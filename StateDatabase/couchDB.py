@@ -108,17 +108,19 @@ class CouchDBServer:
 					docs.append(dict(req_doc.json()))
 			return docs
 
-	def delete_events(self, node):
+	def delete_num_events_by_node(self, node, event_name, event_num):
 		docs = list()
+		num_deleted = 0
 		r = requests.get(self.server + "/events/_all_docs")
 		if r.status_code != 200:
 			r.raise_for_status()
 		else:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
-				req_doc = requests.get(self.server + "/events/" + row["id"])
-				if req_doc.json()["node"] == node:
+				event = requests.get(self.server + "/events/" + row["id"]).json()
+				if event["node"] == node["node"] and event["name"] == event_name and num_deleted < event_num:
 					self.delete_event(row)
+					num_deleted += 1
 
 	def delete_event(self, event):
 		self.delete_doc("events", event["id"], event["value"]["rev"])

@@ -18,7 +18,7 @@ def initialize():
 				cpu=dict(upper=150,lower=70), 
 				mem=dict(upper=1024,lower=512), 
 				disk=dict(upper=100,lower=100), 
-				network=dict(upper=100,lower=100)
+				net=dict(upper=100,lower=100)
 			)
 		)
 		node1 = dict(
@@ -75,8 +75,8 @@ def initialize():
 		handler.add_doc("rules", cpu_exceeded_upper)
 		handler.add_doc("rules", cpu_dropped_lower)
 
-		cpu_rescaleUP = dict(_id = 'cpu_rescaleUP', type='rule', resource="cpu", name='cpu_rescaleUP', rule=dict({">":[{"var": "events.scale.up"},3]}), generates="requests", action={"requests":["cpu_rescaleUP"]})
-		cpu_rescaleDOWN = dict(_id = 'cpu_rescaleDOWN', type='rule', resource="cpu", name='cpu_rescaleDOWN', rule=dict({">":[{"var": "events.scale.down"},3]}), generates="requests", action={"requests":["cpu_rescaleDOWN"]})
+		cpu_rescaleUP = dict(_id = 'cpu_rescaleUP', type='rule', resource="cpu", name='cpu_rescaleUP', rule=dict({">":[{"var": "events.scale.up"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleUp"]})
+		cpu_rescaleDOWN = dict(_id = 'cpu_rescaleDOWN', type='rule', resource="cpu", name='cpu_rescaleDOWN', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]})
 		handler.add_doc("rules", cpu_rescaleUP)
 		handler.add_doc("rules", cpu_rescaleDOWN)
 		
@@ -86,8 +86,8 @@ def initialize():
 		handler.add_doc("rules", mem_exceeded_upper)
 		handler.add_doc("rules", mem_dropped_lower)
 
-		mem_rescaleUP = dict(_id = 'mem_rescaleUP', type='rule', resource="mem", name='mem_rescaleUP', rule=dict({">":[{"var": "events.scale.up"},3]}), generates="requests", action={"requests":["mem_rescaleUP"]})
-		mem_rescaleDOWN = dict(_id = 'mem_rescaleDOWN', type='rule', resource="mem", name='mem_rescaleDOWN', rule=dict({">":[{"var": "events.scale.down"},3]}), generates="requests", action={"requests":["mem_rescaleDOWN"]})
+		mem_rescaleUP = dict(_id = 'mem_rescaleUP', type='rule', resource="mem", name='mem_rescaleUP', rule=dict({">":[{"var": "events.scale.up"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleUp"]})
+		mem_rescaleDOWN = dict(_id = 'mem_rescaleDOWN', type='rule', resource="mem", name='mem_rescaleDOWN', rule=dict({">":[{"var": "events.scale.down"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleDown"]})
 		handler.add_doc("rules", mem_rescaleUP)
 		handler.add_doc("rules", mem_rescaleDOWN)
 
@@ -103,12 +103,12 @@ def initialize():
 		#handler.add_doc("events", underCPU)
 
 	# CREATE REQUESTS
-	if handler.database_exists("requests"):
-		print ("Adding 'requests' documents")
-		ScaleUpCpu = dict(type='request', node='node0', name='ScaleUpCpu')
-		ScaleDownCpu = dict(type='request', node='node1', name='ScaleDownCpu')
-		handler.add_doc("requests", ScaleUpCpu)
-		handler.add_doc("requests", ScaleDownCpu)
+	#if handler.database_exists("requests"):
+		#print ("Adding 'requests' documents")
+		#ScaleUpCpu = dict(type='request', node='node0', name='ScaleUpCpu')
+		#ScaleDownCpu = dict(type='request', node='node1', name='ScaleDownCpu')
+		#handler.add_doc("requests", ScaleUpCpu)
+		#handler.add_doc("requests", ScaleDownCpu)
 
 
 initialize()
