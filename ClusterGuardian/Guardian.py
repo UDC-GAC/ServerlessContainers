@@ -30,11 +30,16 @@ monitoring_handler = BDWatchdog()
 database_handler = couchDB.CouchDBServer()
 
 def get_node_usages(node, window_difference, window_delay):
-	subquery=[dict(aggregator='sum', metric='proc.cpu.user',tags=dict(host=node["node"]))]	
+	usages = {'proc.cpu.user':-1, 'proc.mem.resident':-1, 'proc.cpu.kernel':-1, 'proc.mem.virtual':-1}
+	
+	subquery=[dict(aggregator='sum', metric='proc.cpu.user',tags=dict(host=node["node"])),
+			  dict(aggregator='sum', metric='proc.cpu.kernel',tags=dict(host=node["node"])),
+			  dict(aggregator='sum', metric='proc.mem.resident',tags=dict(host=node["node"])),
+			  dict(aggregator='sum', metric='proc.mem.virtual',tags=dict(host=node["node"]))]	
 	start = int(time.time() - (window_difference + window_delay))
 	end = int(time.time() - window_delay)
 	query = dict(start=start, end=end, queries=subquery)
-	result = monitoring_handler.get_points(query)
+	result = monitoring_handler.get_points(query)	
 	for metric in result:
 		dps = metric["dps"]
 		summatory = 0
@@ -44,37 +49,51 @@ def get_node_usages(node, window_difference, window_delay):
 			average_real = summatory / len(dps)
 		else:
 			average_real = 0
-		return average_real
-		#print(metric["metric"] + " -> " + str(time.strftime('%Y/%m/%d-%H:%M:%S',time.localtime(start))) + " to " + str(time.strftime('%Y/%m/%d-%H:%M:%S',time.localtime(end))) + " for " + str(end - start) + " seconds " + " -> " + str(("%.2f" % round(summatory,2))) + " / " + str(len(dps)) + " = " + str(("%.2f" % round(average_real,2))))
+		
+		usages[metric["metric"]] = average_real
+		
+	return usages
+	#print(metric["metric"] + " -> " + str(time.strftime('%Y/%m/%d-%H:%M:%S',time.localtime(start))) + " to " + str(time.strftime('%Y/%m/%d-%H:%M:%S',time.localtime(end))) + " for " + str(end - start) + " seconds " + " -> " + str(("%.2f" % round(summatory,2))) + " / " + str(len(dps)) + " = " + str(("%.2f" % round(average_real,2))))
 
 
 def get_node_events(node):
 	node_events = database_handler.get_events(node)
-	events_reduced = {"action": {"events": {"scale": {"down": 0, "up":0}}}}
-   
+	events_reduced = {"action": {"cpu": {"events": {"scale": {"down": 0, "up":0}}}, "mem":{"events": {"scale": {"down": 0, "up":0}}}}}
 	for event in node_events:
 		key = event["action"]["events"]["scale"].keys()[0]
 		value = event["action"]["events"]["scale"][key]
-		events_reduced["action"]["events"]["scale"][key] += value
-
+		events_reduced["action"][event["resource"]]["events"]["scale"][key] += value
 	return events_reduced["action"]
 
 def match_node_limits(node, usages, resources, limits, rules):
 	events = []
+	data = {}
+	
+	data["cpu"] = dict(
+		proc=dict(cpu=dict()),
+		limits=dict(cpu=limits["cpu"]),
+		nodes=dict(cpu=resources["cpu"])
+	)
+	data["mem"] = dict(
+		proc=dict(mem=dict()),
+		limits=dict(mem=limits["mem"]),
+		nodes=dict(mem=resources["mem"])
+	)
+	
+	for usage_metric in usages:
+		keys = usage_metric.split(".")
+		data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]	
+	
 	for rule in rules:
-		data = dict(
-			proc=dict(cpu=dict(user=usages)),
-			limits=dict(cpu=limits),
-			nodes=dict(cpu=resources)
-		)
-		
-		#print json.dumps(rule["rule"])
-		#print json.dumps(data)
-		if(jsonLogic(rule["rule"], data)):
-			#print "Rule matched, triggers " + rule["generates"] + " -> " + str(rule["action"][rule["generates"]])
-			#for event in rule["action"][rule["generates"]]:
-			#	events.append(dict(type="event", node=node["node"], name=event, timestamp=int(time.time())))
-			events.append(dict(type="event", node=node["node"], action=rule["action"], timestamp=int(time.time())))
+		if rule["generates"] == "events":
+			if(jsonLogic(rule["rule"], data[rule["resource"]])):
+				events.append(dict(
+						resource=rule["resource"],
+						type="event", 
+						node=node["node"], 
+						action=rule["action"], 
+						timestamp=int(time.time()))
+					)
 	return events
 
 def process_events(events):
@@ -83,12 +102,12 @@ def process_events(events):
 
 def match_node_events(node, events, rules):
 	requests = []
+	data = events
+	print json.dumps(events)
 	for rule in rules:
-		data = events
-		
 		#print json.dumps(rule["rule"])
 		#print json.dumps(data)
-		if(jsonLogic(rule["rule"], data)):
+		if(jsonLogic(rule["rule"], data[rule["resource"]])):
 			#print "Rule matched, triggers " + rule["generates"] + " -> " + str(rule["action"][rule["generates"]])
 			#for event in rule["action"][rule["generates"]]:
 			#	events.append(dict(type="event", node=node["node"], name=event, timestamp=int(time.time())))
@@ -106,19 +125,20 @@ def guard():
 	while True:
 		nodes = database_handler.get_nodes()
 		for node in nodes:
+			usages = get_node_usages(node, window_difference, window_delay)
 			triggered_events = match_node_limits(
 				node,
-				get_node_usages(node, window_difference, window_delay), 
-				node["resources"]["cpu"],
-				database_handler.get_limits(node)["resources"]["cpu"], 
+				usages, 
+				node["resources"],
+				database_handler.get_limits(node)["resources"], 
 				rules)
 			process_events(triggered_events)
 			
 			triggered_requests = match_node_events(node, get_node_events(node), rules)
 			
-			print "RESOURCE: " + str(node["resources"]["cpu"])
-			print "LIMIT: " + str(database_handler.get_limits(node)["resources"]["cpu"])
-			print "USAGE: " + str("%.2f" % round(get_node_usages(node, window_difference, window_delay),2))
+			print "RESOURCES: " + str(node["resources"])
+			print "LIMITS: " + str(database_handler.get_limits(node)["resources"])
+			print "USAGES: " + str(usages)
 			print "TRIGGERED EVENTS " + str(triggered_events)
 			print "NODE EVENTS " + str(json.dumps(get_node_events(node)))
 			print "TRIGGERED REQUESTS " + str(triggered_requests)
