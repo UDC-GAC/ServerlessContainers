@@ -5,7 +5,7 @@ import json
 class CouchDBServer:
 	
 	post_doc_headers = {'content-type': 'application/json'}
-	databases = ['nodes','limits','events','rules','requests']
+	databases = ['config','nodes','limits','events','rules','requests']
 	
 	def __init__(self, server = 'http://couchdb:5984'):
 		if self.check_valid_url(server):
@@ -119,11 +119,11 @@ class CouchDBServer:
 			for row in rows:
 				event = requests.get(self.server + "/events/" + row["id"]).json()
 				if event["node"] == node["node"] and event["name"] == event_name and num_deleted < event_num:
-					self.delete_event(row)
+					self.delete_event(dict(_id = row["id"], _rev=row["value"]["rev"]))
 					num_deleted += 1
 
 	def delete_event(self, event):
-		self.delete_doc("events", event["id"], event["value"]["rev"])
+		self.delete_doc("events", event["_id"], event["_rev"])
 
 	def get_limits(self, node):
 		docs = list()

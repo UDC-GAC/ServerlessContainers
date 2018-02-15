@@ -30,6 +30,11 @@ monitoring_handler = BDWatchdog()
 database_handler = couchDB.CouchDBServer()
 METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
 RESOURCES = ['cpu','mem','disk','net']
+########################
+WINDOW_TIMELAPSE = 10
+WINDOW_DELAY = 10
+TRIGGER_WINDOW_TIME = 50
+## GET THESE VARIABLES FROM STATE DATABASE
 
 def get_node_usages(node, window_difference, window_delay):
 	usages = dict()
@@ -61,13 +66,18 @@ def get_node_usages(node, window_difference, window_delay):
 	return usages
 
 
-def get_node_events(node):
+def get_node_events(node, trigger_window_time):
 	node_events = database_handler.get_events(node)
 	events_reduced = {"action": {}}
 	for resource in RESOURCES:
 		events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up":0}}}
 		
 	for event in node_events:
+		if event["timestamp"] < time.time() - trigger_window_time:
+			print "Event too old, purge it"
+			print event
+			database_handler.delete_event(event)
+		
 		key = event["action"]["events"]["scale"].keys()[0]
 		value = event["action"]["events"]["scale"][key]
 		events_reduced["action"][event["resource"]]["events"]["scale"][key] += value
@@ -129,19 +139,26 @@ def match_node_events(node, events, rules):
 	for rule in rules:
 		if rule["generates"] == "requests":
 			if(jsonLogic(rule["rule"], data[rule["resource"]])):
-				requests.append(dict(type="request", node=node["node"], action=rule["action"], timestamp=int(time.time())))
+				requests.append(dict(
+					type="request", 
+					amount=rule["amount"],
+					node=node["node"], 
+					action=rule["action"], 
+					timestamp=int(time.time()))
+				)
 				database_handler.delete_num_events_by_node(node, generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"])
 	return requests
 
 def guard():
-	window_difference = 10
-	window_delay = 10
-	
 	rules = database_handler.get_rules()
 	#print "RULES:"
 	#print json.dumps(rules)
 	print 
 	while True:
+		config = database_handler.get_all_database_docs("config")[0] #FIX
+		window_difference = config["guardian_config"]["WINDOW_TIMELAPSE"]
+		window_delay = config["guardian_config"]["WINDOW_DELAY"]
+
 		nodes = database_handler.get_nodes()
 		for node in nodes:
 			usages = get_node_usages(node, window_difference, window_delay)
@@ -156,7 +173,7 @@ def guard():
 			
 			triggered_requests = match_node_events(
 				node, 
-				get_node_events(node), 
+				get_node_events(node, TRIGGER_WINDOW_TIME), 
 				rules)
 			process_requests(triggered_requests)
 			
@@ -178,7 +195,7 @@ def guard():
 			events = []
 			for event in triggered_events: events.append(event["name"])
 			print "TRIGGERED EVENTS " + str(events)
-			print "NODE EVENTS " + str(json.dumps(get_node_events(node)))
+			print "NODE EVENTS " + str(json.dumps(get_node_events(node, TRIGGER_WINDOW_TIME)))
 			
 			requests = []
 			for request in triggered_requests: requests.append(request["action"]["requests"][0])

@@ -66,19 +66,17 @@ def initialize():
 	# CREATE RULES
 	if handler.database_exists("rules"):
 		print ("Adding 'rules' documents")
-		#exceeded_upper = dict(_id = 'exceeded_upper', type='rule', name='exceeded_upper', rule=dict({"and":[{">":[{"var": "proc.cpu.user"},{"var": "limits.cpu.upper"}]},{"<":[{"var": "limits.cpu.upper"},{"var": "nodes.cpu.max"}]}]}), generates="events", action={"events":["bottCPU"]})
-		#dropped_lower = dict(_id = 'dropped_lower', type='rule', name='dropped_lower', rule=dict({"and":[{"<":[{"var": "proc.cpu.user"},{"var": "limits.cpu.lower"}]},{">":[{"var": "limits.cpu.lower"},{"var": "nodes.cpu.min"}]}]}), generates="events", action={"events":["underCPU"]})
-		
+
 		# CPU
 		cpu_exceeded_upper = dict(_id = 'cpu_exceeded_upper', type='rule', resource="cpu", name='cpu_exceeded_upper', rule=dict({"and":[{">":[{"var": "proc.cpu.user"},{"var": "limits.cpu.upper"}]},{"<":[{"var": "limits.cpu.upper"},{"var": "nodes.cpu.max"}]}]}), generates="events", action={"events":{"scale":{"up":1}}})
 		cpu_dropped_lower = dict(_id = 'cpu_dropped_lower', type='rule', resource="cpu", name='cpu_dropped_lower', rule=dict({"and":[{"<":[{"var": "proc.cpu.user"},{"var": "limits.cpu.lower"}]},{">":[{"var": "limits.cpu.lower"},{"var": "nodes.cpu.min"}]}]}), generates="events", action={"events":{"scale":{"down":1}}})
 		handler.add_doc("rules", cpu_exceeded_upper)
 		handler.add_doc("rules", cpu_dropped_lower)
 
-		cpu_rescaleUP = dict(_id = 'cpu_rescaleUP', type='rule', resource="cpu", name='cpu_rescaleUP', rule=dict({">":[{"var": "events.scale.up"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleUp"]})
-		cpu_rescaleDOWN = dict(_id = 'cpu_rescaleDOWN', type='rule', resource="cpu", name='cpu_rescaleDOWN', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]})
-		handler.add_doc("rules", cpu_rescaleUP)
-		handler.add_doc("rules", cpu_rescaleDOWN)
+		CpuRescaleUp = dict(_id = 'CpuRescaleUp', type='rule', resource="cpu", name='CpuRescaleUp', rule=dict({">":[{"var": "events.scale.up"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleUp"]}, amount=100)
+		CpuRescaleDown = dict(_id = 'CpuRescaleDown', type='rule', resource="cpu", name='CpuRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]}, amount=100)
+		handler.add_doc("rules", CpuRescaleUp)
+		handler.add_doc("rules", CpuRescaleDown)
 		
 		# MEM
 		mem_exceeded_upper = dict(_id = 'mem_exceeded_upper', type='rule', resource="mem", name='mem_exceeded_upper', rule=dict({"and":[{">":[{"var": "proc.mem.resident"},{"var": "limits.mem.upper"}]},{"<":[{"var": "limits.mem.upper"},{"var": "nodes.mem.max"}]}]}), generates="events", action={"events":{"scale":{"up":1}}})
@@ -86,11 +84,24 @@ def initialize():
 		handler.add_doc("rules", mem_exceeded_upper)
 		handler.add_doc("rules", mem_dropped_lower)
 
-		mem_rescaleUP = dict(_id = 'mem_rescaleUP', type='rule', resource="mem", name='mem_rescaleUP', rule=dict({">":[{"var": "events.scale.up"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleUp"]})
-		mem_rescaleDOWN = dict(_id = 'mem_rescaleDOWN', type='rule', resource="mem", name='mem_rescaleDOWN', rule=dict({">":[{"var": "events.scale.down"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleDown"]})
-		handler.add_doc("rules", mem_rescaleUP)
-		handler.add_doc("rules", mem_rescaleDOWN)
+		MemRescaleUp = dict(_id = 'MemRescaleUp', type='rule', resource="mem", name='MemRescaleUp', rule=dict({">":[{"var": "events.scale.up"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleUp"]}, amount=256)
+		MemRescaleDown = dict(_id = 'MemRescaleDown', type='rule', resource="mem", name='MemRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleDown"]}, amount=256)
+		handler.add_doc("rules", MemRescaleUp)
+		handler.add_doc("rules", MemRescaleDown)
 
+
+	# INIT CONFIG
+	if handler.database_exists("config"):
+		print ("Adding 'config' document")
+		config = dict(_id='config', type='config', name='config', 
+			guardian_config=dict(
+				WINDOW_TIMELAPSE = 10, 
+				WINDOW_DELAY = 10,
+				TRIGGER_WINDOW_TIME = 40)
+			)
+		handler.add_doc("config", config)
+		
+		
 	## CREATE EVENTS
 	#if handler.database_exists("rules"):
 		#print ("Adding 'events' documents")
