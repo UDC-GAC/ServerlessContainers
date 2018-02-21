@@ -335,7 +335,7 @@ def get_node_resources(node_name):
 			node_dict["mem"] = get_node_mem(container)
 			node_dict["disks"] = get_node_disks(container)
 			node_dict["networks"] = get_node_networks(container)
-			print json.dumps(node_dict)
+			return node_dict
 		else:
 			# If container not running, skip
 			pass
@@ -343,6 +343,14 @@ def get_node_resources(node_name):
 		# If node not found, pass
 		pass
 
+def get_all_nodes():
+	client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'), verify=False)
+	containers = client.containers.all()
+	containers_dict = dict()
+	for c in containers:
+		if c.status == "Running":
+			containers_dict[c.name] = get_node_resources(c.name)
+	return containers_dict
 
 def main():
 	if sys.argv[1] == "get":
