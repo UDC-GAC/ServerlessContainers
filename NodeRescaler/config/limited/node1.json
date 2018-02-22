@@ -1,24 +1,26 @@
 {
     "cpu": {
-        "cpu_allowance_limit": "0%",
-        "cpu_num_limit": "0-7"
+        "cpu_allowance_limit": "-1",
+        "cpu_num_limit": "1,3",
+        "effective_num_cpus": "2",
+        "success": true
     },
     "disks": [
         {
             "device_path": "/dev/mapper/lxd-node1_data",
-            "disk_read_limit": "0",
-            "disk_write_limit": "0",
+            "disk_read_limit": "1024000",
+            "disk_write_limit": "1024000",
             "major": "253",
             "minor": "16",
             "mountpoint": "/mnt/volumes/nodes/node1/data/"
         }
     ],
     "mem": {
-        "mem_limit": "0"
+        "mem_limit": "8G"
     },
     "networks": [
         {
-            "net": "eth0",
+            "device_name_in_container": "eth0",
             "net_limit": "0"
         }
     ]
