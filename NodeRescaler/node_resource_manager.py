@@ -14,68 +14,86 @@ LXD_PASSWORD = "testlxd"
 
 
 ### CPU ####
-CPU_LIMIT_LABEL_LXD = "limits.cpu"
-CPU_ALLOWANCE_LABEL_LXD = "limits.cpu.allowance"
-
-CPU_LIMIT_LABEL = "cpu_limit"
+CPU_LIMIT_CPUS_LABEL = "cpu_num_limit"
+CPU_LIMIT_ALLOWANCE_LABEL = "cpu_allowance_limit"
+CPU_EFFECTIVE_CPUS_LABEL="effective_num_cpus"
 
 def set_node_cpus(container, cpu_resource):
-	limit_type = cpu_resource["limit_type"]
-	
-	# Assume an integer (e.g.:3), a range (e.g.:3-5) or a limit in the form of 25ms/100ms
-	limit = cpu_resource[CPU_LIMIT_LABEL]
-	
-	if limit_type == "cpus" or limit_type == "cpuset":
+	limits_applied = True
+	if CPU_LIMIT_CPUS_LABEL in cpu_resource:
+		cpu_accounting_path = "/".join([CGROUP_PATH,"cpuacct","lxc",container.name,"cpu.cfs_quota_us"])
+		cpu_limit = int(cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL][:-1]) # Strip the percentage char and cast to int
+		quota = 100 * cpu_limit # Every 100 period ticks count as 1% of CPU
+		if quota == 0:
+			quota = -1 # Set to max
+		
+		limit = str(quota)
+		
 		try:
-			config = container.config
-			config[CPU_LIMIT_LABEL_LXD] = limit
-			container.save(config)
-			return True
-		except Error:
-			return False
+			if os.path.isfile(cpu_accounting_path) and os.access(cpu_accounting_path,os.W_OK):
+				cgroups_cpuacct_file = open(cpu_accounting_path,'w')
+				cgroups_cpuacct_file.write(limit)
+				cgroups_cpuacct_file.close()
+				limits_applied = limits_applied and True
+			else:
+				limits_applied = limits_applied and False
+		except IOError as e:
+			print e
+			limits_applied = limits_applied and False
 			
-	if limit_type == "cpu_allowance":
+	if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
+		cpu_cpuset_path = "/".join([CGROUP_PATH,"cpuset","lxc",container.name,"cpuset.cpus"])
 		try:
-			config = container.config
-			config[CPU_ALLOWANCE_LABEL_LXD] = limit
-			container.save(config)
-			return True
-		except Error:
-			return False
-					
+			if os.path.isfile(cpu_cpuset_path) and os.access(cpu_cpuset_path,os.W_OK):
+				cgroups_cpuset_file = open(cpu_cpuset_path,'w')
+				cgroups_cpuset_file.write(str(cpu_resource[CPU_LIMIT_CPUS_LABEL]))
+				cgroups_cpuset_file.close()
+				limits_applied = limits_applied and True
+			else:
+				limits_applied = limits_applied and False
+		except IOError as e:
+			print e
+			limits_applied = limits_applied and False
+	
+	return limits_applied
 
 def get_node_cpus(container):
-	config = container.expanded_config
-	cpu_limit = 100 # no limit
-	cpu_num = 0
-	
+	## Get info from cgroups cpuacct subsystem
+	cpu_accounting_path = "/".join([CGROUP_PATH,"cpuacct","lxc",container.name,"cpu.cfs_quota_us"])
+	cpu_limit = ""
+	if os.path.isfile(cpu_accounting_path) and os.access(cpu_accounting_path,os.R_OK):
+		cgroups_cpuacct_file = open(cpu_accounting_path,'r')
+		for line in cgroups_cpuacct_file:
+			cpu_limit = line.rstrip("\n") # Just 1 line should be available
+		cgroups_cpuacct_file.close()
+		cpu_limit = int(cpu_limit) / 100
+		if cpu_limit < 2:
+			cpu_limit = 0
+
+			
+	## Get info from cgroups cpuset subsystem
 	cpus_path = "/".join([CGROUP_PATH,"cpuset","lxc",container.name,"cpuset.cpus"])
 	cpus = ""
-	
-	## Get info from LXD database
-	if CPU_ALLOWANCE_LABEL_LXD in config:
-		cpu_limit = config[CPU_ALLOWANCE_LABEL_LXD] #can be 50% or 25ms/200ms
-		try:
-			# Try for the case of a percentage, get all string except last character, the '%' char
-			cpu_limit = int(cpu_limit[:-1])
-		except ValueError:
-			# If no percentage, then try for fraction
-			parts = cpu_limit.split("/")
-			(first, second) = parts[0],parts[1]
-			cpu_limit =  100 * float(first[:-2])/float(second[:-2]) # considering that the limit is set as Xms/Yms
-		
-	## Get info from cgroups filesystem
 	if os.path.isfile(cpus_path) and os.access(cpus_path,os.R_OK):
 		cgroups_cpus_file = open(cpus_path,'r')
 		for line in cgroups_cpus_file:
 			cpus = line.rstrip("\n") # Just 1 line should be available
-
 		cgroups_cpus_file.close()
 	
-	
+	#Get the number of effective, active cores for the container
+	effective_cpus = 0
+	parts = cpus.split(",")
+	for part in parts:
+		ranges = part.split("-")
+		if len(ranges) == 1:
+			effective_cpus += 1 # No range so only 1 core
+		else:
+			effective_cpus += (int(ranges[1]) - int(ranges[0])) + 1 #5-7 equals to 3 cores active
+			
 	final_dict = dict()
-	final_dict["cpus"] = cpus
-	final_dict["cpu_limit"] = cpu_limit
+	final_dict[CPU_LIMIT_CPUS_LABEL] = cpus
+	final_dict[CPU_EFFECTIVE_CPUS_LABEL] = str(effective_cpus)
+	final_dict[CPU_LIMIT_ALLOWANCE_LABEL] = str(cpu_limit) + "%"
 	
 	return final_dict
 	#return((";").join([CPU_HEADER,container.name,str(cpu_num),str(cpu_limit),cpus]))
@@ -87,36 +105,76 @@ MEM_LIMIT_LABEL_LXD = "limits.memory"
 MEM_LIMIT_LABEL = "mem_limit"
 
 def get_node_mem(container):
-	config = container.expanded_config
 	mem_limit = 0 # no limit
-	if MEM_LIMIT_LABEL_LXD in config:
-		mem_limit = config[MEM_LIMIT_LABEL_LXD]
-		
+	
+	## Get info from memory cpuset subsystem
+	memory_limit_path = "/".join([CGROUP_PATH,"memory","lxc",container.name,"memory.limit_in_bytes"])
+	if os.path.isfile(memory_limit_path) and os.access(memory_limit_path,os.R_OK):
+		cgroups_mem_file = open(memory_limit_path,'r')
+		for line in cgroups_mem_file:
+			mem_limit = line.rstrip("\n") # Just 1 line should be available
+		cgroups_mem_file.close()
+	
+	
+	mem_limit_converted = float(mem_limit) / 1073741824
+	if mem_limit_converted < 1:
+		# Less than 1 GB, report in MB
+		mem_limit_converted = int(mem_limit_converted * 1024)
+		mem_limit_converted = str(mem_limit_converted) + 'M'
+	elif mem_limit_converted > 128:
+		# more than 128G?, probably not limited so set to 0 ('unlimited')
+		mem_limit_converted = str(0)
+	else:
+		# Report in GB
+		mem_limit_converted = int(mem_limit_converted)
+		mem_limit_converted = str(mem_limit_converted)  + 'G'
+	
 	final_dict = dict()
-	final_dict[MEM_LIMIT_LABEL] = mem_limit
+	final_dict[MEM_LIMIT_LABEL] = mem_limit_converted
 	
 	return final_dict
-	#return((";").join([MEM_HEADER,container.name,str(mem_limit)]))
 
 def set_node_mem(container, mem_resource):
 	# Assume an integer for bytes (e.g.:1024000) or a string like 8G
-	value = mem_resource[MEM_LIMIT_LABEL]
-	
-	try:
-		config = container.config
-		config[MEM_LIMIT_LABEL_LXD] = value
-		container.save(config)
-		return True
-	except pylxd.exceptions.LXDAPIException as e:
-		print(e)
+	if MEM_LIMIT_LABEL in mem_resource:
+		try:
+			value = int(mem_resource[MEM_LIMIT_LABEL])
+			if value == 0:
+				# Set to -1 so a 'no limit' is applied, 0 is a no valid cgroups value for memory
+				value = -1 
+		except ValueError:
+			# Try for the string limit
+			# Strip the last character as it is a suffix, for mem subsystem valid values are e.g., 1024M, 1G...
+			try:
+				value = int(mem_resource[MEM_LIMIT_LABEL][:-1])
+			except ValueError as e:
+				print e
+				# No valid value was given
+				return False
+		try:
+			memory_limit_path = "/".join([CGROUP_PATH,"memory","lxc",container.name,"memory.limit_in_bytes"])
+			if os.path.isfile(memory_limit_path) and os.access(memory_limit_path,os.W_OK):
+				cgroups_mem_file = open(memory_limit_path,'w')
+				cgroups_mem_file.write(str(value))
+				cgroups_mem_file.close()
+				return True
+			else:
+				# Can't access the file
+				return False
+		except IOError as e:
+			print e
+			return False
+	else:
+		# No limit was set
 		return False
+	
 
 #############
 
 
 ### DISK ####
-DISK_READ_LIMIT_LABEL = "limit_read"
-DISK_WRITE_LIMIT_LABEL = "limit_write"
+DISK_READ_LIMIT_LABEL = "disk_read_limit"
+DISK_WRITE_LIMIT_LABEL = "disk_write_limit"
 
 def get_system_mounted_filesystems():
 	df = subprocess.Popen(["df","--output=source,target"], stdout=subprocess.PIPE)
@@ -180,12 +238,12 @@ def get_node_disks(container):
 			if major_minor_str in limits_read:
 				device_read_limit = limits_read[major_minor_str]
 			else:
-				device_read_limit = 0
+				device_read_limit = str(0)
 			
 			if major_minor_str in limits_write:
 				device_write_limit = limits_write[major_minor_str]
 			else:
-				device_write_limit = 0
+				device_write_limit = str(0)
 			
 			disk_dict = dict()
 			disk_dict["mountpoint"] = device_mountpoint
@@ -213,7 +271,7 @@ def set_node_disk(container, disk_resource):
 		limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
 		devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
 		try:
-			if os.path.isfile(devices_read_limit_path) and os.access(devices_read_limit_path,os.R_OK):
+			if os.path.isfile(devices_read_limit_path) and os.access(devices_read_limit_path,os.W_OK):
 				devices_read_limit_file = open(devices_read_limit_path,'w')
 				devices_read_limit_file.write(major + ":" + minor + " " + limit_read)
 				devices_read_limit_file.close()
@@ -227,7 +285,7 @@ def set_node_disk(container, disk_resource):
 		limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
 		devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
 		try:
-			if os.path.isfile(devices_write_limit_path) and os.access(devices_write_limit_path,os.R_OK):
+			if os.path.isfile(devices_write_limit_path) and os.access(devices_write_limit_path,os.W_OK):
 				devices_write_limit_file = open(devices_write_limit_path,'w')
 				devices_write_limit_file.write(major + ":" + minor + " " + limit_write)
 				devices_write_limit_file.close()
@@ -243,7 +301,8 @@ def set_node_disk(container, disk_resource):
 
 ### NET ####
 
-NET_DEVICE_NAME_LABEL = "device_name_in_host"
+NET_DEVICE_HOST_NAME_LABEL = "device_name_in_host"
+NET_DEVICE_NAME_LABEL = "device_name_in_container"
 NET_LIMIT_LABEL = "net_limit"
 
 def get_interface_limit(interface_name):
@@ -269,14 +328,24 @@ def get_node_networks(container):
 			interface_host_name = networks[net]["host_name"]
 			
 			net_dict = dict()
-			net_dict["net"] = net
-			net_dict[NET_DEVICE_NAME_LABEL] = interface_host_name
-			net_dict["limit"] = get_interface_limit(interface_host_name)
+			net_dict[NET_DEVICE_NAME_LABEL] = net
+			net_dict[NET_DEVICE_HOST_NAME_LABEL] = interface_host_name
+			net_dict[NET_LIMIT_LABEL] = get_interface_limit(interface_host_name)
 
-			#return((";").join([NET_HEADER, container.name, net, interface_host_name, get_interface_limit(interface_host_name)]))
 			retrieved_nets.append(net_dict)
 	return retrieved_nets
 
+
+def unset_interface_limit(interface_name):
+	try:
+		tc = subprocess.Popen(["tc","qdisc","del","dev",interface_name,"root"],stderr=subprocess.PIPE)
+		tc.wait()
+		if tc.returncode == 0:
+			return True
+		else:
+			return False
+	except subprocess.CalledProcessError as e:
+		return False
 
 def set_interface_limit(interface_name, limit):
 	try:
@@ -288,32 +357,58 @@ def set_interface_limit(interface_name, limit):
 			return False
 	except subprocess.CalledProcessError as e:
 		return False
-	
+
 def set_node_net(container, net):
-	return set_interface_limit(net[NET_DEVICE_NAME_LABEL], net[NET_LIMIT_LABEL])
+	def set_limit_with_host_interface(interface_in_host):
+		if net[NET_LIMIT_LABEL] != "0" and net[NET_LIMIT_LABEL] != "":
+			# Unset old limit and set new
+			unset_interface_limit(net[NET_DEVICE_HOST_NAME_LABEL])
+			return set_interface_limit(interface_in_host, net[NET_LIMIT_LABEL])
+		else:
+			# Unset the limit
+			unset_interface_limit(interface_in_host)
+			return True
+	
+	if NET_LIMIT_LABEL in net:
+		if NET_DEVICE_HOST_NAME_LABEL in net:
+			# host network interface available
+			return set_limit_with_host_interface(net[NET_DEVICE_HOST_NAME_LABEL])
+		else:
+			# Retrieve the host interface using the internal container interface
+			return False
+	else:
+		# No limit to set, leave untouched
+		return True
+	# Just check that it is set correctly, as trying to unset if it was not set will return an error (not idempotent)
+	#return unset_interface_limit(net[NET_DEVICE_NAME_LABEL]) and set_interface_limit(net[NET_DEVICE_NAME_LABEL], net[NET_LIMIT_LABEL])
 	
 	
 
 #############			
 
 
+DICT_CPU_LABEL = "cpu"
+DICT_MEM_LABEL = "mem"
+DICT_DISK_LABEL = "disks"
+DICT_NET_LABEL = "networks"
+
 def set_node_resources(node_name, resources):
 	client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'), verify=False)
 	try:
 		container = client.containers.get(node_name)
 		if container.status == "Running":
-			if "cpu" in resources:
-				print "CPU UPDATED: " + str(set_node_cpus(container, resources["cpu"]))	
+			if DICT_CPU_LABEL in resources:
+				print "CPU UPDATED: " + str(set_node_cpus(container, resources[DICT_CPU_LABEL]))	
 			
-			if "mem" in resources:
-				print "MEM UPDATED: " + str(set_node_mem(container, resources["mem"]))
+			if DICT_MEM_LABEL in resources:
+				print "MEM UPDATED: " + str(set_node_mem(container, resources[DICT_MEM_LABEL]))
 				
-			if "disks" in resources:
-				for disk in resources["disks"]:
+			if DICT_DISK_LABEL in resources:
+				for disk in resources[DICT_DISK_LABEL]:
 					print "DISK UPDATED: " + str(set_node_disk(container, disk))
 			
-			if "networks" in resources:
-				for net in resources["networks"]:
+			if DICT_NET_LABEL in resources:
+				for net in resources[DICT_NET_LABEL]:
 					print "NET UPDATED: " + str(set_node_net(container, net))
 		else:
 			# If container not running, skip
@@ -331,10 +426,10 @@ def get_node_resources(node_name):
 		container = client.containers.get(node_name)
 		if container.status == "Running":
 			node_dict = dict()
-			node_dict["cpu"] = get_node_cpus(container)
-			node_dict["mem"] = get_node_mem(container)
-			node_dict["disks"] = get_node_disks(container)
-			node_dict["networks"] = get_node_networks(container)
+			node_dict[DICT_CPU_LABEL] = get_node_cpus(container)
+			node_dict[DICT_MEM_LABEL] = get_node_mem(container)
+			node_dict[DICT_DISK_LABEL] = get_node_disks(container)
+			node_dict[DICT_NET_LABEL] = get_node_networks(container)
 			return node_dict
 		else:
 			# If container not running, skip
@@ -355,22 +450,16 @@ def get_all_nodes():
 def main():
 	if sys.argv[1] == "get":
 		for arg in sys.argv[2:]:
-			get_node_resources(arg)
+			print json.dumps(get_node_resources(arg))
 			
 	if sys.argv[1] == "set":
-		for arg in sys.argv[2:]:
-			## TMP ##
-			resources = dict()
-			
-			#resources["cpu"] = {"limit_type" : "cpus", CPU_LIMIT_LABEL : "4"}
-			resources["cpu"] = {"limit_type" : "cpus", CPU_LIMIT_LABEL : "0-4"}
-			resources["cpu"] = {"limit_type" : "cpu_allowance", CPU_LIMIT_LABEL : "25ms/100ms"}
-			resources["mem"] = {MEM_LIMIT_LABEL : "8GB"}
-			resources["disks"] = [{DISK_WRITE_LIMIT_LABEL: "1024000", DISK_READ_LIMIT_LABEL: "1024000", "major":"253", "minor":"7"},{DISK_WRITE_LIMIT_LABEL: "1024000", DISK_READ_LIMIT_LABEL: "1024000", "major":"253", "minor":"21"}]
-			resources["networks"] = [{NET_LIMIT_LABEL: "10mbit", NET_DEVICE_NAME_LABEL : "vethNWC856"}]
-			set_node_resources(arg, resources)
-			## TMP ##
-		
+		## TMP ##
+		resources = dict()
+		set_node_resources("node0",get_node_resources("node0"))
+		set_node_resources("node1",get_node_resources("node1"))
+		set_node_resources("node2",get_node_resources("node2"))
+		set_node_resources("node3",get_node_resources("node3"))
+		## TMP ##
 		
 if __name__ == "__main__":
     main()

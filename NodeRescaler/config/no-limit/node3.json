@@ -1,0 +1,26 @@
+{
+    "cpu": {
+        "cpu_allowance_limit": "0%",
+        "cpu_num_limit": "0-7"
+    },
+    "disks": [
+        {
+            "device_path": "/dev/mapper/lxd-node3_data",
+            "disk_read_limit": "0",
+            "disk_write_limit": "0",
+            "major": "253",
+            "minor": "18",
+            "mountpoint": "/mnt/volumes/nodes/node3/data/"
+        }
+    ],
+    "mem": {
+        "mem_limit": "0"
+    },
+    "networks": [
+        {
+            "device_name_in_host": "veth657INL",
+            "net": "eth0",
+            "net_limit": "0"
+        }
+    ]
+}
