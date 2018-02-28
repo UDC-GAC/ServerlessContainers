@@ -34,15 +34,17 @@ RESOURCES = ['cpu','mem','disk','net']
 WINDOW_TIMELAPSE = 10
 WINDOW_DELAY = 10
 TRIGGER_WINDOW_TIME = 50
+
+NO_METRIC_DATA_DEFAULT_VALUE = -1
 ## GET THESE VARIABLES FROM STATE DATABASE
 
-def get_node_usages(node, window_difference, window_delay):
+def get_node_usages(structure, window_difference, window_delay):
 	usages = dict()
 	subquery = list()
 	
 	for metric in METRICS:
-		usages[metric] = -1
-		subquery.append(dict(aggregator='sum', metric=metric,tags=dict(host=node["node"])))
+		usages[metric] = NO_METRIC_DATA_DEFAULT_VALUE
+		subquery.append(dict(aggregator='sum', metric=metric,tags=dict(host=structure["name"])))
 		
 
 	start = int(time.time() - (window_difference + window_delay))
@@ -66,8 +68,8 @@ def get_node_usages(node, window_difference, window_delay):
 	return usages
 
 
-def get_node_events(node, trigger_window_time):
-	node_events = database_handler.get_events(node)
+def get_node_events(structure, trigger_window_time):
+	node_events = database_handler.get_events(structure)
 	events_reduced = {"action": {}}
 	for resource in RESOURCES:
 		events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up":0}}}
@@ -93,7 +95,7 @@ def generateEventName(event, resource):
 	return finalString
 
 
-def match_node_limits(node, usages, resources, limits, rules):
+def match_node_limits(structure, usages, resources, limits, rules):
 	events = []
 	data = {}
 	
@@ -101,10 +103,10 @@ def match_node_limits(node, usages, resources, limits, rules):
 		data[resource] = dict()
 		data[resource]["proc"] = {}
 		data[resource]["limits"] = {}
-		data[resource]["nodes"] = {}
+		data[resource]["structure"] = {}
 		data[resource]["proc"][resource] = dict()
 		data[resource]["limits"][resource] = limits[resource]
-		data[resource]["nodes"][resource] = resources[resource]
+		data[resource]["structure"][resource] = resources[resource]
 	
 	
 	for usage_metric in usages:
@@ -113,12 +115,14 @@ def match_node_limits(node, usages, resources, limits, rules):
 	
 	for rule in rules:
 		if rule["generates"] == "events":
+			print json.dumps(rule["rule"])
+			print json.dumps(data[rule["resource"]])
 			if(jsonLogic(rule["rule"], data[rule["resource"]])):
 				events.append(dict(
 						name=generateEventName(rule["action"]["events"], rule["resource"]),
 						resource=rule["resource"],
 						type="event", 
-						node=node["node"], 
+						structure=structure["name"], 
 						action=rule["action"], 
 						timestamp=int(time.time()))
 					)
@@ -133,7 +137,7 @@ def process_requests(requests):
 		database_handler.add_doc("requests", request)
 
 
-def match_node_events(node, events, rules):
+def match_node_events(structure, events, rules):
 	requests = []
 	data = events
 	for rule in rules:
@@ -142,49 +146,47 @@ def match_node_events(node, events, rules):
 				requests.append(dict(
 					type="request", 
 					amount=rule["amount"],
-					node=node["node"], 
+					structure=structure["name"], 
 					action=rule["action"], 
 					timestamp=int(time.time()))
 				)
-				database_handler.delete_num_events_by_node(node, generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"])
+				database_handler.delete_num_events_by_node(structure, generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"])
 	return requests
 
 def guard():
-	rules = database_handler.get_rules()
-	#print "RULES:"
-	#print json.dumps(rules)
-	print 
 	while True:
+		rules = database_handler.get_rules()
 		config = database_handler.get_all_database_docs("config")[0] #FIX
 		window_difference = config["guardian_config"]["WINDOW_TIMELAPSE"]
 		window_delay = config["guardian_config"]["WINDOW_DELAY"]
 
-		nodes = database_handler.get_nodes()
-		for node in nodes:
-			usages = get_node_usages(node, window_difference, window_delay)
+		containers = database_handler.get_structures()
+		print containers
+		for container in containers:
+			usages = get_node_usages(container, window_difference, window_delay)
 			
 			triggered_events = match_node_limits(
-				node,
+				container,
 				usages, 
-				node["resources"],
-				database_handler.get_limits(node)["resources"], 
+				container["resources"],
+				database_handler.get_limits(container)["resources"], 
 				rules)
 			process_events(triggered_events)
 			
 			triggered_requests = match_node_events(
-				node, 
-				get_node_events(node, TRIGGER_WINDOW_TIME), 
+				container, 
+				get_node_events(container, TRIGGER_WINDOW_TIME), 
 				rules)
 			process_requests(triggered_requests)
 			
-			resources = node["resources"]
+			resources = container["resources"]
 			print "RESOURCES: " + \
 				"cpu" + "("+str(resources["cpu"]["max"])+","+str(resources["cpu"]["current"])+","+str(resources["cpu"]["min"])+")" + " - " + \
 				"mem" + "("+str(resources["mem"]["max"])+","+str(resources["mem"]["current"])+","+str(resources["mem"]["min"])+")"+ " - " + \
 				"disk" + "("+str(resources["disk"]["max"])+","+str(resources["disk"]["current"])+","+str(resources["disk"]["min"])+")"+ " - " + \
 				"net" + "("+str(resources["net"]["max"])+","+str(resources["net"]["current"])+","+str(resources["net"]["min"])+")"
 			
-			limits = database_handler.get_limits(node)["resources"]
+			limits = database_handler.get_limits(container)["resources"]
 			print "LIMITS: "  + \
 				"cpu" + "("+str(limits["cpu"]["upper"])+","+str(limits["cpu"]["lower"])+")" + " - " + \
 				"mem" + "("+str(limits["mem"]["upper"])+","+str(limits["mem"]["lower"])+")" + " - " + \
@@ -195,7 +197,7 @@ def guard():
 			events = []
 			for event in triggered_events: events.append(event["name"])
 			print "TRIGGERED EVENTS " + str(events)
-			print "NODE EVENTS " + str(json.dumps(get_node_events(node, TRIGGER_WINDOW_TIME)))
+			print "NODE EVENTS " + str(json.dumps(get_node_events(container, TRIGGER_WINDOW_TIME)))
 			
 			requests = []
 			for request in triggered_requests: requests.append(request["action"]["requests"][0])

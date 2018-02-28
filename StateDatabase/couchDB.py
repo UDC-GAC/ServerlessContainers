@@ -5,7 +5,6 @@ import json
 class CouchDBServer:
 	
 	post_doc_headers = {'content-type': 'application/json'}
-	databases = ['config','nodes','limits','events','rules','requests']
 	
 	def __init__(self, server = 'http://couchdb:5984'):
 		if self.check_valid_url(server):
@@ -27,28 +26,13 @@ class CouchDBServer:
 		else:
 			return True
 	
-	def create_all_dbs(self):
-		print ("Creating all databases")
-		for database in self.databases:
-			if self.create_database(database):
-				print("Database " + database + " created")
-				
 	def remove_database(self, database):
 		r = requests.delete(self.server + "/"  + database)
 		if r.status_code != 200:
 			r.raise_for_status()
 		else:
 			return True
-			
-	def remove_all_dbs(self):
-		print ("Removing all databases")
-		for database in self.databases:
-			try:
-				if self.remove_database(database):
-					print("Database " + database + " removed")
-			except(requests.exceptions.HTTPError):
-				pass
-
+	
 	def get_all_database_docs(self, database):
 		docs = list()
 		r = requests.get(self.server + "/"  + database + "/_all_docs")
@@ -82,20 +66,20 @@ class CouchDBServer:
 		else:
 			return True
 
-	def get_nodes(self, type="node"):
+	def get_structures(self, subtype="container"):
 		docs = list()
-		r = requests.get(self.server + "/nodes/_all_docs")
+		r = requests.get(self.server + "/structures/_all_docs")
 		if r.status_code != 200:
 			r.raise_for_status()
 		else:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
-				req_doc = requests.get(self.server + "/nodes/" + row["id"])
-				if req_doc.json()["type"] == type:
+				req_doc = requests.get(self.server + "/structures/" + row["id"])
+				if req_doc.json()["subtype"] == subtype:
 					docs.append(dict(req_doc.json()))
 			return docs
 	
-	def get_events(self, node, event=None):
+	def get_events(self, structure, event=None):
 		docs = list()
 		r = requests.get(self.server + "/events/_all_docs")
 		if r.status_code != 200:
@@ -104,11 +88,11 @@ class CouchDBServer:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
 				req_doc = requests.get(self.server + "/events/" + row["id"])
-				if req_doc.json()["node"] == node["node"]:
+				if req_doc.json()["structure"] == structure["name"]:
 					docs.append(dict(req_doc.json()))
 			return docs
 
-	def delete_num_events_by_node(self, node, event_name, event_num):
+	def delete_num_events_by_node(self, structure, event_name, event_num):
 		docs = list()
 		num_deleted = 0
 		r = requests.get(self.server + "/events/_all_docs")
@@ -118,14 +102,14 @@ class CouchDBServer:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
 				event = requests.get(self.server + "/events/" + row["id"]).json()
-				if event["node"] == node["node"] and event["name"] == event_name and num_deleted < event_num:
+				if event["structure"] == structure["name"] and event["name"] == event_name and num_deleted < event_num:
 					self.delete_event(dict(_id = row["id"], _rev=row["value"]["rev"]))
 					num_deleted += 1
 
 	def delete_event(self, event):
 		self.delete_doc("events", event["_id"], event["_rev"])
 
-	def get_limits(self, node):
+	def get_limits(self, structure):
 		docs = list()
 		r = requests.get(self.server + "/limits/_all_docs")
 		if r.status_code != 200:
@@ -134,10 +118,10 @@ class CouchDBServer:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
 				req_doc = requests.get(self.server + "/limits/" + row["id"])
-				if req_doc.json()["node"] == node["node"]:
+				if req_doc.json()["structure"] == structure["name"]:
 					return(dict(req_doc.json()))
 			
-	def get_requests(self, node=None):
+	def get_requests(self, structure=None):
 		docs = list()
 		r = requests.get(self.server + "/requests/_all_docs")
 		if r.status_code != 200:
@@ -146,8 +130,8 @@ class CouchDBServer:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
 				req_doc = requests.get(self.server + "/requests/" + row["id"])
-				if node!=None:
-					if req_doc.json()["node"] == node:
+				if structure!=None:
+					if req_doc.json()["structure"] == structure:
 						docs.append(dict(req_doc.json()))
 				else:
 					docs.append(dict(req_doc.json()))
@@ -156,7 +140,7 @@ class CouchDBServer:
 	def delete_request(self, request):
 		self.delete_doc("requests", request["id"], request["value"]["rev"])
 		
-	def delete_requests(self, node):
+	def delete_requests(self, structure):
 		docs = list()
 		r = requests.get(self.server + "/requests/_all_docs")
 		if r.status_code != 200:
@@ -165,7 +149,7 @@ class CouchDBServer:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
 				req_doc = requests.get(self.server + "/requests/" + row["id"])
-				if req_doc.json()["node"] == node:
+				if req_doc.json()["structure"] == structure:
 					self.delete_request(row)
 
 	def get_rules(self):
