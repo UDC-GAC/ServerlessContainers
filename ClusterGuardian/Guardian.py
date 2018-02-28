@@ -191,10 +191,10 @@ def guard():
 			
 			resources = container["resources"]
 			print "RESOURCES: " + \
-				"cpu" + "("+str(resources["cpu"]["max"])+","+str(resources["cpu"]["current"])+","+str(resources["cpu"]["min"])+")" + " - " + \
-				"mem" + "("+str(resources["mem"]["max"])+","+str(resources["mem"]["current"])+","+str(resources["mem"]["min"])+")"+ " - " + \
-				"disk" + "("+str(resources["disk"]["max"])+","+str(resources["disk"]["current"])+","+str(resources["disk"]["min"])+")"+ " - " + \
-				"net" + "("+str(resources["net"]["max"])+","+str(resources["net"]["current"])+","+str(resources["net"]["min"])+")"
+				"cpu" + "("+str(resources["cpu"]["max"])+","+str(resources["cpu"]["min"])+")" + " - " + \
+				"mem" + "("+str(resources["mem"]["max"])+","+str(resources["mem"]["min"])+")"+ " - " + \
+				"disk" + "("+str(resources["disk"]["max"])+","+str(resources["disk"]["min"])+")"+ " - " + \
+				"net" + "("+str(resources["net"]["max"])+","+str(resources["net"]["min"])+")"
 			
 			limits = database_handler.get_limits(container)["resources"]
 			print "LIMITS: "  + \

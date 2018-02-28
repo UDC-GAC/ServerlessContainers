@@ -1,9 +1,8 @@
 #/usr/bin/python
-import requests
-import json
-import re
-import time
 import sys
+import json
+import time
+import requests
 
 sys.path.append('../StateDatabase')
 import couchDB
@@ -58,6 +57,70 @@ def filter_requests(request_timeout):
 
 	return merged_requests
 
+def get_container_resources(container):
+	r = requests.get("http://dante:8000/container/"+container, headers = {'Accept':'application/json'})
+	if r.status_code == 200:
+		return r.json()
+	else:
+		return None
+
+
+def apply_request(request, resources):
+	resource_dict = dict()
+	
+	action = request["action"]
+	
+	if action.endswith("Down"):
+		amount = -1 * request["amount"]
+	
+	if action.startswith("Cpu"):
+		resource_dict["cpu"] = dict()
+		
+	elif action.startswith("Mem"):
+		current_mem_limit = resources["mem"]["mem_limit"]
+		try:
+			if int(current_mem_limit) == -1:
+				# Memory is set to unlimited so can't do anything
+				return None
+		except ValueError:
+			# Memory is set, should be in xxG for GB or yyM for MB
+			unit = current_mem_limit[-1]
+			try:
+				current_mem_limit = int(current_mem_limit[:-1])
+			except:
+				# Bad value for the string
+				return None
+			if unit == "G":
+				#Convert to Megabytes
+				current_mem_limit = 1024 * current_mem_limit
+			elif unit == "M":
+				#Already in MB, don't do anything
+				pass
+			else:
+				# Bad value for the string
+				return None
+		resource_dict["mem"] = dict()
+		resource_dict["mem"]["mem_limit"] = str(int(amount + current_mem_limit)) + 'M'
+		
+	return resource_dict
+	
+
+def set_container_resources(container, resources):
+	r = requests.put("http://dante:8000/container/"+container, data=json.dumps(resources), headers = {'Content-Type':'application/json','Accept':'application/json'})
+	if r.status_code == 201:
+		return json.dumps(r.json())
+	else:
+		return r.text
+
+
+def process_request(request, resources):
+	#Generate the changed_resources document 
+	new_resources = apply_request(request, resources)
+	if new_resources:
+		print "Changes to apply for container " + request["structure"] + " " + json.dumps(new_resources)
+		print "Applied changes, new resources are: " + set_container_resources(request["structure"], new_resources)
+		database_handler.delete_requests(request)
+
 def scale():
 	while True:
 		config = database_handler.get_all_database_docs("config")[0] #FIX
@@ -70,10 +133,10 @@ def scale():
 			print("No requests at " + time.strftime("%D %H:%M:%S", time.localtime()))
 		else:
 			print("Requests at " + time.strftime("%D %H:%M:%S", time.localtime()))
-			for request in requests:	
-				print json.dumps(request)
+			for request in requests:
+				process_request(request, get_container_resources(request["structure"]))
 			print 
-				
+
 		time.sleep(polling_frequency)
 
 scale()

@@ -5,6 +5,7 @@ from flask import jsonify
 from flask import abort
 from flask import Response
 import json 
+import time
 
 import node_resource_manager as NodeResourceManager
 
@@ -30,17 +31,23 @@ def get_containers_resources():
 @app.route("/container/<container_name>", methods=['PUT'])
 def set_container_resources(container_name):
 	if container_name != "":
-		NodeResourceManager.set_node_resources(container_name, request.json)
-		applied_config = NodeResourceManager.get_node_resources(container_name)
-		if applied_config != None:
-			return Response(json.dumps(applied_config), status=201, mimetype='application/json')
-		else:
-			return abort(404)
+		print request.json
+		if not NodeResourceManager.set_node_resources(container_name, request.json):
+			return abort(500)
+		else:				
+			applied_config = NodeResourceManager.get_node_resources(container_name)
+			if applied_config != None:
+				return Response(json.dumps(applied_config), status=201, mimetype='application/json')
+			else:
+				return abort(404)
 	else:
 		abort(400)
 
+
+
 @app.route("/container/<container_name>", methods=['GET'])
 def get_container_resources(container_name):
+	
 	if container_name != "":
 		data = NodeResourceManager.get_node_resources(container_name)
 		if data != None:

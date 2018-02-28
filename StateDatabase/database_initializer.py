@@ -65,10 +65,10 @@ def initialize():
 			subtype='container',
 			name='node0', 
 			resources=dict(
-				cpu=dict(max=300,current=100,min=50), 
-				mem=dict(max=4096,current=1024,min=256), 
-				disk=dict(max=100,current=100,min=100), 
-				net=dict(max=100,current=100,min=100)
+				cpu=dict(max=300,min=50), 
+				mem=dict(max=4096,min=256), 
+				disk=dict(max=100,min=100), 
+				net=dict(max=100,min=100)
 			)
 		)
 		node1 = dict(
@@ -76,10 +76,10 @@ def initialize():
 			subtype='container',
 			name='node1', 
 			resources=dict(
-				cpu=dict(max=400,current=200,min=100), 
-				memory=dict(max=4096,current=1024,min=512), 
-				disk=dict(max=100,current=100,min=100), 
-				network=dict(max=100,current=100,min=100)
+				cpu=dict(max=400,min=100), 
+				memory=dict(max=4096,min=512), 
+				disk=dict(max=100,min=100), 
+				network=dict(max=100,min=100)
 			)
 		)
 		handler.add_doc("structures", node0)

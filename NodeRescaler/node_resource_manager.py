@@ -143,18 +143,21 @@ def get_node_mem(container):
 	else:
 		return op
 		
-	mem_limit_converted = float(mem_limit) / 1073741824
-	if mem_limit_converted < 1:
+	mem_limit_converted = float(mem_limit) / 1048576 # Convert to MB
+	if mem_limit_converted < 1024:
 		# Less than 1 GB, report in MB
-		mem_limit_converted = int(mem_limit_converted * 1024)
+		mem_limit_converted = int(mem_limit_converted)
 		mem_limit_converted = str(mem_limit_converted) + 'M'
-	elif mem_limit_converted > 128:
-		# more than 128G?, probably not limited so set to -1 ('unlimited')
+	elif mem_limit_converted > 65536:
+		# more than 64G?, probably not limited so set to -1 ('unlimited')
 		mem_limit_converted = str(-1)
 	else:
-		# Report in GB
+		# Report in GB if exact number
 		mem_limit_converted = int(mem_limit_converted)
-		mem_limit_converted = str(mem_limit_converted)  + 'G'
+		if mem_limit_converted % 1024 == 0 :
+			mem_limit_converted = str(mem_limit_converted / 1024)  + 'G'
+		else:
+			mem_limit_converted = str(mem_limit_converted)  + 'M'
 	
 	final_dict = dict()
 	final_dict[MEM_LIMIT_LABEL] = mem_limit_converted
@@ -407,35 +410,41 @@ DICT_NET_LABEL = "networks"
 
 def set_node_resources(node_name, resources):
 	client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'), verify=False)
-	try:
-		container = client.containers.get(node_name)
-		if container.status == "Running":
-			if DICT_CPU_LABEL in resources:
-				set_node_cpus(container, resources[DICT_CPU_LABEL])
-			
-			if DICT_MEM_LABEL in resources:
-				set_node_mem(container, resources[DICT_MEM_LABEL])
+	if resources == None:
+		# No resources to set
+		return False
+	else:
+		try:
+			container = client.containers.get(node_name)
+			if container.status == "Running":
+				if DICT_CPU_LABEL in resources:
+					set_node_cpus(container, resources[DICT_CPU_LABEL])
 				
-			if DICT_DISK_LABEL in resources:
-				for disk in resources[DICT_DISK_LABEL]:
-					set_node_disk(container, disk)
-			
-			if DICT_NET_LABEL in resources:
-				for net in resources[DICT_NET_LABEL]:
-					if NET_DEVICE_HOST_NAME_LABEL in net:
-						del net[NET_DEVICE_HOST_NAME_LABEL]
-					set_node_net(container, net)
-		else:
-			# If container not running, skip
-			pass
-	except pylxd.exceptions.NotFound:
-		# If node not found, pass
-		pass
-		
+				if DICT_MEM_LABEL in resources:
+					set_node_mem(container, resources[DICT_MEM_LABEL])
+					
+				if DICT_DISK_LABEL in resources:
+					for disk in resources[DICT_DISK_LABEL]:
+						set_node_disk(container, disk)
+				
+				if DICT_NET_LABEL in resources:
+					for net in resources[DICT_NET_LABEL]:
+						if NET_DEVICE_HOST_NAME_LABEL in net:
+							del net[NET_DEVICE_HOST_NAME_LABEL]
+						set_node_net(container, net)
+				return True
+			else:
+				# If container not running, skip
+				return False
+		except pylxd.exceptions.NotFound:
+			# If node not found, pass
+			return False
+
 def get_node_resources(node_name):
 	client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'), verify=False)
 	#client.authenticate(LXD_PASSWORD)
 	try:
+		
 		container = client.containers.get(node_name)
 		if container.status == "Running":
 			node_dict = dict()
@@ -463,6 +472,7 @@ def get_node_resources(node_name):
 				node_dict[DICT_NET_LABEL] = net_resources["data"]
 			else:
 				node_dict[DICT_NET_LABEL] = net_resources
+			
 			return node_dict
 		else:
 			# If container not running, skip
