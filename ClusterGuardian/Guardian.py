@@ -12,7 +12,10 @@ from json_logic import jsonLogic
 
 class BDWatchdog:
 	
-	def __init__(self, server = 'http://opentsdb:4242'):
+	OPENTSDB_URL = "opentsdb"
+	OPENTSDB_PORT = 4242
+	
+	def __init__(self, server = 'http://'+ OPENTSDB_URL + ':' + str(int(OPENTSDB_PORT))):
 		if self.check_valid_url(server):
 			self.server = server
 		else:
@@ -31,14 +34,11 @@ database_handler = couchDB.CouchDBServer()
 METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
 RESOURCES = ['cpu','mem','disk','net']
 ########################
-WINDOW_TIMELAPSE = 10
-WINDOW_DELAY = 10
-TRIGGER_WINDOW_TIME = 50
 
 NO_METRIC_DATA_DEFAULT_VALUE = -1
 ## GET THESE VARIABLES FROM STATE DATABASE
 
-def get_node_usages(structure, window_difference, window_delay):
+def get_structure_usages(structure, window_difference, window_delay):
 	usages = dict()
 	subquery = list()
 	
@@ -68,18 +68,19 @@ def get_node_usages(structure, window_difference, window_delay):
 	return usages
 
 
-def get_node_events(structure, trigger_window_time):
-	node_events = database_handler.get_events(structure)
+def purge_old_events(structure, event_timeout):
+	structure_events = database_handler.get_events(structure)
+	for event in structure_events:
+		if event["timestamp"] < time.time() - event_timeout:
+			database_handler.delete_event(event)
+
+def get_structure_events(structure):
+	structure_events = database_handler.get_events(structure)
 	events_reduced = {"action": {}}
 	for resource in RESOURCES:
 		events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up":0}}}
 		
-	for event in node_events:
-		if event["timestamp"] < time.time() - trigger_window_time:
-			print "Event too old, purge it"
-			print event
-			database_handler.delete_event(event)
-		
+	for event in structure_events:
 		key = event["action"]["events"]["scale"].keys()[0]
 		value = event["action"]["events"]["scale"][key]
 		events_reduced["action"][event["resource"]]["events"]["scale"][key] += value
@@ -95,7 +96,7 @@ def generateEventName(event, resource):
 	return finalString
 
 
-def match_node_limits(structure, usages, resources, limits, rules):
+def match_container_limits(structure, usages, resources, limits, rules):
 	events = []
 	data = {}
 	
@@ -115,8 +116,6 @@ def match_node_limits(structure, usages, resources, limits, rules):
 	
 	for rule in rules:
 		if rule["generates"] == "events":
-			print json.dumps(rule["rule"])
-			print json.dumps(data[rule["resource"]])
 			if(jsonLogic(rule["rule"], data[rule["resource"]])):
 				events.append(dict(
 						name=generateEventName(rule["action"]["events"], rule["resource"]),
@@ -137,7 +136,7 @@ def process_requests(requests):
 		database_handler.add_doc("requests", request)
 
 
-def match_node_events(structure, events, rules):
+def match_structure_events(structure, events, rules):
 	requests = []
 	data = events
 	for rule in rules:
@@ -147,25 +146,35 @@ def match_node_events(structure, events, rules):
 					type="request", 
 					amount=rule["amount"],
 					structure=structure["name"], 
-					action=rule["action"], 
+					action=rule["action"]["requests"][0], 
 					timestamp=int(time.time()))
 				)
-				database_handler.delete_num_events_by_node(structure, generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"])
+				database_handler.delete_num_events_by_structure(structure, generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"])
 	return requests
+
+
+default_config = {"WINDOW_TIMELAPSE":10, "WINDOW_DELAY":10, "EVENT_TIMEOUT":40}
+
+
+def get_config_value(config, key):
+	try:
+		return config["guardian_config"][key]
+	except KeyError:
+		return default_config[key]
 
 def guard():
 	while True:
 		rules = database_handler.get_rules()
 		config = database_handler.get_all_database_docs("config")[0] #FIX
-		window_difference = config["guardian_config"]["WINDOW_TIMELAPSE"]
-		window_delay = config["guardian_config"]["WINDOW_DELAY"]
-
+		window_difference = get_config_value(config, "WINDOW_TIMELAPSE")
+		window_delay = get_config_value(config, "WINDOW_DELAY")
+		event_timeout = get_config_value(config, "EVENT_TIMEOUT")
+		
 		containers = database_handler.get_structures()
-		print containers
 		for container in containers:
-			usages = get_node_usages(container, window_difference, window_delay)
+			usages = get_structure_usages(container, window_difference, window_delay)
 			
-			triggered_events = match_node_limits(
+			triggered_events = match_container_limits(
 				container,
 				usages, 
 				container["resources"],
@@ -173,9 +182,10 @@ def guard():
 				rules)
 			process_events(triggered_events)
 			
-			triggered_requests = match_node_events(
-				container, 
-				get_node_events(container, TRIGGER_WINDOW_TIME), 
+			purge_old_events(container, event_timeout)
+			triggered_requests = match_structure_events(
+				container,
+				get_structure_events(container), 
 				rules)
 			process_requests(triggered_requests)
 			
@@ -197,10 +207,10 @@ def guard():
 			events = []
 			for event in triggered_events: events.append(event["name"])
 			print "TRIGGERED EVENTS " + str(events)
-			print "NODE EVENTS " + str(json.dumps(get_node_events(container, TRIGGER_WINDOW_TIME)))
+			print "NODE EVENTS " + str(json.dumps(get_structure_events(container)))
 			
 			requests = []
-			for request in triggered_requests: requests.append(request["action"]["requests"][0])
+			for request in triggered_requests: requests.append(request)
 			print "TRIGGERED REQUESTS " + str(requests)
 			print
 			

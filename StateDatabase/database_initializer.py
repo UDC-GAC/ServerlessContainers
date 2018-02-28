@@ -119,8 +119,13 @@ def initialize():
 			guardian_config=dict(
 				WINDOW_TIMELAPSE = 10, 
 				WINDOW_DELAY = 10,
-				TRIGGER_WINDOW_TIME = 40)
+				EVENT_TIMEOUT = 40
+			),
+			scaler_config=dict(
+				POLLING_FREQUENCY = 20,
+				REQUEST_TIMEOUT = 60
 			)
+		)
 		handler.add_doc("config", config)
 		
 		

@@ -92,7 +92,7 @@ class CouchDBServer:
 					docs.append(dict(req_doc.json()))
 			return docs
 
-	def delete_num_events_by_node(self, structure, event_name, event_num):
+	def delete_num_events_by_structure(self, structure, event_name, event_num):
 		docs = list()
 		num_deleted = 0
 		r = requests.get(self.server + "/events/_all_docs")
@@ -138,7 +138,7 @@ class CouchDBServer:
 			return docs
 
 	def delete_request(self, request):
-		self.delete_doc("requests", request["id"], request["value"]["rev"])
+		self.delete_doc("requests", request["_id"], request["_rev"])
 		
 	def delete_requests(self, structure):
 		docs = list()
