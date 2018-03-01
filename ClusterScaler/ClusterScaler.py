@@ -60,45 +60,31 @@ def filter_requests(request_timeout):
 def get_container_resources(container):
 	r = requests.get("http://dante:8000/container/"+container, headers = {'Accept':'application/json'})
 	if r.status_code == 200:
-		return r.json()
+		return dict(r.json())
 	else:
 		return None
 
 
 def apply_request(request, resources):
-	resource_dict = dict()
-	
 	action = request["action"]
+	amount = request["amount"]
+	resource_dict = dict()
+	resource_dict[request["resource"]] = dict()
 	
-	if action.endswith("Down"):
-		amount = -1 * request["amount"]
-	
-	if action.startswith("Cpu"):
-		resource_dict["cpu"] = dict()
+	if request["resource"] == "cpu":
+		pass
 		
-	elif action.startswith("Mem"):
+	elif request["resource"] == "mem":
 		current_mem_limit = resources["mem"]["mem_limit"]
 		try:
-			if int(current_mem_limit) == -1:
+			if current_mem_limit == "-1":
 				# Memory is set to unlimited so can't do anything
 				return None
-		except ValueError:
-			# Memory is set, should be in xxG for GB or yyM for MB
-			unit = current_mem_limit[-1]
-			try:
-				current_mem_limit = int(current_mem_limit[:-1])
-			except:
-				# Bad value for the string
-				return None
-			if unit == "G":
-				#Convert to Megabytes
-				current_mem_limit = 1024 * current_mem_limit
-			elif unit == "M":
-				#Already in MB, don't do anything
-				pass
 			else:
-				# Bad value for the string
-				return None
+				current_mem_limit = int(current_mem_limit)
+		except ValueError:
+			# Bad value
+			return None
 		resource_dict["mem"] = dict()
 		resource_dict["mem"]["mem_limit"] = str(int(amount + current_mem_limit)) + 'M'
 		
@@ -108,7 +94,7 @@ def apply_request(request, resources):
 def set_container_resources(container, resources):
 	r = requests.put("http://dante:8000/container/"+container, data=json.dumps(resources), headers = {'Content-Type':'application/json','Accept':'application/json'})
 	if r.status_code == 201:
-		return json.dumps(r.json())
+		return dict(r.json())
 	else:
 		return r.text
 
@@ -117,9 +103,30 @@ def process_request(request, resources):
 	#Generate the changed_resources document 
 	new_resources = apply_request(request, resources)
 	if new_resources:
+		print "Request: " + json.dumps(request)
 		print "Changes to apply for container " + request["structure"] + " " + json.dumps(new_resources)
-		print "Applied changes, new resources are: " + set_container_resources(request["structure"], new_resources)
-		database_handler.delete_requests(request)
+		
+		# Apply changes through a REST call
+		#applied_resources = get_container_resources(request["structure"])
+		applied_resources = set_container_resources(request["structure"], new_resources)
+		print "Applied changes, new resources are: " + str(applied_resources)
+		
+		# Remove the request from the database
+		database_handler.delete_request(request)
+		
+		# Update the limits
+		limits = database_handler.get_limits({"name":request["structure"]})
+		limits["resources"][request["resource"]]["upper"] += request["amount"] 
+		limits["resources"][request["resource"]]["lower"] += request["amount"]
+		database_handler.update_doc("limits", limits)
+		print json.dumps(limits)
+		
+		# Update the structure current value
+		structure = database_handler.get_structure(request["structure"])
+		structure["resources"][request["resource"]]["current"] = applied_resources[request["resource"]]["mem_limit"] # FIX
+		print json.dumps(structure)
+		database_handler.update_doc("structures", structure)
+		
 
 def scale():
 	while True:

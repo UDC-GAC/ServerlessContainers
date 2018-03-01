@@ -143,7 +143,8 @@ def match_structure_events(structure, events, rules):
 		if rule["generates"] == "requests":
 			if(jsonLogic(rule["rule"], data[rule["resource"]])):
 				requests.append(dict(
-					type="request", 
+					type="request",
+					resource=rule["resource"],
 					amount=rule["amount"],
 					structure=structure["name"], 
 					action=rule["action"]["requests"][0], 
@@ -192,7 +193,7 @@ def guard():
 			resources = container["resources"]
 			print "RESOURCES: " + \
 				"cpu" + "("+str(resources["cpu"]["max"])+","+str(resources["cpu"]["min"])+")" + " - " + \
-				"mem" + "("+str(resources["mem"]["max"])+","+str(resources["mem"]["min"])+")"+ " - " + \
+				"mem" + "("+str(resources["mem"]["max"])+","+str(resources["mem"]["current"])+","+str(resources["mem"]["min"])+")"+ " - " + \
 				"disk" + "("+str(resources["disk"]["max"])+","+str(resources["disk"]["min"])+")"+ " - " + \
 				"net" + "("+str(resources["net"]["max"])+","+str(resources["net"]["min"])+")"
 			

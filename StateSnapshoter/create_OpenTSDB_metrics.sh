@@ -10,15 +10,15 @@
 ./build/tsdb mkmetric limit.net.upper
 
 # NODE RESOURCES
-./build/tsdb mkmetric node.cpu.current
-./build/tsdb mkmetric node.cpu.max
-./build/tsdb mkmetric node.cpu.min
-./build/tsdb mkmetric node.mem.current
-./build/tsdb mkmetric node.mem.max
-./build/tsdb mkmetric node.mem.min
-./build/tsdb mkmetric node.disk.current
-./build/tsdb mkmetric node.disk.max
-./build/tsdb mkmetric node.disk.min
-./build/tsdb mkmetric node.net.current
-./build/tsdb mkmetric node.net.max
-./build/tsdb mkmetric node.net.min
+./build/tsdb mkmetric structure.cpu.current
+./build/tsdb mkmetric structure.cpu.max
+./build/tsdb mkmetric structure.cpu.min
+./build/tsdb mkmetric structure.mem.current
+./build/tsdb mkmetric structure.mem.max
+./build/tsdb mkmetric structure.mem.min
+./build/tsdb mkmetric structure.disk.current
+./build/tsdb mkmetric structure.disk.max
+./build/tsdb mkmetric structure.disk.min
+./build/tsdb mkmetric structure.net.current
+./build/tsdb mkmetric structure.net.max
+./build/tsdb mkmetric structure.net.min

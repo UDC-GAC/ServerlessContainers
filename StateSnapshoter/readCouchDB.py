@@ -8,7 +8,10 @@ sys.path.append('../StateDatabase')
 import couchDB
 
 def translate_doc_to_timeseries(doc):
-	node_name = doc["node"]
+	try:
+		node_name = doc["name"]
+	except KeyError:
+		node_name = doc["structure"]
 	timestamp=int(time.time())
 	
 	for resource in doc["resources"]:
@@ -23,8 +26,8 @@ database_handler = couchDB.CouchDBServer()
 while(True):
 	for limit in database_handler.get_all_database_docs("limits"):
 		translate_doc_to_timeseries(limit)
-	for node in database_handler.get_all_database_docs("nodes"):
-		translate_doc_to_timeseries(node)
+	for structure in database_handler.get_all_database_docs("structures"):
+		translate_doc_to_timeseries(structure)
 	time.sleep(10)
 
 

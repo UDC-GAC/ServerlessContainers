@@ -143,40 +143,30 @@ def get_node_mem(container):
 	else:
 		return op
 		
-	mem_limit_converted = float(mem_limit) / 1048576 # Convert to MB
-	if mem_limit_converted < 1024:
-		# Less than 1 GB, report in MB
-		mem_limit_converted = int(mem_limit_converted)
-		mem_limit_converted = str(mem_limit_converted) + 'M'
-	elif mem_limit_converted > 65536:
+	mem_limit_converted = int(mem_limit) / 1048576 # Convert to MB
+	if mem_limit_converted > 65536:
 		# more than 64G?, probably not limited so set to -1 ('unlimited')
 		mem_limit_converted = str(-1)
-	else:
-		# Report in GB if exact number
-		mem_limit_converted = int(mem_limit_converted)
-		if mem_limit_converted % 1024 == 0 :
-			mem_limit_converted = str(mem_limit_converted / 1024)  + 'G'
-		else:
-			mem_limit_converted = str(mem_limit_converted)  + 'M'
 	
 	final_dict = dict()
 	final_dict[MEM_LIMIT_LABEL] = mem_limit_converted
+	final_dict["unit"] = "M"
 	
 	return ({"success": True, "data": final_dict})
 
 def set_node_mem(container, mem_resource):
-	# Assume an integer for bytes (e.g.:1024000) or a string like 8G
+	# Assume an integer for megabytes, add the M and set to cgroups
 	if MEM_LIMIT_LABEL in mem_resource:
 		try:
 			value = int(mem_resource[MEM_LIMIT_LABEL])
-			if value < LOWER_LIMIT_MEGABYTES * 1024 * 1024:
+			if value < LOWER_LIMIT_MEGABYTES:
 				# Don't allow values lower than an amount like 64 MB as it will probably block the container
 				return {"success":False, "error": "Memory limit is too low, less than " + LOWER_LIMIT_MEGABYTES + " MB"}
 		except ValueError:
-			# Try for the string limit
+			# Try for a possible string value or the "-1" value that is unlimited
 			# CAUTION, very low values like 1M are not checked and will go through
 			value = mem_resource[MEM_LIMIT_LABEL]
-			if value == "":
+			if value == "-1" or value == "":
 				value = -1
 		
 		memory_limit_path = "/".join([CGROUP_PATH,"memory","lxc",container.name,"memory.limit_in_bytes"])

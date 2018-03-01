@@ -1,0 +1,38 @@
+{
+	"timeseries":[
+		{
+			"metrics":[
+				{
+					"metric": "structure.mem.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				},	
+				{
+					"metric": "proc.mem.resident",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				},{
+					"metric": "limit.mem.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				},{
+					"metric": "limit.mem.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 12000
+			}
+		}
+	]
+}

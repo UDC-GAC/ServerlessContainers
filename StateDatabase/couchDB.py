@@ -79,6 +79,19 @@ class CouchDBServer:
 					docs.append(dict(req_doc.json()))
 			return docs
 	
+	def get_structure(self, structure_name):
+		docs = list()
+		r = requests.get(self.server + "/structures/_all_docs")
+		if r.status_code != 200:
+			r.raise_for_status()
+		else:
+			rows = json.loads(r.text)["rows"]
+			for row in rows:
+				req_doc = requests.get(self.server + "/structures/" + row["id"])
+				if req_doc.json()["name"] == structure_name:
+					return(dict(req_doc.json()))
+			
+	
 	def get_events(self, structure, event=None):
 		docs = list()
 		r = requests.get(self.server + "/events/_all_docs")
@@ -131,7 +144,7 @@ class CouchDBServer:
 			for row in rows:
 				req_doc = requests.get(self.server + "/requests/" + row["id"])
 				if structure!=None:
-					if req_doc.json()["structure"] == structure:
+					if req_doc.json()["structure"] == structure["name"]:
 						docs.append(dict(req_doc.json()))
 				else:
 					docs.append(dict(req_doc.json()))
@@ -149,7 +162,7 @@ class CouchDBServer:
 			rows = json.loads(r.text)["rows"]
 			for row in rows:
 				req_doc = requests.get(self.server + "/requests/" + row["id"])
-				if req_doc.json()["structure"] == structure:
+				if req_doc.json()["structure"] == structure["name"]:
 					self.delete_request(row)
 
 	def get_rules(self):
