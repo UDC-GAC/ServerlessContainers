@@ -29,8 +29,8 @@ def initialize():
 	create_all_dbs()
 
 	
-	#containers = ["node0","node1","node2","node3"]
-	containers = ["node0"]
+	containers = ["node0","node1","node2","node3"]
+	#containers = ["node0"]
 	# CREATE LIMITS
 	if handler.database_exists("limits"):
 		print ("Adding 'limits' documents")

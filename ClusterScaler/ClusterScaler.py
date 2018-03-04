@@ -96,7 +96,7 @@ def set_container_resources(container, resources):
 	if r.status_code == 201:
 		return dict(r.json())
 	else:
-		return r.text
+		r.raise_for_status()
 
 
 def process_request(request, resources):
@@ -104,26 +104,26 @@ def process_request(request, resources):
 	new_resources = apply_request(request, resources)
 	if new_resources:
 		print "Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources)
-		
-		# Apply changes through a REST call
-		applied_resources = set_container_resources(request["structure"], new_resources)
-		#print "Applied changes, new resources are: " + str(applied_resources)
-		
-		# Remove the request from the database
-		database_handler.delete_request(request)
-		
-		# Update the limits
-		limits = database_handler.get_limits({"name":request["structure"]})
-		limits["resources"][request["resource"]]["upper"] += request["amount"] 
-		limits["resources"][request["resource"]]["lower"] += request["amount"]
-		database_handler.update_doc("limits", limits)
-		
-		# Update the structure current value
-		structure = database_handler.get_structure(request["structure"])
-		structure["resources"][request["resource"]]["current"] = applied_resources[request["resource"]]["mem_limit"] # FIX
-		database_handler.update_doc("structures", structure)
-		print "SUCCESS"
-		
+		try:
+			# Apply changes through a REST call
+			applied_resources = set_container_resources(request["structure"], new_resources)
+			
+			# Remove the request from the database
+			database_handler.delete_request(request)
+			
+			# Update the limits
+			limits = database_handler.get_limits({"name":request["structure"]})
+			limits["resources"][request["resource"]]["upper"] += request["amount"] 
+			limits["resources"][request["resource"]]["lower"] += request["amount"]
+			database_handler.update_doc("limits", limits)
+			
+			# Update the structure current value
+			structure = database_handler.get_structure(request["structure"])
+			structure["resources"][request["resource"]]["current"] = applied_resources[request["resource"]]["mem_limit"] # FIX
+			database_handler.update_doc("structures", structure)
+		except requests.exceptions.HTTPError:
+			print "FAIL"
+			return
 
 def scale():
 	while True:

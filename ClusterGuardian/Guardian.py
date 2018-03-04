@@ -233,14 +233,14 @@ def guard():
 		containers = database_handler.get_structures(subtype="container")
 		for container in containers:
 			try:
-				delta = time.time()
-				delta = pet_watchdog("start", delta)
+				#delta = time.time()
+				#delta = pet_watchdog("start", delta)
 				
 				usages = get_structure_usages(container, window_difference, window_delay)
-				delta = pet_watchdog("with monitor data retrieved", delta)
+				#delta = pet_watchdog("with monitor data retrieved", delta)
 				
 				limits = database_handler.get_limits(container)["resources"]
-				delta = pet_watchdog("with limits retrieved", delta)
+				#delta = pet_watchdog("with limits retrieved", delta)
 				triggered_events = match_container_limits(
 					container,
 					usages, 
@@ -248,17 +248,17 @@ def guard():
 					limits, 
 					rules)
 				process_events(triggered_events)
-				delta = pet_watchdog("with events processed", delta)
+				#delta = pet_watchdog("with events processed", delta)
 
 
 				events = reduce_structure_events(filter_and_purge_old_events(container, event_timeout))
-				delta = pet_watchdog("with structure events retrieved", delta)
+				#delta = pet_watchdog("with structure events retrieved", delta)
 				triggered_requests = match_structure_events(
 					container,
 					events, 
 					rules)
 				process_requests(triggered_requests)
-				delta = pet_watchdog("with requests processed", delta)
+				#delta = pet_watchdog("with requests processed", delta)
 				
 				## DEBUG AND INFO OUTPUT
 				print_debug_info(container, usages, triggered_events, triggered_requests)
