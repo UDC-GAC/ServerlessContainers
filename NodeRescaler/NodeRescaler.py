@@ -31,7 +31,6 @@ def get_containers_resources():
 @app.route("/container/<container_name>", methods=['PUT'])
 def set_container_resources(container_name):
 	if container_name != "":
-		print request.json
 		if not NodeResourceManager.set_node_resources(container_name, request.json):
 			return abort(500)
 		else:				

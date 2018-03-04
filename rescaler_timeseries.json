@@ -31,7 +31,106 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 12000
+				"ymax": 8192
+			}
+		},{
+			"metrics":[
+				{
+					"metric": "structure.mem.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				},	
+				{
+					"metric": "proc.mem.resident",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				},{
+					"metric": "limit.mem.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				},{
+					"metric": "limit.mem.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 8192
+			}
+		},{
+			"metrics":[
+				{
+					"metric": "structure.mem.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				},	
+				{
+					"metric": "proc.mem.resident",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				},{
+					"metric": "limit.mem.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				},{
+					"metric": "limit.mem.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 8192
+			}
+		},{
+			"metrics":[
+				{
+					"metric": "structure.mem.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				},	
+				{
+					"metric": "proc.mem.resident",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				},{
+					"metric": "limit.mem.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				},{
+					"metric": "limit.mem.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 8192
 			}
 		}
 	]

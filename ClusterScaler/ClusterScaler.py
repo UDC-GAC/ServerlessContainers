@@ -103,13 +103,11 @@ def process_request(request, resources):
 	#Generate the changed_resources document 
 	new_resources = apply_request(request, resources)
 	if new_resources:
-		print "Request: " + json.dumps(request)
-		print "Changes to apply for container " + request["structure"] + " " + json.dumps(new_resources)
+		print "Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources)
 		
 		# Apply changes through a REST call
-		#applied_resources = get_container_resources(request["structure"])
 		applied_resources = set_container_resources(request["structure"], new_resources)
-		print "Applied changes, new resources are: " + str(applied_resources)
+		#print "Applied changes, new resources are: " + str(applied_resources)
 		
 		# Remove the request from the database
 		database_handler.delete_request(request)
@@ -119,13 +117,12 @@ def process_request(request, resources):
 		limits["resources"][request["resource"]]["upper"] += request["amount"] 
 		limits["resources"][request["resource"]]["lower"] += request["amount"]
 		database_handler.update_doc("limits", limits)
-		print json.dumps(limits)
 		
 		# Update the structure current value
 		structure = database_handler.get_structure(request["structure"])
 		structure["resources"][request["resource"]]["current"] = applied_resources[request["resource"]]["mem_limit"] # FIX
-		print json.dumps(structure)
 		database_handler.update_doc("structures", structure)
+		print "SUCCESS"
 		
 
 def scale():
@@ -141,8 +138,7 @@ def scale():
 		else:
 			print("Requests at " + time.strftime("%D %H:%M:%S", time.localtime()))
 			for request in requests:
-				process_request(request, get_container_resources(request["structure"]))
-			print 
+				process_request(request, get_container_resources(request["structure"])) 
 
 		time.sleep(polling_frequency)
 

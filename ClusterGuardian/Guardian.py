@@ -4,6 +4,7 @@ import json
 import re
 import time
 import sys
+import traceback
 
 sys.path.append('../StateDatabase')
 import couchDB
@@ -26,7 +27,10 @@ class BDWatchdog:
 	
 	def get_points(self, query):
 		r = requests.post(self.server + "/api/query", data=json.dumps(query), headers = {'content-type': 'application/json','Accept':'application/json'})
-		return json.loads(r.text)
+		if r.status_code == 200:
+			return json.loads(r.text)
+		else:
+			r.raise_for_status()
 		
 
 monitoring_handler = BDWatchdog()
@@ -41,41 +45,42 @@ NO_METRIC_DATA_DEFAULT_VALUE = -1
 def get_structure_usages(structure, window_difference, window_delay):
 	usages = dict()
 	subquery = list()
-	
 	for metric in METRICS:
 		usages[metric] = NO_METRIC_DATA_DEFAULT_VALUE
-		subquery.append(dict(aggregator='sum', metric=metric,tags=dict(host=structure["name"])))
+		subquery.append(dict(aggregator='sum', metric=metric, tags=dict(host=structure["name"])))
 		
 
 	start = int(time.time() - (window_difference + window_delay))
 	end = int(time.time() - window_delay)
 	query = dict(start=start, end=end, queries=subquery)
-	
 	result = monitoring_handler.get_points(query)
 	
 	for metric in result:
 		dps = metric["dps"]
-		summatory = 0
-		for key in dps:
-			summatory += dps[key]
+		summatory = sum(dps.values())
 		if len(dps) > 0:
 			average_real = summatory / len(dps)
 		else:
 			average_real = 0
-		
 		usages[metric["metric"]] = average_real
 		
 	return usages
 
 
-def purge_old_events(structure, event_timeout):
+def filter_and_purge_old_events(structure, event_timeout):
 	structure_events = database_handler.get_events(structure)
+	filtered_events = list()
 	for event in structure_events:
 		if event["timestamp"] < time.time() - event_timeout:
+			# Event is too old, remove it
 			database_handler.delete_event(event)
+		else:
+			# Event is not too old, keep it
+			filtered_events.append(event)
+	return filtered_events
 
-def get_structure_events(structure):
-	structure_events = database_handler.get_events(structure)
+def reduce_structure_events(structure_events):
+	#structure_events = database_handler.get_events(structure)
 	events_reduced = {"action": {}}
 	for resource in RESOURCES:
 		events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up":0}}}
@@ -163,57 +168,109 @@ def get_config_value(config, key):
 	except KeyError:
 		return default_config[key]
 
+
+def try_get_value(dict, key):
+	try:
+		return dict[key]
+	except KeyError:
+		return "n/a"
+
+def print_container_status(resource_label, resources_dict, limits_dict):
+	return 	\
+		(str(try_get_value(resources_dict[resource_label], "max"))+","+ \
+		str(try_get_value(limits_dict[resource_label], "upper"))+","+ \
+		str(try_get_value(resources_dict[resource_label], "current"))+","+ \
+		str(try_get_value(limits_dict[resource_label], "lower"))+","+ \
+		str(try_get_value(resources_dict[resource_label], "min")))
+
+def print_container_usages(usages):
+	translator_dict = {"cpu": "proc.cpu.user", "mem":"proc.mem.resident"}
+	string = ""
+	for resource in ["cpu","mem"]:
+		if usages[translator_dict[resource]] == -1 : usages[translator_dict[resource]] = "n/a"
+		string += resource + "(" + str(usages[translator_dict[resource]]) + ")" + " "
+
+	return string
+
+def print_debug_info(container, usages, triggered_events, triggered_requests):
+	resources = container["resources"]
+	limits = database_handler.get_limits(container)["resources"]
+	print " @" + container["name"]
+	print "   #RESOURCES: " + \
+		"cpu(" + print_container_status("cpu", resources, limits) + ")"+ \
+		 " - " + \
+		"mem(" + print_container_status("mem", resources, limits) + ")"
+	
+	print "   #USAGES: " + print_container_usages(usages)
+	
+	events = []
+	for event in triggered_events: events.append(event["name"])
+	requests = []
+	for request in triggered_requests: requests.append(request["action"])
+	
+	print "   #TRIGGERED EVENTS " + str(events) + " AND TRIGGERED REQUESTS " + str(requests)
+	
+	
+def pet_watchdog(stage, delta):
+	print "Reached stage: " + stage + " at time: " + str("%.2f" % (time.time() - delta))
+	return time.time()
+
 def guard():
+	epoch = 0
 	while True:
+		# For debug output only
+		epoch += 1 
+		epoch_start = time.time()
+		print "EPOCH: " + str(epoch) + " at time: " + time.strftime("%D %H:%M:%S", time.localtime())
+		####
+		
 		rules = database_handler.get_rules()
 		config = database_handler.get_all_database_docs("config")[0] #FIX
 		window_difference = get_config_value(config, "WINDOW_TIMELAPSE")
 		window_delay = get_config_value(config, "WINDOW_DELAY")
 		event_timeout = get_config_value(config, "EVENT_TIMEOUT")
 		
-		containers = database_handler.get_structures()
+		containers = database_handler.get_structures(subtype="container")
 		for container in containers:
-			usages = get_structure_usages(container, window_difference, window_delay)
-			
-			triggered_events = match_container_limits(
-				container,
-				usages, 
-				container["resources"],
-				database_handler.get_limits(container)["resources"], 
-				rules)
-			process_events(triggered_events)
-			
-			purge_old_events(container, event_timeout)
-			triggered_requests = match_structure_events(
-				container,
-				get_structure_events(container), 
-				rules)
-			process_requests(triggered_requests)
-			
-			resources = container["resources"]
-			print "RESOURCES: " + \
-				"cpu" + "("+str(resources["cpu"]["max"])+","+str(resources["cpu"]["min"])+")" + " - " + \
-				"mem" + "("+str(resources["mem"]["max"])+","+str(resources["mem"]["current"])+","+str(resources["mem"]["min"])+")"+ " - " + \
-				"disk" + "("+str(resources["disk"]["max"])+","+str(resources["disk"]["min"])+")"+ " - " + \
-				"net" + "("+str(resources["net"]["max"])+","+str(resources["net"]["min"])+")"
-			
-			limits = database_handler.get_limits(container)["resources"]
-			print "LIMITS: "  + \
-				"cpu" + "("+str(limits["cpu"]["upper"])+","+str(limits["cpu"]["lower"])+")" + " - " + \
-				"mem" + "("+str(limits["mem"]["upper"])+","+str(limits["mem"]["lower"])+")" + " - " + \
-				"disk" + "("+str(limits["disk"]["upper"])+","+str(limits["disk"]["lower"])+")" + " - " + \
-				"net" + "("+str(limits["net"]["upper"])+","+str(limits["net"]["lower"])+")"
+			try:
+				delta = time.time()
+				delta = pet_watchdog("start", delta)
 				
-			print "USAGES: " + str(usages)
-			events = []
-			for event in triggered_events: events.append(event["name"])
-			print "TRIGGERED EVENTS " + str(events)
-			print "NODE EVENTS " + str(json.dumps(get_structure_events(container)))
+				usages = get_structure_usages(container, window_difference, window_delay)
+				delta = pet_watchdog("with monitor data retrieved", delta)
+				
+				limits = database_handler.get_limits(container)["resources"]
+				delta = pet_watchdog("with limits retrieved", delta)
+				triggered_events = match_container_limits(
+					container,
+					usages, 
+					container["resources"],
+					limits, 
+					rules)
+				process_events(triggered_events)
+				delta = pet_watchdog("with events processed", delta)
+
+
+				events = reduce_structure_events(filter_and_purge_old_events(container, event_timeout))
+				delta = pet_watchdog("with structure events retrieved", delta)
+				triggered_requests = match_structure_events(
+					container,
+					events, 
+					rules)
+				process_requests(triggered_requests)
+				delta = pet_watchdog("with requests processed", delta)
+				
+				## DEBUG AND INFO OUTPUT
+				print_debug_info(container, usages, triggered_events, triggered_requests)
 			
-			requests = []
-			for request in triggered_requests: requests.append(request)
-			print "TRIGGERED REQUESTS " + str(requests)
-			print
+			except Exception as e:
+				print "ERROR with container: " + container["name"]
+				print str(e)
+				traceback.print_exc()
+		epoch_end = time.time()
+		processing_time = epoch_end - epoch_start
+		print "It took " + str(processing_time) + " seconds to process " + str(len(containers)) + " nodes."
+		print
 			
 		time.sleep(window_difference)
 

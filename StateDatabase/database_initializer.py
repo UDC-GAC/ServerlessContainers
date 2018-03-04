@@ -28,62 +28,53 @@ def initialize():
 	remove_all_dbs()
 	create_all_dbs()
 
-
+	
+	#containers = ["node0","node1","node2","node3"]
+	containers = ["node0"]
 	# CREATE LIMITS
 	if handler.database_exists("limits"):
 		print ("Adding 'limits' documents")
-		node0 = dict(
-			#_id = 'node0', 
-			type='limit', 
-			structure='node0', 
-			resources=dict(
-				cpu=dict(upper=150,lower=70), 
-				mem=dict(upper=8000,lower=7000), 
-				disk=dict(upper=100,lower=100), 
-				net=dict(upper=100,lower=100)
+		for c in containers:
+			container = dict(
+				type='limit', 
+				structure=c, 
+				resources=dict(
+					cpu=dict(upper=150,lower=70), 
+					mem=dict(upper=8000,lower=7000), 
+					disk=dict(upper=100,lower=100), 
+					net=dict(upper=100,lower=100)
+				)
 			)
-		)
-		node1 = dict(
-			#_id = 'node1', 
-			type='limit', 
-			structure='node1', 
-			resources=dict(
-				cpu=dict(upper=300,lower=100), 
-				mem=dict(upper=2048,lower=1024),
-				disk=dict(upper=100,lower=100),
-				net=dict(upper=100,lower=100)
-			)
-		)
-		handler.add_doc("limits", node0)
-		handler.add_doc("limits", node1)
-
-	# CREATE STRUCTURE
+			handler.add_doc("limits", container)
+		
+	# CREATE STRUCTURES
 	if handler.database_exists("structures"):
 		print ("Adding 'structures' documents")
-		node0 = dict(
-			type='structure', 
-			subtype='container',
-			name='node0', 
-			resources=dict(
-				cpu=dict(max=300,min=50), 
-				mem=dict(max=8192,min=256), 
-				disk=dict(max=100,min=100), 
-				net=dict(max=100,min=100)
+		for c in containers:
+			container = dict(
+				type='structure', 
+				subtype='container',
+				name=c, 
+				resources=dict(
+					cpu=dict(max=300,min=50), 
+					mem=dict(max=8192,min=256), 
+					disk=dict(max=100,min=100), 
+					net=dict(max=100,min=100)
+				)
 			)
+			handler.add_doc("structures", container)
+		
+		host = dict(
+				type='structure', 
+				subtype='host',
+				name="dante", 
+				resources=dict(
+					cpu=800, 
+					mem=46000
+				)
 		)
-		node1 = dict(
-			type='structure', 
-			subtype='container',
-			name='node1', 
-			resources=dict(
-				cpu=dict(max=400,min=100), 
-				memory=dict(max=4096,min=512), 
-				disk=dict(max=100,min=100), 
-				network=dict(max=100,min=100)
-			)
-		)
-		handler.add_doc("structures", node0)
-		#handler.add_doc("nodes", node1)
+		handler.add_doc("structures", host)
+		
 		
 	# CREATE RULES
 	if handler.database_exists("rules"):
