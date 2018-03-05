@@ -6,11 +6,13 @@ from flask import abort
 from flask import Response
 import json 
 import time
+import sys
 
-import node_resource_manager as NodeResourceManager
+sys.path.append('../NodeManager')
+import lxd_node_resource_manager as NodeResourceManager
 
 app = Flask(__name__)
-#CORS(app)
+
 
 @app.route("/container/", methods=['GET'])
 def get_containers_resources():
@@ -31,8 +33,9 @@ def get_containers_resources():
 @app.route("/container/<container_name>", methods=['PUT'])
 def set_container_resources(container_name):
 	if container_name != "":
-		if not NodeResourceManager.set_node_resources(container_name, request.json):
-			return abort(500)
+		success, applied_config = NodeResourceManager.set_node_resources(container_name, request.json)
+		if not success:
+			return Response(json.dumps(applied_config), status=500, mimetype='application/json')
 		else:				
 			applied_config = NodeResourceManager.get_node_resources(container_name)
 			if applied_config != None:
