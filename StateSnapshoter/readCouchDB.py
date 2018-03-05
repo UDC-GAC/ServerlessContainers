@@ -34,7 +34,7 @@ database_handler = couchDB.CouchDBServer()
 while(True):
 	for limit in database_handler.get_all_database_docs("limits"):
 		translate_doc_to_timeseries(limit)
-	for structure in database_handler.get_all_database_docs("structures"):
+	for structure in database_handler.get_structures(subtype="container"):
 		translate_doc_to_timeseries(structure)
 	time.sleep(10)
 

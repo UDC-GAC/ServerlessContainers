@@ -171,38 +171,36 @@ def get_config_value(config, key):
 
 def try_get_value(dict, key):
 	try:
-		return dict[key]
+		#return str("%.2f" % dict[key]) # Float with 2 decimals
+		return int(dict[key])
 	except KeyError:
 		return "n/a"
 
-def print_container_status(resource_label, resources_dict, limits_dict):
+def print_container_status(resource_label, resources_dict, limits_dict, usages_dict):
+	translator_dict = {"cpu": "proc.cpu.user", "mem":"proc.mem.resident"}
+	if usages_dict[translator_dict[resource_label]] == -1 : 
+		usage_value_string = "n/a"
+	else:
+		usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
+			
+			
 	return 	\
 		(str(try_get_value(resources_dict[resource_label], "max"))+","+ \
-		str(try_get_value(limits_dict[resource_label], "upper"))+","+ \
 		str(try_get_value(resources_dict[resource_label], "current"))+","+ \
+		str(try_get_value(limits_dict[resource_label], "upper"))+","+ \
+		usage_value_string+","+ \
 		str(try_get_value(limits_dict[resource_label], "lower"))+","+ \
 		str(try_get_value(resources_dict[resource_label], "min")))
-
-def print_container_usages(usages):
-	translator_dict = {"cpu": "proc.cpu.user", "mem":"proc.mem.resident"}
-	string = ""
-	for resource in ["cpu","mem"]:
-		if usages[translator_dict[resource]] == -1 : usages[translator_dict[resource]] = "n/a"
-		string += resource + "(" + str(usages[translator_dict[resource]]) + ")" + " "
-
-	return string
 
 def print_debug_info(container, usages, triggered_events, triggered_requests):
 	resources = container["resources"]
 	limits = database_handler.get_limits(container)["resources"]
 	print " @" + container["name"]
 	print "   #RESOURCES: " + \
-		"cpu(" + print_container_status("cpu", resources, limits) + ")"+ \
+		"cpu(" + print_container_status("cpu", resources, limits, usages) + ")"+ \
 		 " - " + \
-		"mem(" + print_container_status("mem", resources, limits) + ")"
-	
-	print "   #USAGES: " + print_container_usages(usages)
-	
+		"mem(" + print_container_status("mem", resources, limits, usages) + ")"
+		
 	events = []
 	for event in triggered_events: events.append(event["name"])
 	requests = []

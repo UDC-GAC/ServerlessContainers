@@ -1,9 +1,7 @@
 {
     "cpu": {
-        "cpu_allowance_limit": "-1",
-        "cpu_num_limit": "0,2",
-        "effective_num_cpus": "2",
-        "success": true
+        "cpu_allowance_limit": "101",
+	"cpu_num" : 2
     },
     "disks": [
         {

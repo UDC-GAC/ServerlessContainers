@@ -44,6 +44,8 @@ CPU_LIMIT_ALLOWANCE_LABEL = "cpu_allowance_limit"
 CPU_EFFECTIVE_CPUS_LABEL="effective_num_cpus"
 CPU_EFFECTIVE_LIMIT = "effective_cpu_limit"
 
+TICKS_PER_CPU_PERCENTAGE = 1000
+
 def get_node_cpus(container):
 	## Get info from cgroups cpuacct subsystem
 	cpu_accounting_path = "/".join([CGROUP_PATH,"cpuacct","lxc",container.name,"cpu.cfs_quota_us"])
@@ -52,7 +54,7 @@ def get_node_cpus(container):
 		cpu_limit = int(op["data"])
 		if cpu_limit != -1:
 			# A limit is set, else leave it untouched
-			cpu_limit = int(op["data"]) / 100
+			cpu_limit = int(op["data"]) / TICKS_PER_CPU_PERCENTAGE
 	else:
 		return op
 
@@ -77,14 +79,14 @@ def get_node_cpus(container):
 		else:
 			effective_cpus += (int(ranges[1]) - int(ranges[0])) + 1 
 	
-	# Get the effective limit of the container, if allowance is set, then allowance,
-	#otherwise it is the number of cores multiplied per 100%
+	# Get the effective limit of the container, if allowance is set, then it 
+	# is limited by number of cpus available otherwise it is the number of 
+	# cores multiplied per 100 for percentage
 	if cpu_limit == -1:
 		effective_limit = effective_cpus * 100
-		cpu_limit = str(cpu_limit)
 	else:
-		effective_limit = cpu_limit
-		cpu_limit = str(cpu_limit) + '%'
+		effective_limit = min(cpu_limit, effective_cpus * 100)
+	cpu_limit = str(cpu_limit) 
 	
 	final_dict = dict()
 	final_dict[CPU_LIMIT_CPUS_LABEL] = cpus
@@ -93,6 +95,12 @@ def get_node_cpus(container):
 	final_dict[CPU_LIMIT_ALLOWANCE_LABEL] = cpu_limit
 	
 	return ({"success": True, "data": final_dict})
+
+##
+def dump(obj):
+  for attr in dir(obj):
+    print("obj.%s = %r" % (attr, getattr(obj, attr)))
+##
 	
 def set_node_cpus(container, cpu_resource):
 	if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
@@ -102,21 +110,24 @@ def set_node_cpus(container, cpu_resource):
 			if cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL] == "-1":
 				cpu_limit = -1
 			else:
-				cpu_limit = int(cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL][:-1]) # Strip the percentage char and cast to int
+				cpu_limit = int(cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL])
 		except ValueError as e:
 			return ({"success": False,"error": str(e)})
 			
 		if cpu_limit == 0:
 			quota = -1 # Set to max
 		else:
-			quota = 100 * cpu_limit # Every 100 period ticks count as 1% of CPU
+			quota = TICKS_PER_CPU_PERCENTAGE * cpu_limit # Every 1000 period ticks count as 1% of CPU
 		
 		op = write_cgroup_file_value(cpu_accounting_path, str(quota))
 		if not op["success"]:
 			#Something happened
 			return op
-					
+	
+	#print dump(container)
+				
 	if CPU_LIMIT_CPUS_LABEL in cpu_resource:
+		#container.config["limits.cpu"] = cpu_resource[CPU_LIMIT_CPUS_LABEL]
 		cpu_cpuset_path = "/".join([CGROUP_PATH,"cpuset","lxc",container.name,"cpuset.cpus"])
 		
 		op = write_cgroup_file_value(cpu_cpuset_path, str(cpu_resource[CPU_LIMIT_CPUS_LABEL]))

@@ -1,6 +1,6 @@
 {
     "cpu": {
-        "cpu_allowance_limit": "110%",
+        "cpu_allowance_limit": "110",
         "cpu_num_limit": "5,7",
         "effective_num_cpus": "2",
         "success": true

@@ -29,8 +29,8 @@ def initialize():
 	create_all_dbs()
 
 	
-	containers = ["node0","node1","node2","node3"]
-	#containers = ["node0"]
+	#containers = ["node0","node1","node2","node3"]
+	containers = ["node0"]
 	# CREATE LIMITS
 	if handler.database_exists("limits"):
 		print ("Adding 'limits' documents")
@@ -86,8 +86,8 @@ def initialize():
 		handler.add_doc("rules", cpu_exceeded_upper)
 		handler.add_doc("rules", cpu_dropped_lower)
 
-		CpuRescaleUp = dict(_id = 'CpuRescaleUp', type='rule', resource="cpu", name='CpuRescaleUp', rule=dict({">":[{"var": "events.scale.up"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleUp"]}, amount=100)
-		CpuRescaleDown = dict(_id = 'CpuRescaleDown', type='rule', resource="cpu", name='CpuRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]}, amount=-100)
+		CpuRescaleUp = dict(_id = 'CpuRescaleUp', type='rule', resource="cpu", name='CpuRescaleUp', rule=dict({">":[{"var": "events.scale.up"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleUp"]}, amount=10)
+		CpuRescaleDown = dict(_id = 'CpuRescaleDown', type='rule', resource="cpu", name='CpuRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]}, amount=-10)
 		handler.add_doc("rules", CpuRescaleUp)
 		handler.add_doc("rules", CpuRescaleDown)
 		

@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import requests
+import math
 
 sys.path.append('../StateDatabase')
 import couchDB
@@ -65,26 +66,52 @@ def get_container_resources(container):
 		return None
 
 
-def apply_request(request, resources):
+def apply_request(request, resources, specified_resources):
 	action = request["action"]
 	amount = request["amount"]
 	resource_dict = dict()
 	resource_dict[request["resource"]] = dict()
 	
 	if request["resource"] == "cpu":
-		pass
+		resource_dict["cpu"] = dict()
+		current_cpu_limit = resources["cpu"]["cpu_allowance_limit"]
+		if current_cpu_limit == "-1":
+			# CPU is set to unlimited so just apply limit
+			current_cpu_limit = specified_resources["max"] # Start with max resources
+			#current_cpu_limit = specified_resources["min"] # Start with min resources
+			# Careful as values over the max and under the min can be generated with this code
+			return None
+		else:
+			try:
+				current_cpu_limit = int(current_cpu_limit)
+			except ValueError:
+				# Bad value
+				return None
+		
+		effective_cpu_limit = int(resources["cpu"]["effective_num_cpus"])
+		cpu_allowance_limit = current_cpu_limit + amount
+		
+		if cpu_allowance_limit + 100 < effective_cpu_limit or cpu_allowance_limit >= effective_cpu_limit:
+			# Round up the number of cores needed as 
+			# - at least one core can be reclaimed because of underuse or
+			# - not enough cores to apply the limit or close to the limit
+			number_of_cpus_requested = int(math.ceil(cpu_allowance_limit / 100.0))
+			resource_dict["cpu"]["cpu_num"] = str(range(number_of_cpus_requested)[0]) + "-" +str(range(number_of_cpus_requested)[-1])
+		
+		resource_dict["cpu"]["cpu_allowance_limit"] = cpu_allowance_limit
 		
 	elif request["resource"] == "mem":
 		current_mem_limit = resources["mem"]["mem_limit"]
-		try:
-			if current_mem_limit == "-1":
-				# Memory is set to unlimited so can't do anything
-				return None
-			else:
-				current_mem_limit = int(current_mem_limit)
-		except ValueError:
-			# Bad value
+		if current_mem_limit == "-1":
+			# MEM is set to unlimited so just apply limit
+			# FIX
 			return None
+		else:
+			try:
+				current_mem_limit = int(current_mem_limit)
+			except ValueError:
+				# Bad value
+				return None
 		resource_dict["mem"] = dict()
 		resource_dict["mem"]["mem_limit"] = str(int(amount + current_mem_limit)) + 'M'
 		
@@ -99,28 +126,33 @@ def set_container_resources(container, resources):
 		r.raise_for_status()
 
 
-def process_request(request, resources):
+def process_request(request, real_resources, specified_resources):
 	#Generate the changed_resources document 
-	new_resources = apply_request(request, resources)
+	new_resources = apply_request(request, real_resources, specified_resources)
+	
 	if new_resources:
 		print "Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources)
 		try:
+			structure = request["structure"]
+			resource = request["resource"]
+			
 			# Apply changes through a REST call
-			applied_resources = set_container_resources(request["structure"], new_resources)
+			applied_resources = set_container_resources(structure, new_resources)
 			
 			# Remove the request from the database
 			database_handler.delete_request(request)
 			
 			# Update the limits
-			limits = database_handler.get_limits({"name":request["structure"]})
-			limits["resources"][request["resource"]]["upper"] += request["amount"] 
-			limits["resources"][request["resource"]]["lower"] += request["amount"]
+			limits = database_handler.get_limits({"name":structure})
+			limits["resources"][resource]["upper"] += request["amount"] 
+			limits["resources"][resource]["lower"] += request["amount"]
 			database_handler.update_doc("limits", limits)
 			
 			# Update the structure current value
-			structure = database_handler.get_structure(request["structure"])
-			structure["resources"][request["resource"]]["current"] = applied_resources[request["resource"]]["mem_limit"] # FIX
-			database_handler.update_doc("structures", structure)
+			current_value_label = {"cpu":"cpu_allowance_limit", "mem":"mem_limit"}
+			updated_structure = database_handler.get_structure(structure)
+			updated_structure["resources"][resource]["current"] = applied_resources[resource][current_value_label[resource]]
+			database_handler.update_doc("structures", updated_structure)
 		except requests.exceptions.HTTPError:
 			print "FAIL"
 			return
@@ -138,7 +170,9 @@ def scale():
 		else:
 			print("Requests at " + time.strftime("%D %H:%M:%S", time.localtime()))
 			for request in requests:
-				process_request(request, get_container_resources(request["structure"])) 
+				real_resources = get_container_resources(request["structure"])
+				specified_resources = database_handler.get_structure(request["structure"])
+				process_request(request, real_resources, specified_resources) 
 
 		time.sleep(polling_frequency)
 
