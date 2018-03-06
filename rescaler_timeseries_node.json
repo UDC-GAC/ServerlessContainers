@@ -36,6 +36,39 @@
 		},{
 			"metrics":[
 				{
+					"metric": "structure.cpu.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				},	
+				{
+					"metric": "proc.cpu.user",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				},{
+					"metric": "limit.cpu.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				},{
+					"metric": "limit.cpu.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node0"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 800
+			}
+		},{
+			"metrics":[
+				{
 					"metric": "structure.mem.current",
 					"aggregator" : "zimsum",
 					"tags" : [
@@ -65,6 +98,39 @@
 			"yranges":{
 				"ymin": 0,
 				"ymax": 8192
+			}
+		},{
+			"metrics":[
+				{
+					"metric": "structure.cpu.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				},	
+				{
+					"metric": "proc.cpu.user",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				},{
+					"metric": "limit.cpu.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				},{
+					"metric": "limit.cpu.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node1"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 800
 			}
 		},{
 			"metrics":[
@@ -102,6 +168,39 @@
 		},{
 			"metrics":[
 				{
+					"metric": "structure.cpu.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				},	
+				{
+					"metric": "proc.cpu.user",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				},{
+					"metric": "limit.cpu.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				},{
+					"metric": "limit.cpu.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node2"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 800
+			}
+		},{
+			"metrics":[
+				{
 					"metric": "structure.mem.current",
 					"aggregator" : "zimsum",
 					"tags" : [
@@ -131,6 +230,39 @@
 			"yranges":{
 				"ymin": 0,
 				"ymax": 8192
+			}
+		},{
+			"metrics":[
+				{
+					"metric": "structure.cpu.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				},	
+				{
+					"metric": "proc.cpu.user",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				},{
+					"metric": "limit.cpu.lower",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				},{
+					"metric": "limit.cpu.upper",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node3"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 800
 			}
 		}
 	]

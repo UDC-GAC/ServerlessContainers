@@ -81,12 +81,12 @@ def get_node_cpus(container_name):
 		effective_limit = effective_cpus * 100
 	else:
 		effective_limit = min(cpu_limit, effective_cpus * 100)
-	cpu_limit = str(cpu_limit) 
+	#cpu_limit = str(cpu_limit) 
 	
 	final_dict = dict()
 	final_dict[CPU_LIMIT_CPUS_LABEL] = cpus
-	final_dict[CPU_EFFECTIVE_CPUS_LABEL] = str(effective_cpus)
-	final_dict[CPU_EFFECTIVE_LIMIT] = str(effective_limit)
+	final_dict[CPU_EFFECTIVE_CPUS_LABEL] = effective_cpus
+	final_dict[CPU_EFFECTIVE_LIMIT] = effective_limit
 	final_dict[CPU_LIMIT_ALLOWANCE_LABEL] = cpu_limit
 	
 	return (True, final_dict)

@@ -148,11 +148,14 @@ def process_request(request, real_resources, specified_resources):
 			limits["resources"][resource]["lower"] += request["amount"]
 			database_handler.update_doc("limits", limits)
 			
+			
 			# Update the structure current value
 			current_value_label = {"cpu":"cpu_allowance_limit", "mem":"mem_limit"}
 			updated_structure = database_handler.get_structure(structure)
 			updated_structure["resources"][resource]["current"] = applied_resources[resource][current_value_label[resource]]
 			database_handler.update_doc("structures", updated_structure)
+			
+			
 		except requests.exceptions.HTTPError:
 			print "FAIL"
 			return

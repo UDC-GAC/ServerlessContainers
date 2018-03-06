@@ -155,7 +155,10 @@ def match_structure_events(structure, events, rules):
 					action=rule["action"]["requests"][0], 
 					timestamp=int(time.time()))
 				)
-				database_handler.delete_num_events_by_structure(structure, generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"])
+				database_handler.delete_num_events_by_structure(
+					structure, 
+					generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"]
+				)
 	return requests
 
 
@@ -192,6 +195,7 @@ def print_container_status(resource_label, resources_dict, limits_dict, usages_d
 		str(try_get_value(limits_dict[resource_label], "lower"))+","+ \
 		str(try_get_value(resources_dict[resource_label], "min")))
 
+
 def print_debug_info(container, usages, triggered_events, triggered_requests):
 	resources = container["resources"]
 	limits = database_handler.get_limits(container)["resources"]
@@ -208,7 +212,39 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
 	
 	print "   #TRIGGERED EVENTS " + str(events) + " AND TRIGGERED REQUESTS " + str(requests)
 	
+
+
+def check_invalid_values(value1, label1, value2, label2):
+	if value1 > value2: 
+		raise ValueError(
+			"value for '" + label1 + "': " + str(value1) + \
+			" is greater than " + \
+			"value for '" + label2 + "': " + str(value2))
+
+#def check_close_boundaries():
+
+def check_invalid_state(container):
+	resources = container["resources"]
+	limits = database_handler.get_limits(container)["resources"]
 	
+	for resource in ["cpu","mem"]:
+		max_value = try_get_value(resources[resource], "max")
+		current_value = try_get_value(resources[resource], "current")
+		upper_value = try_get_value(limits[resource], "upper")
+		lower_value = try_get_value(limits[resource], "lower")
+		min_value = try_get_value(resources[resource], "min")
+		
+		# Check if the first value is greater than the second
+		# check the full chain max > upper > current > lower > min
+		check_invalid_values(min_value, "current", max_value, "max")
+		check_invalid_values(upper_value, "upper", current_value, "current")
+		check_invalid_values(lower_value, "lower", upper_value, "upper")
+		check_invalid_values(min_value, "min", max_value, "lower")
+		
+		
+		
+	
+
 def pet_watchdog(stage, delta):
 	print "Reached stage: " + stage + " at time: " + str("%.2f" % (time.time() - delta))
 	return time.time()
@@ -231,6 +267,8 @@ def guard():
 		containers = database_handler.get_structures(subtype="container")
 		for container in containers:
 			try:
+				check_invalid_state(container)
+
 				#delta = time.time()
 				#delta = pet_watchdog("start", delta)
 				
