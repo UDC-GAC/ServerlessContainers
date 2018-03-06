@@ -39,6 +39,8 @@ METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.vi
 RESOURCES = ['cpu','mem','disk','net']
 ########################
 
+translator_dict = {"cpu": "proc.cpu.user", "mem":"proc.mem.resident"}
+
 NO_METRIC_DATA_DEFAULT_VALUE = -1
 ## GET THESE VARIABLES FROM STATE DATABASE
 
@@ -63,7 +65,12 @@ def get_structure_usages(structure, window_difference, window_delay):
 		else:
 			average_real = 0
 		usages[metric["metric"]] = average_real
-		
+	
+	# TEMPORAL HACK, FIX !!!!
+	if "proc.cpu.user" in usages and "proc.cpu.kernel" in usages:
+		usages["proc.cpu.user"] += usages["proc.cpu.kernel"]
+	# TEMPORAL HACK, FIX !!!!
+	
 	return usages
 
 
@@ -141,23 +148,45 @@ def process_requests(requests):
 		database_handler.add_doc("requests", request)
 
 
-def match_structure_events(structure, events, rules):
+def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
+	current_resource_limit = structure["resources"][resource]["current"]
+	current_resource_usage = usages[translator_dict[resource]]
+	
+	difference = current_resource_limit - current_resource_usage
+	
+	if percentage_reduction > 100:
+		percentage_reduction = 90 
+	
+	amount = max(int(-1 * (percentage_reduction * difference) / 100), 0)
+	return amount
+
+def match_structure_events(structure, events, rules, usages):
 	requests = []
-	data = events
 	for rule in rules:
 		if rule["generates"] == "requests":
-			if(jsonLogic(rule["rule"], data[rule["resource"]])):
+			if(jsonLogic(rule["rule"], events[rule["resource"]])):
+				# Match, generate request
+				if "rescale_by" in rule.keys():
+					if rule["rescale_by"] == "amount":
+						amount=rule["amount"]
+					elif rule["rescale_by"] == "percentage_reduction":
+						amount = get_amount_from_percentage_reduction(structure, usages, rule["resource"], int(rule["percentage_reduction"]))
+						#print "it would be :" + str(amount)
+						#amount=rule["amount"]
+				else:
+					amount=rule["amount"]
+					
 				requests.append(dict(
 					type="request",
 					resource=rule["resource"],
-					amount=rule["amount"],
+					amount=amount,
 					structure=structure["name"], 
 					action=rule["action"]["requests"][0], 
 					timestamp=int(time.time()))
 				)
 				database_handler.delete_num_events_by_structure(
 					structure, 
-					generateEventName(data[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"]
+					generateEventName(events[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"]
 				)
 	return requests
 
@@ -180,7 +209,6 @@ def try_get_value(dict, key):
 		return "n/a"
 
 def print_container_status(resource_label, resources_dict, limits_dict, usages_dict):
-	translator_dict = {"cpu": "proc.cpu.user", "mem":"proc.mem.resident"}
 	if usages_dict[translator_dict[resource_label]] == -1 : 
 		usage_value_string = "n/a"
 	else:
@@ -221,11 +249,18 @@ def check_invalid_values(value1, label1, value2, label2):
 			" is greater than " + \
 			"value for '" + label2 + "': " + str(value2))
 
-#def check_close_boundaries():
-
+def check_close_boundaries(value1, label1, value2, label2, boundary):
+	if value1 - boundary <= value2: 
+		raise ValueError(
+			"value for '" + label1 + "': " + str(value1) + \
+			" is too close ("+str(boundary)+") to " + \
+			"value for '" + label2 + "': " + str(value2))
+			
 def check_invalid_state(container):
 	resources = container["resources"]
 	limits = database_handler.get_limits(container)["resources"]
+	
+	resources_boundaries = {"cpu":15,"mem":170} # Better don't set multiples of steps
 	
 	for resource in ["cpu","mem"]:
 		max_value = try_get_value(resources[resource], "max")
@@ -236,12 +271,19 @@ def check_invalid_state(container):
 		
 		# Check if the first value is greater than the second
 		# check the full chain max > upper > current > lower > min
-		check_invalid_values(min_value, "current", max_value, "max")
+		if current_value != "n/a":
+			check_invalid_values(min_value, "current", max_value, "max")
 		check_invalid_values(upper_value, "upper", current_value, "current")
 		check_invalid_values(lower_value, "lower", upper_value, "upper")
 		check_invalid_values(min_value, "min", max_value, "lower")
 		
-		
+		try:
+			# Check that there is a boundary between values, like the current and upper, so
+			# that the limit can be surpassed
+			if current_value != "n/a":
+				check_close_boundaries(current_value, "current", upper_value, "upper", resources_boundaries[resource])
+		except ValueError as e:
+			print "WARN: " + str(e)
 		
 	
 
@@ -292,7 +334,8 @@ def guard():
 				triggered_requests = match_structure_events(
 					container,
 					events, 
-					rules)
+					rules,
+					usages)
 				process_requests(triggered_requests)
 				#delta = pet_watchdog("with requests processed", delta)
 				

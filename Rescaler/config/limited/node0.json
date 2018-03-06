@@ -1,6 +1,6 @@
 {
   "cpu": {
-    "cpu_allowance_limit": "150", 
+    "cpu_allowance_limit": "200", 
     "cpu_num": "0,2" 
   }, 
   "disks": [

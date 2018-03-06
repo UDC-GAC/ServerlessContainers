@@ -39,7 +39,7 @@ def initialize():
 				type='limit', 
 				structure=c, 
 				resources=dict(
-					cpu=dict(upper=150,lower=70), 
+					cpu=dict(upper=140,lower=70), 
 					mem=dict(upper=8000,lower=7000), 
 					disk=dict(upper=100,lower=100), 
 					net=dict(upper=100,lower=100)
@@ -92,13 +92,84 @@ def initialize():
 		handler.add_doc("rules", CpuRescaleDown)
 		
 		# MEM
-		mem_exceeded_upper = dict(_id = 'mem_exceeded_upper', type='rule', resource="mem", name='mem_exceeded_upper', rule=dict({"and":[{">":[{"var": "proc.mem.resident"},{"var": "limits.mem.upper"}]},{"<":[{"var": "limits.mem.upper"},{"var": "structure.mem.max"}]}]}), generates="events", action={"events":{"scale":{"up":1}}})
-		mem_dropped_lower = dict(_id = 'mem_dropped_lower', type='rule', resource="mem", name='mem_dropped_lower', rule=dict({"and":[{">":[{"var": "proc.mem.resident"},0]},{"<":[{"var": "proc.mem.resident"},{"var": "limits.mem.lower"}]},{">":[{"var": "limits.mem.lower"},{"var": "structure.mem.min"}]}]}), generates="events", action={"events":{"scale":{"down":1}}})
+		mem_exceeded_upper = dict(
+			_id = 'mem_exceeded_upper', 
+			type='rule', 
+			resource="mem", 
+			name='mem_exceeded_upper', 
+			rule=dict(
+				{"and":[
+					{">":[
+						{"var": "proc.mem.resident"},
+						{"var": "limits.mem.upper"}]},
+					{"<":[
+						{"var": "limits.mem.upper"},
+						{"var": "structure.mem.max"}]}
+					]
+				}), 
+			generates="events", 
+			action={"events":{"scale":{"up":1}}}
+		)
+		
+		mem_dropped_lower = dict(
+			_id = 'mem_dropped_lower', 
+			type='rule', 
+			resource="mem", 
+			name='mem_dropped_lower', 
+			rule=dict(
+				{"and":[
+					{">":[
+						{"var": "proc.mem.resident"},
+						0]},
+					{"<":[
+						{"var": "proc.mem.resident"},
+						{"var": "limits.mem.lower"}]},
+					{">":[
+						{"var": "limits.mem.lower"},
+						{"var": "structure.mem.min"}]}
+					]}
+				), 
+				generates="events", 
+				action={"events":{"scale":{"down":1}}}
+		)
+				
 		handler.add_doc("rules", mem_exceeded_upper)
 		handler.add_doc("rules", mem_dropped_lower)
 
-		MemRescaleUp = dict(_id = 'MemRescaleUp', type='rule', resource="mem", name='MemRescaleUp', rule=dict({">":[{"var": "events.scale.up"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleUp"]}, amount=256)
-		MemRescaleDown = dict(_id = 'MemRescaleDown', type='rule', resource="mem", name='MemRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), generates="requests", events_to_remove=3, action={"requests":["MemRescaleDown"]}, amount=-256)
+		MemRescaleUp = dict(
+			_id = 'MemRescaleUp', 
+			type='rule', 
+			resource="mem", 
+			name='MemRescaleUp', 
+			rule=dict(
+				{">":[
+					{"var": "events.scale.up"},
+					2]}), 
+			generates="requests", 
+			events_to_remove=2, 
+			action={"requests":["MemRescaleUp"]}, 
+			amount=2560,
+			percentage_difference=20,
+			rescale_by = "amount"
+		)
+		
+		MemRescaleDown = dict(
+			_id = 'MemRescaleDown', 
+			type='rule', 
+			resource="mem", 
+			name='MemRescaleDown', 
+			rule=dict(
+				{">":[
+					{"var": "events.scale.down"},
+					3]}), 
+			generates="requests", 
+			events_to_remove=3, 
+			action={"requests":["MemRescaleDown"]}, 
+			amount=-512,
+			percentage_reduction=50,
+			rescale_by = "percentage_reduction"
+		)
+		
 		handler.add_doc("rules", MemRescaleUp)
 		handler.add_doc("rules", MemRescaleDown)
 
@@ -108,12 +179,12 @@ def initialize():
 		print ("Adding 'config' document")
 		config = dict(_id='config', type='config', name='config', 
 			guardian_config=dict(
-				WINDOW_TIMELAPSE = 10, 
+				WINDOW_TIMELAPSE = 5, 
 				WINDOW_DELAY = 10,
 				EVENT_TIMEOUT = 40
 			),
 			scaler_config=dict(
-				POLLING_FREQUENCY = 20,
+				POLLING_FREQUENCY = 10,
 				REQUEST_TIMEOUT = 60
 			)
 		)

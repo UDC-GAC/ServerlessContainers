@@ -31,7 +31,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 8192
+				"ymax": 9000
 			}
 		},{
 			"metrics":[
@@ -64,7 +64,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 800
+				"ymax": 300
 			}
 		},{
 			"metrics":[
@@ -97,7 +97,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 8192
+				"ymax": 9000
 			}
 		},{
 			"metrics":[
@@ -130,7 +130,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 800
+				"ymax": 300
 			}
 		},{
 			"metrics":[
@@ -163,7 +163,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 8192
+				"ymax": 9000
 			}
 		},{
 			"metrics":[
@@ -196,7 +196,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 800
+				"ymax": 300
 			}
 		},{
 			"metrics":[
@@ -229,7 +229,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 8192
+				"ymax": 9000
 			}
 		},{
 			"metrics":[
@@ -262,7 +262,7 @@
 			],
 			"yranges":{
 				"ymin": 0,
-				"ymax": 800
+				"ymax": 300
 			}
 		}
 	]
