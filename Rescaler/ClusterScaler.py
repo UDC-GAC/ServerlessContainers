@@ -24,7 +24,6 @@ def filter_requests(request_timeout):
 	filtered_requests = list()
 	merged_requests = list()
 	all_requests = database_handler.get_requests()
-	
 	# First purge the old requests
 	for request in all_requests:
 		if request["timestamp"] < time.time() - request_timeout:
@@ -123,6 +122,7 @@ def set_container_resources(container, resources):
 	if r.status_code == 201:
 		return dict(r.json())
 	else:
+		return dict(r.json())
 		r.raise_for_status()
 
 
@@ -152,17 +152,26 @@ def process_request(request, real_resources, specified_resources):
 			# Update the structure current value
 			current_value_label = {"cpu":"cpu_allowance_limit", "mem":"mem_limit"}
 			updated_structure = database_handler.get_structure(structure)
+			print json.dumps(applied_resources)
 			updated_structure["resources"][resource]["current"] = applied_resources[resource][current_value_label[resource]]
 			database_handler.update_doc("structures", updated_structure)
 			
 			
-		except requests.exceptions.HTTPError:
-			print "FAIL"
+		except requests.exceptions.HTTPError as e:
+			print "FAIL: " + str(e) + json.dumps(applied_resources)
 			return
 
 def scale():
 	while True:
-		config = database_handler.get_all_database_docs("config")[0] #FIX
+		service = database_handler.get_service("scaler")
+
+		# HEARTBEAT
+		service["heartbeat"] =  time.strftime("%D %H:%M:%S", time.localtime())
+		database_handler.update_doc("services", service)
+		
+		# CONFIG		
+		#config = database_handler.get_all_database_docs("config")[0] #FIX
+		config = service["config"]
 		polling_frequency = get_config_value(config, "POLLING_FREQUENCY")
 		request_timeout = get_config_value(config, "REQUEST_TIMEOUT")
 		

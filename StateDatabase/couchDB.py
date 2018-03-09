@@ -44,7 +44,7 @@ class CouchDBServer:
 				req_doc = requests.get(self.server + "/" + database + "/" + row["id"])
 				docs.append(dict(req_doc.json()))
 			return docs
-
+	
 	def delete_doc(self, database, id, rev):
 		r = requests.delete(self.server + "/" + database + "/" + str(id) + "?rev=" + str(rev))
 		if r.status_code != 200:
@@ -66,38 +66,32 @@ class CouchDBServer:
 		else:
 			return True
 	
-	def get_structures(self, subtype=None):
-		docs = list()
-		if subtype == None:
-			subtype = "container"
+	
+	def find_documents_by_matches(self, database, selectors):
+		query = {"selector": {}}
 		
-		query = {"selector": {"subtype": subtype}}
-		req_docs = requests.post(self.server + "/structures/_find", data=json.dumps(query), headers = {'Content-Type': 'application/json'})
+		for key in selectors:
+			query["selector"][key] = selectors[key]
+
+		req_docs = requests.post(self.server + "/"+database+"/_find", data=json.dumps(query), headers = {'Content-Type': 'application/json'})
 		if req_docs.status_code != 200:
 			req_docs.raise_for_status()
 		else:
 			return req_docs.json()["docs"]
+			
+	
+	def get_structures(self, subtype=None):
+		if subtype == None:
+			return self.get_all_database_docs("structures")
+		else:
+			return self.find_documents_by_matches("structures", {"subtype": subtype})
 	
 	def get_structure(self, structure_name):
-		docs = list()
-		r = requests.get(self.server + "/structures/_all_docs")
-		if r.status_code != 200:
-			r.raise_for_status()
-		else:
-			rows = json.loads(r.text)["rows"]
-			for row in rows:
-				req_doc = requests.get(self.server + "/structures/" + row["id"])
-				if req_doc.json()["name"] == structure_name:
-					return(dict(req_doc.json()))
-			
+		return dict(self.find_documents_by_matches("structures", {"name": structure_name})[0])
+							
 	def get_events(self, structure):
-		query = {"selector": {"structure": structure["name"]}}
-		req_docs = requests.post(self.server + "/events/_find", data=json.dumps(query), headers = {'Content-Type': 'application/json'})
-		
-		if req_docs.status_code != 200:
-			req_docs.raise_for_status()
-		else:
-			return req_docs.json()["docs"]
+		return self.find_documents_by_matches("events", {"structure": structure["name"]})
+
 
 	def delete_num_events_by_structure(self, structure, event_name, event_num):
 		docs = list()
@@ -117,35 +111,14 @@ class CouchDBServer:
 		self.delete_doc("events", event["_id"], event["_rev"])
 
 	def get_limits(self, structure):
-		query = {"selector": {"structure": structure["name"]}}
-		req_docs = requests.post(self.server + "/limits/_find", data=json.dumps(query), headers = {'Content-Type': 'application/json'})
-		
-		if req_docs.status_code != 200:
-			req_docs.raise_for_status()
-		else:
-			# Return just the first item, as it should only be one
-			return req_docs.json()["docs"][0]
-	
-	def get_requests(self, structure=None):
-		if structure!=None:
-			query = {"selector": {"structure": structure["name"]}}
-			req_docs = requests.post(self.server + "/requests/_find", data=json.dumps(query), headers = {'Content-Type': 'application/json'})
+		# Return just the first item, as it should only be one
+		return self.find_documents_by_matches("limits", {"structure": structure["name"]})[0]
 			
-			if req_docs.status_code != 200:
-				req_docs.raise_for_status()
-			else:
-				return req_docs.json()["docs"]
+	def get_requests(self, structure=None):
+		if structure == None:
+			return self.get_all_database_docs("requests")
 		else:
-			docs = list()
-			req_docs = requests.get(self.server + "/requests/_all_docs")
-			if req_docs.status_code != 200:
-				req_docs.raise_for_status()
-			else:
-				rows = json.loads(req_docs.text)["rows"]
-				for row in rows:
-					req_doc = requests.get(self.server + "/requests/" + row["id"])
-					docs.append(dict(req_doc.json()))
-				return docs
+			return self.find_documents_by_matches("requests", {"structure": structure["name"]})
 
 	def delete_request(self, request):
 		self.delete_doc("requests", request["_id"], request["_rev"])
@@ -163,13 +136,9 @@ class CouchDBServer:
 					self.delete_request(row)
 
 	def get_rules(self):
-		docs = list()
-		r = requests.get(self.server + "/rules/_all_docs")
-		if r.status_code != 200:
-			r.raise_for_status()
-		else:
-			rows = json.loads(r.text)["rows"]
-			for row in rows:
-				req_doc = requests.get(self.server + "/rules/" + row["id"])
-				docs.append(dict(req_doc.json()))
-			return docs
+		return self.get_all_database_docs("rules")
+
+
+
+	def get_service(self, service_name):
+		return dict(self.find_documents_by_matches("services", {"name": service_name})[0])

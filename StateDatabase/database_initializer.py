@@ -6,7 +6,7 @@ import requests
 def initialize():
 	
 	
-	databases = ['config','structures','limits','events','rules','requests']
+	databases = ['structures','limits','events','rules','requests','services']
 	
 	handler = couchDB.CouchDBServer()
 	
@@ -172,23 +172,34 @@ def initialize():
 		
 		handler.add_doc("rules", MemRescaleUp)
 		handler.add_doc("rules", MemRescaleDown)
-
-
-	# INIT CONFIG
-	if handler.database_exists("config"):
-		print ("Adding 'config' document")
-		config = dict(_id='config', type='config', name='config', 
-			guardian_config=dict(
+	
+	# CREATE SERVICES
+	if handler.database_exists("services"):
+		print ("Adding 'services' document")
+		
+		guardian = dict(
+			name = "guardian",
+			type = "service",
+			heartbeat = "",
+			config=dict(
 				WINDOW_TIMELAPSE = 5, 
 				WINDOW_DELAY = 10,
-				EVENT_TIMEOUT = 40
-			),
-			scaler_config=dict(
+				EVENT_TIMEOUT = 40,
+				DEBUG = True
+			)
+		)
+		
+		scaler = dict(
+			name = "scaler",
+			type = "service",
+			heartbeat = "",
+			config=dict(
 				POLLING_FREQUENCY = 10,
 				REQUEST_TIMEOUT = 60
 			)
 		)
-		handler.add_doc("config", config)
-
+	
+		handler.add_doc("services", scaler)
+		handler.add_doc("services", guardian)
 
 initialize()
