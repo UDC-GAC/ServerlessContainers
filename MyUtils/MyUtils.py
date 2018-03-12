@@ -23,7 +23,7 @@ def logging_info(message, debug=True):
 	logging.info(message)
 	if debug: print("INFO: " + message)
 
-def log_warning(message, debug=True):
+def logging_warning(message, debug=True):
 	logging.warning(message)
 	if debug: print("WARN: " +message)
 

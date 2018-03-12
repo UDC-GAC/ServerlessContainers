@@ -8,8 +8,8 @@ import json
 import time
 import sys
 
-sys.path.append('../NodeManager')
-import NodeManager/lxd_node_resource_manager as NodeResourceManager
+sys.path.append('..')
+import NodeManager.lxd_node_resource_manager as NodeResourceManager
 
 app = Flask(__name__)
 
@@ -61,6 +61,6 @@ def get_container_resources(container_name):
 
 
 if __name__ == "__main__":
-	app.run()
+	app.run(host='0.0.0.0', port=8000)
 
 

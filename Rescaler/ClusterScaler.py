@@ -5,6 +5,7 @@ import json
 import time
 import requests
 import math
+import traceback
 import logging
 
 sys.path.append('..')
@@ -109,6 +110,10 @@ def apply_request(request, resources, specified_resources):
 			except ValueError:
 				# Bad value
 				return None
+		
+		if int(amount + current_mem_limit) < 0:
+			raise ValueError("Error in setting memory, it is lower than 0")
+		
 		resource_dict["mem"] = dict()
 		resource_dict["mem"]["mem_limit"] = str(int(amount + current_mem_limit)) + 'M'
 		
@@ -120,22 +125,31 @@ def set_container_resources(container, resources):
 	if r.status_code == 201:
 		return dict(r.json())
 	else:
-		return dict(r.json())
+		print(json.dumps(r.json()))
 		r.raise_for_status()
+		#return dict(r.json())
+		
 
 
 def process_request(request, real_resources, specified_resources):
 	#Generate the changed_resources document 
 	new_resources = apply_request(request, real_resources, specified_resources)
+	current_value_label = {"cpu":"cpu_allowance_limit", "mem":"mem_limit"}
 	
 	if new_resources:
-		logging_info("Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources))
+		utils.logging_info("Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources))
 		try:
 			structure = request["structure"]
 			resource = request["resource"]
 			
+			# Get the previous values in case the scaling is not successfully and fully applied
+			#previous_resource_limit = real_resources[resource]["current"]
+			
 			# Apply changes through a REST call
 			applied_resources = set_container_resources(structure, new_resources)
+			
+			# Get the applied value
+			current_value = applied_resources[resource][current_value_label[resource]]
 			
 			# Remove the request from the database
 			db.delete_request(request)
@@ -148,16 +162,20 @@ def process_request(request, real_resources, specified_resources):
 			
 			
 			# Update the structure current value
-			current_value_label = {"cpu":"cpu_allowance_limit", "mem":"mem_limit"}
 			updated_structure = db.get_structure(structure)
-			updated_structure["resources"][resource]["current"] = applied_resources[resource][current_value_label[resource]]
+			updated_structure["resources"][resource]["current"] = current_value
 			db.update_doc("structures", updated_structure)
 			
-			
-		except requests.exceptions.HTTPError as e:
-			logging_error(str(e) + " " + str(traceback.format_exc()))
+		except (requests.exceptions.HTTPError) as e:
+			utils.logging_error(str(e) + " " + str(traceback.format_exc()))
 			return
-
+		except KeyError as e:
+			utils.logging_error(str(e) + " " + str(traceback.format_exc()))
+			utils.logging_error(json.dumps(applied_resources))
+			return
+		except (Exception) as e:
+			utils.logging_error(str(e) + " " + str(traceback.format_exc()))
+			return
 
 SERVICE_NAME = "scaler"
 
@@ -180,12 +198,16 @@ def scale():
 			# No requests to process
 			utils.logging_info("No requests at " + utils.get_time_now_string(), debug)
 		else:
-			logging_info("Requests at " + utils.get_time_now_string())
+			utils.logging_info("Requests at " + utils.get_time_now_string())
 			for request in requests:
 				real_resources = get_container_resources(request["structure"])
 				specified_resources = db.get_structure(request["structure"])
-				process_request(request, real_resources, specified_resources) 
-
+				try:
+					process_request(request, real_resources, specified_resources) 
+				except Exception as e:
+					utils.logging_error(str(e) + " " + str(traceback.format_exc()))
 		time.sleep(polling_frequency)
-
-scale()
+try:
+	scale()
+except Exception as e:
+	utils.logging_error(str(e) + " " + str(traceback.format_exc()))

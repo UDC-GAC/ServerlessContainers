@@ -28,6 +28,7 @@ RESOURCES = ['cpu','mem','disk','net']
 translator_dict = {"cpu": "proc.cpu.user", "mem":"proc.mem.resident"}
 
 NO_METRIC_DATA_DEFAULT_VALUE = -1
+NOT_AVAILABLE_STRING = "n/a"
 
 def get_structure_usages(structure, window_difference, window_delay):
 	usages = dict()
@@ -154,7 +155,7 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
 	return amount
 
 def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
-	current_resource_limit = structure["resources"]["resources"][resource]["current"]
+	current_resource_limit = structure["resources"][resource]["current"]
 	current_resource_usage = usages[translator_dict[resource]]
 	
 	difference = current_resource_limit - current_resource_usage
@@ -165,56 +166,83 @@ def get_amount_from_percentage_reduction(structure, usages, resource, percentage
 	amount = int(-1 * (percentage_reduction * difference) / 100)
 	return amount
 
+def adjust_if_invalid_amount(amount, resource, structure, limits):
+	upper_limit = limits["resources"][resource]["upper"] + amount
+	lower_limit = limits["resources"][resource]["lower"] + amount
+	current = structure["resources"][resource]["current"] + amount
+	max_limit = structure["resources"][resource]["max"]
+	min_limit = structure["resources"][resource]["min"]
+	
+	if lower_limit < min_limit:
+	# The amount to reduce is too big, adjust it so that the lower limit is
+	# set to the minimum
+		amount += (min_limit - lower_limit)
+		
+	if current > max_limit:
+	# The amount to increase is too big, adjust it so that the upper limit is 
+	# set to the maximum
+		amount -= (current - max_limit)
+	
+	return amount
+
 def match_structure_events(structure, events, rules, usages, limits):
 	requests = []
 	for rule in rules:
-		if rule["generates"] == "requests":
-			if(jsonLogic(rule["rule"], events[rule["resource"]])):
-				# Match, generate request
-				if "rescale_by" in rule.keys():
-					try:
-						if rule["rescale_by"] == "amount":
-							amount=rule["amount"]
-						elif rule["rescale_by"] == "percentage_reduction":
-							amount = get_amount_from_percentage_reduction(
-								structure, usages, rule["resource"], int(rule["percentage_reduction"]))					
-						elif rule["rescale_by"] == "fit_to_usage":
-							amount = get_amount_from_fit_reduction(
-								structure, usages, rule["resource"], limits)
-						else:
-							amount=rule["amount"]
-					except KeyError as e:
-						# Error because current value may not be available and it is
-						# required for methods like percentage reduction
-						utils.log_warning("error in trying to compute rescaling amount for rule '"+ rule["name"] +"' : " + str(traceback.format_exc()), debug)
+		resource_label = rule["resource"]
+		if rule["generates"] == "requests" and (jsonLogic(rule["rule"], events[resource_label])):
+			# Check that the current resource value exists, otherwise there is nothing to rescale
+			if not "current" in structure["resources"][resource_label]:
+				utils.logging_warning("No current value for container'" + structure["name"] + "' and resource '" + resource_label +"', can't rescale", debug)
+				continue
+			
+			# Match, generate request
+			if "rescale_by" in rule.keys():
+				try:
+					if rule["rescale_by"] == "amount":
 						amount=rule["amount"]
-				else:
+					elif rule["rescale_by"] == "percentage_reduction":
+						amount = get_amount_from_percentage_reduction(
+							structure, usages, resource_label, int(rule["percentage_reduction"]))					
+					elif rule["rescale_by"] == "fit_to_usage":
+						amount = get_amount_from_fit_reduction(
+							structure, usages, resource_label, limits)
+					else:
+						amount=rule["amount"]
+				except KeyError as e:
+					# Error because current value may not be available and it is
+					# required for methods like percentage reduction
+					utils.logging_warning("error in trying to compute rescaling amount for rule '"+ rule["name"] +"' : " + str(traceback.format_exc()), debug)
 					amount=rule["amount"]
-					utils.log_warning("No rescale_by policy is set in rule : '"+ rule["name"] +"', falling back to default amount: " + str(amount), debug)
-					
-				requests.append(dict(
-					type="request",
-					resource=rule["resource"],
-					amount=amount,
-					structure=structure["name"], 
-					action=rule["action"]["requests"][0], 
-					timestamp=int(time.time()))
-				)
-				db.delete_num_events_by_structure(
-					structure, 
-					generateEventName(events[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"]
-				)
+			else:
+				amount=rule["amount"]
+				utils.logging_warning("No rescale_by policy is set in rule : '"+ rule["name"] +"', falling back to default amount: " + str(amount), debug)
+			
+			
+			amount = adjust_if_invalid_amount(amount, resource_label, structure, limits)
+			
+			requests.append(dict(
+				type="request",
+				resource=resource_label,
+				amount=amount,
+				structure=structure["name"], 
+				action=rule["action"]["requests"][0], 
+				timestamp=int(time.time()))
+			)
+			db.delete_num_events_by_structure(
+				structure, 
+				generateEventName(events[resource_label]["events"], resource_label), rule["events_to_remove"]
+			)
 	return requests
 
 def try_get_value(dict, key):
 	try:
 		return int(dict[key])
 	except KeyError:
-		return "n/a"
+		return NOT_AVAILABLE_STRING
 
 def print_container_status(resource_label, resources_dict, limits_dict, usages_dict):
 	if usages_dict[translator_dict[resource_label]] == -1 : 
-		usage_value_string = "n/a"
+		usage_value_string = NOT_AVAILABLE_STRING
 	else:
 		usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
 			
@@ -246,6 +274,10 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
 	
 
 
+def check_unset_values(value, label):
+	if value == NOT_AVAILABLE_STRING:
+		raise ValueError("value for '" + label + "' is not set or is not available.")
+
 def check_invalid_values(value1, label1, value2, label2):
 	if value1 > value2: 
 		raise ValueError(
@@ -273,21 +305,49 @@ def check_invalid_state(container):
 		lower_value = try_get_value(limits[resource], "lower")
 		min_value = try_get_value(resources[resource], "min")
 		
-		# Check if the first value is greater than the second
-		# check the full chain max > upper > current > lower > min
-		if current_value != "n/a":
-			check_invalid_values(min_value, "current", max_value, "max")
-		check_invalid_values(upper_value, "upper", current_value, "current")
-		check_invalid_values(lower_value, "lower", upper_value, "upper")
-		#check_invalid_values(min_value, "min", lower_value, "lower")
+		# Check values are set, except for current as it may have not been persisted yet
+		check_unset_values(max_value, "max")
+		check_unset_values(upper_value, "upper")
+		check_unset_values(lower_value, "lower")
+		check_unset_values(min_value, "min")
 		
+		# Check if the first value is greater than the second
+		# check the full chain "max > upper > current > lower > min"
 		try:
-			# Check that there is a boundary between values, like the current and upper, so
-			# that the limit can be surpassed
-			if current_value != "n/a":
+			if current_value != NOT_AVAILABLE_STRING:
+				check_invalid_values(current_value, "current", max_value, "max")
+			check_invalid_values(upper_value, "upper", current_value, "current")
+			check_invalid_values(lower_value, "lower", upper_value, "upper")
+			check_invalid_values(min_value, "min", lower_value, "lower")
+		except ValueError as e:
+			# An error was detected, try to correct the invalid state
+			utils.logging_warning(str(e) + " , I will try to correct it", debug)
+			
+			# If the current values has overflowed the maximum, what do we do oh god?
+			# wait for rescale down?
+			if current_value != NOT_AVAILABLE_STRING and current_value > max_value:
+				raise
+			
+			# Reset the limits using the current value if available, otherwise just correct them as they are
+			if current_value != NOT_AVAILABLE_STRING:
+				interlimit_boundary = try_get_value(limits[resource], "boundary")
+				upper_value = current_value - interlimit_boundary # FIX OR LEAVE IT, DECIDE
+				lower_value = upper_value - interlimit_boundary
+			else:
+				#swap
+				upper_value,lower_value = lower_value, upper_value
+			
+			utils.logging_warning("New limits should be (upper,lower): (" + str(upper_value)+","+str(lower_value)+")", debug)
+			
+		# Check that there is a boundary between values, like the current and upper, so
+		# that the limit can be surpassed
+		try:	
+			if current_value != NOT_AVAILABLE_STRING:
 				check_close_boundaries(current_value, "current", upper_value, "upper", resources_boundaries[resource])
 		except ValueError as e:
-			utils.logging_error.log_warning(str(e), debug)
+			# An error was detected, try to correct the invalid state
+			#utils.logging_error(str(e), debug)
+			raise
 		
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE":10, "WINDOW_DELAY":10, "EVENT_TIMEOUT":40, "DEBUG":True}
@@ -366,7 +426,10 @@ def guard():
 
 
 def main():
-	guard()
+	try:
+		guard()
+	except Exception as e:
+		utils.logging_error(str(e) + " " + str(traceback.format_exc()))
 
 if __name__ == "__main__":
 	main()	

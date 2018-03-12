@@ -109,7 +109,7 @@ def set_node_cpus(container_name, cpu_resource):
 			else:
 				cpu_limit = int(cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL])
 		except ValueError as e:
-			return ({"success": False,"error": str(e)})
+			return (False,{"error": str(e)})
 			
 		if cpu_limit == 0:
 			quota = -1 # Set to max

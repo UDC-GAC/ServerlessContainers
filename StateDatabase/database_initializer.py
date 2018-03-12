@@ -2,7 +2,7 @@
 import couchDB
 import requests
 
-
+import sys
 sys.path.append('..')
 import StateDatabase.couchDB as couchDB
 
@@ -42,8 +42,8 @@ def initialize():
 				type='limit', 
 				structure=c, 
 				resources=dict(
-					cpu=dict(upper=140,lower=70), 
-					mem=dict(upper=8000,lower=7000), 
+					cpu=dict(upper=140,lower=70,boundary=70), 
+					mem=dict(upper=8000,lower=7000,boundary=1000), 
 					disk=dict(upper=100,lower=100), 
 					net=dict(upper=100,lower=100)
 				)
@@ -185,9 +185,9 @@ def initialize():
 			type = "service",
 			heartbeat = "",
 			config=dict(
-				WINDOW_TIMELAPSE = 5, 
+				WINDOW_TIMELAPSE = 3, 
 				WINDOW_DELAY = 10,
-				EVENT_TIMEOUT = 40,
+				EVENT_TIMEOUT = 30,
 				DEBUG = True
 			)
 		)
@@ -197,8 +197,8 @@ def initialize():
 			type = "service",
 			heartbeat = "",
 			config=dict(
-				POLLING_FREQUENCY = 10,
-				REQUEST_TIMEOUT = 60
+				POLLING_FREQUENCY = 5,
+				REQUEST_TIMEOUT = 30
 			)
 		)
 		
@@ -207,7 +207,7 @@ def initialize():
 			type = "service",
 			heartbeat = "",
 			config=dict(
-				POLLING_FREQUENCY = 10
+				POLLING_FREQUENCY = 5
 			)
 		)
 		
@@ -216,7 +216,7 @@ def initialize():
 			type = "service",
 			heartbeat = "",
 			config=dict(
-				POLLING_FREQUENCY = 10
+				POLLING_FREQUENCY = 5
 			)
 		)
 	
