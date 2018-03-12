@@ -6,10 +6,12 @@ import sys
 import time
 import traceback
 
-sys.path.append('../StateDatabase')
-import couchDB
 
-database_handler = couchDB.CouchDBServer()
+sys.path.append('..')
+import StateDatabase.couchDB as couchDB
+import MyUtils.MyUtils as utils
+
+db = couchDB.CouchDBServer()
 
 def eprint(*args, **kwargs):
 	print(*args, file=sys.stderr, **kwargs)
@@ -53,7 +55,7 @@ def generate_timeseries(container_name, resources):
 def update_container_current_values(container_name, resources):
 	try:
 		timestamp=int(time.time())
-		updated_structure = database_handler.get_structure(container_name)
+		updated_structure = db.get_structure(container_name)
 		
 		for resource in resources:
 			if resource == "disks":
@@ -65,16 +67,27 @@ def update_container_current_values(container_name, resources):
 			updated_structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
 		
 		print ("Success with container : " + str(container_name) + " at time: " + time.strftime("%D %H:%M:%S", time.localtime()))
-		database_handler.update_doc("structures", updated_structure)
+		db.update_doc("structures", updated_structure)
 							
 	except Exception as e:
 		eprint("Error with container data of: " + str(container_name) + " with resources: " + str(resources))
 		traceback.print_exc()
 		
 	
+SERVICE_NAME = "node_state_snapshoter"
+
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY":10}
 
 while(True):
+	service = db.get_service(SERVICE_NAME)
+	
+	utils.beat(db, SERVICE_NAME)
 	containers = ["node0","node1","node2","node3"]
+	
+	# CONFIG
+	config = service["config"]
+	polling_frequency = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
+	
 	#containers = ["node0"]
 	for container_name in containers:
 		resources = get_container_resources(container_name)
@@ -85,6 +98,6 @@ while(True):
 		# Persist through timeseries sent to OpenTSDB
 		#generate_timeseries(container_name, resources)
 			
-	time.sleep(10)
+	time.sleep(polling_frequency)
 
 

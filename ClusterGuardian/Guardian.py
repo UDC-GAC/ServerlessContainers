@@ -2,45 +2,19 @@
 from __future__ import print_function
 import requests
 import json
-import re
 import time
 import sys
 import traceback
 import logging
-
-sys.path.append('../StateDatabase')
-import couchDB
-
 from json_logic import jsonLogic
 
+sys.path.append('..')
+import StateDatabase.couchDB as couchDB
+import StateDatabase.bdwatchdog as bdwatchdog
+import MyUtils.MyUtils as utils
 
-def eprint(*args, **kwargs):
-	print(*args, file=sys.stderr, **kwargs)
-
-class BDWatchdog:
-	
-	OPENTSDB_URL = "opentsdb"
-	OPENTSDB_PORT = 4242
-	
-	def __init__(self, server = 'http://'+ OPENTSDB_URL + ':' + str(int(OPENTSDB_PORT))):
-		if self.check_valid_url(server):
-			self.server = server
-		else:
-			raise ValueError("Invalid server url %s", server)
-
-	def check_valid_url(self, url):
-		return True
-	
-	def get_points(self, query):
-		r = requests.post(self.server + "/api/query", data=json.dumps(query), headers = {'content-type': 'application/json','Accept':'application/json'})
-		if r.status_code == 200:
-			return json.loads(r.text)
-		else:
-			r.raise_for_status()
-		
-
-monitoring_handler = BDWatchdog()
-database_handler = couchDB.CouchDBServer()
+monitoring_handler = bdwatchdog.BDWatchdog()
+db = couchDB.CouchDBServer()
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
 
@@ -80,27 +54,28 @@ def get_structure_usages(structure, window_difference, window_delay):
 	final_values = dict()
 	
 	for value in GUARDIAN_METRICS:
-		final_values[value] = 0
+		final_values[value] = NO_METRIC_DATA_DEFAULT_VALUE
 		for metric in GUARDIAN_METRICS[value]:
-			final_values[value] += usages[metric]
-	
+			if usages[metric] != NO_METRIC_DATA_DEFAULT_VALUE:
+				final_values[value] += usages[metric]
+			
 	return final_values
 
 
 def filter_and_purge_old_events(structure, event_timeout):
-	structure_events = database_handler.get_events(structure)
+	structure_events = db.get_events(structure)
 	filtered_events = list()
 	for event in structure_events:
 		if event["timestamp"] < time.time() - event_timeout:
 			# Event is too old, remove it
-			database_handler.delete_event(event)
+			db.delete_event(event)
 		else:
 			# Event is not too old, keep it
 			filtered_events.append(event)
 	return filtered_events
 
 def reduce_structure_events(structure_events):
-	#structure_events = database_handler.get_events(structure)
+	#structure_events = db.get_events(structure)
 	events_reduced = {"action": {}}
 	for resource in RESOURCES:
 		events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up":0}}}
@@ -128,8 +103,8 @@ def match_container_limits(structure, usages, resources, limits, rules):
 	for resource in RESOURCES:
 		data[resource] = {
 				"proc":{resource:{}},
-				"limits":{resource:limits[resource]},
-				"structure":{resource:resources[resource]}}	
+				"limits":{resource:limits["resources"][resource]},
+				"structure":{resource:resources["resources"][resource]}}	
 	for usage_metric in usages:
 		keys = usage_metric.split(".")
 		data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]	
@@ -149,26 +124,37 @@ def match_container_limits(structure, usages, resources, limits, rules):
 
 def process_events(events):
 	for event in events:
-		database_handler.add_doc("events", event)
+		db.add_doc("events", event)
 
 def process_requests(requests):
 	for request in requests:
-		database_handler.add_doc("requests", request)
+		db.add_doc("requests", request)
 
 
-def get_amount_from_fit_reduction(structure, usages, resource):
+def get_amount_from_fit_reduction(structure, usages, resource, limits):
 	
-	boundary_dict = {"cpu": 25, "mem":1024}
 	current_resource_limit = structure["resources"][resource]["current"]
+	upper_resource_limit = limits["resources"][resource]["upper"]
+	lower_resource_limit = limits["resources"][resource]["lower"]
+	
+	upper_to_lower_window = upper_resource_limit - lower_resource_limit
+	current_to_upper_window = current_resource_limit - upper_resource_limit
 	current_resource_usage = usages[translator_dict[resource]]
 	
-	difference = current_resource_limit - current_resource_usage
+	# Set the limit so that the resource usage is placed in between the upper and lower limits
+	# and keeping the boundary between the upper and the real resource limits
+	desired_applied_resource_limit = \
+		current_resource_usage +  \
+		upper_to_lower_window / 2 + \
+		current_to_upper_window
+	
+	difference = current_resource_limit - desired_applied_resource_limit 
 		
-	amount = -1 * (difference - boundary_dict[resource])
+	amount = -1 * difference
 	return amount
 
 def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
-	current_resource_limit = structure["resources"][resource]["current"]
+	current_resource_limit = structure["resources"]["resources"][resource]["current"]
 	current_resource_usage = usages[translator_dict[resource]]
 	
 	difference = current_resource_limit - current_resource_usage
@@ -179,7 +165,7 @@ def get_amount_from_percentage_reduction(structure, usages, resource, percentage
 	amount = int(-1 * (percentage_reduction * difference) / 100)
 	return amount
 
-def match_structure_events(structure, events, rules, usages):
+def match_structure_events(structure, events, rules, usages, limits):
 	requests = []
 	for rule in rules:
 		if rule["generates"] == "requests":
@@ -194,15 +180,17 @@ def match_structure_events(structure, events, rules, usages):
 								structure, usages, rule["resource"], int(rule["percentage_reduction"]))					
 						elif rule["rescale_by"] == "fit_to_usage":
 							amount = get_amount_from_fit_reduction(
-								structure, usages, rule["resource"])
+								structure, usages, rule["resource"], limits)
 						else:
 							amount=rule["amount"]
-					except KeyError:
+					except KeyError as e:
 						# Error because current value may not be available and it is
 						# required for methods like percentage reduction
+						utils.log_warning("error in trying to compute rescaling amount for rule '"+ rule["name"] +"' : " + str(traceback.format_exc()), debug)
 						amount=rule["amount"]
 				else:
 					amount=rule["amount"]
+					utils.log_warning("No rescale_by policy is set in rule : '"+ rule["name"] +"', falling back to default amount: " + str(amount), debug)
 					
 				requests.append(dict(
 					type="request",
@@ -212,7 +200,7 @@ def match_structure_events(structure, events, rules, usages):
 					action=rule["action"]["requests"][0], 
 					timestamp=int(time.time()))
 				)
-				database_handler.delete_num_events_by_structure(
+				db.delete_num_events_by_structure(
 					structure, 
 					generateEventName(events[rule["resource"]]["events"], rule["resource"]), rule["events_to_remove"]
 				)
@@ -220,7 +208,6 @@ def match_structure_events(structure, events, rules, usages):
 
 def try_get_value(dict, key):
 	try:
-		#return str("%.2f" % dict[key]) # Float with 2 decimals
 		return int(dict[key])
 	except KeyError:
 		return "n/a"
@@ -243,19 +230,19 @@ def print_container_status(resource_label, resources_dict, limits_dict, usages_d
 
 def print_debug_info(container, usages, triggered_events, triggered_requests):
 	resources = container["resources"]
-	limits = database_handler.get_limits(container)["resources"]
-	print(" @" + container["name"])
-	print("   #RESOURCES: " + \
+	limits = db.get_limits(container)["resources"]
+	utils.logging_info(" @" + container["name"], debug)
+	utils.logging_info("   #RESOURCES: " + \
 		"cpu(" + print_container_status("cpu", resources, limits, usages) + ")"+ \
 		 " - " + \
-		"mem(" + print_container_status("mem", resources, limits, usages) + ")")
+		"mem(" + print_container_status("mem", resources, limits, usages) + ")", debug)
 		
 	events = []
 	for event in triggered_events: events.append(event["name"])
 	requests = []
 	for request in triggered_requests: requests.append(request["action"])
 	
-	print("   #TRIGGERED EVENTS " + str(events) + " AND TRIGGERED REQUESTS " + str(requests))
+	utils.logging_info("   #TRIGGERED EVENTS " + str(events) + " AND TRIGGERED REQUESTS " + str(requests), debug)
 	
 
 
@@ -275,7 +262,7 @@ def check_close_boundaries(value1, label1, value2, label2, boundary):
 			
 def check_invalid_state(container):
 	resources = container["resources"]
-	limits = database_handler.get_limits(container)["resources"]
+	limits = db.get_limits(container)["resources"]
 	
 	resources_boundaries = {"cpu":15,"mem":170} # Better don't set multiples of steps
 	
@@ -300,43 +287,40 @@ def check_invalid_state(container):
 			if current_value != "n/a":
 				check_close_boundaries(current_value, "current", upper_value, "upper", resources_boundaries[resource])
 		except ValueError as e:
-			logging.warning(str(e))
+			utils.logging_error.log_warning(str(e), debug)
 		
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE":10, "WINDOW_DELAY":10, "EVENT_TIMEOUT":40, "DEBUG":True}
-def get_config_value(config, key):
-	try:
-		return config[key]
-	except KeyError:
-		logging.warning("Failed to get config key: " + key)
-		return CONFIG_DEFAULT_VALUES[key]
-		
+
+
+
 def pet_watchdog(stage, delta):
-	print("Reached stage: " + stage + " at time: " + str("%.2f" % (time.time() - delta)))
+	utils.logging_info("Reached stage: " + stage + " at time: " + str("%.2f" % (time.time() - delta)), debug)
 	return time.time()
-	
+
+SERVICE_NAME = "guardian"
+
+debug = True
 def guard():
 	logging.basicConfig(filename='Guardian.log', level=logging.INFO)
 	
 	while True:	
-		service = database_handler.get_service("guardian")
+		service = db.get_service(SERVICE_NAME)
 		
-		# HEARTBEAT
-		service["heartbeat"] =  time.strftime("%D %H:%M:%S", time.localtime())
-		database_handler.update_doc("services", service)
+		utils.beat(db, SERVICE_NAME)
 		
 		epoch_start = time.time()
 		
 		# CONFIG
-		rules = database_handler.get_rules()
+		rules = db.get_rules()
 		config = service["config"]
-		window_difference = get_config_value(config, "WINDOW_TIMELAPSE")
-		window_delay = get_config_value(config, "WINDOW_DELAY")
-		event_timeout = get_config_value(config, "EVENT_TIMEOUT")
-		debug = get_config_value(config, "DEBUG")
+		window_difference = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+		window_delay = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
+		event_timeout = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
+		debug = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 		benchmark = False
 		
-		containers = database_handler.get_structures(subtype="container")
+		containers = db.get_structures(subtype="container")
 		for container in containers:
 			try:
 				check_invalid_state(container)
@@ -346,12 +330,12 @@ def guard():
 				
 				usages = get_structure_usages(container, window_difference, window_delay)
 				if benchmark: delta = pet_watchdog("with monitor data retrieved", delta)
-				limits = database_handler.get_limits(container)["resources"]
+				limits = db.get_limits(container)
 				if benchmark: delta = pet_watchdog("with limits retrieved", delta)
 				triggered_events = match_container_limits(
 					container,
 					usages, 
-					container["resources"],
+					container,
 					limits, 
 					rules)
 				process_events(triggered_events)
@@ -363,7 +347,8 @@ def guard():
 					container,
 					events, 
 					rules,
-					usages)
+					usages,
+					limits)
 				process_requests(triggered_requests)
 				if benchmark: delta = pet_watchdog("with requests processed", delta)
 				
@@ -371,15 +356,11 @@ def guard():
 				if debug: print_debug_info(container, usages, triggered_events, triggered_requests)
 			
 			except Exception as e:
-				eprint("ERROR with container: " + container["name"])
-				eprint(str(e))
-				traceback.print_exc()
+				utils.logging_error("error with container: " + container["name"]  + " " + str(e) + " " + str(traceback.format_exc()), debug)
 		epoch_end = time.time()
 		processing_time = epoch_end - epoch_start
 		
-		time_message = "It took " +  str("%.2f" % processing_time) + " seconds to process " + str(len(containers)) + " nodes."
-		if debug: print(time_message)
-		logging.info(time_message)
+		utils.logging_info("It took " +  str("%.2f" % processing_time) + " seconds to process " + str(len(containers)) + " nodes at " + utils.get_time_now_string(), debug)
 		
 		time.sleep(window_difference)
 

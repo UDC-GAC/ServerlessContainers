@@ -9,7 +9,7 @@ import time
 import sys
 
 sys.path.append('../NodeManager')
-import lxd_node_resource_manager as NodeResourceManager
+import NodeManager/lxd_node_resource_manager as NodeResourceManager
 
 app = Flask(__name__)
 

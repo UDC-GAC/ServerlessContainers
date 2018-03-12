@@ -1,1 +1,0 @@
-python NodeStateSnapshoter.py

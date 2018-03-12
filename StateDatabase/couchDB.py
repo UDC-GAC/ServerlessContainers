@@ -141,4 +141,14 @@ class CouchDBServer:
 
 
 	def get_service(self, service_name):
-		return dict(self.find_documents_by_matches("services", {"name": service_name})[0])
+		docs = self.find_documents_by_matches("services", {"name": service_name})
+		if not docs:
+			raise ValueError("Service " + service_name + " not found")
+		else:
+			# Return the first one as it should only be one
+			return dict(docs[0])
+
+
+
+
+

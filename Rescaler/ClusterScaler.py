@@ -1,33 +1,31 @@
 #/usr/bin/python
+from __future__ import print_function
 import sys
 import json
 import time
 import requests
 import math
+import logging
 
-sys.path.append('../StateDatabase')
-import couchDB
+sys.path.append('..')
+import StateDatabase.couchDB as couchDB
+import MyUtils.MyUtils as utils
 
-database_handler = couchDB.CouchDBServer()
+db = couchDB.CouchDBServer()
 
-
-default_config = {"POLLING_FREQUENCY":10, "REQUEST_TIMEOUT":600}
-
-def get_config_value(config, key):
-	try:
-		return config["scaler_config"][key]
-	except KeyError:
-		return default_config[key]
-		
+def eprint(*args, **kwargs):
+	print(*args, file=sys.stderr, **kwargs)
+	
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY":10, "REQUEST_TIMEOUT":600, "DEBUG":True}
 		
 def filter_requests(request_timeout):
 	filtered_requests = list()
 	merged_requests = list()
-	all_requests = database_handler.get_requests()
+	all_requests = db.get_requests()
 	# First purge the old requests
 	for request in all_requests:
 		if request["timestamp"] < time.time() - request_timeout:
-			database_handler.delete_request(request)
+			db.delete_request(request)
 		else:
 			filtered_requests.append(request)
 	
@@ -41,10 +39,10 @@ def filter_requests(request_timeout):
 			stored_request = structure_requests_dict[structure][action]
 			if stored_request["timestamp"] > request["timestamp"]:
 				# The stored request is newer, leave it and remove the retrieved one
-				database_handler.delete_request(request)
+				db.delete_request(request)
 			else:
 				# The stored request is older, remove it and save the retrieved one
-				database_handler.delete_request(stored_request)
+				db.delete_request(stored_request)
 				structure_requests_dict[structure][action] = request
 		else:
 			if not structure in structure_requests_dict:
@@ -131,7 +129,7 @@ def process_request(request, real_resources, specified_resources):
 	new_resources = apply_request(request, real_resources, specified_resources)
 	
 	if new_resources:
-		print "Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources)
+		logging_info("Request: " + request["action"] + " for container : " + request["structure"] + " for new resources : " + json.dumps(new_resources))
 		try:
 			structure = request["structure"]
 			resource = request["resource"]
@@ -140,50 +138,52 @@ def process_request(request, real_resources, specified_resources):
 			applied_resources = set_container_resources(structure, new_resources)
 			
 			# Remove the request from the database
-			database_handler.delete_request(request)
+			db.delete_request(request)
 			
 			# Update the limits
-			limits = database_handler.get_limits({"name":structure})
+			limits = db.get_limits({"name":structure})
 			limits["resources"][resource]["upper"] += request["amount"] 
 			limits["resources"][resource]["lower"] += request["amount"]
-			database_handler.update_doc("limits", limits)
+			db.update_doc("limits", limits)
 			
 			
 			# Update the structure current value
 			current_value_label = {"cpu":"cpu_allowance_limit", "mem":"mem_limit"}
-			updated_structure = database_handler.get_structure(structure)
-			print json.dumps(applied_resources)
+			updated_structure = db.get_structure(structure)
 			updated_structure["resources"][resource]["current"] = applied_resources[resource][current_value_label[resource]]
-			database_handler.update_doc("structures", updated_structure)
+			db.update_doc("structures", updated_structure)
 			
 			
 		except requests.exceptions.HTTPError as e:
-			print "FAIL: " + str(e) + json.dumps(applied_resources)
+			logging_error(str(e) + " " + str(traceback.format_exc()))
 			return
 
-def scale():
-	while True:
-		service = database_handler.get_service("scaler")
 
-		# HEARTBEAT
-		service["heartbeat"] =  time.strftime("%D %H:%M:%S", time.localtime())
-		database_handler.update_doc("services", service)
+SERVICE_NAME = "scaler"
+
+debug = True
+def scale():
+	logging.basicConfig(filename='ClusterScaler.log', level=logging.INFO)
+	while True:
+		service = db.get_service(SERVICE_NAME)
+		
+		utils.beat(db, SERVICE_NAME)
 		
 		# CONFIG		
-		#config = database_handler.get_all_database_docs("config")[0] #FIX
 		config = service["config"]
-		polling_frequency = get_config_value(config, "POLLING_FREQUENCY")
-		request_timeout = get_config_value(config, "REQUEST_TIMEOUT")
+		polling_frequency = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
+		request_timeout = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "REQUEST_TIMEOUT")
+		debug = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 		
 		requests = filter_requests(request_timeout)
 		if not requests:
 			# No requests to process
-			print("No requests at " + time.strftime("%D %H:%M:%S", time.localtime()))
+			utils.logging_info("No requests at " + utils.get_time_now_string(), debug)
 		else:
-			print("Requests at " + time.strftime("%D %H:%M:%S", time.localtime()))
+			logging_info("Requests at " + utils.get_time_now_string())
 			for request in requests:
 				real_resources = get_container_resources(request["structure"])
-				specified_resources = database_handler.get_structure(request["structure"])
+				specified_resources = db.get_structure(request["structure"])
 				process_request(request, real_resources, specified_resources) 
 
 		time.sleep(polling_frequency)

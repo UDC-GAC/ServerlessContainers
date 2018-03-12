@@ -9,10 +9,16 @@ import traceback
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-sys.path.append('../StateDatabase')
+
+
+
+sys.path.append('..')
+import StateDatabase.couchDB as couchDB
+import MyUtils.MyUtils as utils
+
+
 sys.path.append('../../metrics-to-time-series/pipes')
-import couchDB
-import send_to_OpenTSDB as OpenTSDB_sender
+import pipes.send_to_OpenTSDB as OpenTSDB_sender
 
 
 def translate_doc_to_timeseries(doc):
@@ -35,12 +41,24 @@ def translate_doc_to_timeseries(doc):
 		eprint("Error with document: " + str(doc))
 		traceback.print_exc()
 
-database_handler = couchDB.CouchDBServer()
+db = couchDB.CouchDBServer()
+
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY":10}
+SERVICE_NAME = "database_snapshoter"
+
 while(True):
+	service = db.get_service(SERVICE_NAME)
+
+	utils.beat(db, SERVICE_NAME)
+
+	# CONFIG
+	config = service["config"]
+	polling_frequency = utils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
+	
 	docs = []
-	for limit in database_handler.get_all_database_docs("limits"):
+	for limit in db.get_all_database_docs("limits"):
 		docs += translate_doc_to_timeseries(limit)
-	for structure in database_handler.get_structures(subtype="container"):
+	for structure in db.get_structures(subtype="container"):
 		docs += translate_doc_to_timeseries(structure)
 	
 	success = OpenTSDB_sender.send_json_documents(docs)
@@ -49,6 +67,6 @@ while(True):
 	else:
 		print ("Post was done at: " +  time.strftime("%D %H:%M:%S", time.localtime()) + " with " + str(len(docs)) + " documents")
 
-	time.sleep(10)
+	time.sleep(polling_frequency)
 
 

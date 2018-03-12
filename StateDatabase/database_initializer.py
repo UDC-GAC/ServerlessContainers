@@ -3,6 +3,9 @@ import couchDB
 import requests
 
 
+sys.path.append('..')
+import StateDatabase.couchDB as couchDB
+
 def initialize():
 	
 	
@@ -87,7 +90,7 @@ def initialize():
 		handler.add_doc("rules", cpu_dropped_lower)
 
 		CpuRescaleUp = dict(_id = 'CpuRescaleUp', type='rule', resource="cpu", name='CpuRescaleUp', rule=dict({">":[{"var": "events.scale.up"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleUp"]}, amount=10)
-		CpuRescaleDown = dict(_id = 'CpuRescaleDown', type='rule', resource="cpu", name='CpuRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]}, amount=-10)
+		CpuRescaleDown = dict(_id = 'CpuRescaleDown', type='rule', resource="cpu", name='CpuRescaleDown', rule=dict({">":[{"var": "events.scale.down"},3]}), events_to_remove=3, generates="requests", action={"requests":["CpuRescaleDown"]}, amount=-10,rescale_by = "fit_to_usage")
 		handler.add_doc("rules", CpuRescaleUp)
 		handler.add_doc("rules", CpuRescaleDown)
 		
@@ -167,7 +170,7 @@ def initialize():
 			action={"requests":["MemRescaleDown"]}, 
 			amount=-512,
 			percentage_reduction=50,
-			rescale_by = "percentage_reduction"
+			rescale_by = "fit_to_usage"
 		)
 		
 		handler.add_doc("rules", MemRescaleUp)
@@ -198,8 +201,28 @@ def initialize():
 				REQUEST_TIMEOUT = 60
 			)
 		)
+		
+		database_snapshoter = dict(
+			name = "database_snapshoter",
+			type = "service",
+			heartbeat = "",
+			config=dict(
+				POLLING_FREQUENCY = 10
+			)
+		)
+		
+		node_state_snapshoter = dict(
+			name = "node_state_snapshoter",
+			type = "service",
+			heartbeat = "",
+			config=dict(
+				POLLING_FREQUENCY = 10
+			)
+		)
 	
 		handler.add_doc("services", scaler)
 		handler.add_doc("services", guardian)
+		handler.add_doc("services", database_snapshoter)
+		handler.add_doc("services", node_state_snapshoter)
 
 initialize()
