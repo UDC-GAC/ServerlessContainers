@@ -3,13 +3,15 @@ from __future__ import print_function
 import time
 import logging
 import sys
+import requests
 
 def eprint(*args, **kwargs):
 	print(*args, file=sys.stderr, **kwargs)
 	
 def beat(db, service_name):
 	service = db.get_service(service_name)
-	service["heartbeat"] =  time.strftime("%D %H:%M:%S", time.localtime())
+	service["heartbeat_human"] =  time.strftime("%D %H:%M:%S", time.localtime())
+	service["heartbeat"] =  time.time()
 	db.update_doc("services", service)
 
 
@@ -33,3 +35,11 @@ def logging_error(message, debug=True):
 
 def get_time_now_string():
 	 return str(time.strftime("%D %H:%M:%S", time.localtime()))
+
+def get_container_resources(container_name):
+	r = requests.get("http://dante:8000/container/"+container_name, headers = {'Accept':'application/json'})
+	if r.status_code == 200:
+		return dict(r.json())
+	else:
+		return None
+

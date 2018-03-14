@@ -259,18 +259,22 @@ def print_container_status(resource_label, resources_dict, limits_dict, usages_d
 def print_debug_info(container, usages, triggered_events, triggered_requests):
 	resources = container["resources"]
 	limits = db.get_limits(container)["resources"]
-	utils.logging_info(" @" + container["name"], debug)
-	utils.logging_info("   #RESOURCES: " + \
+	
+	container_name_str = "@" + container["name"]
+	
+	resources_str = "#RESOURCES: " + \
 		"cpu(" + print_container_status("cpu", resources, limits, usages) + ")"+ \
 		 " - " + \
-		"mem(" + print_container_status("mem", resources, limits, usages) + ")", debug)
-		
+		"mem(" + print_container_status("mem", resources, limits, usages) + ")"
+	
 	events = []
 	for event in triggered_events: events.append(event["name"])
 	requests = []
 	for request in triggered_requests: requests.append(request["action"])
 	
-	utils.logging_info("   #TRIGGERED EVENTS " + str(events) + " AND TRIGGERED REQUESTS " + str(requests), debug)
+	triggered_requests_and_events = "#TRIGGERED EVENTS " + str(events) + " AND TRIGGERED REQUESTS " + str(requests)
+	
+	utils.logging_info(" ".join([container_name_str,resources_str,triggered_requests_and_events]), debug)
 	
 
 
@@ -420,7 +424,8 @@ def guard():
 		epoch_end = time.time()
 		processing_time = epoch_end - epoch_start
 		
-		utils.logging_info("It took " +  str("%.2f" % processing_time) + " seconds to process " + str(len(containers)) + " nodes at " + utils.get_time_now_string(), debug)
+		if benchmark:
+			utils.logging_info("It took " +  str("%.2f" % processing_time) + " seconds to process " + str(len(containers)) + " nodes at " + utils.get_time_now_string(), debug)
 		
 		time.sleep(window_difference)
 

@@ -30,6 +30,7 @@ def get_containers_resources():
 	else:
 		return jsonify(NodeResourceManager.get_all_nodes())
 
+
 @app.route("/container/<container_name>", methods=['PUT'])
 def set_container_resources(container_name):
 	if container_name != "":
@@ -46,7 +47,6 @@ def set_container_resources(container_name):
 		abort(400)
 
 
-
 @app.route("/container/<container_name>", methods=['GET'])
 def get_container_resources(container_name):
 	
@@ -60,6 +60,10 @@ def get_container_resources(container_name):
 		return jsonify(NodeResourceManager.get_all_nodes())
 
 
+@app.route("/heartbeat", methods=['GET'])
+def heartbeat():
+	return Response(json.dumps({"status":"alive"}), status=200, mimetype='application/json')
+	
 if __name__ == "__main__":
 	app.run(host='0.0.0.0', port=8000)
 

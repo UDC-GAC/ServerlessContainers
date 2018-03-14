@@ -2,12 +2,16 @@
 # NODE LIMITS
 ./build/tsdb mkmetric limit.cpu.lower
 ./build/tsdb mkmetric limit.cpu.upper
+./build/tsdb mkmetric limit.cpu.boundary
 ./build/tsdb mkmetric limit.mem.lower
 ./build/tsdb mkmetric limit.mem.upper
+./build/tsdb mkmetric limit.mem.boundary
 ./build/tsdb mkmetric limit.disk.lower
 ./build/tsdb mkmetric limit.disk.upper
+./build/tsdb mkmetric limit.disk.boundary
 ./build/tsdb mkmetric limit.net.lower
 ./build/tsdb mkmetric limit.net.upper
+./build/tsdb mkmetric limit.net.boundary
 
 # NODE RESOURCES
 ./build/tsdb mkmetric structure.cpu.current

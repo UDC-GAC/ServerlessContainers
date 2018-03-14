@@ -56,14 +56,6 @@ def filter_requests(request_timeout):
 
 	return merged_requests
 
-def get_container_resources(container):
-	r = requests.get("http://dante:8000/container/"+container, headers = {'Accept':'application/json'})
-	if r.status_code == 200:
-		return dict(r.json())
-	else:
-		return None
-
-
 def apply_request(request, resources, specified_resources):
 	action = request["action"]
 	amount = request["amount"]
@@ -200,7 +192,7 @@ def scale():
 		else:
 			utils.logging_info("Requests at " + utils.get_time_now_string())
 			for request in requests:
-				real_resources = get_container_resources(request["structure"])
+				real_resources = utils.get_container_resources(request["structure"])
 				specified_resources = db.get_structure(request["structure"])
 				try:
 					process_request(request, real_resources, specified_resources) 
