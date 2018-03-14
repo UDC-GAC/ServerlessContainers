@@ -57,6 +57,7 @@ def initialize():
 			container = dict(
 				type='structure', 
 				subtype='container',
+				host='dante',
 				name=c, 
 				resources=dict(
 					cpu=dict(max=300,min=50), 
@@ -207,7 +208,8 @@ def initialize():
 			type = "service",
 			heartbeat = "",
 			config=dict(
-				POLLING_FREQUENCY = 5
+				POLLING_FREQUENCY = 5,
+				DEBUG = True
 			)
 		)
 		

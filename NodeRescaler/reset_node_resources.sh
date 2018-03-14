@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 echo "0,2" > /sys/fs/cgroup/cpuset/lxc/node0/cpuset.cpus
 echo "1,3" > /sys/fs/cgroup/cpuset/lxc/node1/cpuset.cpus
 echo "4,6" > /sys/fs/cgroup/cpuset/lxc/node2/cpuset.cpus
