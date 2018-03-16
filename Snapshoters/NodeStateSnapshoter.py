@@ -64,9 +64,6 @@ def persist():
         # Heartbeat
         MyUtils.beat(db_handler, SERVICE_NAME)
 
-        # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)
-
         try:
             containers = db_handler.get_structures(subtype="container")
         except (requests.exceptions.HTTPError, ValueError):
@@ -80,7 +77,13 @@ def persist():
 
         for container in containers:
             container_name = container["name"]
-            resources = MyUtils.get_container_resources(container_name)
+
+            try:
+                resources = MyUtils.get_container_resources(container_name)
+            except requests.exceptions.HTTPError as e:
+                MyUtils.logging_error("Error trying to get container " +
+                                      str(container_name) + " info " + str(e) + traceback.format_exc(), debug)
+                fail_count += 1
 
             try:
 

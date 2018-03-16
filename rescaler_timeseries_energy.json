@@ -1,0 +1,46 @@
+{
+	"timeseries":[
+		{
+			"metrics":[
+				{
+					"metric": "sys.cpu.user",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=es-udc-dec-jonatan-dante"
+					]
+				},{
+					"metric": "proc.cpu.user",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node*"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 800
+			}
+		},{
+			"metrics":[
+				{
+					"metric": "sys.cpu.energy",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=es-udc-dec-jonatan-dante"
+					]
+				},
+				{
+					"metric": "structure.energy.current",
+					"aggregator" : "zimsum",
+					"tags" : [
+						"host=node*"
+					]
+				}
+			],
+			"yranges":{
+				"ymin": 0,
+				"ymax": 80
+			}
+		}
+	]
+}

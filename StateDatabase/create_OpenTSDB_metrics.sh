@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 # NODE LIMITS
 ./build/tsdb mkmetric limit.cpu.lower
@@ -12,6 +13,8 @@
 ./build/tsdb mkmetric limit.net.lower
 ./build/tsdb mkmetric limit.net.upper
 ./build/tsdb mkmetric limit.net.boundary
+./build/tsdb mkmetric limit.energy.upper
+./build/tsdb mkmetric limit.energy.lower
 
 # NODE RESOURCES
 ./build/tsdb mkmetric structure.cpu.current
@@ -26,3 +29,8 @@
 ./build/tsdb mkmetric structure.net.current
 ./build/tsdb mkmetric structure.net.max
 ./build/tsdb mkmetric structure.net.min
+./build/tsdb mkmetric structure.energy.current
+./build/tsdb mkmetric structure.energy.max
+./build/tsdb mkmetric structure.energy.min
+
+

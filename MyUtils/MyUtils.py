@@ -51,7 +51,17 @@ def get_container_resources(container_name):
     if r.status_code == 200:
         return dict(r.json())
     else:
-        return None
+        r.raise_for_status()
+
+
+def register_service(db_handler, service):
+    try:
+        existing_service = db_handler.get_service(service["name"])
+        db_handler.delete_service(existing_service)
+    except ValueError:
+        # Service is not registered, everything is fine
+        pass
+    db_handler.add_service(service)
 
 
 def get_service(db_handler, service_name):

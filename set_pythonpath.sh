@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 DEV_PATH=$HOME/development
 RESCALER_PATH=$DEV_PATH/automatic-rescaler
 BDWACHDOG_PATH=$DEV_PATH/metrics-to-time-series

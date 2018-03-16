@@ -28,25 +28,35 @@ def print_alive(service_name):
 
 
 while True:
+    dead = list()
+    alive = list()
+
     services = db.get_all_database_docs("services")
     print("AT: " + str(time.strftime("%D %H:%M:%S", time.localtime())))
     for service in services:
         if "heartbeat" not in service:
-            print_dead(service["name"])
+            dead.append(service["name"])
         elif not isinstance(service["heartbeat"], int) and not isinstance(service["heartbeat"], float):
-            print_dead(service["name"])
+            dead.append(service["name"])
         elif int(service["heartbeat"]) == 0:
-            print_dead(service["name"])
+            dead.append(service["name"])
         elif service["heartbeat"] < time.time() - time_window_allowed:
-            print_dead(service["name"])
+            dead.append(service["name"])
         else:
-            print_alive(service["name"])
+            alive.append(service["name"])
 
     for node_REST_service in ["dante"]:
         if check_node_rescaler_status(node_REST_service):
-            print_alive(node_REST_service + "_node_rescaler")
+            alive.append(node_REST_service + "_node_rescaler")
         else:
-            print_dead(node_REST_service + "_node_rescaler")
+            dead.append(node_REST_service + "_node_rescaler")
+
+    for a in alive:
+        print_alive(a)
+
+    print("!-----------------------!")
+    for d in dead:
+        print_dead(d)
 
     print
     time.sleep(POLLING_TIME)

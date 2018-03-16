@@ -15,7 +15,7 @@ BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', '
 GUARDIAN_METRICS = {
     'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'],
     'proc.mem.resident': ['proc.mem.resident']}
-RESOURCES = ['cpu', 'mem', 'disk', 'net']
+RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True}
 SERVICE_NAME = "guardian"
 debug = True
@@ -105,8 +105,8 @@ def match_container_limits(structure, usages, resources, limits, rules):
         data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
 
     for rule in rules:
-        if rule["generates"] == "events":
-            if jsonLogic(rule["rule"], data[rule["resource"]]):
+        try:
+            if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
                 events.append(dict(
                     name=generate_event_name(rule["action"]["events"], rule["resource"]),
                     resource=rule["resource"],
@@ -115,6 +115,11 @@ def match_container_limits(structure, usages, resources, limits, rules):
                     action=rule["action"],
                     timestamp=int(time.time()))
                 )
+        except KeyError as e:
+            MyUtils.logging_warning(
+                "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
+                debug)
+
     return events
 
 
@@ -185,53 +190,59 @@ def adjust_if_invalid_amount(amount, resource, structure, limits):
 def match_structure_events(structure, events, rules, usages, limits):
     generated_requests = list()
     for rule in rules:
-        resource_label = rule["resource"]
-        if rule["generates"] == "requests" and (jsonLogic(rule["rule"], events[resource_label])):
-            # Check that the current resource value exists, otherwise there is nothing to rescale
-            if "current" not in structure["resources"][resource_label]:
-                MyUtils.logging_warning("No current value for container'" + structure[
-                    "name"] + "' and resource '" + resource_label + "', can't rescale", debug)
-                continue
+        try:
+            resource_label = rule["resource"]
+            if rule["active"] and rule["generates"] == "requests" and jsonLogic(rule["rule"], events[resource_label]):
+                # Check that the current resource value exists, otherwise there is nothing to rescale
+                if "current" not in structure["resources"][resource_label]:
+                    MyUtils.logging_warning("No current value for container'" + structure[
+                        "name"] + "' and resource '" + resource_label + "', can't rescale", debug)
+                    continue
 
-            # Match, generate request
-            if "rescale_by" in rule.keys():
-                try:
-                    if rule["rescale_by"] == "amount":
+                # Match, generate request
+                if "rescale_by" in rule.keys():
+                    try:
+                        if rule["rescale_by"] == "amount":
+                            amount = rule["amount"]
+                        elif rule["rescale_by"] == "percentage_reduction":
+                            amount = get_amount_from_percentage_reduction(
+                                structure, usages, resource_label, int(rule["percentage_reduction"]))
+                        elif rule["rescale_by"] == "fit_to_usage":
+                            amount = get_amount_from_fit_reduction(
+                                structure, usages, resource_label, limits)
+                        else:
+                            amount = rule["amount"]
+                    except KeyError:
+                        # Error because current value may not be available and it is
+                        # required for methods like percentage reduction
+                        MyUtils.logging_warning(
+                            "error in trying to compute rescaling amount for rule '" + rule["name"] + "' : " + str(
+                                traceback.format_exc()), debug)
                         amount = rule["amount"]
-                    elif rule["rescale_by"] == "percentage_reduction":
-                        amount = get_amount_from_percentage_reduction(
-                            structure, usages, resource_label, int(rule["percentage_reduction"]))
-                    elif rule["rescale_by"] == "fit_to_usage":
-                        amount = get_amount_from_fit_reduction(
-                            structure, usages, resource_label, limits)
-                    else:
-                        amount = rule["amount"]
-                except KeyError:
-                    # Error because current value may not be available and it is
-                    # required for methods like percentage reduction
-                    MyUtils.logging_warning(
-                        "error in trying to compute rescaling amount for rule '" + rule["name"] + "' : " + str(
-                            traceback.format_exc()), debug)
+                else:
                     amount = rule["amount"]
-            else:
-                amount = rule["amount"]
-                MyUtils.logging_warning("No rescale_by policy is set in rule : '" + rule[
-                    "name"] + "', falling back to default amount: " + str(amount), debug)
+                    MyUtils.logging_warning("No rescale_by policy is set in rule : '" + rule[
+                        "name"] + "', falling back to default amount: " + str(amount), debug)
 
-            amount = adjust_if_invalid_amount(amount, resource_label, structure, limits)
+                amount = adjust_if_invalid_amount(amount, resource_label, structure, limits)
 
-            generated_requests.append(dict(
-                type="request",
-                resource=resource_label,
-                amount=amount,
-                structure=structure["name"],
-                action=rule["action"]["requests"][0],
-                timestamp=int(time.time()))
-            )
-            db_handler.delete_num_events_by_structure(
-                structure,
-                generate_event_name(events[resource_label]["events"], resource_label), rule["events_to_remove"]
-            )
+                generated_requests.append(dict(
+                    type="request",
+                    resource=resource_label,
+                    amount=amount,
+                    structure=structure["name"],
+                    action=rule["action"]["requests"][0],
+                    timestamp=int(time.time()))
+                )
+                db_handler.delete_num_events_by_structure(
+                    structure,
+                    generate_event_name(events[resource_label]["events"], resource_label), rule["events_to_remove"]
+                )
+        except KeyError as e:
+            MyUtils.logging_warning(
+                "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
+                debug)
+
     return generated_requests
 
 
@@ -257,6 +268,14 @@ def print_container_status(resource_label, resources_dict, limits_dict, usages_d
          str(try_get_value(resources_dict[resource_label], "min")))
 
 
+def print_container_energy(resource_label, resources_dict, limits_dict):
+    return \
+        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
+         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
+         str(try_get_value(resources_dict[resource_label], "current")) + "," +
+         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
+         str(try_get_value(resources_dict[resource_label], "min")))
+
 def print_debug_info(container, usages, triggered_events, triggered_requests):
     resources = container["resources"]
     limits = db_handler.get_limits(container)["resources"]
@@ -266,7 +285,9 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
     resources_str = "#RESOURCES: " + \
                     "cpu(" + print_container_status("cpu", resources, limits, usages) + ")" + \
                     " - " + \
-                    "mem(" + print_container_status("mem", resources, limits, usages) + ")"
+                    "mem(" + print_container_status("mem", resources, limits, usages) + ")" + \
+                    " - " + \
+                    "energy(" + print_container_energy("energy", resources, limits) + ")"
 
     ev, req = list(), list()
     for event in triggered_events:

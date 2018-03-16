@@ -128,6 +128,12 @@ class CouchDBServer:
     def get_rules(self):
         return self.get_all_database_docs("rules")
 
+    def add_service(self, service):
+        return self.add_doc("services", service)
+
+    def delete_service(self, service):
+        return self.delete_doc("services", service["_id"], service["_rev"])
+
     def get_service(self, service_name):
         docs = self.find_documents_by_matches("services", {"name": service_name})
         if not docs:
