@@ -24,73 +24,153 @@ NO_METRIC_DATA_DEFAULT_VALUE = -1
 NOT_AVAILABLE_STRING = "n/a"
 
 
-def get_structure_usages(structure, window_difference, window_delay):
-    usages = dict()
-    subquery = list()
-    for metric in BDWATCHDOG_METRICS:
-        usages[metric] = NO_METRIC_DATA_DEFAULT_VALUE
-        subquery.append(dict(aggregator='sum', metric=metric, tags=dict(host=structure["name"])))
+# TESTED
 
-    start = int(time.time() - (window_difference + window_delay))
-    end = int(time.time() - window_delay)
-    query = dict(start=start, end=end, queries=subquery)
-    result = monitoring_handler.get_points(query)
-
-    for metric in result:
-        dps = metric["dps"]
-        summatory = sum(dps.values())
-        if len(dps) > 0:
-            average_real = summatory / len(dps)
-        else:
-            average_real = 0
-        usages[metric["metric"]] = average_real
-
-    final_values = dict()
-
-    for value in GUARDIAN_METRICS:
-        final_values[value] = NO_METRIC_DATA_DEFAULT_VALUE
-        for metric in GUARDIAN_METRICS[value]:
-            if usages[metric] != NO_METRIC_DATA_DEFAULT_VALUE:
-                final_values[value] += usages[metric]
-
-    return final_values
+def check_unset_values(value, label):
+    if value == NOT_AVAILABLE_STRING:
+        raise ValueError("value for '" + label + "' is not set or is not available.")
 
 
-def filter_and_purge_old_events(structure, event_timeout):
-    structure_events = db_handler.get_events(structure)
-    filtered_events = list()
-    for event in structure_events:
-        if event["timestamp"] < time.time() - event_timeout:
-            # Event is too old, remove it
-            db_handler.delete_event(event)
-        else:
-            # Event is not too old, keep it
-            filtered_events.append(event)
-    return filtered_events
+def check_invalid_values(value1, label1, value2, label2):
+    if value1 > value2:
+        raise ValueError(
+            "value for '" + label1 + "': " + str(value1) +
+            " is greater than " +
+            "value for '" + label2 + "': " + str(value2))
 
 
-def reduce_structure_events(structure_events):
-    # structure_events = db.get_events(structure)
-    events_reduced = {"action": {}}
-    for resource in RESOURCES:
-        events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up": 0}}}
-
-    for event in structure_events:
-        key = event["action"]["events"]["scale"].keys()[0]
-        value = event["action"]["events"]["scale"][key]
-        events_reduced["action"][event["resource"]]["events"]["scale"][key] += value
-    return events_reduced["action"]
+def try_get_value(d, key):
+    try:
+        return int(d[key])
+    except KeyError:
+        return NOT_AVAILABLE_STRING
 
 
 def generate_event_name(event, resource):
-    final_string = "none"
-    if "down" in event["scale"].keys() and event["scale"]["down"] > 0:
+    final_string = None
+
+    if "scale" not in event:
+        raise ValueError("Missing 'scale' key")
+
+    if "up" not in event["scale"] and "down" not in event["scale"]:
+        raise ValueError("Must have an 'up' or 'down count")
+
+    elif "up" in event["scale"] and "down" in event["scale"]:
+        raise ValueError("Can't have both up and down counts")
+
+    elif "down" in event["scale"] and event["scale"]["down"] > 0:
         final_string = resource.title() + "Underuse"
-    if "up" in event["scale"].keys() and event["scale"]["up"] > 0:
+
+    elif "up" in event["scale"] and event["scale"]["up"] > 0:
         final_string = resource.title() + "Bottleneck"
+
     return final_string
 
 
+def filter_old_events(structure_events, event_timeout):
+    valid_events = list()
+    invalid_events = list()
+    for event in structure_events:
+        # If event is too old, remove it, otherwise keep it
+        if event["timestamp"] < time.time() - event_timeout:
+            invalid_events.append(event)
+        else:
+            valid_events.append(event)
+    return valid_events, invalid_events
+
+
+def reduce_structure_events(structure_events):
+    events_reduced = {"action": {}}
+    for event in structure_events:
+        resource = event["resource"]
+        if resource not in events_reduced["action"]:
+            events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up": 0}}}
+        for key in event["action"]["events"]["scale"].keys():
+            value = event["action"]["events"]["scale"][key]
+            events_reduced["action"][resource]["events"]["scale"][key] += value
+    return events_reduced["action"]
+
+
+def get_container_resources_str(resource_label, resources_dict, limits_dict, usages_dict):
+    if usages_dict[translator_dict[resource_label]] == NO_METRIC_DATA_DEFAULT_VALUE:
+        usage_value_string = NOT_AVAILABLE_STRING
+    else:
+        usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
+
+    return \
+        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
+         str(try_get_value(resources_dict[resource_label], "current")) + "," +
+         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
+         usage_value_string + "," +
+         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
+         str(try_get_value(resources_dict[resource_label], "min")))
+
+
+def adjust_if_invalid_amount(amount, resource, structure, limits):
+    upper_limit = limits["resources"][resource]["upper"] + amount
+    lower_limit = limits["resources"][resource]["lower"] + amount
+    max_limit = structure["resources"][resource]["max"]
+    min_limit = structure["resources"][resource]["min"]
+
+    if lower_limit < min_limit:
+        # The amount to reduce is too big, adjust it so that the lower limit is
+        # set to the minimum
+        amount += (min_limit - lower_limit)
+    elif upper_limit > max_limit:
+        # The amount to increase is too big, adjust it so that the upper limit is
+        # set to the maximum
+        amount -= (upper_limit - max_limit)
+
+    return amount
+
+
+# TO BE TESTED
+
+
+def get_container_energy_str(resource_label, resources_dict, limits_dict):
+    return \
+        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
+         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
+         str(try_get_value(resources_dict[resource_label], "current")) + "," +
+         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
+         str(try_get_value(resources_dict[resource_label], "min")))
+
+
+def check_invalid_container_state(resources, limits):
+    resources_boundaries = {"cpu": 15, "mem": 170}  # Better don't set multiples of steps
+
+    for resource in ["cpu", "mem"]:
+        max_value = try_get_value(resources[resource], "max")
+        current_value = try_get_value(resources[resource], "current")
+        upper_value = try_get_value(limits[resource], "upper")
+        lower_value = try_get_value(limits[resource], "lower")
+        min_value = try_get_value(resources[resource], "min")
+
+        # Check values are set and valid, except for current as it may have not been persisted yet
+        check_unset_values(max_value, "max")
+        check_unset_values(upper_value, "upper")
+        check_unset_values(lower_value, "lower")
+        check_unset_values(min_value, "min")
+
+        # Check if the first value is greater than the second
+        # check the full chain "max > upper > current > lower > min"
+        if current_value != NOT_AVAILABLE_STRING:
+            check_invalid_values(current_value, "current", max_value, "max")
+        check_invalid_values(upper_value, "upper", current_value, "current")
+        check_invalid_values(lower_value, "lower", upper_value, "upper")
+        check_invalid_values(min_value, "min", lower_value, "lower")
+
+        # Check that there is a boundary between values, like the current and upper, so
+        # that the limit can be surpassed
+        if current_value != NOT_AVAILABLE_STRING:
+            if current_value - resources_boundaries[resource] <= upper_value:
+                raise ValueError(
+                    "value for 'current': " + str(current_value) +
+                    " is too close (" + str(resources_boundaries[resource]) + ") to " +
+                    "value for 'upper': " + str(upper_value))
+
+
+# NOT TESTED
 def match_container_limits(structure, usages, resources, limits, rules):
     events = []
     data = dict()
@@ -121,16 +201,6 @@ def match_container_limits(structure, usages, resources, limits, rules):
                 debug)
 
     return events
-
-
-def process_events(events):
-    for event in events:
-        db_handler.add_doc("events", event)
-
-
-def process_requests(generated_requests):
-    for request in generated_requests:
-        db_handler.add_doc("requests", request)
 
 
 def get_amount_from_fit_reduction(structure, usages, resource, limits):
@@ -165,25 +235,6 @@ def get_amount_from_percentage_reduction(structure, usages, resource, percentage
         percentage_reduction = 50  # TMP hard fix just in case
 
     amount = int(-1 * (percentage_reduction * difference) / 100)
-    return amount
-
-
-def adjust_if_invalid_amount(amount, resource, structure, limits):
-    lower_limit = limits["resources"][resource]["lower"] + amount
-    current = structure["resources"][resource]["current"] + amount
-    max_limit = structure["resources"][resource]["max"]
-    min_limit = structure["resources"][resource]["min"]
-
-    if lower_limit < min_limit:
-        # The amount to reduce is too big, adjust it so that the lower limit is
-        # set to the minimum
-        amount += (min_limit - lower_limit)
-
-    if current > max_limit:
-        # The amount to increase is too big, adjust it so that the upper limit is
-        # set to the maximum
-        amount -= (current - max_limit)
-
     return amount
 
 
@@ -236,7 +287,8 @@ def match_structure_events(structure, events, rules, usages, limits):
                 )
                 db_handler.delete_num_events_by_structure(
                     structure,
-                    generate_event_name(events[resource_label]["events"], resource_label), rule["events_to_remove"]
+                    generate_event_name(events[resource_label]["events"], resource_label),
+                    rule["events_to_remove"]
                 )
         except KeyError as e:
             MyUtils.logging_warning(
@@ -246,36 +298,6 @@ def match_structure_events(structure, events, rules, usages, limits):
     return generated_requests
 
 
-def try_get_value(d, key):
-    try:
-        return int(d[key])
-    except KeyError:
-        return NOT_AVAILABLE_STRING
-
-
-def print_container_status(resource_label, resources_dict, limits_dict, usages_dict):
-    if usages_dict[translator_dict[resource_label]] == -1:
-        usage_value_string = NOT_AVAILABLE_STRING
-    else:
-        usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
-
-    return \
-        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
-         str(try_get_value(resources_dict[resource_label], "current")) + "," +
-         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
-         usage_value_string + "," +
-         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
-         str(try_get_value(resources_dict[resource_label], "min")))
-
-
-def print_container_energy(resource_label, resources_dict, limits_dict):
-    return \
-        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
-         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
-         str(try_get_value(resources_dict[resource_label], "current")) + "," +
-         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
-         str(try_get_value(resources_dict[resource_label], "min")))
-
 def print_debug_info(container, usages, triggered_events, triggered_requests):
     resources = container["resources"]
     limits = db_handler.get_limits(container)["resources"]
@@ -283,11 +305,11 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
     container_name_str = "@" + container["name"]
 
     resources_str = "#RESOURCES: " + \
-                    "cpu(" + print_container_status("cpu", resources, limits, usages) + ")" + \
+                    "cpu(" + get_container_resources_str("cpu", resources, limits, usages) + ")" + \
                     " - " + \
-                    "mem(" + print_container_status("mem", resources, limits, usages) + ")" + \
+                    "mem(" + get_container_resources_str("mem", resources, limits, usages) + ")" + \
                     " - " + \
-                    "energy(" + print_container_energy("energy", resources, limits) + ")"
+                    "energy(" + get_container_energy_str("energy", resources, limits) + ")"
 
     ev, req = list(), list()
     for event in triggered_events:
@@ -300,84 +322,39 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
     MyUtils.logging_info(" ".join([container_name_str, resources_str, triggered_requests_and_events]), debug)
 
 
-def check_unset_values(value, label):
-    if value == NOT_AVAILABLE_STRING:
-        raise ValueError("value for '" + label + "' is not set or is not available.")
+# CAN'T BE TESTED
 
 
-def check_invalid_values(value1, label1, value2, label2):
-    if value1 > value2:
-        raise ValueError(
-            "value for '" + label1 + "': " + str(value1) +
-            " is greater than " +
-            "value for '" + label2 + "': " + str(value2))
+def get_structure_usages(structure, window_difference, window_delay):
+    usages = dict()
+    subquery = list()
+    for metric in BDWATCHDOG_METRICS:
+        usages[metric] = NO_METRIC_DATA_DEFAULT_VALUE
+        subquery.append(dict(aggregator='sum', metric=metric, tags=dict(host=structure["name"])))
 
+    start = int(time.time() - (window_difference + window_delay))
+    end = int(time.time() - window_delay)
+    query = dict(start=start, end=end, queries=subquery)
+    result = monitoring_handler.get_points(query)
 
-def check_close_boundaries(value1, label1, value2, label2, boundary):
-    if value1 - boundary <= value2:
-        raise ValueError(
-            "value for '" + label1 + "': " + str(value1) +
-            " is too close (" + str(boundary) + ") to " +
-            "value for '" + label2 + "': " + str(value2))
+    for metric in result:
+        dps = metric["dps"]
+        summatory = sum(dps.values())
+        if len(dps) > 0:
+            average_real = summatory / len(dps)
+        else:
+            average_real = 0
+        usages[metric["metric"]] = average_real
 
+    final_values = dict()
 
-def check_invalid_state(container):
-    resources = container["resources"]
-    limits = db_handler.get_limits(container)["resources"]
+    for value in GUARDIAN_METRICS:
+        final_values[value] = NO_METRIC_DATA_DEFAULT_VALUE
+        for metric in GUARDIAN_METRICS[value]:
+            if usages[metric] != NO_METRIC_DATA_DEFAULT_VALUE:
+                final_values[value] += usages[metric]
 
-    resources_boundaries = {"cpu": 15, "mem": 170}  # Better don't set multiples of steps
-
-    for resource in ["cpu", "mem"]:
-        max_value = try_get_value(resources[resource], "max")
-        current_value = try_get_value(resources[resource], "current")
-        upper_value = try_get_value(limits[resource], "upper")
-        lower_value = try_get_value(limits[resource], "lower")
-        min_value = try_get_value(resources[resource], "min")
-
-        # Check values are set, except for current as it may have not been persisted yet
-        check_unset_values(max_value, "max")
-        check_unset_values(upper_value, "upper")
-        check_unset_values(lower_value, "lower")
-        check_unset_values(min_value, "min")
-
-        # Check if the first value is greater than the second
-        # check the full chain "max > upper > current > lower > min"
-        try:
-            if current_value != NOT_AVAILABLE_STRING:
-                check_invalid_values(current_value, "current", max_value, "max")
-            check_invalid_values(upper_value, "upper", current_value, "current")
-            check_invalid_values(lower_value, "lower", upper_value, "upper")
-            check_invalid_values(min_value, "min", lower_value, "lower")
-        except ValueError as e:
-            # An error was detected, try to correct the invalid state
-            MyUtils.logging_warning(str(e) + " , I will try to correct it", debug)
-
-            # If the current values has overflowed the maximum, what do we do oh god?
-            # wait for rescale down?
-            if current_value != NOT_AVAILABLE_STRING and current_value > max_value:
-                raise
-
-            # Reset the limits using the current value if available, otherwise just correct them as they are
-            if current_value != NOT_AVAILABLE_STRING:
-                interlimit_boundary = try_get_value(limits[resource], "boundary")
-                upper_value = current_value - interlimit_boundary  # FIX OR LEAVE IT, DECIDE
-                lower_value = upper_value - interlimit_boundary
-            else:
-                # swap
-                upper_value, lower_value = lower_value, upper_value
-
-            MyUtils.logging_warning(
-                "New limits should be (upper,lower): (" + str(upper_value) + "," + str(lower_value) + ")", debug)
-
-        # Check that there is a boundary between values, like the current and upper, so
-        # that the limit can be surpassed
-        try:
-            if current_value != NOT_AVAILABLE_STRING:
-                check_close_boundaries(current_value, "current", upper_value, "upper", resources_boundaries[resource])
-        except ValueError:
-            # An error was detected, try to correct the invalid state
-            # utils.logging_error(str(e), debug)
-            raise
+    return final_values
 
 
 def guard():
@@ -405,7 +382,9 @@ def guard():
         containers = db_handler.get_structures(subtype="container")
         for container in containers:
             try:
-                check_invalid_state(container)
+                resources = container["resources"]
+                limits = db_handler.get_limits(container)["resources"]
+                check_invalid_container_state(resources, limits)
 
                 usages = get_structure_usages(container, window_difference, window_delay)
                 limits = db_handler.get_limits(container)
@@ -415,16 +394,26 @@ def guard():
                     container,
                     limits,
                     rules)
-                process_events(triggered_events)
 
-                events = reduce_structure_events(filter_and_purge_old_events(container, event_timeout))
+                for event in triggered_events:
+                    db_handler.add_doc("events", event)
+
+                all_events = db_handler.get_events(container)
+                filtered_events, old_events = filter_old_events(all_events, event_timeout)
+
+                for event in old_events:
+                    db_handler.delete_event(event)
+
+                reduced_events = reduce_structure_events(filtered_events)
                 triggered_requests = match_structure_events(
                     container,
-                    events,
+                    reduced_events,
                     rules,
                     usages,
                     limits)
-                process_requests(triggered_requests)
+
+                for request in triggered_requests:
+                    db_handler.add_doc("requests", request)
 
                 # DEBUG AND INFO OUTPUT
                 if debug:
