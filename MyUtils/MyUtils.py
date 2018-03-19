@@ -14,7 +14,7 @@ def beat(db_handler, service_name):
     service = db_handler.get_service(service_name)
     service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
     service["heartbeat"] = time.time()
-    db_handler.update_doc("services", service)
+    db_handler.update_service(service)
 
 
 def get_config_value(config, default_config, key):
@@ -57,6 +57,7 @@ def get_container_resources(container_name):
 def register_service(db_handler, service):
     try:
         existing_service = db_handler.get_service(service["name"])
+        # Service is registered, remove it
         db_handler.delete_service(existing_service)
     except ValueError:
         # Service is not registered, everything is fine
@@ -66,16 +67,17 @@ def register_service(db_handler, service):
 
 def get_service(db_handler, service_name):
     # Get service info
-    service = None
     try:
         service = db_handler.get_service(service_name)
     except (requests.exceptions.HTTPError, ValueError):
         # An error might have been thrown because database was recently updated or created
-        logging_error("Fatal error, couldn't retrieve service.", True)
-        exit(1)
+        message = "Fatal error, couldn't retrieve service."
+        logging_error(message, True)
+        raise Exception(message)
 
     if "config" not in service:
-        logging_error("Fatal error, couldn't retrieve service configuration.", True)
-        exit(1)
+        message = "Fatal error, couldn't retrieve service configuration."
+        logging_error(message, True)
+        raise Exception(message)
 
     return service

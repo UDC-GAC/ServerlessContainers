@@ -153,12 +153,12 @@ def process_request(request, real_resources, specified_resources):
             limits = db_handler.get_limits({"name": structure})
             limits["resources"][resource]["upper"] += request["amount"]
             limits["resources"][resource]["lower"] += request["amount"]
-            db_handler.update_doc("limits", limits)
+            db_handler.update_limit(limits)
 
             # Update the structure current value
             updated_structure = db_handler.get_structure(structure)
             updated_structure["resources"][resource]["current"] = current_value
-            db_handler.update_doc("structures", updated_structure)
+            db_handler.update_structure(updated_structure)
 
         except requests.exceptions.HTTPError as e:
             MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)

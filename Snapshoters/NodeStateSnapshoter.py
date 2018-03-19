@@ -8,7 +8,6 @@ import logging
 import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
 
-
 db_handler = couchDB.CouchDBServer()
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
@@ -47,7 +46,7 @@ def update_container_current_values(container_name, resources):
         updated_structure["resources"][resource]["current"] = resources[resource][
             translate_map[resource]["limit_label"]]
 
-    db_handler.update_doc("structures", updated_structure)
+    db_handler.update_structure(updated_structure)
     print("Success with container : " + str(container_name) + " at time: " + time.strftime("%D %H:%M:%S",
                                                                                            time.localtime()))
 

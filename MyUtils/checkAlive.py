@@ -58,5 +58,5 @@ while True:
     for d in dead:
         print_dead(d)
 
-    print
+    print("")
     time.sleep(POLLING_TIME)

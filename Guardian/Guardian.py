@@ -4,24 +4,29 @@ import MyUtils.MyUtils as MyUtils
 import time
 import traceback
 import logging
+import requests
 from json_logic import jsonLogic
 import StateDatabase.couchDB as couchDB
 import StateDatabase.bdwatchdog as bdwatchdog
 
-monitoring_handler = bdwatchdog.BDWatchdog()
+bdwatchdog_handler = bdwatchdog.BDWatchdog()
+NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog_handler.NO_METRIC_DATA_DEFAULT_VALUE
+
 db_handler = couchDB.CouchDBServer()
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
 GUARDIAN_METRICS = {
     'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'],
     'proc.mem.resident': ['proc.mem.resident']}
+translator_dict = {"cpu": "proc.cpu.user", "mem": "proc.mem.resident"}
+
 RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True}
 SERVICE_NAME = "guardian"
 debug = True
-translator_dict = {"cpu": "proc.cpu.user", "mem": "proc.mem.resident"}
-NO_METRIC_DATA_DEFAULT_VALUE = -1
+
 NOT_AVAILABLE_STRING = "n/a"
+MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
 
 
 # TESTED
@@ -55,7 +60,8 @@ def generate_event_name(event, resource):
     if "up" not in event["scale"] and "down" not in event["scale"]:
         raise ValueError("Must have an 'up' or 'down count")
 
-    elif "up" in event["scale"] and "down" in event["scale"]:
+    elif "up" in event["scale"] and event["scale"]["up"] > 0 \
+            and "down" in event["scale"] and event["scale"]["down"] > 0:
         raise ValueError("Can't have both up and down counts")
 
     elif "down" in event["scale"] and event["scale"]["down"] > 0:
@@ -124,83 +130,17 @@ def adjust_if_invalid_amount(amount, resource, structure, limits):
     return amount
 
 
-# TO BE TESTED
+def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
+    current_resource_limit = structure["resources"][resource]["current"]
+    current_resource_usage = usages[translator_dict[resource]]
 
+    difference = current_resource_limit - current_resource_usage
 
-def get_container_energy_str(resource_label, resources_dict, limits_dict):
-    return \
-        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
-         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
-         str(try_get_value(resources_dict[resource_label], "current")) + "," +
-         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
-         str(try_get_value(resources_dict[resource_label], "min")))
+    if percentage_reduction > MAX_PERCENTAGE_REDUCTION_ALLOWED:
+        percentage_reduction = MAX_PERCENTAGE_REDUCTION_ALLOWED
 
-
-def check_invalid_container_state(resources, limits):
-    resources_boundaries = {"cpu": 15, "mem": 170}  # Better don't set multiples of steps
-
-    for resource in ["cpu", "mem"]:
-        max_value = try_get_value(resources[resource], "max")
-        current_value = try_get_value(resources[resource], "current")
-        upper_value = try_get_value(limits[resource], "upper")
-        lower_value = try_get_value(limits[resource], "lower")
-        min_value = try_get_value(resources[resource], "min")
-
-        # Check values are set and valid, except for current as it may have not been persisted yet
-        check_unset_values(max_value, "max")
-        check_unset_values(upper_value, "upper")
-        check_unset_values(lower_value, "lower")
-        check_unset_values(min_value, "min")
-
-        # Check if the first value is greater than the second
-        # check the full chain "max > upper > current > lower > min"
-        if current_value != NOT_AVAILABLE_STRING:
-            check_invalid_values(current_value, "current", max_value, "max")
-        check_invalid_values(upper_value, "upper", current_value, "current")
-        check_invalid_values(lower_value, "lower", upper_value, "upper")
-        check_invalid_values(min_value, "min", lower_value, "lower")
-
-        # Check that there is a boundary between values, like the current and upper, so
-        # that the limit can be surpassed
-        if current_value != NOT_AVAILABLE_STRING:
-            if current_value - resources_boundaries[resource] <= upper_value:
-                raise ValueError(
-                    "value for 'current': " + str(current_value) +
-                    " is too close (" + str(resources_boundaries[resource]) + ") to " +
-                    "value for 'upper': " + str(upper_value))
-
-
-# NOT TESTED
-def match_container_limits(structure, usages, resources, limits, rules):
-    events = []
-    data = dict()
-
-    for resource in RESOURCES:
-        data[resource] = {
-            "proc": {resource: {}},
-            "limits": {resource: limits["resources"][resource]},
-            "structure": {resource: resources["resources"][resource]}}
-    for usage_metric in usages:
-        keys = usage_metric.split(".")
-        data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
-
-    for rule in rules:
-        try:
-            if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
-                events.append(dict(
-                    name=generate_event_name(rule["action"]["events"], rule["resource"]),
-                    resource=rule["resource"],
-                    type="event",
-                    structure=structure["name"],
-                    action=rule["action"],
-                    timestamp=int(time.time()))
-                )
-        except KeyError as e:
-            MyUtils.logging_warning(
-                "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
-                debug)
-
-    return events
+    amount = int(-1 * (percentage_reduction * difference) / 100)
+    return amount
 
 
 def get_amount_from_fit_reduction(structure, usages, resource, limits):
@@ -225,21 +165,93 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
     return amount
 
 
-def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
-    current_resource_limit = structure["resources"][resource]["current"]
-    current_resource_usage = usages[translator_dict[resource]]
-
-    difference = current_resource_limit - current_resource_usage
-
-    if percentage_reduction > 50:
-        percentage_reduction = 50  # TMP hard fix just in case
-
-    amount = int(-1 * (percentage_reduction * difference) / 100)
-    return amount
+def get_container_energy_str(resources_dict, limits_dict):
+    return \
+        (str(try_get_value(resources_dict["energy"], "max")) + "," +
+         str(try_get_value(limits_dict["energy"], "upper")) + "," +
+         str(try_get_value(resources_dict["energy"], "current")) + "," +
+         str(try_get_value(limits_dict["energy"], "lower")) + "," +
+         str(try_get_value(resources_dict["energy"], "min")))
 
 
-def match_structure_events(structure, events, rules, usages, limits):
+def invalid_container_state(resources, limits, resources_boundaries):
+    try:
+        for resource in ["cpu", "mem"]:
+            max_value = try_get_value(resources[resource], "max")
+            current_value = try_get_value(resources[resource], "current")
+            upper_value = try_get_value(limits[resource], "upper")
+            lower_value = try_get_value(limits[resource], "lower")
+            min_value = try_get_value(resources[resource], "min")
+
+            # Check values are set and valid, except for current as it may have not been persisted yet
+            check_unset_values(max_value, "max")
+            check_unset_values(upper_value, "upper")
+            check_unset_values(lower_value, "lower")
+            check_unset_values(min_value, "min")
+
+            # Check if the first value is greater than the second
+            # check the full chain "max > upper > current > lower > min"
+            if current_value != NOT_AVAILABLE_STRING:
+                check_invalid_values(current_value, "current", max_value, "max")
+            check_invalid_values(upper_value, "upper", current_value, "current")
+            check_invalid_values(lower_value, "lower", upper_value, "upper")
+            check_invalid_values(min_value, "min", lower_value, "lower")
+
+            # Check that there is a boundary between values, like the current and upper, so
+            # that the limit can be surpassed
+            if current_value != NOT_AVAILABLE_STRING:
+                if current_value - resources_boundaries[resource] <= upper_value:
+                    return True
+                    # raise ValueError(
+                    #     "value for 'current': " + str(current_value) +
+                    #     " is too close (" + str(resources_boundaries[resource]) + ") to " +
+                    #     "value for 'upper': " + str(upper_value))
+    except ValueError:
+        return True
+
+    return False
+
+
+def match_usages_and_limits(structure_name, rules, usages, limits, resources):
+    events = []
+    data = dict()
+
+    for resource in RESOURCES:
+        data[resource] = {
+            "proc": {resource: {}},
+            "limits": {resource: limits[resource]},
+            "structure": {resource: resources[resource]}}
+
+    for usage_metric in usages:
+        keys = usage_metric.split(".")
+        data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
+
+    for rule in rules:
+        try:
+            if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
+                events.append(dict(
+                    name=generate_event_name(rule["action"]["events"], rule["resource"]),
+                    resource=rule["resource"],
+                    type="event",
+                    structure=structure_name,
+                    action=rule["action"],
+                    timestamp=int(time.time()))
+                )
+        except KeyError as e:
+            MyUtils.logging_warning(
+                "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
+                debug)
+
+    return events
+
+
+# TO BE TESTED
+
+
+# NOT TESTED
+def match_rules_and_events(structure, rules, events, limits, usages):
     generated_requests = list()
+    events_to_remove = dict()
     for rule in rules:
         try:
             resource_label = rule["resource"]
@@ -255,12 +267,14 @@ def match_structure_events(structure, events, rules, usages, limits):
                     try:
                         if rule["rescale_by"] == "amount":
                             amount = rule["amount"]
+
                         elif rule["rescale_by"] == "percentage_reduction":
                             amount = get_amount_from_percentage_reduction(
                                 structure, usages, resource_label, int(rule["percentage_reduction"]))
+
                         elif rule["rescale_by"] == "fit_to_usage":
-                            amount = get_amount_from_fit_reduction(
-                                structure, usages, resource_label, limits)
+                            amount = get_amount_from_fit_reduction(structure, usages, resource_label, limits)
+
                         else:
                             amount = rule["amount"]
                     except KeyError:
@@ -285,19 +299,23 @@ def match_structure_events(structure, events, rules, usages, limits):
                     action=rule["action"]["requests"][0],
                     timestamp=int(time.time()))
                 )
-                db_handler.delete_num_events_by_structure(
-                    structure,
-                    generate_event_name(events[resource_label]["events"], resource_label),
-                    rule["events_to_remove"]
-                )
+
+                event_name = generate_event_name(events[resource_label]["events"], resource_label)
+                if event_name not in events_to_remove:
+                    events_to_remove[event_name] = 0
+
+                events_to_remove[event_name] += rule["events_to_remove"]
+
         except KeyError as e:
             MyUtils.logging_warning(
                 "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
                 debug)
 
-    return generated_requests
+    return generated_requests, events_to_remove
 
 
+# CAN'T OR DON'T HAVE TO BE TESTED
+# Their logic is simple and the used functions inside them are tested
 def print_debug_info(container, usages, triggered_events, triggered_requests):
     resources = container["resources"]
     limits = db_handler.get_limits(container)["resources"]
@@ -309,7 +327,7 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
                     " - " + \
                     "mem(" + get_container_resources_str("mem", resources, limits, usages) + ")" + \
                     " - " + \
-                    "energy(" + get_container_energy_str("energy", resources, limits) + ")"
+                    "energy(" + get_container_energy_str(resources, limits) + ")"
 
     ev, req = list(), list()
     for event in triggered_events:
@@ -322,39 +340,67 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
     MyUtils.logging_info(" ".join([container_name_str, resources_str, triggered_requests_and_events]), debug)
 
 
-# CAN'T BE TESTED
+def process_serverless_container(config, container, usages, limits, rules):
+    event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
+
+    # Match usages and rules to generate events
+    triggered_events = match_usages_and_limits(container["name"], rules, usages, limits["resources"],
+                                               container["resources"])
+
+    # Create events, data movement, slow
+    db_handler.add_events(triggered_events)
+
+    # Get all the events, data movement, slow
+    all_events = db_handler.get_events(container)
+
+    # Filter the events according to timestamp
+    filtered_events, old_events = filter_old_events(all_events, event_timeout)
+
+    # Remove the old events, data movement, slow
+    db_handler.delete_events(old_events)
+
+    # Merge all the event counts
+    reduced_events = reduce_structure_events(filtered_events)
+
+    # Match events and rules to generate requests
+    triggered_requests, events_to_remove = match_rules_and_events(container, rules, reduced_events, limits, usages)
+
+    # Remove events that generated the request, data movement, slow
+    for event in events_to_remove:
+        db_handler.delete_num_events_by_structure(container, event, events_to_remove[event])
+
+    # Create requests, data movement, slow
+    db_handler.add_requests(triggered_requests)
+
+    # DEBUG AND INFO OUTPUT
+    if debug:
+        print_debug_info(container, usages, triggered_events, triggered_requests)
 
 
-def get_structure_usages(structure, window_difference, window_delay):
-    usages = dict()
-    subquery = list()
-    for metric in BDWATCHDOG_METRICS:
-        usages[metric] = NO_METRIC_DATA_DEFAULT_VALUE
-        subquery.append(dict(aggregator='sum', metric=metric, tags=dict(host=structure["name"])))
+def serverless(config, containers):
+    window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+    window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
+    rules = db_handler.get_rules()
 
-    start = int(time.time() - (window_difference + window_delay))
-    end = int(time.time() - window_delay)
-    query = dict(start=start, end=end, queries=subquery)
-    result = monitoring_handler.get_points(query)
+    for container in containers:
+        try:
+            resources = container["resources"]
 
-    for metric in result:
-        dps = metric["dps"]
-        summatory = sum(dps.values())
-        if len(dps) > 0:
-            average_real = summatory / len(dps)
-        else:
-            average_real = 0
-        usages[metric["metric"]] = average_real
+            # Data retrieving, slow
+            limits = db_handler.get_limits(container)
+            resources_boundaries = {"cpu": 15, "mem": 170}  # Better don't set multiples of steps
+            if invalid_container_state(resources, limits["resources"], resources_boundaries):
+                continue
 
-    final_values = dict()
+            # Data retrieving, slow
+            usages = bdwatchdog_handler.get_structure_usages(container["name"], window_difference, window_delay,
+                                                             BDWATCHDOG_METRICS, GUARDIAN_METRICS)
+            process_serverless_container(config, container, usages, limits, rules)
 
-    for value in GUARDIAN_METRICS:
-        final_values[value] = NO_METRIC_DATA_DEFAULT_VALUE
-        for metric in GUARDIAN_METRICS[value]:
-            if usages[metric] != NO_METRIC_DATA_DEFAULT_VALUE:
-                final_values[value] += usages[metric]
-
-    return final_values
+        except Exception as e:
+            MyUtils.logging_error(
+                "error with container: " + container["name"] + " " + str(e) + " " + str(traceback.format_exc()),
+                debug)
 
 
 def guard():
@@ -368,62 +414,21 @@ def guard():
         # Heartbeat
         MyUtils.beat(db_handler, SERVICE_NAME)
 
-        epoch_start = time.time()
-
         # CONFIG
-        rules = db_handler.get_rules()
         config = service["config"]
-        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-        window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
-        event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
         benchmark = False
 
-        containers = db_handler.get_structures(subtype="container")
-        for container in containers:
-            try:
-                resources = container["resources"]
-                limits = db_handler.get_limits(container)["resources"]
-                check_invalid_container_state(resources, limits)
-
-                usages = get_structure_usages(container, window_difference, window_delay)
-                limits = db_handler.get_limits(container)
-                triggered_events = match_container_limits(
-                    container,
-                    usages,
-                    container,
-                    limits,
-                    rules)
-
-                for event in triggered_events:
-                    db_handler.add_doc("events", event)
-
-                all_events = db_handler.get_events(container)
-                filtered_events, old_events = filter_old_events(all_events, event_timeout)
-
-                for event in old_events:
-                    db_handler.delete_event(event)
-
-                reduced_events = reduce_structure_events(filtered_events)
-                triggered_requests = match_structure_events(
-                    container,
-                    reduced_events,
-                    rules,
-                    usages,
-                    limits)
-
-                for request in triggered_requests:
-                    db_handler.add_doc("requests", request)
-
-                # DEBUG AND INFO OUTPUT
-                if debug:
-                    print_debug_info(container, usages, triggered_events, triggered_requests)
-
-            except Exception as e:
-                MyUtils.logging_error(
-                    "error with container: " + container["name"] + " " + str(e) + " " + str(traceback.format_exc()),
-                    debug)
-
+        # Data retrieving, slow
+        try:
+            containers = db_handler.get_structures(subtype="container")
+        except (requests.exceptions.HTTPError, ValueError):
+            MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
+            continue
+        # Process and measure time
+        epoch_start = time.time()
+        serverless(config, containers)
         epoch_end = time.time()
         processing_time = epoch_end - epoch_start
 

@@ -20,7 +20,7 @@ def initialize():
             try:
                 if handler.remove_database(database):
                     print("Database " + database + " removed")
-            except(requests.exceptions.HTTPError):
+            except requests.exceptions.HTTPError:
                 pass
 
     remove_all_dbs()
@@ -43,7 +43,7 @@ def initialize():
                     energy=dict(upper=20, lower=10)
                 )
             )
-            handler.add_doc("limits", container)
+            handler.add_limit(container)
 
     # CREATE STRUCTURES
     if handler.database_exists("structures"):
@@ -62,7 +62,7 @@ def initialize():
                     energy=dict(max=20, min=0)
                 )
             )
-            handler.add_doc("structures", container)
+            handler.add_structure(container)
 
         host = dict(
             type='structure',
@@ -73,7 +73,7 @@ def initialize():
                 mem=46000
             )
         )
-        handler.add_doc("structures", host)
+        handler.add_structure(host)
 
     # CREATE RULES
     if handler.database_exists("rules"):
@@ -105,21 +105,21 @@ def initialize():
             rule=dict(
                 {"and": [
                     {">": [
-                           {"var": "proc.cpu.user"},
-                           0]},
-                       {"<": [
-                           {"var": "proc.cpu.user"},
-                           {"var": "limits.cpu.lower"}]},
-                       {">": [
-                           {"var": "limits.cpu.lower"},
-                           {"var": "structure.cpu.min"}]}]}),
+                        {"var": "proc.cpu.user"},
+                        0]},
+                    {"<": [
+                        {"var": "proc.cpu.user"},
+                        {"var": "limits.cpu.lower"}]},
+                    {">": [
+                        {"var": "limits.cpu.lower"},
+                        {"var": "structure.cpu.min"}]}]}),
             generates="events",
             action={"events": {"scale": {"down": 1}}},
             active=False
         )
 
-        handler.add_doc("rules", cpu_exceeded_upper)
-        handler.add_doc("rules", cpu_dropped_lower)
+        handler.add_rule(cpu_exceeded_upper)
+        handler.add_rule(cpu_dropped_lower)
 
         CpuRescaleUp = dict(
             _id='CpuRescaleUp',
@@ -148,8 +148,8 @@ def initialize():
             active=False,
         )
 
-        handler.add_doc("rules", CpuRescaleUp)
-        handler.add_doc("rules", CpuRescaleDown)
+        handler.add_rule(CpuRescaleUp)
+        handler.add_rule(CpuRescaleDown)
 
         # MEM
         mem_exceeded_upper = dict(
@@ -191,8 +191,8 @@ def initialize():
             active=False
         )
 
-        handler.add_doc("rules", mem_exceeded_upper)
-        handler.add_doc("rules", mem_dropped_lower)
+        handler.add_rule(mem_exceeded_upper)
+        handler.add_rule(mem_dropped_lower)
 
         MemRescaleUp = dict(
             _id='MemRescaleUp',
@@ -230,8 +230,8 @@ def initialize():
             active=False
         )
 
-        handler.add_doc("rules", MemRescaleUp)
-        handler.add_doc("rules", MemRescaleDown)
+        handler.add_rule(MemRescaleUp)
+        handler.add_rule(MemRescaleDown)
 
         # ENERGY
         energy_exceeded_upper = dict(
@@ -247,7 +247,7 @@ def initialize():
             generates="events", action={"events": {"scale": {"up": 1}}},
             active=True
         )
-        handler.add_doc("rules", energy_exceeded_upper)
+        handler.add_rule(energy_exceeded_upper)
 
     # CREATE SERVICES
     if handler.database_exists("services"):
@@ -306,11 +306,11 @@ def initialize():
             )
         )
 
-        handler.add_doc("services", scaler)
-        handler.add_doc("services", guardian)
-        handler.add_doc("services", database_snapshoter)
-        handler.add_doc("services", node_state_snapshoter)
-        handler.add_doc("services", analyzer)
+        handler.add_service(scaler)
+        handler.add_service(guardian)
+        handler.add_service(database_snapshoter)
+        handler.add_service(node_state_snapshoter)
+        handler.add_service(analyzer)
 
 
 initialize()
