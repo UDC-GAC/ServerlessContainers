@@ -43,7 +43,6 @@ class GuardianTest(unittest.TestCase):
 
         scale_invalid1 = {"bogus": 1}
         scale_invalid2 = {"scale": {"bogus": 1}}
-        scale_invalid3 = {"scale": {"down": 1, "up": 3}}
 
         with self.assertRaises(ValueError):
             guardian.generate_event_name(scale_invalid1, "cpu")
@@ -51,8 +50,6 @@ class GuardianTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             guardian.generate_event_name(scale_invalid2, "cpu")
 
-        with self.assertRaises(ValueError):
-            guardian.generate_event_name(scale_invalid3, "cpu")
 
     def test_filter_old_events(self):
         all_events = list()

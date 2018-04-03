@@ -18,10 +18,7 @@ debug = True
 
 def translate_doc_to_timeseries(doc):
     try:
-        try:
-            node_name = doc["name"]
-        except KeyError:
-            node_name = doc["structure"]
+        struct_name = doc["name"]
         timestamp = int(time.time())
 
         timeseries_list = list()
@@ -29,7 +26,8 @@ def translate_doc_to_timeseries(doc):
             for boundary in doc["resources"][resource]:
                 value = doc["resources"][resource][boundary]
                 metric = doc["type"] + "." + resource + "." + boundary
-                timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags=dict(host=node_name))
+                timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure" : struct_name})
+
                 timeseries_list.append(timeseries)
         return timeseries_list
     except Exception as e:
@@ -49,11 +47,13 @@ def get_structures():
     docs = list()
     for structure in db_handler.get_structures(subtype="container"):
         docs += translate_doc_to_timeseries(structure)
+    for application in db_handler.get_structures(subtype="application"):
+        docs += translate_doc_to_timeseries(application)
     return docs
 
 
 def persist():
-    logging.basicConfig(filename='DatabaseSnap.log', level=logging.INFO)
+    logging.basicConfig(filename='DatabaseSnapshoter.log', level=logging.INFO)
     fail_count = 0
     global debug
     while True:
@@ -73,14 +73,14 @@ def persist():
         docs = list()
         try:
             docs += get_limits()
-        except (requests.exceptions.HTTPError, ValueError):
+        except (requests.exceptions.HTTPError, ValueError, KeyError):
             # An error might have been thrown because database was recently updated or created
             fail_count += 1
             MyUtils.logging_warning("Couldn't retrieve limits info.", debug)
 
         try:
             docs += get_structures()
-        except (requests.exceptions.HTTPError, ValueError):
+        except (requests.exceptions.HTTPError, ValueError, KeyError):
             # An error might have been thrown because database was recently updated or created
             fail_count += 1
             MyUtils.logging_warning("Couldn't retrieve structure info.", debug)

@@ -52,7 +52,7 @@ def update_container_current_values(container_name, resources):
 
 
 def persist():
-    logging.basicConfig(filename='DatabaseSnapshoter.log', level=logging.INFO)
+    logging.basicConfig(filename='NodeStateSnapshoter.log', level=logging.INFO)
     fail_count = 0
     global debug
     while True:

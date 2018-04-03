@@ -21,7 +21,8 @@ GUARDIAN_METRICS = {
 translator_dict = {"cpu": "proc.cpu.user", "mem": "proc.mem.resident"}
 
 RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
+                         "EVENT_TIMEOUT": 40, "DEBUG": True, "GUARD_POLICY": "serverless"}
 SERVICE_NAME = "guardian"
 debug = True
 
@@ -62,7 +63,9 @@ def generate_event_name(event, resource):
 
     elif "up" in event["scale"] and event["scale"]["up"] > 0 \
             and "down" in event["scale"] and event["scale"]["down"] > 0:
-        raise ValueError("Can't have both up and down counts")
+        # SPECIAL CASE OF HEAVY HYSTERESIS
+        #raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
+        return None
 
     elif "down" in event["scale"] and event["scale"]["down"] > 0:
         final_string = resource.title() + "Underuse"
@@ -229,14 +232,17 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
     for rule in rules:
         try:
             if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
-                events.append(dict(
-                    name=generate_event_name(rule["action"]["events"], rule["resource"]),
-                    resource=rule["resource"],
-                    type="event",
-                    structure=structure_name,
-                    action=rule["action"],
-                    timestamp=int(time.time()))
-                )
+                # FIXME
+                event_name = generate_event_name(rule["action"]["events"], rule["resource"])
+                if event_name:
+                    events.append(dict(
+                        name=event_name,
+                        resource=rule["resource"],
+                        type="event",
+                        structure=structure_name,
+                        action=rule["action"],
+                        timestamp=int(time.time()))
+                    )
         except KeyError as e:
             MyUtils.logging_warning(
                 "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
@@ -255,7 +261,7 @@ def match_rules_and_events(structure, rules, events, limits, usages):
     for rule in rules:
         try:
             resource_label = rule["resource"]
-            if rule["active"] and rule["generates"] == "requests" and jsonLogic(rule["rule"], events[resource_label]):
+            if rule["active"] and rule["generates"] == "requests" and resource_label in events and jsonLogic(rule["rule"], events[resource_label]):
                 # Check that the current resource value exists, otherwise there is nothing to rescale
                 if "current" not in structure["resources"][resource_label]:
                     MyUtils.logging_warning("No current value for container'" + structure[
@@ -296,6 +302,7 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                     resource=resource_label,
                     amount=amount,
                     structure=structure["name"],
+                    host=structure["host"],
                     action=rule["action"]["requests"][0],
                     timestamp=int(time.time()))
                 )
@@ -359,18 +366,22 @@ def process_serverless_container(config, container, usages, limits, rules):
     # Remove the old events, data movement, slow
     db_handler.delete_events(old_events)
 
-    # Merge all the event counts
-    reduced_events = reduce_structure_events(filtered_events)
+    # If there are no events, nothing else to do as no requests will be generated
+    if filtered_events:
+        # Merge all the event counts
+        reduced_events = reduce_structure_events(filtered_events)
 
-    # Match events and rules to generate requests
-    triggered_requests, events_to_remove = match_rules_and_events(container, rules, reduced_events, limits, usages)
+        # Match events and rules to generate requests
+        triggered_requests, events_to_remove = match_rules_and_events(container, rules, reduced_events, limits, usages)
 
-    # Remove events that generated the request, data movement, slow
-    for event in events_to_remove:
-        db_handler.delete_num_events_by_structure(container, event, events_to_remove[event])
+        # Remove events that generated the request, data movement, slow
+        for event in events_to_remove:
+            db_handler.delete_num_events_by_structure(container, event, events_to_remove[event])
 
-    # Create requests, data movement, slow
-    db_handler.add_requests(triggered_requests)
+        # Create requests, data movement, slow
+        db_handler.add_requests(triggered_requests)
+    else:
+        triggered_requests = list()
 
     # DEBUG AND INFO OUTPUT
     if debug:
@@ -419,6 +430,7 @@ def guard():
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
         benchmark = False
+        guard_policy = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "GUARD_POLICY")
 
         # Data retrieving, slow
         try:
@@ -428,7 +440,13 @@ def guard():
             continue
         # Process and measure time
         epoch_start = time.time()
-        serverless(config, containers)
+
+        if guard_policy is "serverless":
+            serverless(config, containers)
+        # Default option will be serverless
+        else:
+            serverless(config, containers)
+
         epoch_end = time.time()
         processing_time = epoch_end - epoch_start
 

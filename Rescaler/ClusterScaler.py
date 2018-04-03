@@ -82,9 +82,20 @@ def apply_request(request, resources, specified_resources):
             # - at least one core can be reclaimed because of underuse or
             # - not enough cores to apply the limit or close to the limit
             number_of_cpus_requested = int(math.ceil(cpu_allowance_limit / 100.0))
-            resource_dict["cpu"]["cpu_num"] = str(range(number_of_cpus_requested)[0]) + "-" + str(
-                range(number_of_cpus_requested)[-1])
+
             # TODO Implement cpu resource management
+
+            cpus_map = {"node0": ["0","2"],"node1":["1","3"],"node2":["4","6"],"node3":["5","7"]}
+            #resource_dict["cpu"]["cpu_num"] = cpus_map[request["structure"]][0:number_of_cpus_requested]
+
+            resource_dict["cpu"]["cpu_num"] = \
+                str(cpus_map[request["structure"]][0]) + "," + \
+                str(cpus_map[request["structure"]][number_of_cpus_requested-1])
+
+            # resource_dict["cpu"]["cpu_num"] = \
+            #     str(range(number_of_cpus_requested)[0]) + "-" + \
+            #     str(range(number_of_cpus_requested)[-1])
+
 
         resource_dict["cpu"]["cpu_allowance_limit"] = cpu_allowance_limit
 
@@ -110,17 +121,15 @@ def apply_request(request, resources, specified_resources):
     return resource_dict
 
 
-def set_container_resources(container, resources):
-    r = requests.put("http://dante:8000/container/" + container, data=json.dumps(resources),
+def set_container_resources(container, host, resources):
+    node_rescaler_endpoint = host
+    r = requests.put("http://"+node_rescaler_endpoint+":8000/container/" + container, data=json.dumps(resources),
                      headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
     if r.status_code == 201:
         return dict(r.json())
     else:
         print(json.dumps(r.json()))
         r.raise_for_status()
-
-
-# return dict(r.json())
 
 
 def process_request(request, real_resources, specified_resources):
@@ -136,12 +145,13 @@ def process_request(request, real_resources, specified_resources):
         try:
             structure = request["structure"]
             resource = request["resource"]
+            host = request["host"]
 
             # Get the previous values in case the scaling is not successfully and fully applied
             # previous_resource_limit = real_resources[resource]["current"]
 
             # Apply changes through a REST call
-            applied_resources = set_container_resources(structure, new_resources)
+            applied_resources = set_container_resources(structure, host, new_resources)
 
             # Get the applied value
             current_value = applied_resources[resource][current_value_label[resource]]

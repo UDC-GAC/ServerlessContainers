@@ -27,20 +27,21 @@ def initialize():
     create_all_dbs()
 
     containers = ["node0", "node1", "node2", "node3"]
-    # containers = ["node0"]
+    hosts = ["dante", "apolo"]
+    applications = ["app1"]
     # CREATE LIMITS
     if handler.database_exists("limits"):
         print ("Adding 'limits' documents")
         for c in containers:
             container = dict(
                 type='limit',
-                structure=c,
+                name=c,
                 resources=dict(
-                    cpu=dict(upper=140, lower=70, boundary=70),
-                    mem=dict(upper=8000, lower=7000, boundary=1000),
+                    cpu=dict(upper=170, lower=150),
+                    mem=dict(upper=8000, lower=7000),
                     disk=dict(upper=100, lower=100),
                     net=dict(upper=100, lower=100),
-                    energy=dict(upper=20, lower=10)
+                    energy=dict(upper=15, lower=5)
                 )
             )
             handler.add_limit(container)
@@ -55,7 +56,7 @@ def initialize():
                 host='es-udc-dec-jonatan-dante',
                 name=c,
                 resources=dict(
-                    cpu=dict(max=300, min=50),
+                    cpu=dict(max=200, min=10),
                     mem=dict(max=8192, min=256),
                     disk=dict(max=100, min=100),
                     net=dict(max=100, min=100),
@@ -64,17 +65,29 @@ def initialize():
             )
             handler.add_structure(container)
 
-        host = dict(
-            type='structure',
-            subtype='host',
-            name="es-udc-dec-jonatan-dante",
-            resources=dict(
-                cpu=800,
-                mem=46000
+        for h in hosts:
+            host = dict(
+                type='structure',
+                subtype='host',
+                name=h,
+                resources=dict(
+                    cpu=800,
+                    mem=46000
+                )
             )
-        )
-        handler.add_structure(host)
+            handler.add_structure(host)
 
+        app = dict(
+            type='structure',
+            subtype='application',
+            name="app1",
+            resources=dict(
+                cpu=dict(max=300, min=50),
+                mem=dict(max=46000, min=1024)
+            ),
+            containers=["node0","node1","node2","node3"]
+        )
+        handler.add_structure(app)
     # CREATE RULES
     if handler.database_exists("rules"):
         print ("Adding 'rules' documents")
@@ -94,7 +107,7 @@ def initialize():
                         {"var": "limits.cpu.upper"},
                         {"var": "structure.cpu.max"}]}]}),
             generates="events", action={"events": {"scale": {"up": 1}}},
-            active=False
+            active=True
         )
 
         cpu_dropped_lower = dict(
@@ -115,7 +128,7 @@ def initialize():
                         {"var": "structure.cpu.min"}]}]}),
             generates="events",
             action={"events": {"scale": {"down": 1}}},
-            active=False
+            active=True
         )
 
         handler.add_rule(cpu_exceeded_upper)
@@ -130,8 +143,9 @@ def initialize():
             events_to_remove=3,
             generates="requests",
             action={"requests": ["CpuRescaleUp"]},
-            amount=10,
-            active=False
+            amount=20,
+            rescale_by="amount",
+            active=True
         )
 
         CpuRescaleDown = dict(
@@ -143,9 +157,9 @@ def initialize():
             events_to_remove=3,
             generates="requests",
             action={"requests": ["CpuRescaleDown"]},
-            amount=-10,
+            amount=-20,
             rescale_by="fit_to_usage",
-            active=False,
+            active=True,
         )
 
         handler.add_rule(CpuRescaleUp)
@@ -167,7 +181,7 @@ def initialize():
                         {"var": "structure.mem.max"}]}]}),
             generates="events",
             action={"events": {"scale": {"up": 1}}},
-            active=False
+            active=True
         )
 
         mem_dropped_lower = dict(
@@ -188,7 +202,7 @@ def initialize():
                         {"var": "structure.mem.min"}]}]}),
             generates="events",
             action={"events": {"scale": {"down": 1}}},
-            active=False
+            active=True
         )
 
         handler.add_rule(mem_exceeded_upper)
@@ -207,9 +221,8 @@ def initialize():
             events_to_remove=2,
             action={"requests": ["MemRescaleUp"]},
             amount=2560,
-            percentage_difference=20,
             rescale_by="amount",
-            active=False
+            active=True
         )
 
         MemRescaleDown = dict(
@@ -227,7 +240,7 @@ def initialize():
             amount=-512,
             percentage_reduction=50,
             rescale_by="fit_to_usage",
-            active=False
+            active=True
         )
 
         handler.add_rule(MemRescaleUp)
@@ -258,6 +271,7 @@ def initialize():
             type="service",
             heartbeat="",
             config=dict(
+                GUARD_POLICY="serverless",
                 WINDOW_TIMELAPSE=3,
                 WINDOW_DELAY=10,
                 EVENT_TIMEOUT=30,
@@ -270,6 +284,7 @@ def initialize():
             type="service",
             heartbeat="",
             config=dict(
+                DEBUG=True,
                 POLLING_FREQUENCY=5,
                 REQUEST_TIMEOUT=30
             )
@@ -294,8 +309,8 @@ def initialize():
             )
         )
 
-        analyzer = dict(
-            name="analyzer",
+        refeeder = dict(
+            name="refeeder",
             type="service",
             heartbeat="",
             config=dict(
@@ -310,7 +325,7 @@ def initialize():
         handler.add_service(guardian)
         handler.add_service(database_snapshoter)
         handler.add_service(node_state_snapshoter)
-        handler.add_service(analyzer)
+        handler.add_service(refeeder)
 
 
 initialize()
