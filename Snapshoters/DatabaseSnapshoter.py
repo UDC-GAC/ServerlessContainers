@@ -53,7 +53,7 @@ def get_structures():
 
 
 def persist():
-    logging.basicConfig(filename='DatabaseSnapshoter.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
     fail_count = 0
     global debug
     while True:

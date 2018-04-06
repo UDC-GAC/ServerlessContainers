@@ -34,3 +34,7 @@
 ./build/tsdb mkmetric structure.energy.min
 
 
+# APPLICATION RESOURCES
+./build/tsdb mkmetric structure.cpu.usage
+./build/tsdb mkmetric structure.mem.usage
+./build/tsdb mkmetric structure.energy.usage

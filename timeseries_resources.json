@@ -39,7 +39,7 @@
     {
       "metrics": [
         {
-          "metric": "structure.cpu.current",
+          "metric": "structure.cpu.usage",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"

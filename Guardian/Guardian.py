@@ -14,15 +14,22 @@ NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
 db_handler = couchDB.CouchDBServer()
 
-BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
-GUARDIAN_METRICS = {
-    'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'],
-    'proc.mem.resident': ['proc.mem.resident']}
-translator_dict = {"cpu": "proc.cpu.user", "mem": "proc.mem.resident"}
+BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
+GUARDIAN_CONTAINER_METRICS = {
+    'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
+    'structure.mem.usage': ['proc.mem.resident']}
+
+BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage']
+GUARDIAN_APPLICATION_METRICS = {
+    'structure.cpu.usage': ['structure.cpu.usage'],
+    'structure.mem.usage': ['structure.mem.usage']}
+
+translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage"}
 
 RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
-                         "EVENT_TIMEOUT": 40, "DEBUG": True, "GUARD_POLICY": "serverless"}
+                         "EVENT_TIMEOUT": 40, "DEBUG": True, "GUARD_POLICY": "serverless",
+                         "STRUCTURE_GUARDED": "container"}
 SERVICE_NAME = "guardian"
 debug = True
 
@@ -64,7 +71,7 @@ def generate_event_name(event, resource):
     elif "up" in event["scale"] and event["scale"]["up"] > 0 \
             and "down" in event["scale"] and event["scale"]["down"] > 0:
         # SPECIAL CASE OF HEAVY HYSTERESIS
-        #raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
+        # raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
         return None
 
     elif "down" in event["scale"] and event["scale"]["down"] > 0:
@@ -204,15 +211,14 @@ def invalid_container_state(resources, limits, resources_boundaries):
             # that the limit can be surpassed
             if current_value != NOT_AVAILABLE_STRING:
                 if current_value - resources_boundaries[resource] <= upper_value:
-                    return True
-                    # raise ValueError(
-                    #     "value for 'current': " + str(current_value) +
-                    #     " is too close (" + str(resources_boundaries[resource]) + ") to " +
-                    #     "value for 'upper': " + str(upper_value))
+                    # return True
+                    raise ValueError(
+                        "value for 'current': " + str(current_value) +
+                        " is too close (" + str(resources_boundaries[resource]) + ") to " +
+                        "value for 'upper': " + str(upper_value))
     except ValueError:
-        return True
-
-    return False
+        # return True
+        raise
 
 
 def match_usages_and_limits(structure_name, rules, usages, limits, resources):
@@ -220,13 +226,14 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
     data = dict()
 
     for resource in RESOURCES:
-        data[resource] = {
-            "proc": {resource: {}},
-            "limits": {resource: limits[resource]},
-            "structure": {resource: resources[resource]}}
+        if resource in resources:
+            data[resource] = {
+                "limits": {resource: limits[resource]},
+                "structure": {resource: resources[resource]}}
 
     for usage_metric in usages:
         keys = usage_metric.split(".")
+        # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
         data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
 
     for rule in rules:
@@ -254,6 +261,14 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
 # TO BE TESTED
 
 
+def is_application(structure):
+    return structure["subtype"] == "application"
+
+
+def is_container(structure):
+    return structure["subtype"] == "container"
+
+
 # NOT TESTED
 def match_rules_and_events(structure, rules, events, limits, usages):
     generated_requests = list()
@@ -261,12 +276,21 @@ def match_rules_and_events(structure, rules, events, limits, usages):
     for rule in rules:
         try:
             resource_label = rule["resource"]
-            if rule["active"] and rule["generates"] == "requests" and resource_label in events and jsonLogic(rule["rule"], events[resource_label]):
-                # Check that the current resource value exists, otherwise there is nothing to rescale
-                if "current" not in structure["resources"][resource_label]:
+            if rule["active"] and rule["generates"] == "requests" and resource_label in events and jsonLogic(
+                    rule["rule"], events[resource_label]):
+
+                if is_container(structure) and "current" not in structure["resources"][resource_label]:
+                    # If rescaling a container, check that the current resource value exists,
+                    # otherwise there is nothing to rescale
+
                     MyUtils.logging_warning("No current value for container'" + structure[
                         "name"] + "' and resource '" + resource_label + "', can't rescale", debug)
                     continue
+                elif is_application(structure) and "rescale_by" in rule.keys() and rule["rescale_by"] != "amount":
+                    # Only rescale by amount is allowed for application rescaling, for now
+                    rule["rescale_by"] = "amount"
+                    MyUtils.logging_warning(
+                        "application rescaling only allows rescaling by 'amount' policy, coercing to it.", debug)
 
                 # Match, generate request
                 if "rescale_by" in rule.keys():
@@ -297,15 +321,19 @@ def match_rules_and_events(structure, rules, events, limits, usages):
 
                 amount = adjust_if_invalid_amount(amount, resource_label, structure, limits)
 
-                generated_requests.append(dict(
+                request = dict(
                     type="request",
                     resource=resource_label,
                     amount=amount,
                     structure=structure["name"],
-                    host=structure["host"],
                     action=rule["action"]["requests"][0],
                     timestamp=int(time.time()))
-                )
+
+                # TODO FIX ME Should the host be specified by the guardian or retrieved by the scaler
+                if is_container(structure):
+                    request["host"] = structure["host"]
+
+                generated_requests.append(request)
 
                 event_name = generate_event_name(events[resource_label]["events"], resource_label)
                 if event_name not in events_to_remove:
@@ -388,34 +416,60 @@ def process_serverless_container(config, container, usages, limits, rules):
         print_debug_info(container, usages, triggered_events, triggered_requests)
 
 
-def serverless(config, containers):
+def serverless(config, structures):
     window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
     window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
     rules = db_handler.get_rules()
 
-    for container in containers:
+    for structure in structures:
         try:
-            resources = container["resources"]
+            resources = structure["resources"]
 
             # Data retrieving, slow
-            limits = db_handler.get_limits(container)
+            limits = db_handler.get_limits(structure)
+
+            if not limits:
+                MyUtils.logging_warning(
+                    "structure: " + structure["name"] + " has no limits", debug)
+                continue
+
             resources_boundaries = {"cpu": 15, "mem": 170}  # Better don't set multiples of steps
-            if invalid_container_state(resources, limits["resources"], resources_boundaries):
+            try:
+                invalid_container_state(resources, limits["resources"], resources_boundaries)
+            except ValueError as e:
+                MyUtils.logging_warning(
+                    "structure: " + structure["name"] + " has invalid state with its limits and resources" + str(
+                        e) + " " + str(traceback.format_exc()), debug)
                 continue
 
             # Data retrieving, slow
-            usages = bdwatchdog_handler.get_structure_usages(container["name"], window_difference, window_delay,
-                                                             BDWATCHDOG_METRICS, GUARDIAN_METRICS)
-            process_serverless_container(config, container, usages, limits, rules)
+            if is_container(structure):
+                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
+                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
+                tag = "host"
+            elif is_application(structure):
+                metrics_to_retrieve = BDWATCHDOG_APPLICATION_METRICS
+                metrics_to_generate = GUARDIAN_APPLICATION_METRICS
+                tag = "structure"
+            else:
+                # Default is container
+                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
+                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
+                tag = "host"
+
+            usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference, window_delay,
+                                                             metrics_to_retrieve, metrics_to_generate)
+
+            process_serverless_container(config, structure, usages, limits, rules)
 
         except Exception as e:
             MyUtils.logging_error(
-                "error with container: " + container["name"] + " " + str(e) + " " + str(traceback.format_exc()),
+                "error with structure: " + structure["name"] + " " + str(e) + " " + str(traceback.format_exc()),
                 debug)
 
 
 def guard():
-    logging.basicConfig(filename='Guardian.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
     global debug
     while True:
 
@@ -431,28 +485,29 @@ def guard():
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
         benchmark = False
         guard_policy = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "GUARD_POLICY")
+        structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
 
         # Data retrieving, slow
         try:
-            containers = db_handler.get_structures(subtype="container")
+            structures = db_handler.get_structures(subtype=structure_guarded)
         except (requests.exceptions.HTTPError, ValueError):
             MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
             continue
         # Process and measure time
         epoch_start = time.time()
 
-        if guard_policy is "serverless":
-            serverless(config, containers)
+        if guard_policy == "serverless":
+            serverless(config, structures)
         # Default option will be serverless
         else:
-            serverless(config, containers)
+            serverless(config, structures)
 
         epoch_end = time.time()
         processing_time = epoch_end - epoch_start
 
         if benchmark:
             MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to process " + str(
-                len(containers)) + " nodes at " + MyUtils.get_time_now_string(), debug)
+                len(structures)) + " nodes at " + MyUtils.get_time_now_string(), debug)
 
         time.sleep(window_difference)
 

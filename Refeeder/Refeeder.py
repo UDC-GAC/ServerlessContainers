@@ -97,7 +97,7 @@ def get_host_info(host_name):
         host_info = host_info_cache[host_name]
     else:
         # Data retrieving, slow
-        host_info = bdwatchdog.get_structure_usages(host_name, window_difference,
+        host_info = bdwatchdog.get_structure_usages({"host":host_name}, window_difference,
                                                     window_delay, BDWATCHDOG_ENERGY_METRICS,
                                                     ANALYZER_ENERGY_METRICS)
         host_info_cache[host_name] = host_info
@@ -118,7 +118,7 @@ def refeed_containers(containers):
 def get_container_info(container_name):
     global window_difference
     global window_delay
-    container_info = bdwatchdog.get_structure_usages(container_name, window_difference, window_delay,
+    container_info = bdwatchdog.get_structure_usages({"host":container_name}, window_difference, window_delay,
                                                      BDWATCHDOG_METRICS, ANALYZER_APPLICATION_METRICS)
     return container_info
 
@@ -133,7 +133,7 @@ def generate_application_energy_metrics(application, updated_containers):
     if "energy" not in application["resources"]:
         application["resources"]["energy"] = dict()
 
-    application["resources"]["energy"]["current"] = total_energy
+    application["resources"]["energy"]["usage"] = total_energy
     return application
 
 
@@ -146,7 +146,7 @@ def generate_application_metrics(application):
         application_info = merge(application_info, container_info)
 
     for resource in application_info:
-        application["resources"][resource]["current"] = application_info[resource]
+        application["resources"][resource]["usage"] = application_info[resource]
 
     return application
 

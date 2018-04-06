@@ -126,8 +126,12 @@ class CouchDBServer:
         return self.__add_doc(self.__limits_db_name, limit)
 
     def get_limits(self, structure):
-        # Return just the first item, as it should only be one
-        return self.find_documents_by_matches(self.__limits_db_name, {"structure": structure["name"]})[0]
+        # Return just the first item, as it should only be one, otherwise return none
+        limits = self.find_documents_by_matches(self.__limits_db_name, {"name": structure["name"]})
+        if not limits:
+            return None
+        else:
+            return limits[0]
 
     def update_limit(self, limit):
         return self.__update_doc(self.__limits_db_name, limit)
@@ -150,8 +154,19 @@ class CouchDBServer:
     def add_rule(self, rule):
         return self.__add_doc(self.__rules_db_name, rule)
 
+    def get_rule(self, rule_name):
+        docs = self.find_documents_by_matches(self.__rules_db_name, {"name": rule_name})
+        if not docs:
+            raise ValueError("Rule " + rule_name + " not found")
+        else:
+            # Return the first one as it should only be one
+            return dict(docs[0])
+
     def get_rules(self):
         return self.get_all_database_docs(self.__rules_db_name)
+
+    def update_rule(self, rule):
+        return self.__update_doc(self.__rules_db_name, rule)
 
     # SERVICES #
     def get_service(self, service_name):

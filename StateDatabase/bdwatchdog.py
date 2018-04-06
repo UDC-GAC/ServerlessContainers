@@ -20,12 +20,12 @@ class BDWatchdog:
         else:
             r.raise_for_status()
 
-    def get_structure_usages(self, hostname, window_difference, window_delay, retrieve_metrics, generate_metrics):
+    def get_structure_usages(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics):
         usages = dict()
         subquery = list()
         for metric in retrieve_metrics:
             usages[metric] = self.NO_METRIC_DATA_DEFAULT_VALUE
-            subquery.append(dict(aggregator='zimsum', metric=metric, tags=dict(host=hostname)))
+            subquery.append(dict(aggregator='zimsum', metric=metric, tags=tags))
 
         start = int(time.time() - (window_difference + window_delay))
         end = int(time.time() - window_delay)

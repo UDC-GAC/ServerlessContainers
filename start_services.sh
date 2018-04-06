@@ -7,5 +7,6 @@ export PYTHONPATH=$RESCALER_PATH:$BDWACHDOG_PATH
 tmux new -d -s "Guardian" "python Guardian/Guardian.py"
 tmux new -d -s "Scaler" "python Rescaler/ClusterScaler.py"
 tmux new -d -s "Refeeder" "python Refeeder/Refeeder.py"
-tmux new -d -s "DatabaseSnapshoter" "python Snapshoters/StateDatabaseSnapshoter.py"
-tmux new -d -s "NodeSnapshoter" "python Snapshoters/NodeStateSnapshoter.py"
+tmux new -d -s "DatabaseSnapshoter" "python Snapshoters/DatabaseSnapshoter.py"
+tmux new -d -s "StructuresSnapshoter" "python Snapshoters/StructuresSnapshoter.py"
+

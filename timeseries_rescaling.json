@@ -6,7 +6,7 @@
           "metric": "structure.mem.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node0"
+            "structure=node0"
           ]
         },
         {
@@ -20,14 +20,14 @@
           "metric": "limit.mem.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node0"
+            "structure=node0"
           ]
         },
         {
           "metric": "limit.mem.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node0"
+            "structure=node0"
           ]
         }
       ],
@@ -42,7 +42,7 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node0"
+            "structure=node0"
           ]
         },
         {
@@ -56,14 +56,14 @@
           "metric": "limit.cpu.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node0"
+            "structure=node0"
           ]
         },
         {
           "metric": "limit.cpu.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node0"
+            "structure=node0"
           ]
         }
       ],
@@ -78,7 +78,7 @@
           "metric": "structure.mem.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node1"
+            "structure=node1"
           ]
         },
         {
@@ -92,14 +92,14 @@
           "metric": "limit.mem.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node1"
+            "structure=node1"
           ]
         },
         {
           "metric": "limit.mem.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node1"
+            "structure=node1"
           ]
         }
       ],
@@ -114,7 +114,7 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node1"
+            "structure=node1"
           ]
         },
         {
@@ -128,14 +128,14 @@
           "metric": "limit.cpu.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node1"
+            "structure=node1"
           ]
         },
         {
           "metric": "limit.cpu.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node1"
+            "structure=node1"
           ]
         }
       ],
@@ -150,7 +150,7 @@
           "metric": "structure.mem.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node2"
+            "structure=node2"
           ]
         },
         {
@@ -164,14 +164,14 @@
           "metric": "limit.mem.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node2"
+            "structure=node2"
           ]
         },
         {
           "metric": "limit.mem.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node2"
+            "structure=node2"
           ]
         }
       ],
@@ -186,7 +186,7 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node2"
+            "structure=node2"
           ]
         },
         {
@@ -200,14 +200,14 @@
           "metric": "limit.cpu.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node2"
+            "structure=node2"
           ]
         },
         {
           "metric": "limit.cpu.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node2"
+            "structure=node2"
           ]
         }
       ],
@@ -222,7 +222,7 @@
           "metric": "structure.mem.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node3"
+            "structure=node3"
           ]
         },
         {
@@ -236,14 +236,14 @@
           "metric": "limit.mem.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node3"
+            "structure=node3"
           ]
         },
         {
           "metric": "limit.mem.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node3"
+            "structure=node3"
           ]
         }
       ],
@@ -258,7 +258,7 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "host=node3"
+            "structure=node3"
           ]
         },
         {
@@ -272,14 +272,14 @@
           "metric": "limit.cpu.lower",
           "aggregator": "zimsum",
           "tags": [
-            "host=node3"
+            "structure=node3"
           ]
         },
         {
           "metric": "limit.cpu.upper",
           "aggregator": "zimsum",
           "tags": [
-            "host=node3"
+            "structure=node3"
           ]
         }
       ],

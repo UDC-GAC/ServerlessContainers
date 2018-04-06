@@ -27,7 +27,7 @@ def initialize():
     create_all_dbs()
 
     containers = ["node0", "node1", "node2", "node3"]
-    hosts = ["dante", "apolo"]
+    hosts = ["es-udc-dec-jonatan-dante", "es-udc-dec-jonatan-apolo"]
     applications = ["app1"]
     # CREATE LIMITS
     if handler.database_exists("limits"):
@@ -45,6 +45,19 @@ def initialize():
                 )
             )
             handler.add_limit(container)
+
+        application = dict(
+            type='limit',
+            name='app1',
+            resources=dict(
+                cpu=dict(upper=300, lower=100),
+                mem=dict(upper=14000, lower=4000),
+                disk=dict(upper=100, lower=100),
+                net=dict(upper=100, lower=100),
+                energy=dict(upper=50, lower=5)
+            )
+        )
+        handler.add_limit(application)
 
     # CREATE STRUCTURES
     if handler.database_exists("structures"):
@@ -71,8 +84,8 @@ def initialize():
                 subtype='host',
                 name=h,
                 resources=dict(
-                    cpu=800,
-                    mem=46000
+                    cpu=dict(max=800),
+                    mem=dict(max=46000)
                 )
             )
             handler.add_structure(host)
@@ -82,8 +95,9 @@ def initialize():
             subtype='application',
             name="app1",
             resources=dict(
-                cpu=dict(max=300, min=50),
-                mem=dict(max=46000, min=1024)
+                cpu=dict(max=600, min=50),
+                mem=dict(max=46000, min=1024),
+                energy=dict(max=60, min=0)
             ),
             containers=["node0","node1","node2","node3"]
         )
@@ -101,7 +115,7 @@ def initialize():
             rule=dict(
                 {"and": [
                     {">": [
-                        {"var": "proc.cpu.user"},
+                        {"var": "structure.cpu.usage"},
                         {"var": "limits.cpu.upper"}]},
                     {"<": [
                         {"var": "limits.cpu.upper"},
@@ -118,10 +132,10 @@ def initialize():
             rule=dict(
                 {"and": [
                     {">": [
-                        {"var": "proc.cpu.user"},
+                        {"var": "structure.cpu.usage"},
                         0]},
                     {"<": [
-                        {"var": "proc.cpu.user"},
+                        {"var": "structure.cpu.usage"},
                         {"var": "limits.cpu.lower"}]},
                     {">": [
                         {"var": "limits.cpu.lower"},
@@ -174,7 +188,7 @@ def initialize():
             rule=dict(
                 {"and": [
                     {">": [
-                        {"var": "proc.mem.resident"},
+                        {"var": "structure.mem.usage"},
                         {"var": "limits.mem.upper"}]},
                     {"<": [
                         {"var": "limits.mem.upper"},
@@ -192,10 +206,10 @@ def initialize():
             rule=dict(
                 {"and": [
                     {">": [
-                        {"var": "proc.mem.resident"},
+                        {"var": "structure.mem.usage"},
                         0]},
                     {"<": [
-                        {"var": "proc.mem.resident"},
+                        {"var": "structure.mem.usage"},
                         {"var": "limits.mem.lower"}]},
                     {">": [
                         {"var": "limits.mem.lower"},
@@ -272,6 +286,7 @@ def initialize():
             heartbeat="",
             config=dict(
                 GUARD_POLICY="serverless",
+                STRUCTURE_GUARDED="container",
                 WINDOW_TIMELAPSE=3,
                 WINDOW_DELAY=10,
                 EVENT_TIMEOUT=30,
@@ -301,7 +316,7 @@ def initialize():
         )
 
         node_state_snapshoter = dict(
-            name="node_state_snapshoter",
+            name="structures_snapshoter",
             type="service",
             heartbeat="",
             config=dict(

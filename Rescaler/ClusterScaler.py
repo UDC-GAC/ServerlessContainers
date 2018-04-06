@@ -143,7 +143,7 @@ def process_request(request, real_resources, specified_resources):
 
         applied_resources = dict()
         try:
-            structure = request["structure"]
+            structure_name = request["structure"]
             resource = request["resource"]
             host = request["host"]
 
@@ -151,7 +151,7 @@ def process_request(request, real_resources, specified_resources):
             # previous_resource_limit = real_resources[resource]["current"]
 
             # Apply changes through a REST call
-            applied_resources = set_container_resources(structure, host, new_resources)
+            applied_resources = set_container_resources(structure_name, host, new_resources)
 
             # Get the applied value
             current_value = applied_resources[resource][current_value_label[resource]]
@@ -160,13 +160,13 @@ def process_request(request, real_resources, specified_resources):
             db_handler.delete_request(request)
 
             # Update the limits
-            limits = db_handler.get_limits({"name": structure})
+            limits = db_handler.get_limits({"name": structure_name})
             limits["resources"][resource]["upper"] += request["amount"]
             limits["resources"][resource]["lower"] += request["amount"]
             db_handler.update_limit(limits)
 
             # Update the structure current value
-            updated_structure = db_handler.get_structure(structure)
+            updated_structure = db_handler.get_structure(structure_name)
             updated_structure["resources"][resource]["current"] = current_value
             db_handler.update_structure(updated_structure)
 
@@ -181,9 +181,27 @@ def process_request(request, real_resources, specified_resources):
             MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)
             return
 
+def rescale_container(request, structure_name):
+    real_resources = MyUtils.get_container_resources(structure_name)
+    specified_resources = db_handler.get_structure(structure_name)
+    try:
+        process_request(request, real_resources, specified_resources)
+    except Exception as e:
+        MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)
+
+
+def rescale_application(request, structure_name):
+    pass
+
+def is_application(structure):
+    return structure["subtype"] == "application"
+
+
+def is_container(structure):
+    return structure["subtype"] == "container"
 
 def scale():
-    logging.basicConfig(filename='ClusterScaler.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME+'.log', level=logging.INFO)
     global debug
     while True:
 
@@ -206,12 +224,13 @@ def scale():
         else:
             MyUtils.logging_info("Requests at " + MyUtils.get_time_now_string(), debug)
             for request in new_requests:
-                real_resources = MyUtils.get_container_resources(request["structure"])
-                specified_resources = db_handler.get_structure(request["structure"])
-                try:
-                    process_request(request, real_resources, specified_resources)
-                except Exception as e:
-                    MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)
+                structure_name = request["structure"]
+                structure = db_handler.get_structure(structure_name)
+                if is_application(structure):
+                    rescale_application(request, structure_name)
+                else:
+                    rescale_container(request, structure_name)
+
         time.sleep(polling_frequency)
 
 
