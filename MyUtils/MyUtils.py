@@ -65,17 +65,27 @@ def register_service(db_handler, service):
     db_handler.add_service(service)
 
 
-def get_service(db_handler, service_name):
+def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_seconds=2):
+    fails = 0
+    success = False
+    service = None
     # Get service info
-    try:
-        service = db_handler.get_service(service_name)
-    except (requests.exceptions.HTTPError, ValueError):
-        # An error might have been thrown because database was recently updated or created
-        message = "Fatal error, couldn't retrieve service."
-        logging_error(message, True)
-        raise Exception(message)
+    while not success:
+        try:
+            service = db_handler.get_service(service_name)
+            success = True
+        except (requests.exceptions.HTTPError, ValueError):
+            # An error might have been thrown because database was recently updated or created
+            # try again up to a maximum number of retries
+            fails += 1
+            if fails >= max_allowed_failures:
+                message = "Fatal error, couldn't retrieve service."
+                logging_error(message, True)
+                raise Exception(message)
+            else:
+                time.sleep(time_backoff_seconds)
 
-    if "config" not in service:
+    if not service or "config" not in service:
         message = "Fatal error, couldn't retrieve service configuration."
         logging_error(message, True)
         raise Exception(message)

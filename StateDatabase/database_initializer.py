@@ -95,7 +95,7 @@ def initialize():
             subtype='application',
             name="app1",
             resources=dict(
-                cpu=dict(max=600, min=50),
+                cpu=dict(max=900, min=50),
                 mem=dict(max=46000, min=1024),
                 energy=dict(max=60, min=0)
             ),

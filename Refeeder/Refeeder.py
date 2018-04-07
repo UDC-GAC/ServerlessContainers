@@ -7,22 +7,18 @@ import logging
 import requests
 import StateDatabase.couchDB as couchDB
 import StateDatabase.bdwatchdog
-import json
 
 bdwatchdog = StateDatabase.bdwatchdog.BDWatchdog()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
 db_handler = couchDB.CouchDBServer()
 
+
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident']
-GUARDIAN_METRICS = {'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'], 'proc.mem.resident': ['proc.mem.resident']}
-
 BDWATCHDOG_ENERGY_METRICS = ['sys.cpu.user', 'sys.cpu.kernel', 'sys.cpu.energy']
-ANALYZER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'],
-                           'energy': ['sys.cpu.energy']}
-
+GUARDIAN_METRICS = {'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'], 'proc.mem.resident': ['proc.mem.resident']}
+ANALYZER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'], 'energy': ['sys.cpu.energy']}
 ANALYZER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident']}
 
-RESOURCES = ['cpu']
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "DEBUG": True}
 SERVICE_NAME = "refeeder"
 debug = True
@@ -30,36 +26,25 @@ NOT_AVAILABLE_STRING = "n/a"
 
 CONTAINER_ENERGY_METRIC = "structure.energy.current"
 
+# Default values
 window_difference = 10
 window_delay = 10
 host_info_cache = dict()
 
 
-def merge(output, input):
-    for key in input:
-        if key in output:
-            output[key] = output[key] + input[key]
+def merge(output_dict, input_dict):
+    for key in input_dict:
+        if key in output_dict:
+            output_dict[key] = output_dict[key] + input_dict[key]
         else:
-            output[key] = input[key]
-    return output
+            output_dict[key] = input_dict[key]
+    return output_dict
 
 
 def update_structure(structure):
-    fail_count = 0
-    MAX_FAILS = 3
-    TIME_BACKOFF = 2  # seconds
-    while fail_count < MAX_FAILS:
-        try:
-            db_handler.update_structure(structure)
-            print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
-                  + time.strftime("%D %H:%M:%S", time.localtime()))
-            break
-        except requests.exceptions.HTTPError as e:
-            # FIX TODO probably tried to update a document that has already been updated by other service
-            # since it was retrieved, silence it
-            # MyUtils.logging_error("Error " + str(e) + " " + str(traceback.format_exc()), debug)
-            fail_count += 1
-            time.sleep(TIME_BACKOFF)
+    db_handler.update_structure(structure)
+    print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
+          + time.strftime("%D %H:%M:%S", time.localtime()))
 
 
 def generate_container_energy_metrics(container, host_info):
@@ -97,7 +82,7 @@ def get_host_info(host_name):
         host_info = host_info_cache[host_name]
     else:
         # Data retrieving, slow
-        host_info = bdwatchdog.get_structure_usages({"host":host_name}, window_difference,
+        host_info = bdwatchdog.get_structure_usages({"host": host_name}, window_difference,
                                                     window_delay, BDWATCHDOG_ENERGY_METRICS,
                                                     ANALYZER_ENERGY_METRICS)
         host_info_cache[host_name] = host_info
@@ -118,7 +103,7 @@ def refeed_containers(containers):
 def get_container_info(container_name):
     global window_difference
     global window_delay
-    container_info = bdwatchdog.get_structure_usages({"host":container_name}, window_difference, window_delay,
+    container_info = bdwatchdog.get_structure_usages({"host": container_name}, window_difference, window_delay,
                                                      BDWATCHDOG_METRICS, ANALYZER_APPLICATION_METRICS)
     return container_info
 
@@ -127,8 +112,8 @@ def generate_application_energy_metrics(application, updated_containers):
     total_energy = 0
     for c in updated_containers:
         # Check if container is used for this application and if it has energy information
-        if c["name"] in application["containers"] and "energy" in c["resources"] and "current" in c["resources"][
-            "energy"]:
+        if c["name"] in application["containers"] and "energy" in c["resources"] \
+                and "current" in c["resources"]["energy"]:
             total_energy += c["resources"]["energy"]["current"]
     if "energy" not in application["resources"]:
         application["resources"]["energy"] = dict()

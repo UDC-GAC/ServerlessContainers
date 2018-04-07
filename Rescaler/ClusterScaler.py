@@ -9,7 +9,6 @@ import math
 import traceback
 import logging
 
-
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 600, "DEBUG": True}
 SERVICE_NAME = "scaler"
 db_handler = couchDB.CouchDBServer()
@@ -85,17 +84,16 @@ def apply_request(request, resources, specified_resources):
 
             # TODO Implement cpu resource management
 
-            cpus_map = {"node0": ["0","2"],"node1":["1","3"],"node2":["4","6"],"node3":["5","7"]}
-            #resource_dict["cpu"]["cpu_num"] = cpus_map[request["structure"]][0:number_of_cpus_requested]
+            cpus_map = {"node0": ["0", "2"], "node1": ["1", "3"], "node2": ["4", "6"], "node3": ["5", "7"]}
+            # resource_dict["cpu"]["cpu_num"] = cpus_map[request["structure"]][0:number_of_cpus_requested]
 
             resource_dict["cpu"]["cpu_num"] = \
                 str(cpus_map[request["structure"]][0]) + "," + \
-                str(cpus_map[request["structure"]][number_of_cpus_requested-1])
+                str(cpus_map[request["structure"]][number_of_cpus_requested - 1])
 
             # resource_dict["cpu"]["cpu_num"] = \
             #     str(range(number_of_cpus_requested)[0]) + "-" + \
             #     str(range(number_of_cpus_requested)[-1])
-
 
         resource_dict["cpu"]["cpu_allowance_limit"] = cpu_allowance_limit
 
@@ -123,7 +121,7 @@ def apply_request(request, resources, specified_resources):
 
 def set_container_resources(container, host, resources):
     node_rescaler_endpoint = host
-    r = requests.put("http://"+node_rescaler_endpoint+":8000/container/" + container, data=json.dumps(resources),
+    r = requests.put("http://" + node_rescaler_endpoint + ":8000/container/" + container, data=json.dumps(resources),
                      headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
     if r.status_code == 201:
         return dict(r.json())
@@ -181,6 +179,7 @@ def process_request(request, real_resources, specified_resources):
             MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)
             return
 
+
 def rescale_container(request, structure_name):
     real_resources = MyUtils.get_container_resources(structure_name)
     specified_resources = db_handler.get_structure(structure_name)
@@ -193,6 +192,7 @@ def rescale_container(request, structure_name):
 def rescale_application(request, structure_name):
     pass
 
+
 def is_application(structure):
     return structure["subtype"] == "application"
 
@@ -200,8 +200,9 @@ def is_application(structure):
 def is_container(structure):
     return structure["subtype"] == "container"
 
+
 def scale():
-    logging.basicConfig(filename=SERVICE_NAME+'.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
     global debug
     while True:
 

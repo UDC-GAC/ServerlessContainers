@@ -9,6 +9,7 @@ import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
 
 db_handler = couchDB.CouchDBServer()
+RESOURCES = ["cpu", "mem"]
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"}
@@ -49,6 +50,7 @@ def update_container_current_values(container_name, resources):
     db_handler.update_structure(updated_structure)
     print("Success with container : " + str(container_name) + " at time: " + time.strftime("%D %H:%M:%S",
                                                                                            time.localtime()))
+
 
 def persist_containers():
     fail_count = 0
@@ -92,16 +94,12 @@ def persist_containers():
 
 
 def persist_hosts(container_resources_dict):
-    fail_count = 0
-
     # Try to get the containers, if unavailable, return
     try:
         hosts = db_handler.get_structures(subtype="host")
     except (requests.exceptions.HTTPError, ValueError):
         MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
         return
-
-
 
     # Generate the host resource state from the containers it hosts
 
@@ -113,37 +111,60 @@ def persist_hosts(container_resources_dict):
             host_containers[container_host] = list()
         host_containers[container_host].append(container_resources_dict[c])
 
-    host_used_resources = dict()
+    used_resources = dict()
     for host in hosts:
         host_name = host["name"]
         if host_name not in host_containers:
             continue
         containers = host_containers[host_name]
-        host_used_resources[host_name] = dict()
-        host_used_resources[host_name]["cpu"] = 0
-        host_used_resources[host_name]["mem"] = 0
+        used_resources[host_name] = dict()
+
+        for resource in RESOURCES:
+            used_resources[host_name][resource] = 0
 
         for c in containers:
-            # CPU
-            host_used_resources[host_name]["cpu"] += c["resources"]["cpu"]["effective_cpu_limit"]
+            for resource in RESOURCES:
+                used_resources[host_name][resource] += c["resources"][resource][translate_map[resource]["limit_label"]]
 
-            # MEM
-            host_used_resources[host_name]["mem"] += c["resources"]["mem"]["mem_limit"]
-
-        host["resources"]["cpu"]["free"] = host["resources"]["cpu"]["max"] - host_used_resources[host_name]["cpu"]
-        host["resources"]["mem"]["free"] = host["resources"]["cpu"]["max"] - host_used_resources[host_name]["mem"]
+        for resource in RESOURCES:
+            host["resources"][resource]["free"] = host["resources"][resource]["max"] - used_resources[host_name][
+                resource]
 
         db_handler.update_structure(host)
+        print("Success with host : " + str(host_name) + " at time: " + time.strftime("%D %H:%M:%S",
+                                                                                     time.localtime()))
 
-    print(json.dumps(host_used_resources))
+
+def persist_applications(container_resources_dict):
+    # Try to get the containers, if unavailable, return
+    try:
+        applications = db_handler.get_structures(subtype="application")
+    except (requests.exceptions.HTTPError, ValueError):
+        MyUtils.logging_warning("Couldn't retrieve applications info.", debug=True)
+        return
+
+    # Generate the applications current resource values
+    for app in applications:
+
+        for resource in RESOURCES:
+            app["resources"][resource]["current"] = 0
+
+        application_containers = app["containers"]
+        for c in application_containers:
+            for resource in RESOURCES:
+                app["resources"][resource]["current"] += container_resources_dict[c]["resources"][resource][
+                    translate_map[resource]["limit_label"]]
+
+        db_handler.update_structure(app)
+        print("Success with app : " + str(app["name"]) + " at time: " + time.strftime("%D %H:%M:%S",
+                                                                                      time.localtime()))
 
 
 def persist():
-    logging.basicConfig(filename=SERVICE_NAME+'.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
     global debug
     while True:
-
         # Get service info
         service = MyUtils.get_service(db_handler, SERVICE_NAME)
 
@@ -156,13 +177,8 @@ def persist():
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
         container_resources_dict = persist_containers()
+        persist_applications(container_resources_dict)
         persist_hosts(container_resources_dict)
-
-        # if fail_count >= MAX_FAIL_NUM:
-        #     MyUtils.logging_error("[" + SERVICE_NAME + "] failed for " + str(fail_count) + " times, exiting.", debug)
-        #     exit(1)
-        # else:
-        #     fail_count = 0
 
         time.sleep(polling_frequency)
 

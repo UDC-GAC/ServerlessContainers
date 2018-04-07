@@ -24,6 +24,11 @@ GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
     'structure.mem.usage': ['structure.mem.usage']}
 
+GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
+BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
+
+TAGS = {"container": "host", "application": "structure"}
+
 translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage"}
 
 RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
@@ -44,12 +49,13 @@ def check_unset_values(value, label):
         raise ValueError("value for '" + label + "' is not set or is not available.")
 
 
-def check_invalid_values(value1, label1, value2, label2):
+def check_invalid_values(value1, label1, value2, label2, resource="n/a"):
     if value1 > value2:
         raise ValueError(
-            "value for '" + label1 + "': " + str(value1) +
+            "in resources: " + resource +
+            " value for '" + label1 + "': " + str(value1) +
             " is greater than " +
-            "value for '" + label2 + "': " + str(value2))
+            " value for '" + label2 + "': " + str(value2))
 
 
 def try_get_value(d, key):
@@ -202,10 +208,14 @@ def invalid_container_state(resources, limits, resources_boundaries):
             # Check if the first value is greater than the second
             # check the full chain "max > upper > current > lower > min"
             if current_value != NOT_AVAILABLE_STRING:
-                check_invalid_values(current_value, "current", max_value, "max")
-            check_invalid_values(upper_value, "upper", current_value, "current")
-            check_invalid_values(lower_value, "lower", upper_value, "upper")
-            check_invalid_values(min_value, "min", lower_value, "lower")
+                # FIXME current should never be higher than max but it is for some odd reason
+                # so this check is temporally disabled so as to allow the rescaling process to take the resource
+                # down
+                pass
+                #check_invalid_values(current_value, "current", max_value, "max")
+            check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
+            check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
+            check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
 
             # Check that there is a boundary between values, like the current and upper, so
             # that the limit can be surpassed
@@ -375,18 +385,18 @@ def print_debug_info(container, usages, triggered_events, triggered_requests):
     MyUtils.logging_info(" ".join([container_name_str, resources_str, triggered_requests_and_events]), debug)
 
 
-def process_serverless_container(config, container, usages, limits, rules):
+def process_serverless_structure(config, structure, usages, limits, rules):
     event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
 
     # Match usages and rules to generate events
-    triggered_events = match_usages_and_limits(container["name"], rules, usages, limits["resources"],
-                                               container["resources"])
+    triggered_events = match_usages_and_limits(structure["name"], rules, usages, limits["resources"],
+                                               structure["resources"])
 
     # Create events, data movement, slow
     db_handler.add_events(triggered_events)
 
     # Get all the events, data movement, slow
-    all_events = db_handler.get_events(container)
+    all_events = db_handler.get_events(structure)
 
     # Filter the events according to timestamp
     filtered_events, old_events = filter_old_events(all_events, event_timeout)
@@ -400,11 +410,11 @@ def process_serverless_container(config, container, usages, limits, rules):
         reduced_events = reduce_structure_events(filtered_events)
 
         # Match events and rules to generate requests
-        triggered_requests, events_to_remove = match_rules_and_events(container, rules, reduced_events, limits, usages)
+        triggered_requests, events_to_remove = match_rules_and_events(structure, rules, reduced_events, limits, usages)
 
         # Remove events that generated the request, data movement, slow
         for event in events_to_remove:
-            db_handler.delete_num_events_by_structure(container, event, events_to_remove[event])
+            db_handler.delete_num_events_by_structure(structure, event, events_to_remove[event])
 
         # Create requests, data movement, slow
         db_handler.add_requests(triggered_requests)
@@ -413,7 +423,7 @@ def process_serverless_container(config, container, usages, limits, rules):
 
     # DEBUG AND INFO OUTPUT
     if debug:
-        print_debug_info(container, usages, triggered_events, triggered_requests)
+        print_debug_info(structure, usages, triggered_events, triggered_requests)
 
 
 def serverless(config, structures):
@@ -443,15 +453,11 @@ def serverless(config, structures):
                 continue
 
             # Data retrieving, slow
-            if is_container(structure):
-                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
-                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
-                tag = "host"
-            elif is_application(structure):
-                metrics_to_retrieve = BDWATCHDOG_APPLICATION_METRICS
-                metrics_to_generate = GUARDIAN_APPLICATION_METRICS
-                tag = "structure"
-            else:
+            try:
+                metrics_to_retrieve = BDWATCHDOG_METRICS[structure["subtype"]]
+                metrics_to_generate = GUARDIAN_METRICS[structure["subtype"]]
+                tag = TAGS[structure["subtype"]]
+            except KeyError:
                 # Default is container
                 metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
                 metrics_to_generate = GUARDIAN_CONTAINER_METRICS
@@ -460,7 +466,7 @@ def serverless(config, structures):
             usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference, window_delay,
                                                              metrics_to_retrieve, metrics_to_generate)
 
-            process_serverless_container(config, structure, usages, limits, rules)
+            process_serverless_structure(config, structure, usages, limits, rules)
 
         except Exception as e:
             MyUtils.logging_error(

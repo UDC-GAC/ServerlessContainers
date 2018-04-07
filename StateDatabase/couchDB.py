@@ -1,4 +1,6 @@
 # /usr/bin/python
+import time
+
 import requests
 import json
 
@@ -12,6 +14,7 @@ class CouchDBServer:
     __rules_db_name = "rules"
     __events_db_name = "events"
     __requests_db_name = "requests"
+    __MAX_UPDATE_TRIES = 5
 
     def __init__(self, server='http://couchdb:5984'):
         self.server = server
@@ -62,10 +65,24 @@ class CouchDBServer:
         else:
             return True
 
-    def __update_doc(self, database, doc):
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_seconds=2, new_fields=[]):
         r = requests.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200:
-            r.raise_for_status()
+            if r.status_code == 409:
+                # Conflict error, document may have been updated (e.g., heartbeat of services),
+                # update revision and retry
+                if 0 <= previous_tries < self.__MAX_UPDATE_TRIES:
+                    new_doc = self.find_documents_by_matches(database, {"_id": doc["_id"]})[0]
+                    doc["_rev"] = new_doc["_rev"]
+                    return self.__resilient_update_doc(database, doc, previous_tries + 1)
+                else:
+                    r.raise_for_status()
+            elif r.status_code == 404:
+                # Database may have been reinitialized (deleted and recreated), wait and retry again
+                time.sleep(time_backoff_seconds)
+                return self.__resilient_update_doc(database, doc, previous_tries + 1)
+            else:
+                r.raise_for_status()
         else:
             return True
 
@@ -96,7 +113,7 @@ class CouchDBServer:
             return self.find_documents_by_matches(self.__structures_db_name, {"subtype": subtype})
 
     def update_structure(self, structure):
-        return self.__update_doc(self.__structures_db_name, structure)
+        return self.__resilient_update_doc(self.__structures_db_name, structure)
 
     # EVENTS #
     def add_events(self, events):
@@ -134,7 +151,7 @@ class CouchDBServer:
             return limits[0]
 
     def update_limit(self, limit):
-        return self.__update_doc(self.__limits_db_name, limit)
+        return self.__resilient_update_doc(self.__limits_db_name, limit)
 
     # REQUESTS #
     def get_requests(self, structure=None):
@@ -166,7 +183,7 @@ class CouchDBServer:
         return self.get_all_database_docs(self.__rules_db_name)
 
     def update_rule(self, rule):
-        return self.__update_doc(self.__rules_db_name, rule)
+        return self.__resilient_update_doc(self.__rules_db_name, rule)
 
     # SERVICES #
     def get_service(self, service_name):
@@ -181,7 +198,7 @@ class CouchDBServer:
         return self.__add_doc(self.__services_db_name, service)
 
     def update_service(self, service):
-        return self.__update_doc(self.__services_db_name, service)
+        return self.__resilient_update_doc(self.__services_db_name, service)
 
     def delete_service(self, service):
         return self.__delete_doc(self.__services_db_name, service["_id"], service["_rev"])

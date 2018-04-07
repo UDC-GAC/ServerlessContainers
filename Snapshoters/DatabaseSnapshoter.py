@@ -26,7 +26,7 @@ def translate_doc_to_timeseries(doc):
             for boundary in doc["resources"][resource]:
                 value = doc["resources"][resource][boundary]
                 metric = doc["type"] + "." + resource + "." + boundary
-                timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure" : struct_name})
+                timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
 
                 timeseries_list.append(timeseries)
         return timeseries_list

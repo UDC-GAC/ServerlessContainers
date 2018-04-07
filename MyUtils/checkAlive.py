@@ -32,7 +32,7 @@ while True:
     alive = list()
 
     services = db.get_all_database_docs("services")
-    print("AT: " + str(time.strftime("%D %H:%M:%S", time.localtime())))
+
     for service in services:
         if "heartbeat" not in service:
             dead.append(service["name"])
@@ -51,12 +51,18 @@ while True:
         else:
             dead.append(node_REST_service + "_node_rescaler")
 
+    print("AT: " + str(time.strftime("%D %H:%M:%S", time.localtime())))
+    print
+    print("!---- ALIVE ------!")
     for a in alive:
-        print_alive(a)
+        print(a)
+        #print_alive(a)
 
-    print("!-----------------------!")
+    print
+    print("!---- DEAD -------!")
     for d in dead:
-        print_dead(d)
+        print(d)
+        #print_dead(d)
 
     print("")
     time.sleep(POLLING_TIME)
