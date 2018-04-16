@@ -37,7 +37,7 @@ CPU_LIMIT_ALLOWANCE_LABEL = "cpu_allowance_limit"
 CPU_EFFECTIVE_CPUS_LABEL = "effective_num_cpus"
 CPU_EFFECTIVE_LIMIT = "effective_cpu_limit"
 TICKS_PER_CPU_PERCENTAGE = 1000
-
+MAX_TICKS_PER_CPU = 100000
 
 def get_node_cpus(container_name):
     # Get info from cgroups cpuacct subsystem
@@ -95,6 +95,7 @@ def set_node_cpus(container_name, cpu_resource):
 
     if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
         cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc", container_name, "cpu.cfs_quota_us"])
+        cpu_quota_path = "/".join([CGROUP_PATH, "cpuacct", "lxc", container_name, "cpu.cfs_period_us"])
 
         try:
             if cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL] == "-1":
@@ -109,10 +110,18 @@ def set_node_cpus(container_name, cpu_resource):
         else:
             quota = TICKS_PER_CPU_PERCENTAGE * cpu_limit  # Every 1000 period ticks count as 1% of CPU
 
+        # Write the number of ticks per second
+        op = write_cgroup_file_value(cpu_quota_path, str(MAX_TICKS_PER_CPU))
+        if not op["success"]:
+            # Something happened
+            return False, op
+
+        # Write the quota for this container in ticks
         op = write_cgroup_file_value(cpu_accounting_path, str(quota))
         if not op["success"]:
             # Something happened
             return False, op
+
 
         # This change was applied successfully
         applied_changes[CPU_LIMIT_ALLOWANCE_LABEL] = str(quota / TICKS_PER_CPU_PERCENTAGE)

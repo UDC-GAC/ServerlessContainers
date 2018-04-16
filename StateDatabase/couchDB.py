@@ -1,4 +1,5 @@
 # /usr/bin/python
+import random
 import time
 
 import requests
@@ -14,7 +15,7 @@ class CouchDBServer:
     __rules_db_name = "rules"
     __events_db_name = "events"
     __requests_db_name = "requests"
-    __MAX_UPDATE_TRIES = 5
+    __MAX_UPDATE_TRIES = 10
 
     def __init__(self, server='http://couchdb:5984'):
         self.server = server
@@ -65,21 +66,33 @@ class CouchDBServer:
         else:
             return True
 
-    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_seconds=2, new_fields=[]):
+    def __merge(self, input_dict, output_dict):
+        for key, value in input_dict.items():
+            if isinstance(value, dict):
+                # get node or create one
+                node = output_dict.setdefault(key, {})
+                self.__merge(value, node)
+            else:
+                output_dict[key] = value
+
+        return output_dict
+
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=10, max_tries=10):
         r = requests.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
-        if r.status_code != 200:
+        if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
-                # update revision and retry
-                if 0 <= previous_tries < self.__MAX_UPDATE_TRIES:
+                # update revision and retry after slightly random wait
+                if 0 <= previous_tries < max_tries:
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 10)) / 1000)
                     new_doc = self.find_documents_by_matches(database, {"_id": doc["_id"]})[0]
-                    doc["_rev"] = new_doc["_rev"]
-                    return self.__resilient_update_doc(database, doc, previous_tries + 1)
+                    self.__merge(doc, new_doc)
+                    return self.__resilient_update_doc(database, new_doc, previous_tries = previous_tries + 1, max_tries=max_tries)
                 else:
                     r.raise_for_status()
             elif r.status_code == 404:
                 # Database may have been reinitialized (deleted and recreated), wait and retry again
-                time.sleep(time_backoff_seconds)
+                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
                 return self.__resilient_update_doc(database, doc, previous_tries + 1)
             else:
                 r.raise_for_status()
@@ -112,8 +125,8 @@ class CouchDBServer:
         else:
             return self.find_documents_by_matches(self.__structures_db_name, {"subtype": subtype})
 
-    def update_structure(self, structure):
-        return self.__resilient_update_doc(self.__structures_db_name, structure)
+    def update_structure(self, structure, max_tries=10):
+        return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
 
     # EVENTS #
     def add_events(self, events):

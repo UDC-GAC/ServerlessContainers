@@ -33,7 +33,7 @@
     {
       "metrics": [
         {
-          "metric": "structure.energy.current",
+          "metric": "structure.energy.usage",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"

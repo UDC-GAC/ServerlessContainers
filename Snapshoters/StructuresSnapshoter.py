@@ -38,28 +38,27 @@ def generate_timeseries(container_name, resources):
 
 def update_container_current_values(container_name, resources):
     updated_structure = db_handler.get_structure(container_name)
+    new_structure = MyUtils.copy_structure_base(updated_structure)
 
     for resource in resources:
         if resource == "disks":
             continue
         if resource == "networks":
             continue
-        updated_structure["resources"][resource]["current"] = resources[resource][
+
+        if resource not in new_structure:
+            new_structure["resources"][resource] = dict()
+
+        new_structure["resources"][resource]["current"] = resources[resource][
             translate_map[resource]["limit_label"]]
 
-    db_handler.update_structure(updated_structure)
-    print("Success with container : " + str(container_name) + " at time: " + time.strftime("%D %H:%M:%S",
-                                                                                           time.localtime()))
+    MyUtils.update_structure(new_structure, db_handler, debug)
 
 
 def persist_containers():
-    fail_count = 0
-
     # Try to get the containers, if unavailable, return
-    try:
-        containers = db_handler.get_structures(subtype="container")
-    except (requests.exceptions.HTTPError, ValueError):
-        MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
+    containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+    if not containers:
         return
 
     # Retrieve each container resources, persist them and store them to generate host info
@@ -75,30 +74,22 @@ def persist_containers():
                                   str(container_name) + " info " + str(e) + traceback.format_exc(), debug)
             continue
 
-        try:
+        # Persist by updating the Database current value and letting the DatabaseSnapshoter update the value
+        update_container_current_values(container_name, resources)
 
-            # Persist by updating the Database current value and letting the DatabaseSnapshoter update the value
-            update_container_current_values(container_name, resources)
+        container_resources_dict[container_name] = container
+        container_resources_dict[container_name]["resources"] = resources
 
-            container_resources_dict[container_name] = container
-            container_resources_dict[container_name]["resources"] = resources
-
-            # Persist through time series sent to OpenTSDB
-            # generate_timeseries(container_name, resources)
-        except Exception:
-            MyUtils.logging_error("Error " + traceback.format_exc() + " with container data of: " + str(
-                container_name) + " with resources: " + str(resources), debug)
-            fail_count += 1
+        # Persist through time series sent to OpenTSDB
+        # generate_timeseries(container_name, resources)
 
     return container_resources_dict
 
 
 def persist_hosts(container_resources_dict):
     # Try to get the containers, if unavailable, return
-    try:
-        hosts = db_handler.get_structures(subtype="host")
-    except (requests.exceptions.HTTPError, ValueError):
-        MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
+    hosts = MyUtils.get_structures(db_handler, debug, subtype="host")
+    if not hosts:
         return
 
     # Generate the host resource state from the containers it hosts
@@ -130,17 +121,56 @@ def persist_hosts(container_resources_dict):
             host["resources"][resource]["free"] = host["resources"][resource]["max"] - used_resources[host_name][
                 resource]
 
-        db_handler.update_structure(host)
-        print("Success with host : " + str(host_name) + " at time: " + time.strftime("%D %H:%M:%S",
-                                                                                     time.localtime()))
+        # CPU accounting
+        core_usage_map = dict()
+
+        host_max_cores = host["resources"]["cpu"]["max"] / 100
+        host_cpu_list = [str(i) for i in range(host_max_cores)]
+        for core in host_cpu_list:
+            if core not in core_usage_map:
+                core_usage_map[core] = dict()
+                core_usage_map[core]["free"] = 100
+
+
+        for c in containers:
+
+            shares = c["resources"]["cpu"][translate_map["cpu"]["limit_label"]]
+            cpu_num = c["resources"]["cpu"]["cpu_num"]
+
+            cpu_list = MyUtils.get_cpu_list(cpu_num)
+
+            for core in cpu_list:
+                if c["name"] not in core_usage_map[core]:
+                    core_usage_map[core][c["name"]] = 0
+
+                if shares > 0:
+                    # Still cpu shares to map to cores
+                    if core_usage_map[core]["free"] == 0:
+                        # This core is full, nothing to do
+                        pass
+                    else:
+                        free_shares = core_usage_map[core]["free"]
+                        if free_shares > shares:
+                            # More free shares than needed, take only as needed
+                            core_usage_map[core]["free"] -= shares
+                            core_usage_map[core][c["name"]] = shares
+                            break
+                        else:
+                            # Not enough shares in this core, fill it and continue
+                            shares -= free_shares
+                            core_usage_map[core][c["name"]] = free_shares
+                            core_usage_map[core]["free"] = 0
+
+        host["resources"]["cpu"]["core_usage_mapping"] = core_usage_map
+
+        MyUtils.update_structure(host, db_handler, debug, max_tries=1)
+
 
 
 def persist_applications(container_resources_dict):
     # Try to get the containers, if unavailable, return
-    try:
-        applications = db_handler.get_structures(subtype="application")
-    except (requests.exceptions.HTTPError, ValueError):
-        MyUtils.logging_warning("Couldn't retrieve applications info.", debug=True)
+    applications = MyUtils.get_structures(db_handler, debug, subtype="application")
+    if not applications:
         return
 
     # Generate the applications current resource values
@@ -152,12 +182,15 @@ def persist_applications(container_resources_dict):
         application_containers = app["containers"]
         for c in application_containers:
             for resource in RESOURCES:
-                app["resources"][resource]["current"] += container_resources_dict[c]["resources"][resource][
+                if c in container_resources_dict:
+                    app["resources"][resource]["current"] += container_resources_dict[c]["resources"][resource][
                     translate_map[resource]["limit_label"]]
+                else:
+                    #FIXME container info missing, what to do
+                    pass
 
-        db_handler.update_structure(app)
-        print("Success with app : " + str(app["name"]) + " at time: " + time.strftime("%D %H:%M:%S",
-                                                                                      time.localtime()))
+        MyUtils.update_structure(app, db_handler, debug)
+
 
 
 def persist():
@@ -178,7 +211,7 @@ def persist():
 
         container_resources_dict = persist_containers()
         persist_applications(container_resources_dict)
-        persist_hosts(container_resources_dict)
+        #persist_hosts(container_resources_dict)
 
         time.sleep(polling_frequency)
 

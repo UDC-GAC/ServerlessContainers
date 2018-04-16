@@ -4,14 +4,12 @@ import MyUtils.MyUtils as MyUtils
 import time
 import traceback
 import logging
-import requests
 import StateDatabase.couchDB as couchDB
 import StateDatabase.bdwatchdog
 
 bdwatchdog = StateDatabase.bdwatchdog.BDWatchdog()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
 db_handler = couchDB.CouchDBServer()
-
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident']
 BDWATCHDOG_ENERGY_METRICS = ['sys.cpu.user', 'sys.cpu.kernel', 'sys.cpu.energy']
@@ -41,12 +39,6 @@ def merge(output_dict, input_dict):
     return output_dict
 
 
-def update_structure(structure):
-    db_handler.update_structure(structure)
-    print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
-          + time.strftime("%D %H:%M:%S", time.localtime()))
-
-
 def generate_container_energy_metrics(container, host_info):
     global window_difference
     global window_delay
@@ -65,12 +57,11 @@ def generate_container_energy_metrics(container, host_info):
         MyUtils.logging_error("Error, no container info available for: " + container_name, debug)
         return container
 
-    if "energy" not in container["resources"]:
-        container["resources"]["energy"] = dict()
-
-    container["resources"]["energy"]["current"] = float(
+    new_container = MyUtils.copy_structure_base(container)
+    new_container["resources"]["energy"] = dict()
+    new_container["resources"]["energy"]["current"] = float(
         host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
-    return container
+    return new_container
 
 
 def get_host_info(host_name):
@@ -95,7 +86,7 @@ def refeed_containers(containers):
         host_name = container["host"]
         host_info = get_host_info(host_name)
         container = generate_container_energy_metrics(container, host_info)
-        update_structure(container)
+        MyUtils.update_structure(container, db_handler, debug)
         updated_containers.append(container)
     return updated_containers
 
@@ -140,7 +131,7 @@ def refeed_applications(applications, updated_containers):
     for application in applications:
         application = generate_application_metrics(application)
         application = generate_application_energy_metrics(application, updated_containers)
-        update_structure(application)
+        MyUtils.update_structure(application, db_handler, debug)
 
 
 def refeed():
@@ -164,20 +155,17 @@ def refeed():
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
         # Data retrieving, slow
-        try:
-            host_info_cache = dict()
-            containers = db_handler.get_structures(subtype="container")
-            containers = refeed_containers(containers)
-        except (requests.exceptions.HTTPError, ValueError):
-            MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
+        host_info_cache = dict()
+        containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+        if not containers:
             # As no container info is available, no application information will be able to be generated
             continue
 
-        try:
-            applications = db_handler.get_structures(subtype="application")
+        containers = refeed_containers(containers)
+
+        applications = MyUtils.get_structures(db_handler, debug, subtype="application")
+        if applications:
             refeed_applications(applications, containers)
-        except (requests.exceptions.HTTPError, ValueError):
-            MyUtils.logging_warning("Couldn't retrieve applications info.", debug=True)
 
         time.sleep(polling_frequency)
 

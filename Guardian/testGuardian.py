@@ -165,7 +165,7 @@ class GuardianTest(unittest.TestCase):
                           guardian.get_container_resources_str("cpu", resources_dict, limits_dict, usages_dict))
         self.assertEquals("8192,2048,8000,1.78,7000,256",
                           guardian.get_container_resources_str("mem", resources_dict, limits_dict, usages_dict))
-        # TODO
+        # TODO Shoould these tests be used or not?
         # self.assertEquals("200,80,70,6.31,60,50",
         #                  guardian.get_container_resources_str("disk", resources_dict, limits_dict, usages_dict))
         # self.assertEquals("200,80,70,9.56,60,50",

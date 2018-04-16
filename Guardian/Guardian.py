@@ -40,7 +40,7 @@ debug = True
 
 NOT_AVAILABLE_STRING = "n/a"
 MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
-
+MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1.5
 
 # TESTED
 
@@ -129,6 +129,9 @@ def get_container_resources_str(resource_label, resources_dict, limits_dict, usa
 
 
 def adjust_if_invalid_amount(amount, resource, structure, limits):
+    # FIXME This code is correct but doesn't seem to work because higher than max
+    # cpu values are set
+    current_value = structure["resources"][resource]["current"] + amount
     upper_limit = limits["resources"][resource]["upper"] + amount
     lower_limit = limits["resources"][resource]["lower"] + amount
     max_limit = structure["resources"][resource]["max"]
@@ -138,10 +141,10 @@ def adjust_if_invalid_amount(amount, resource, structure, limits):
         # The amount to reduce is too big, adjust it so that the lower limit is
         # set to the minimum
         amount += (min_limit - lower_limit)
-    elif upper_limit > max_limit:
-        # The amount to increase is too big, adjust it so that the upper limit is
+    elif current_value > max_limit:
+        # The amount to increase is too big, adjust it so that the current limit is
         # set to the maximum
-        amount -= (upper_limit - max_limit)
+        amount -= (current_value - max_limit)
 
     return amount
 
@@ -164,8 +167,10 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
     upper_resource_limit = limits["resources"][resource]["upper"]
     lower_resource_limit = limits["resources"][resource]["lower"]
 
-    upper_to_lower_window = upper_resource_limit - lower_resource_limit
-    current_to_upper_window = current_resource_limit - upper_resource_limit
+    upper_to_lower_window = limits["resources"][resource]["boundary"]
+    current_to_upper_window = limits["resources"][resource]["boundary"]
+    #upper_to_lower_window = upper_resource_limit - lower_resource_limit
+    #current_to_upper_window = current_resource_limit - upper_resource_limit
     current_resource_usage = usages[translator_dict[resource]]
 
     # Set the limit so that the resource usage is placed in between the upper and lower limits
@@ -190,7 +195,38 @@ def get_container_energy_str(resources_dict, limits_dict):
          str(try_get_value(resources_dict["energy"], "min")))
 
 
-def invalid_container_state(resources, limits, resources_boundaries):
+def correct_container_state(resources, limits_document):
+    limits = limits_document["resources"]
+    for resource in ["cpu", "mem"]:
+        max_value = try_get_value(resources[resource], "max")
+        current_value = try_get_value(resources[resource], "current")
+        upper_value = try_get_value(limits[resource], "upper")
+        lower_value = try_get_value(limits[resource], "lower")
+        min_value = try_get_value(resources[resource], "min")
+        boundary = limits[resource]["boundary"]
+
+        # Can't correct this, so let it raise the exception
+        #check_invalid_values(current_value, "current", max_value, "max")
+
+        # Correct the chain current > upper > lower, including boundary between current and upper
+        try:
+            check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
+            check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
+            check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
+            if current_value != NOT_AVAILABLE_STRING and current_value - boundary <= upper_value:
+                raise ValueError()
+            if current_value != NOT_AVAILABLE_STRING and current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) >= upper_value:
+                raise ValueError()
+        except ValueError:
+            limits[resource]["upper"] = resources[resource]["current"] - boundary
+            limits[resource]["lower"] = max(limits[resource]["upper"] - boundary,min_value)
+
+    limits_document["resources"] = limits
+    return limits_document
+
+
+def invalid_container_state(usages, resources, limits_document):
+    limits = limits_document["resources"]
     try:
         for resource in ["cpu", "mem"]:
             max_value = try_get_value(resources[resource], "max")
@@ -198,6 +234,7 @@ def invalid_container_state(resources, limits, resources_boundaries):
             upper_value = try_get_value(limits[resource], "upper")
             lower_value = try_get_value(limits[resource], "lower")
             min_value = try_get_value(resources[resource], "min")
+            boundary = limits[resource]["boundary"]
 
             # Check values are set and valid, except for current as it may have not been persisted yet
             check_unset_values(max_value, "max")
@@ -208,11 +245,7 @@ def invalid_container_state(resources, limits, resources_boundaries):
             # Check if the first value is greater than the second
             # check the full chain "max > upper > current > lower > min"
             if current_value != NOT_AVAILABLE_STRING:
-                # FIXME current should never be higher than max but it is for some odd reason
-                # so this check is temporally disabled so as to allow the rescaling process to take the resource
-                # down
-                pass
-                #check_invalid_values(current_value, "current", max_value, "max")
+                check_invalid_values(current_value, "current", max_value, "max")
             check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
             check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
             check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
@@ -220,11 +253,17 @@ def invalid_container_state(resources, limits, resources_boundaries):
             # Check that there is a boundary between values, like the current and upper, so
             # that the limit can be surpassed
             if current_value != NOT_AVAILABLE_STRING:
-                if current_value - resources_boundaries[resource] <= upper_value:
+                if current_value - boundary < upper_value:
                     # return True
                     raise ValueError(
                         "value for 'current': " + str(current_value) +
-                        " is too close (" + str(resources_boundaries[resource]) + ") to " +
+                        " is too close (less than " + str(boundary) + ") to " +
+                        "value for 'upper': " + str(upper_value))
+                elif current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
+                    # return True
+                    raise ValueError(
+                        "value for 'current': " + str(current_value) +
+                        " is too far (more than " + str(int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary)) + ") from " +
                         "value for 'upper': " + str(upper_value))
     except ValueError:
         # return True
@@ -249,7 +288,7 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
     for rule in rules:
         try:
             if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
-                # FIXME
+                # FIXME Should names be generated or retireved?
                 event_name = generate_event_name(rule["action"]["events"], rule["resource"])
                 if event_name:
                     events.append(dict(
@@ -339,7 +378,7 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                     action=rule["action"]["requests"][0],
                     timestamp=int(time.time()))
 
-                # TODO FIX ME Should the host be specified by the guardian or retrieved by the scaler
+                # FIXME Should the host be specified by the guardian or retrieved by the scaler?
                 if is_container(structure):
                     request["host"] = structure["host"]
 
@@ -433,26 +472,12 @@ def serverless(config, structures):
 
     for structure in structures:
         try:
-            resources = structure["resources"]
 
-            # Data retrieving, slow
-            limits = db_handler.get_limits(structure)
-
-            if not limits:
-                MyUtils.logging_warning(
-                    "structure: " + structure["name"] + " has no limits", debug)
+            # Check if structure is guarded
+            if "guard" not in structure or not structure["guard"]:
                 continue
 
-            resources_boundaries = {"cpu": 15, "mem": 170}  # Better don't set multiples of steps
-            try:
-                invalid_container_state(resources, limits["resources"], resources_boundaries)
-            except ValueError as e:
-                MyUtils.logging_warning(
-                    "structure: " + structure["name"] + " has invalid state with its limits and resources" + str(
-                        e) + " " + str(traceback.format_exc()), debug)
-                continue
-
-            # Data retrieving, slow
+            # Check if structure is being monitored, otherwise, ignore
             try:
                 metrics_to_retrieve = BDWATCHDOG_METRICS[structure["subtype"]]
                 metrics_to_generate = GUARDIAN_METRICS[structure["subtype"]]
@@ -463,8 +488,34 @@ def serverless(config, structures):
                 metrics_to_generate = GUARDIAN_CONTAINER_METRICS
                 tag = "host"
 
+            # Data retrieving, slow
             usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference, window_delay,
                                                              metrics_to_retrieve, metrics_to_generate)
+
+            # Skip this structure if all the usage metrics are unavailable
+            if all([usages[metric] == NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+                MyUtils.logging_warning(
+                    "structure: " + structure["name"] + " has no usage data", debug)
+                continue
+
+            resources = structure["resources"]
+
+            # Data retrieving, slow
+            limits = db_handler.get_limits(structure)
+
+            if not limits:
+                MyUtils.logging_warning(
+                    "structure: " + structure["name"] + " has no limits", debug)
+                continue
+
+            try:
+                invalid_container_state(usages, resources, limits)
+            except ValueError as e:
+                MyUtils.logging_warning(
+                    "structure: " + structure["name"] + " has invalid state with its limits and resources, will try to correct: " + str(e), debug)
+                    #str(e) + " " + str(traceback.format_exc()), debug)
+                limits = correct_container_state(resources, limits)
+                db_handler.update_limit(limits)
 
             process_serverless_structure(config, structure, usages, limits, rules)
 
@@ -494,11 +545,10 @@ def guard():
         structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
 
         # Data retrieving, slow
-        try:
-            structures = db_handler.get_structures(subtype=structure_guarded)
-        except (requests.exceptions.HTTPError, ValueError):
-            MyUtils.logging_warning("Couldn't retrieve containers info.", debug=True)
+        structures = MyUtils.get_structures(db_handler, debug, subtype=structure_guarded)
+        if not structures:
             continue
+
         # Process and measure time
         epoch_start = time.time()
 

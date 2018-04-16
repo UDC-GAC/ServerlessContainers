@@ -37,11 +37,11 @@ def initialize():
                 type='limit',
                 name=c,
                 resources=dict(
-                    cpu=dict(upper=170, lower=150),
-                    mem=dict(upper=8000, lower=7000),
-                    disk=dict(upper=100, lower=100),
-                    net=dict(upper=100, lower=100),
-                    energy=dict(upper=15, lower=5)
+                    cpu=dict(upper=170, lower=150, boundary=20),
+                    mem=dict(upper=8000, lower=7000, boundary=1000),
+                    disk=dict(upper=100, lower=100, boundary=10),
+                    net=dict(upper=100, lower=100, boundary=10),
+                    energy=dict(upper=15, lower=5, boundary=3)
                 )
             )
             handler.add_limit(container)
@@ -68,6 +68,7 @@ def initialize():
                 subtype='container',
                 host='es-udc-dec-jonatan-dante',
                 name=c,
+                guard=True,
                 resources=dict(
                     cpu=dict(max=200, min=10),
                     mem=dict(max=8192, min=256),
@@ -83,6 +84,7 @@ def initialize():
                 type='structure',
                 subtype='host',
                 name=h,
+                host=h,
                 resources=dict(
                     cpu=dict(max=800),
                     mem=dict(max=46000)
@@ -94,6 +96,7 @@ def initialize():
             type='structure',
             subtype='application',
             name="app1",
+            guard=True,
             resources=dict(
                 cpu=dict(max=900, min=50),
                 mem=dict(max=46000, min=1024),
@@ -119,7 +122,12 @@ def initialize():
                         {"var": "limits.cpu.upper"}]},
                     {"<": [
                         {"var": "limits.cpu.upper"},
-                        {"var": "structure.cpu.max"}]}]}),
+                        {"var": "structure.cpu.max"}]},
+                    {"<": [
+                        {"var": "structure.cpu.current"},
+                        {"var": "structure.cpu.max"}]}
+                    ]
+                }),
             generates="events", action={"events": {"scale": {"up": 1}}},
             active=True
         )
@@ -192,7 +200,13 @@ def initialize():
                         {"var": "limits.mem.upper"}]},
                     {"<": [
                         {"var": "limits.mem.upper"},
-                        {"var": "structure.mem.max"}]}]}),
+                        {"var": "structure.mem.max"}]},
+                    {"<": [
+                        {"var": "structure.mem.current"},
+                        {"var": "structure.mem.max"}]}
+
+                ]
+                }),
             generates="events",
             action={"events": {"scale": {"up": 1}}},
             active=True
@@ -234,7 +248,7 @@ def initialize():
             generates="requests",
             events_to_remove=2,
             action={"requests": ["MemRescaleUp"]},
-            amount=2560,
+            amount=1024,
             rescale_by="amount",
             active=True
         )
@@ -287,9 +301,9 @@ def initialize():
             config=dict(
                 GUARD_POLICY="serverless",
                 STRUCTURE_GUARDED="container",
-                WINDOW_TIMELAPSE=3,
+                WINDOW_TIMELAPSE=6,
                 WINDOW_DELAY=10,
-                EVENT_TIMEOUT=30,
+                EVENT_TIMEOUT=40,
                 DEBUG=True
             )
         )
@@ -300,7 +314,7 @@ def initialize():
             heartbeat="",
             config=dict(
                 DEBUG=True,
-                POLLING_FREQUENCY=5,
+                POLLING_FREQUENCY=4,
                 REQUEST_TIMEOUT=30
             )
         )

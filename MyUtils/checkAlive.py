@@ -5,7 +5,7 @@ import StateDatabase.couchDB as couchDB
 
 db = couchDB.CouchDBServer()
 time_window_allowed = 20  # 1 minute
-POLLING_TIME = 5
+POLLING_TIME = 2
 
 
 def check_node_rescaler_status(node_rest_endpoint):

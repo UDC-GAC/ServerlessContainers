@@ -4,6 +4,7 @@ import time
 import logging
 import sys
 import requests
+import traceback
 
 
 def eprint(*args, **kwargs):
@@ -91,3 +92,46 @@ def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_
         raise Exception(message)
 
     return service
+
+
+
+# Tranlsate something like '2-5,7' to [2,3,4,7]
+def get_cpu_list(cpu_num_string):
+    cpu_list = list()
+    parts = cpu_num_string.split(",")
+    for part in parts:
+        ranges = part.split("-")
+        if len(ranges) == 1:
+            # Single core, no range (e.g., '5')
+            cpu_list.append(ranges[0])
+        else:
+            # Range (e.g., '4-7' -> 4,5,6)
+            cpu_list += range(int(ranges[0]),int(ranges[-1])+1)
+    return [str(i) for i in cpu_list]
+
+def copy_structure_base(structure):
+    new_struct = dict()
+    new_struct["_id"] = structure["_id"]
+    new_struct["type"] = structure["type"]
+    new_struct["host"] = structure["host"]
+    new_struct["subtype"] = structure["subtype"]
+    new_struct["name"] = structure["name"]
+    new_struct["resources"] = dict()
+    return new_struct
+
+def update_structure(structure, db_handler, debug, max_tries=10):
+    try:
+        db_handler.update_structure(structure, max_tries=max_tries)
+        print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
+              + time.strftime("%D %H:%M:%S", time.localtime()))
+    except requests.exceptions.HTTPError as e:
+        logging_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
+
+
+def get_structures(db_handler, debug, subtype="application"):
+    try:
+        return db_handler.get_structures(subtype=subtype)
+    except (requests.exceptions.HTTPError, ValueError):
+        logging_warning("Couldn't retrieve "+subtype+" info.", debug=debug)
+        return None
+
