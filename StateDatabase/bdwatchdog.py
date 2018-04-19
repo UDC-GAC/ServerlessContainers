@@ -20,12 +20,13 @@ class BDWatchdog:
         else:
             r.raise_for_status()
 
-    def get_structure_usages(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics):
+    def get_structure_usages(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics,
+                             downsample=1):
         usages = dict()
         subquery = list()
         for metric in retrieve_metrics:
             usages[metric] = self.NO_METRIC_DATA_DEFAULT_VALUE
-            subquery.append(dict(aggregator='zimsum', metric=metric, tags=tags))
+            subquery.append(dict(aggregator='zimsum', metric=metric, tags=tags, downsample=str(downsample) + "s-avg"))
 
         start = int(time.time() - (window_difference + window_delay))
         end = int(time.time() - window_delay)
@@ -46,7 +47,7 @@ class BDWatchdog:
         for value in generate_metrics:
             final_values[value] = self.NO_METRIC_DATA_DEFAULT_VALUE
             for metric in generate_metrics[value]:
-                if usages[metric] != self.NO_METRIC_DATA_DEFAULT_VALUE:
+                if metric in usages and usages[metric] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                     final_values[value] += usages[metric]
 
         return final_values

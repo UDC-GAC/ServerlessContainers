@@ -19,17 +19,8 @@ def check_node_rescaler_status(node_rest_endpoint):
         return False
 
 
-def print_dead(service_name):
-    print(service_name + " -> " + "DEAD")
-
-
-def print_alive(service_name):
-    print(service_name + " -> " + "ALIVE")
-
-
 while True:
-    dead = list()
-    alive = list()
+    dead, alive = list(), list()
 
     services = db.get_all_database_docs("services")
 
@@ -45,7 +36,7 @@ while True:
         else:
             alive.append(service["name"])
 
-    for node_REST_service in ["dante"]:
+    for node_REST_service in ["dante", "victoria"]:
         if check_node_rescaler_status(node_REST_service):
             alive.append(node_REST_service + "_node_rescaler")
         else:
@@ -56,13 +47,11 @@ while True:
     print("!---- ALIVE ------!")
     for a in alive:
         print(a)
-        #print_alive(a)
 
     print
     print("!---- DEAD -------!")
     for d in dead:
         print(d)
-        #print_dead(d)
 
     print("")
     time.sleep(POLLING_TIME)

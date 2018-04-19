@@ -1,5 +1,8 @@
 # /usr/bin/python
 from __future__ import print_function
+
+from requests import HTTPError
+
 import MyUtils.MyUtils as MyUtils
 import time
 import traceback
@@ -39,35 +42,17 @@ def merge(output_dict, input_dict):
     return output_dict
 
 
-def generate_container_energy_metrics(container, host_info):
+def get_container_usages(container_name):
     global window_difference
     global window_delay
-    container_name = container["name"]
-    host_name = container["host"]
-
-    if host_info["cpu"] == NO_METRIC_DATA_DEFAULT_VALUE or host_info["energy"] == NO_METRIC_DATA_DEFAULT_VALUE:
-        MyUtils.logging_error(
-            "Error, no host info available for: " + host_name
-            + " so no info can be generated for container: " + container_name, debug)
-        return container
-
-    container_info = get_container_info(container_name)
-
-    if container_info["cpu"] == NO_METRIC_DATA_DEFAULT_VALUE:
-        MyUtils.logging_error("Error, no container info available for: " + container_name, debug)
-        return container
-
-    new_container = MyUtils.copy_structure_base(container)
-    new_container["resources"]["energy"] = dict()
-    new_container["resources"]["energy"]["current"] = float(
-        host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
-    return new_container
+    container_info = bdwatchdog.get_structure_usages({"host": container_name}, window_difference, window_delay,
+                                                     BDWATCHDOG_METRICS, ANALYZER_APPLICATION_METRICS,
+                                                     downsample=window_difference)
+    return container_info
 
 
-def get_host_info(host_name):
-    global host_info_cache
-    global window_difference
-    global window_delay
+def get_host_usages(host_name):
+    global host_info_cache, window_difference, window_delay
     if host_name in host_info_cache:
         # Get data from cache
         host_info = host_info_cache[host_name]
@@ -80,23 +65,25 @@ def get_host_info(host_name):
     return host_info
 
 
-def refeed_containers(containers):
-    updated_containers = list()
-    for container in containers:
-        host_name = container["host"]
-        host_info = get_host_info(host_name)
-        container = generate_container_energy_metrics(container, host_info)
-        MyUtils.update_structure(container, db_handler, debug)
-        updated_containers.append(container)
-    return updated_containers
+def generate_container_energy_metrics(container, host_info):
+    global window_difference, window_delay
+    container_name = container["name"]
 
+    # Get the container infomation
+    container_info = get_container_usages(container_name)
 
-def get_container_info(container_name):
-    global window_difference
-    global window_delay
-    container_info = bdwatchdog.get_structure_usages({"host": container_name}, window_difference, window_delay,
-                                                     BDWATCHDOG_METRICS, ANALYZER_APPLICATION_METRICS)
-    return container_info
+    # Check that the container has cpu information available
+    if container_info["cpu"] == NO_METRIC_DATA_DEFAULT_VALUE:
+        MyUtils.logging_error("Error, no container info available for: " + container_name, debug)
+        return None
+
+    # Generate the container energy information from the container cpu and the host cpu and energy info
+    new_container = MyUtils.copy_structure_base(container)
+    new_container["resources"]["energy"] = dict()
+    new_container["resources"]["energy"]["current"] = float(
+        host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
+
+    return new_container
 
 
 def generate_application_energy_metrics(application, updated_containers):
@@ -118,13 +105,44 @@ def generate_application_metrics(application):
     global window_delay
     application_info = dict()
     for c in application["containers"]:
-        container_info = get_container_info(c)
+        container_info = get_container_usages(c)
         application_info = merge(application_info, container_info)
 
     for resource in application_info:
         application["resources"][resource]["usage"] = application_info[resource]
 
     return application
+
+
+def refeed_containers(containers):
+    updated_containers = list()
+    for container in containers:
+
+        # Get the host cpu and energy usages
+        try:
+            host_name = container["host"]
+            host_info = get_host_usages(host_name)
+
+            # Check that both cpu and energy information have been retrieved for the host
+            for required_info in ["cpu", "energy"]:
+                if host_info[required_info] == NO_METRIC_DATA_DEFAULT_VALUE:
+                    MyUtils.logging_error(
+                        "Error, no host '" + required_info + "' info available for: " + host_name
+                        + " so no info can be generated for container: " + container["name"], debug)
+                    continue
+
+        except HTTPError:
+            MyUtils.logging_error(
+                "Error, no info available for: " + container["host"], debug)
+            continue
+
+        # Generate the energy information, if unsuccessful, None will be returned
+        container = generate_container_energy_metrics(container, host_info)
+        if container:
+            MyUtils.update_structure(container, db_handler, debug)
+            updated_containers.append(container)
+
+    return updated_containers
 
 
 def refeed_applications(applications, updated_containers):

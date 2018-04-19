@@ -4,7 +4,6 @@ import MyUtils.MyUtils as MyUtils
 import time
 import traceback
 import logging
-import requests
 from json_logic import jsonLogic
 import StateDatabase.couchDB as couchDB
 import StateDatabase.bdwatchdog as bdwatchdog
@@ -42,6 +41,7 @@ NOT_AVAILABLE_STRING = "n/a"
 MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
 MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1.5
 
+
 # TESTED
 
 def check_unset_values(value, label):
@@ -63,30 +63,6 @@ def try_get_value(d, key):
         return int(d[key])
     except KeyError:
         return NOT_AVAILABLE_STRING
-
-
-def generate_event_name(event, resource):
-    final_string = None
-
-    if "scale" not in event:
-        raise ValueError("Missing 'scale' key")
-
-    if "up" not in event["scale"] and "down" not in event["scale"]:
-        raise ValueError("Must have an 'up' or 'down count")
-
-    elif "up" in event["scale"] and event["scale"]["up"] > 0 \
-            and "down" in event["scale"] and event["scale"]["down"] > 0:
-        # SPECIAL CASE OF HEAVY HYSTERESIS
-        # raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
-        return None
-
-    elif "down" in event["scale"] and event["scale"]["down"] > 0:
-        final_string = resource.title() + "Underuse"
-
-    elif "up" in event["scale"] and event["scale"]["up"] > 0:
-        final_string = resource.title() + "Bottleneck"
-
-    return final_string
 
 
 def filter_old_events(structure_events, event_timeout):
@@ -119,20 +95,16 @@ def get_container_resources_str(resource_label, resources_dict, limits_dict, usa
     else:
         usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
 
-    return \
-        (str(try_get_value(resources_dict[resource_label], "max")) + "," +
-         str(try_get_value(resources_dict[resource_label], "current")) + "," +
-         str(try_get_value(limits_dict[resource_label], "upper")) + "," +
-         usage_value_string + "," +
-         str(try_get_value(limits_dict[resource_label], "lower")) + "," +
-         str(try_get_value(resources_dict[resource_label], "min")))
+    return (str(try_get_value(resources_dict[resource_label], "max")) + "," +
+            str(try_get_value(resources_dict[resource_label], "current")) + "," +
+            str(try_get_value(limits_dict[resource_label], "upper")) + "," +
+            usage_value_string + "," +
+            str(try_get_value(limits_dict[resource_label], "lower")) + "," +
+            str(try_get_value(resources_dict[resource_label], "min")))
 
 
 def adjust_if_invalid_amount(amount, resource, structure, limits):
-    # FIXME This code is correct but doesn't seem to work because higher than max
-    # cpu values are set
     current_value = structure["resources"][resource]["current"] + amount
-    upper_limit = limits["resources"][resource]["upper"] + amount
     lower_limit = limits["resources"][resource]["lower"] + amount
     max_limit = structure["resources"][resource]["max"]
     min_limit = structure["resources"][resource]["min"]
@@ -169,8 +141,8 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
 
     upper_to_lower_window = limits["resources"][resource]["boundary"]
     current_to_upper_window = limits["resources"][resource]["boundary"]
-    #upper_to_lower_window = upper_resource_limit - lower_resource_limit
-    #current_to_upper_window = current_resource_limit - upper_resource_limit
+    # upper_to_lower_window = upper_resource_limit - lower_resource_limit
+    # current_to_upper_window = current_resource_limit - upper_resource_limit
     current_resource_usage = usages[translator_dict[resource]]
 
     # Set the limit so that the resource usage is placed in between the upper and lower limits
@@ -181,18 +153,15 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
         current_to_upper_window
 
     difference = current_resource_limit - desired_applied_resource_limit
-
-    amount = -1 * difference
-    return amount
+    return -1 * difference
 
 
 def get_container_energy_str(resources_dict, limits_dict):
-    return \
-        (str(try_get_value(resources_dict["energy"], "max")) + "," +
-         str(try_get_value(limits_dict["energy"], "upper")) + "," +
-         str(try_get_value(resources_dict["energy"], "current")) + "," +
-         str(try_get_value(limits_dict["energy"], "lower")) + "," +
-         str(try_get_value(resources_dict["energy"], "min")))
+    return (str(try_get_value(resources_dict["energy"], "max")) + "," +
+            str(try_get_value(limits_dict["energy"], "upper")) + "," +
+            str(try_get_value(resources_dict["energy"], "current")) + "," +
+            str(try_get_value(limits_dict["energy"], "lower")) + "," +
+            str(try_get_value(resources_dict["energy"], "min")))
 
 
 def correct_container_state(resources, limits_document):
@@ -206,7 +175,7 @@ def correct_container_state(resources, limits_document):
         boundary = limits[resource]["boundary"]
 
         # Can't correct this, so let it raise the exception
-        #check_invalid_values(current_value, "current", max_value, "max")
+        # check_invalid_values(current_value, "current", max_value, "max")
 
         # Correct the chain current > upper > lower, including boundary between current and upper
         try:
@@ -215,59 +184,55 @@ def correct_container_state(resources, limits_document):
             check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
             if current_value != NOT_AVAILABLE_STRING and current_value - boundary <= upper_value:
                 raise ValueError()
-            if current_value != NOT_AVAILABLE_STRING and current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) >= upper_value:
+            if current_value != NOT_AVAILABLE_STRING and current_value - int(
+                    MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) >= upper_value:
                 raise ValueError()
         except ValueError:
             limits[resource]["upper"] = resources[resource]["current"] - boundary
-            limits[resource]["lower"] = max(limits[resource]["upper"] - boundary,min_value)
+            limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, min_value)
 
     limits_document["resources"] = limits
     return limits_document
 
 
-def invalid_container_state(usages, resources, limits_document):
+def invalid_container_state(resources, limits_document):
     limits = limits_document["resources"]
-    try:
-        for resource in ["cpu", "mem"]:
-            max_value = try_get_value(resources[resource], "max")
-            current_value = try_get_value(resources[resource], "current")
-            upper_value = try_get_value(limits[resource], "upper")
-            lower_value = try_get_value(limits[resource], "lower")
-            min_value = try_get_value(resources[resource], "min")
-            boundary = limits[resource]["boundary"]
+    for resource in ["cpu", "mem"]:
+        max_value = try_get_value(resources[resource], "max")
+        current_value = try_get_value(resources[resource], "current")
+        upper_value = try_get_value(limits[resource], "upper")
+        lower_value = try_get_value(limits[resource], "lower")
+        min_value = try_get_value(resources[resource], "min")
+        boundary = limits[resource]["boundary"]
 
-            # Check values are set and valid, except for current as it may have not been persisted yet
-            check_unset_values(max_value, "max")
-            check_unset_values(upper_value, "upper")
-            check_unset_values(lower_value, "lower")
-            check_unset_values(min_value, "min")
+        # Check values are set and valid, except for current as it may have not been persisted yet
+        check_unset_values(max_value, "max")
+        check_unset_values(upper_value, "upper")
+        check_unset_values(lower_value, "lower")
+        check_unset_values(min_value, "min")
 
-            # Check if the first value is greater than the second
-            # check the full chain "max > upper > current > lower > min"
-            if current_value != NOT_AVAILABLE_STRING:
-                check_invalid_values(current_value, "current", max_value, "max")
-            check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
-            check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
-            check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
+        # Check if the first value is greater than the second
+        # check the full chain "max > upper > current > lower > min"
+        if current_value != NOT_AVAILABLE_STRING:
+            check_invalid_values(current_value, "current", max_value, "max")
+        check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
+        check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
+        check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
 
-            # Check that there is a boundary between values, like the current and upper, so
-            # that the limit can be surpassed
-            if current_value != NOT_AVAILABLE_STRING:
-                if current_value - boundary < upper_value:
-                    # return True
-                    raise ValueError(
-                        "value for 'current': " + str(current_value) +
-                        " is too close (less than " + str(boundary) + ") to " +
-                        "value for 'upper': " + str(upper_value))
-                elif current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
-                    # return True
-                    raise ValueError(
-                        "value for 'current': " + str(current_value) +
-                        " is too far (more than " + str(int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary)) + ") from " +
-                        "value for 'upper': " + str(upper_value))
-    except ValueError:
-        # return True
-        raise
+        # Check that there is a boundary between values, like the current and upper, so
+        # that the limit can be surpassed
+        if current_value != NOT_AVAILABLE_STRING:
+            if current_value - boundary < upper_value:
+                raise ValueError(
+                    "value for 'current': " + str(current_value) +
+                    " is too close (less than " + str(boundary) + ") to " +
+                    "value for 'upper': " + str(upper_value))
+            elif current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
+                raise ValueError(
+                    "value for 'current': " + str(current_value) +
+                    " is too far (more than " + str(
+                        int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary)) + ") from " +
+                    "value for 'upper': " + str(upper_value))
 
 
 def match_usages_and_limits(structure_name, rules, usages, limits, resources):
@@ -288,8 +253,7 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
     for rule in rules:
         try:
             if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
-                # FIXME Should names be generated or retireved?
-                event_name = generate_event_name(rule["action"]["events"], rule["resource"])
+                event_name = MyUtils.generate_event_name(rule["action"]["events"], rule["resource"])
                 if event_name:
                     events.append(dict(
                         name=event_name,
@@ -308,8 +272,6 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
 
 
 # TO BE TESTED
-
-
 def is_application(structure):
     return structure["subtype"] == "application"
 
@@ -328,20 +290,15 @@ def match_rules_and_events(structure, rules, events, limits, usages):
             if rule["active"] and rule["generates"] == "requests" and resource_label in events and jsonLogic(
                     rule["rule"], events[resource_label]):
 
-                if is_container(structure) and "current" not in structure["resources"][resource_label]:
-                    # If rescaling a container, check that the current resource value exists,
-                    # otherwise there is nothing to rescale
+                # Match, generate request
 
+                # If rescaling a container, check that the current resource value exists, otherwise there
+                # is nothing to rescale
+                if is_container(structure) and "current" not in structure["resources"][resource_label]:
                     MyUtils.logging_warning("No current value for container'" + structure[
                         "name"] + "' and resource '" + resource_label + "', can't rescale", debug)
                     continue
-                elif is_application(structure) and "rescale_by" in rule.keys() and rule["rescale_by"] != "amount":
-                    # Only rescale by amount is allowed for application rescaling, for now
-                    rule["rescale_by"] = "amount"
-                    MyUtils.logging_warning(
-                        "application rescaling only allows rescaling by 'amount' policy, coercing to it.", debug)
 
-                # Match, generate request
                 if "rescale_by" in rule.keys():
                     try:
                         if rule["rescale_by"] == "amount":
@@ -373,18 +330,17 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                 request = dict(
                     type="request",
                     resource=resource_label,
-                    amount=amount,
+                    amount=int(amount),
                     structure=structure["name"],
-                    action=rule["action"]["requests"][0],
+                    action=MyUtils.generate_request_name(amount, resource_label),
                     timestamp=int(time.time()))
 
-                # FIXME Should the host be specified by the guardian or retrieved by the scaler?
                 if is_container(structure):
                     request["host"] = structure["host"]
 
                 generated_requests.append(request)
 
-                event_name = generate_event_name(events[resource_label]["events"], resource_label)
+                event_name = MyUtils.generate_event_name(events[resource_label]["events"], resource_label)
                 if event_name not in events_to_remove:
                     events_to_remove[event_name] = 0
 
@@ -472,7 +428,6 @@ def serverless(config, structures):
 
     for structure in structures:
         try:
-
             # Check if structure is guarded
             if "guard" not in structure or not structure["guard"]:
                 continue
@@ -509,11 +464,13 @@ def serverless(config, structures):
                 continue
 
             try:
-                invalid_container_state(usages, resources, limits)
+                invalid_container_state(resources, limits)
             except ValueError as e:
                 MyUtils.logging_warning(
-                    "structure: " + structure["name"] + " has invalid state with its limits and resources, will try to correct: " + str(e), debug)
-                    #str(e) + " " + str(traceback.format_exc()), debug)
+                    "structure: " + structure[
+                        "name"] + " has invalid state with its limits and resources, will try to correct: " + str(e),
+                    debug)
+                # str(e) + " " + str(traceback.format_exc()), debug)
                 limits = correct_container_state(resources, limits)
                 db_handler.update_limit(limits)
 

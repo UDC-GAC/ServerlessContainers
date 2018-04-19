@@ -50,11 +50,11 @@ def initialize():
             type='limit',
             name='app1',
             resources=dict(
-                cpu=dict(upper=300, lower=100),
-                mem=dict(upper=14000, lower=4000),
-                disk=dict(upper=100, lower=100),
-                net=dict(upper=100, lower=100),
-                energy=dict(upper=50, lower=5)
+                cpu=dict(upper=300, lower=100, boundary=50),
+                mem=dict(upper=14000, lower=2000, boundary=4000),
+                disk=dict(upper=100, lower=100, boundary=10),
+                net=dict(upper=100, lower=100, boundary=10),
+                energy=dict(upper=50, lower=5, boundary=5)
             )
         )
         handler.add_limit(application)
@@ -98,7 +98,7 @@ def initialize():
             name="app1",
             guard=True,
             resources=dict(
-                cpu=dict(max=900, min=50),
+                cpu=dict(max=800, min=40),
                 mem=dict(max=46000, min=1024),
                 energy=dict(max=60, min=0)
             ),
@@ -156,12 +156,21 @@ def initialize():
         handler.add_rule(cpu_exceeded_upper)
         handler.add_rule(cpu_dropped_lower)
 
+        # Avoid hysteresis by only rescaling when X underuse events and no bottlenecks are detected, or viceversa
         CpuRescaleUp = dict(
             _id='CpuRescaleUp',
             type='rule',
             resource="cpu",
             name='CpuRescaleUp',
-            rule=dict({">": [{"var": "events.scale.up"}, 3]}),
+            rule=dict(
+                {"and": [
+                    {">": [
+                        {"var": "events.scale.up"},
+                        3]},
+                    {"==": [
+                        {"var": "events.scale.down"},
+                        0]}
+                ]}),
             events_to_remove=3,
             generates="requests",
             action={"requests": ["CpuRescaleUp"]},
@@ -175,7 +184,15 @@ def initialize():
             type='rule',
             resource="cpu",
             name='CpuRescaleDown',
-            rule=dict({">": [{"var": "events.scale.down"}, 3]}),
+            rule=dict(
+                {"and": [
+                    {">": [
+                        {"var": "events.scale.down"},
+                        3]},
+                    {"==": [
+                        {"var": "events.scale.up"},
+                        0]}
+                ]}),
             events_to_remove=3,
             generates="requests",
             action={"requests": ["CpuRescaleDown"]},
@@ -301,8 +318,8 @@ def initialize():
             config=dict(
                 GUARD_POLICY="serverless",
                 STRUCTURE_GUARDED="container",
-                WINDOW_TIMELAPSE=6,
-                WINDOW_DELAY=10,
+                WINDOW_TIMELAPSE=10,
+                WINDOW_DELAY=20,
                 EVENT_TIMEOUT=40,
                 DEBUG=True
             )
@@ -314,7 +331,7 @@ def initialize():
             heartbeat="",
             config=dict(
                 DEBUG=True,
-                POLLING_FREQUENCY=4,
+                POLLING_FREQUENCY=5,
                 REQUEST_TIMEOUT=30
             )
         )
@@ -324,7 +341,7 @@ def initialize():
             type="service",
             heartbeat="",
             config=dict(
-                POLLING_FREQUENCY=5,
+                POLLING_FREQUENCY=3,
                 DEBUG=True
             )
         )
@@ -345,7 +362,7 @@ def initialize():
             config=dict(
                 POLLING_FREQUENCY=5,
                 WINDOW_TIMELAPSE=5,
-                WINDOW_DELAY=10,
+                WINDOW_DELAY=20,
                 DEBUG=True
             )
         )

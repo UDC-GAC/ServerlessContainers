@@ -39,6 +39,7 @@ CPU_EFFECTIVE_LIMIT = "effective_cpu_limit"
 TICKS_PER_CPU_PERCENTAGE = 1000
 MAX_TICKS_PER_CPU = 100000
 
+
 def get_node_cpus(container_name):
     # Get info from cgroups cpuacct subsystem
     cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc", container_name, "cpu.cfs_quota_us"])
@@ -121,7 +122,6 @@ def set_node_cpus(container_name, cpu_resource):
         if not op["success"]:
             # Something happened
             return False, op
-
 
         # This change was applied successfully
         applied_changes[CPU_LIMIT_ALLOWANCE_LABEL] = str(quota / TICKS_PER_CPU_PERCENTAGE)

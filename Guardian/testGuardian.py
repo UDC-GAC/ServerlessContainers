@@ -91,52 +91,51 @@ class GuardianTest(unittest.TestCase):
             )
             return resources, limits
 
-        resources_boundaries = {"cpu": 15, "mem": 10}
         # State should be valid
         resources, limits = get_valid_state()
-        self.assertFalse(guardian.invalid_container_state(resources, limits, resources_boundaries))
+        self.assertFalse(guardian.invalid_container_state(resources, limits))
 
         # Make resources and limits invalid because unset
         for resource in ["cpu", "mem"]:
             for key in ["max", "min"]:
                 resources, limits = get_valid_state()
                 resources[resource][key] = guardian.NOT_AVAILABLE_STRING
-                self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+                self.assertTrue(guardian.invalid_container_state(resources, limits))
 
             for key in ["upper", "lower"]:
                 resources, limits = get_valid_state()
                 limits[resource][key] = guardian.NOT_AVAILABLE_STRING
-                self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+                self.assertTrue(guardian.invalid_container_state(resources, limits))
 
         for resource in ["cpu", "mem"]:
             # Invalid because max < current
             resources, limits = get_valid_state()
             resources[resource]["max"], resources[resource]["current"] = resources[resource]["current"], \
                                                                          resources[resource]["max"]
-            self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+            self.assertTrue(guardian.invalid_container_state(resources, limits))
 
             # Invalid because current < upper
             resources, limits = get_valid_state()
             resources[resource]["current"], limits[resource]["upper"] = limits[resource]["upper"], resources[resource][
                 "current"]
-            self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+            self.assertTrue(guardian.invalid_container_state(resources, limits))
 
             # Invalid because upper < lower
             resources, limits = get_valid_state()
             limits[resource]["upper"], limits[resource]["lower"] = limits[resource]["lower"], limits[resource]["upper"]
-            self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+            self.assertTrue(guardian.invalid_container_state(resources, limits))
 
             # Invalid because lower < min
             resources, limits = get_valid_state()
             resources[resource]["min"], limits[resource]["lower"] = limits[resource]["lower"], resources[resource][
                 "min"]
-            self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+            self.assertTrue(guardian.invalid_container_state(resources, limits))
 
         # Make resources and limits invalid because no boundary is left between rasl and upr limit
-        for resource in ["cpu", "mem"]:
-            resources, limits = get_valid_state()
-            limits[resource]["upper"] = resources[resource]["current"] - resources_boundaries[resource] / 2
-            self.assertTrue(guardian.invalid_container_state(resources, limits, resources_boundaries))
+        # for resource in ["cpu", "mem"]:
+        #     resources, limits = get_valid_state()
+        #     limits[resource]["upper"] = resources[resource]["current"] - resources_boundaries[resource] / 2
+        #     self.assertTrue(guardian.invalid_container_state(resources, limits))
 
     def test_get_container_resources_str(self):
 

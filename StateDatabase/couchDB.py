@@ -77,17 +77,19 @@ class CouchDBServer:
 
         return output_dict
 
-    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=10, max_tries=10):
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=1000, max_tries=10):
         r = requests.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
                 # update revision and retry after slightly random wait
                 if 0 <= previous_tries < max_tries:
-                    time.sleep((time_backoff_milliseconds + random.randint(1, 10)) / 1000)
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
                     new_doc = self.find_documents_by_matches(database, {"_id": doc["_id"]})[0]
-                    self.__merge(doc, new_doc)
-                    return self.__resilient_update_doc(database, new_doc, previous_tries = previous_tries + 1, max_tries=max_tries)
+                    doc["_rev"] = new_doc["_rev"]
+                    doc = self.__merge(doc, new_doc)
+                    return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                                                       max_tries=max_tries)
                 else:
                     r.raise_for_status()
             elif r.status_code == 404:
@@ -129,9 +131,12 @@ class CouchDBServer:
         return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
 
     # EVENTS #
+    def add_event(self, event):
+        self.__add_doc(self.__events_db_name, event)
+
     def add_events(self, events):
         for event in events:
-            self.__add_doc(self.__events_db_name, event)
+            self.add_event(event)
 
     def get_events(self, structure):
         return self.find_documents_by_matches(self.__events_db_name, {"structure": structure["name"]})
@@ -173,9 +178,12 @@ class CouchDBServer:
         else:
             return self.find_documents_by_matches(self.__requests_db_name, {"structure": structure["name"]})
 
+    def add_request(self, req):
+        self.__add_doc(self.__requests_db_name, req)
+
     def add_requests(self, reqs):
         for request in reqs:
-            self.__add_doc(self.__requests_db_name, request)
+            self.add_request(request)
 
     def delete_request(self, request):
         self.__delete_doc(self.__requests_db_name, request["_id"], request["_rev"])

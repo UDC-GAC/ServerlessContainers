@@ -27,7 +27,13 @@ def switch_to_application(guardian):
     rules = handler.get_rules()
     for rule in rules:
         if "rescale_by" in rule:
-            rule["rescale_by"] = "amount"
+
+            if rule["name"].endswith("Down"):
+                rule["rescale_by"] = "fit_to_usage"
+
+            if rule["name"].endswith("Up"):
+                rule["rescale_by"] = "amount"
+
             handler.update_rule(rule)
 
 

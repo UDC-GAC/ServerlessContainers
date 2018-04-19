@@ -94,7 +94,6 @@ def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_
     return service
 
 
-
 # Tranlsate something like '2-5,7' to [2,3,4,7]
 def get_cpu_list(cpu_num_string):
     cpu_list = list()
@@ -106,25 +105,28 @@ def get_cpu_list(cpu_num_string):
             cpu_list.append(ranges[0])
         else:
             # Range (e.g., '4-7' -> 4,5,6)
-            cpu_list += range(int(ranges[0]),int(ranges[-1])+1)
+            cpu_list += range(int(ranges[0]), int(ranges[-1]) + 1)
     return [str(i) for i in cpu_list]
 
+
 def copy_structure_base(structure):
+    keys_to_copy = ["_id", "type", "host", "subtype", "name", "resources"]
     new_struct = dict()
-    new_struct["_id"] = structure["_id"]
-    new_struct["type"] = structure["type"]
-    new_struct["host"] = structure["host"]
-    new_struct["subtype"] = structure["subtype"]
-    new_struct["name"] = structure["name"]
-    new_struct["resources"] = dict()
+    for key in keys_to_copy:
+        new_struct[key] = structure[key]
     return new_struct
+
+
+def get_resource(structure, resource):
+    return structure["resources"][resource]
+
 
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
         print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
               + time.strftime("%D %H:%M:%S", time.localtime()))
-    except requests.exceptions.HTTPError as e:
+    except requests.exceptions.HTTPError:
         logging_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
 
 
@@ -132,6 +134,38 @@ def get_structures(db_handler, debug, subtype="application"):
     try:
         return db_handler.get_structures(subtype=subtype)
     except (requests.exceptions.HTTPError, ValueError):
-        logging_warning("Couldn't retrieve "+subtype+" info.", debug=debug)
+        logging_warning("Couldn't retrieve " + subtype + " info.", debug=debug)
         return None
 
+
+def generate_request_name(amount, resource):
+    if amount < 0:
+        return resource.title() + "RescaleDown"
+    elif amount > 0:
+        return resource.title() + "RescaleUp"
+    else:
+        return None
+
+
+def generate_event_name(event, resource):
+    final_string = None
+
+    if "scale" not in event:
+        raise ValueError("Missing 'scale' key")
+
+    if "up" not in event["scale"] and "down" not in event["scale"]:
+        raise ValueError("Must have an 'up' or 'down count")
+
+    elif "up" in event["scale"] and event["scale"]["up"] > 0 \
+            and "down" in event["scale"] and event["scale"]["down"] > 0:
+        # SPECIAL CASE OF HEAVY HYSTERESIS
+        # raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
+        return None
+
+    elif "down" in event["scale"] and event["scale"]["down"] > 0:
+        final_string = resource.title() + "Underuse"
+
+    elif "up" in event["scale"] and event["scale"]["up"] > 0:
+        final_string = resource.title() + "Bottleneck"
+
+    return final_string

@@ -15,7 +15,8 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-SKIP_METRICS=["boundary"]
+SKIP_METRICS = ["boundary"]
+
 
 def translate_doc_to_timeseries(doc):
     try:
@@ -30,10 +31,10 @@ def translate_doc_to_timeseries(doc):
                 value = doc["resources"][resource][boundary]
                 metric = doc["type"] + "." + resource + "." + boundary
                 timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
-
                 timeseries_list.append(timeseries)
+
         return timeseries_list
-    except Exception as e:
+    except (ValueError, KeyError) as e:
         MyUtils.logging_error("Error " + str(e) + " " + str(traceback.format_exc() + " with document: " + str(doc)),
                               debug)
         raise
@@ -76,16 +77,14 @@ def persist():
         docs = list()
         try:
             docs += get_limits()
-        except (requests.exceptions.HTTPError, ValueError, KeyError):
+        except (requests.exceptions.HTTPError, KeyError, ValueError):
             # An error might have been thrown because database was recently updated or created
-            fail_count += 1
             MyUtils.logging_warning("Couldn't retrieve limits info.", debug)
 
         try:
             docs += get_structures()
-        except (requests.exceptions.HTTPError, ValueError, KeyError):
+        except (requests.exceptions.HTTPError, KeyError, ValueError):
             # An error might have been thrown because database was recently updated or created
-            fail_count += 1
             MyUtils.logging_warning("Couldn't retrieve structure info.", debug)
 
         # Send the data

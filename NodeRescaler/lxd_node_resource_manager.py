@@ -26,7 +26,7 @@ DICT_NET_LABEL = "networks"
 def get_node_disks(container):
     devices = container.devices
     if not devices:
-        return {"success": True, "data": []}
+        return True, []
     else:
         return cgroups_get_node_disks(container.name, devices)
 
@@ -34,7 +34,7 @@ def get_node_disks(container):
 def get_node_networks(container):
     networks = container.state().network
     if not networks:
-        return {"success": True, "data": []}
+        return True, []
     else:
         network_host_interfaces = list()
         for net in networks.keys():
@@ -46,7 +46,7 @@ def get_node_networks(container):
 
 
 def set_node_resources(node_name, resources):
-    client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
+    client = Client(endpoint='https://localhost:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
                     verify=False)
     if resources is None:
         # No resources to set
@@ -90,7 +90,7 @@ def set_node_resources(node_name, resources):
 
 
 def get_node_resources(node_name):
-    client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
+    client = Client(endpoint='https://localhost:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
                     verify=False)
     # client.authenticate(LXD_PASSWORD)
     try:
@@ -120,10 +120,11 @@ def get_node_resources(node_name):
 
 
 def get_all_nodes():
-    client = Client(endpoint='https://192.168.0.10:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
+    client = Client(endpoint='https://localhost:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
                     verify=False)
     containers = client.containers.all()
     containers_dict = dict()
+    client.authenticate('bogus')
     for c in containers:
         if c.status == "Running":
             containers_dict[c.name] = get_node_resources(c.name)
