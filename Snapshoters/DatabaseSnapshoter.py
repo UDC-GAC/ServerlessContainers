@@ -7,7 +7,7 @@ import traceback
 import logging
 import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
-import pipes.send_to_OpenTSDB as OpenTSDB_sender
+from src.pipelines import send_to_OpenTSDB as OpenTSDB_sender
 
 db_handler = couchDB.CouchDBServer()
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
@@ -15,7 +15,7 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-SKIP_METRICS = ["boundary"]
+SKIP_METRICS = ["boundary", "device"]
 
 
 def translate_doc_to_timeseries(doc):

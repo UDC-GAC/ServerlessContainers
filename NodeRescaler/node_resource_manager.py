@@ -148,6 +148,7 @@ LOWER_LIMIT_MEGABYTES = 64
 
 
 def get_node_mem(container_name):
+    final_dict = dict()
     memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
 
     op = read_cgroup_file_value(memory_limit_path)
@@ -160,36 +161,33 @@ def get_node_mem(container_name):
     if mem_limit_converted > 65536:
         # more than 64G?, probably not limited so set to -1 ('unlimited')
         mem_limit_converted = str(-1)
+        final_dict["unit"] = "unlimited"
+    else:
+        final_dict["unit"] = "M"
 
-    final_dict = dict()
     final_dict[MEM_LIMIT_LABEL] = mem_limit_converted
-    final_dict["unit"] = "M"
-
     return True, final_dict
 
 
 def set_node_mem(container_name, mem_resource):
     # Assume an integer for megabytes, add the M and set to cgroups
     if MEM_LIMIT_LABEL in mem_resource:
-        try:
-            value = int(mem_resource[MEM_LIMIT_LABEL])
-            if value < LOWER_LIMIT_MEGABYTES:
-                # Don't allow values lower than an amount like 64 MB as it will probably block the container
-                return False, {"error": "Memory limit is too low, less than " + str(LOWER_LIMIT_MEGABYTES) + " MB"}
-            value = str(value) + 'M'
-        except ValueError:
-            # Try for the "-1" value, meaning unlimited
-            value = mem_resource[MEM_LIMIT_LABEL]
-            if value is not "-1":
-                raise
+        value = int(mem_resource[MEM_LIMIT_LABEL])
+        if value is -1:
+            value_megabytes = str(value)
+        elif value < LOWER_LIMIT_MEGABYTES:
+            # Don't allow values lower than an amount like 64 MB as it will probably block the container
+            return False, {"error": "Memory limit is too low, less than " + str(LOWER_LIMIT_MEGABYTES) + " MB"}
+        else:
+            value_megabytes = str(value) + 'M'
 
         memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
-        op = write_cgroup_file_value(memory_limit_path, str(value))
+        op = write_cgroup_file_value(memory_limit_path, value_megabytes)
         if not op["success"]:
             # Something happened
             return False, op
         # Nothing bad happened
-        return True, {MEM_LIMIT_LABEL: str(value)}
+        return True, {MEM_LIMIT_LABEL: value}
     else:
         return True, {}
 
@@ -289,12 +287,12 @@ def get_node_disks(container_name, devices):
         if major_minor_str in limits_read:
             device_read_limit = limits_read[major_minor_str]
         else:
-            device_read_limit = str(0)
+            device_read_limit = -1
 
         if major_minor_str in limits_write:
             device_write_limit = limits_write[major_minor_str]
         else:
-            device_write_limit = str(0)
+            device_write_limit = -1
 
         disk_dict = dict()
         disk_dict["mountpoint"] = device_mountpoint
@@ -310,7 +308,7 @@ def get_node_disks(container_name, devices):
 
 
 # NET #
-
+NET_UNIT_NAME_LABEL = "unit"
 NET_DEVICE_HOST_NAME_LABEL = "device_name_in_host"
 NET_DEVICE_NAME_LABEL = "device_name_in_container"
 NET_LIMIT_LABEL = "net_limit"
@@ -324,9 +322,9 @@ def get_interface_limit(interface_name):
         parts = line.rstrip("\n").split()  # Just 1 line should be available
         break
     if len(parts) > 6:
-        return parts[7]
+        return int(parts[7].strip("Mbit"))
     else:
-        return "0"
+        return -1
 
 
 def unset_interface_limit(interface_name):
@@ -341,10 +339,12 @@ def unset_interface_limit(interface_name):
         return False, {"error": "error trying to execute command:  " + str(e)}
 
 
+# tc qdisc add dev veth6UQ01E root tbf rate 100Mbit burst 1000kb latency 100ms
 def set_interface_limit(interface_name, net):
     try:
+        net_limit = str(net[NET_LIMIT_LABEL]) + "Mbit"
         tc = subprocess.Popen(
-            ["tc", "qdisc", "add", "dev", interface_name, "root", "tbf", "rate", net[NET_LIMIT_LABEL], "burst",
+            ["tc", "qdisc", "add", "dev", interface_name, "root", "tbf", "rate", net_limit, "burst",
              "1000kb", "latency", "100ms"], stderr=subprocess.PIPE)
         tc.wait()
         if tc.returncode == 0:
@@ -365,7 +365,7 @@ def set_node_net(net):
             # If no host interface name is available, it is not possible to do anything
             return False, {"error": "No host network interface name was provided"}
 
-        if net[NET_LIMIT_LABEL] != "0" and net[NET_LIMIT_LABEL] != "":
+        if net[NET_LIMIT_LABEL] != -1 and net[NET_LIMIT_LABEL] != "":
             # Unset old limit and set new
             unset_interface_limit(interface_in_host)
             return set_interface_limit(interface_in_host, net)
@@ -390,6 +390,11 @@ def get_node_networks(networks):
         net_dict[NET_DEVICE_NAME_LABEL] = net["container_interface"]
         net_dict[NET_DEVICE_HOST_NAME_LABEL] = interface_host_name
         net_dict[NET_LIMIT_LABEL] = get_interface_limit(interface_host_name)
+        if net_dict[NET_LIMIT_LABEL] == -1:
+            net_dict[NET_UNIT_NAME_LABEL] = "unlimited"
+        else:
+            net_dict[NET_UNIT_NAME_LABEL] = "Mbit"
+
 
         retrieved_nets.append(net_dict)
 

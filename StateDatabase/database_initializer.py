@@ -99,6 +99,8 @@ def initialize():
             guard=True,
             resources=dict(
                 cpu=dict(max=800, min=40),
+                net=dict(max=400, min=40),
+                disk=dict(max=400, min=40),
                 mem=dict(max=46000, min=1024),
                 energy=dict(max=60, min=0)
             ),

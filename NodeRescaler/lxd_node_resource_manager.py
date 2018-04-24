@@ -19,8 +19,8 @@ urllib3.disable_warnings()
 LXD_PASSWORD = "testlxd"
 DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
-DICT_DISK_LABEL = "disks"
-DICT_NET_LABEL = "networks"
+DICT_DISK_LABEL = "disk"
+DICT_NET_LABEL = "net"
 
 
 def get_node_disks(container):
@@ -66,18 +66,23 @@ def set_node_resources(node_name, resources):
                     node_dict[DICT_MEM_LABEL] = mem_resources
 
                 if DICT_DISK_LABEL in resources:
-                    disks_changed = list()
-                    for disk in resources[DICT_DISK_LABEL]:
-                        disk_success, disk_resource = set_node_disk(node_name, disk)
-                        disks_changed.append(disk_resource)
-                        node_dict[DICT_DISK_LABEL] = disks_changed
+                    disk_success, disk_resource = set_node_net(resources[DICT_DISK_LABEL])
+                    node_dict[DICT_DISK_LABEL] = disk_resource
+                    # disks_changed = list()
+                    # for disk in resources[DICT_DISK_LABEL]:
+                    #     disk_success, disk_resource = set_node_disk(node_name, disk)
+                    #     disks_changed.append(disk_resource)
+                    #     node_dict[DICT_DISK_LABEL] = disks_changed
 
                 if DICT_NET_LABEL in resources:
-                    networks_changed = list()
-                    for net in resources[DICT_NET_LABEL]:
-                        net_success, net_resource = set_node_net(net)
-                        networks_changed.append(net_resource)
-                        node_dict[DICT_NET_LABEL] = networks_changed
+                    net_success, net_resource = set_node_net(resources[DICT_NET_LABEL])
+                    node_dict[DICT_NET_LABEL] = net_resource
+
+                    # networks_changed = list()
+                    # for net in resources[DICT_NET_LABEL]:
+                    #     net_success, net_resource = set_node_net(net)
+                    #     networks_changed.append(net_resource)
+                    #     node_dict[DICT_NET_LABEL] = networks_changed
 
                 global_success = cpu_success and mem_success and disk_success and net_success
                 return global_success, node_dict
@@ -105,10 +110,10 @@ def get_node_resources(node_name):
             node_dict[DICT_MEM_LABEL] = mem_resources
 
             disk_success, disk_resources = get_node_disks(container)  # LXD Dependent
-            node_dict[DICT_DISK_LABEL] = disk_resources
+            node_dict[DICT_DISK_LABEL] = disk_resources[0]
 
             net_success, net_resources = get_node_networks(container)  # LXD Dependent
-            node_dict[DICT_NET_LABEL] = net_resources
+            node_dict[DICT_NET_LABEL] = net_resources[0]
 
             return node_dict
         else:

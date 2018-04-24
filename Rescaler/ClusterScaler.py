@@ -1,5 +1,8 @@
 # /usr/bin/python
 from __future__ import print_function
+
+import math
+
 import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
 import json
@@ -137,7 +140,7 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
 
         if needed_shares > 0:
             raise ValueError("Error in setting cpu, couldn't get the resources needed")
-            # FIXME couldn't do rescale down properly as shares to free remain
+            # FIXME couldn't do rescale up properly as shares to free remain
 
     elif amount < 0:
         # Rescale down so free all shares and claim new one to see how many cores can be freed
@@ -215,7 +218,7 @@ def check_invalid_resource_value(database_resources, amount, value, resource):
 def get_current_resource_value(database_resources, real_resources, resource):
     translation_dict = {"cpu": "cpu_allowance_limit", "mem": "mem_limit"}
     current_resource_limit = real_resources[resource][translation_dict[resource]]
-    if current_resource_limit == "-1":
+    if current_resource_limit == -1:
         # RESOURCE is set to unlimited so report min, max or mean, so later apply a rescaling
         # current_resource_limit = database_resources["resources"][resource]["max"]  # Start with max resources
         # current_resource_limit = database_resources["resources"][resource]["min"] # Start with min resources
@@ -368,13 +371,30 @@ def single_container_rescale(request, app_containers):
                                                          metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
         MyUtils.get_resource(container, resource)["usage"] = usages[resource]
         if amount < 0:
-            # Look for a container with enough shares to free in one go
-            if MyUtils.get_resource(container, resource)["current"] >= resource_shares:
+            # Check that the container has enough free resource shares available to be released and that it would be able
+            # to be rescaled without dropping under the minimum value
+            if MyUtils.get_resource(container, resource)["current"] < resource_shares:
+                # Container doesn't have enough resources to free
+                pass
+            elif MyUtils.get_resource(container, resource)["current"] + amount < container["resources"][resource][
+                "min"]:
+                # Container can't free that amount without dropping under the minimum
+                pass
+            else:
                 scalable_containers.append(container)
         else:
-            # Look for a host with enough free shares
+            # Check that the container has enough free resource shares available in the host and that it would be able
+            # to be rescaled without exceeded the maximum value
             container_host = container["host"]
-            if host_info_cache[container_host]["resources"][resource]["free"] >= resource_shares:
+
+            if host_info_cache[container_host]["resources"][resource]["free"] < resource_shares:
+                # Container's host doesn't have enough free resources
+                pass
+            elif MyUtils.get_resource(container, resource)["current"] + amount > container["resources"][resource][
+                "max"]:
+                # Container can't get that amount without exceeding the maximum
+                pass
+            else:
                 scalable_containers.append(container)
 
     # Look for the best fit container for this resource and launch the rescaling request for it
@@ -415,13 +435,11 @@ def rescale_application(request, structure_name):
         if container["host"] not in host_info_cache:
             host_info_cache[container["host"]] = db_handler.get_structure(container["host"])
 
-    # TODO check for containers that are at their minimum resource and remove them from the list of scalable
-
     # First try to fill the request by scaling just one container
     success = single_container_rescale(request, app_containers)
     if not success:
-        # TODO scale with multiple containers
         pass
+        # TODO implement multiple container rescale?
 
 
 def process_requests(reqs):

@@ -21,7 +21,7 @@ for c in containers:
 app = handler.get_structure("app1")
 limits = handler.get_limits(app)
 limits["resources"]=dict(
-                cpu=dict(upper=300, lower=100, boundary=50),
+                cpu=dict(upper=200, lower=100, boundary=80),
                 mem=dict(upper=14000, lower=2000, boundary=4000),
                 disk=dict(upper=100, lower=100, boundary=10),
                 net=dict(upper=100, lower=100, boundary=10),

@@ -1,35 +1,21 @@
 {
-    "cpu": {
-        "cpu_allowance_limit": "-1",
-        "cpu_num_limit": "0-7",
-        "effective_num_cpus": "8",
-        "success": true
-    },
-    "disks": [
-        {
-            "device_path": "/dev/mapper/lxd-node0_data1",
-            "disk_read_limit": "0",
-            "disk_write_limit": "0",
-            "major": "253",
-            "minor": "21",
-            "mountpoint": "/mnt/volumes/nodes/node0/data1/"
-        },
-        {
-            "device_path": "/dev/mapper/lxd-node0_data",
-            "disk_read_limit": "0",
-            "disk_write_limit": "0",
-            "major": "253",
-            "minor": "7",
-            "mountpoint": "/mnt/volumes/nodes/node0/data/"
-        }
-    ],
-    "mem": {
-        "mem_limit": "2G"
-    },
-    "networks": [
-        {
-            "device_name_in_container": "eth0",
-            "net_limit": "0"
-        }
-    ]
+  "cpu": {
+    "cpu_allowance_limit": -1,
+    "cpu_num": "0-7"
+  },
+  "disk": {
+    "device_path": "/dev/mapper/lxd-node0_data",
+    "disk_read_limit": -1,
+    "disk_write_limit": -1,
+    "major": "253",
+    "minor": "7",
+    "mountpoint": "/mnt/volumes/nodes/node0/data/"
+  },
+  "mem": {
+    "mem_limit": -1
+  },
+  "net": {
+    "device_name_in_host": "veth6UQ01E",
+    "net_limit": -1
+  }
 }

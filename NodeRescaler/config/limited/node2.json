@@ -1,24 +1,21 @@
 {
   "cpu": {
-    "cpu_allowance_limit": "200", 
-    "cpu_num": "4,6" 
-  }, 
-  "disks": [
-    {
-      "device_path": "/dev/mapper/lxd-node2_data", 
-      "disk_read_limit": "1024000", 
-      "disk_write_limit": "1024000", 
-      "major": "253", 
-      "minor": "17", 
-      "mountpoint": "/mnt/volumes/nodes/node2/data/"
-    }
-  ], 
+    "cpu_allowance_limit": "200",
+    "cpu_num": "4,6"
+  },
+  "disk": {
+    "device_path": "/dev/mapper/lxd-node2_data",
+    "disk_read_limit": "1024000",
+    "disk_write_limit": "1024000",
+    "major": "253",
+    "minor": "17",
+    "mountpoint": "/mnt/volumes/nodes/node2/data/"
+  },
   "mem": {
-    "mem_limit": "8192" 
-  }, 
-  "networks": [
-    {
-      "net_limit": "0"
-    }
-  ]
+    "mem_limit": "8192"
+  },
+  "net": {
+    "device_name_in_host": "veth6FVM5Y",
+    "net_limit": 100
+  }
 }

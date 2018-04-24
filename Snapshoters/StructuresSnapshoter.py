@@ -9,10 +9,12 @@ import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
 
 db_handler = couchDB.CouchDBServer()
-RESOURCES = ["cpu", "mem"]  # FIXME disk and network resources are skipped
+RESOURCES = ["cpu", "mem", "net", "disk"]
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
-    "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"}
+    "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
+    "disk": {"metric": "structure.disk.current", "limit_label": "disk_read_limit"},  # FIXME missing write value
+    "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
@@ -92,6 +94,7 @@ def persist_applications(container_resources_dict):
         for c in application_containers:
             for resource in RESOURCES:
                 if c in container_resources_dict:
+
                     app["resources"][resource]["current"] += \
                         container_resources_dict[c]["resources"][resource][translate_map[resource]["limit_label"]]
                 else:
