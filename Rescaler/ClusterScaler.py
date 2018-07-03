@@ -496,6 +496,7 @@ def scale():
     global host_info_cache
 
     # Remove previous requests
+    MyUtils.logging_info("Purging previous requests at " + MyUtils.get_time_now_string(), debug)
     filter_requests(0)
 
     while True:

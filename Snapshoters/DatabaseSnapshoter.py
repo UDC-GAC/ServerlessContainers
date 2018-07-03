@@ -15,8 +15,7 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-SKIP_METRICS = ["boundary", "device"]
-
+PERSIST_METRICS = ["max", "min", "upper", "lower", "current"]
 
 def translate_doc_to_timeseries(doc):
     try:
@@ -25,13 +24,12 @@ def translate_doc_to_timeseries(doc):
 
         timeseries_list = list()
         for resource in doc["resources"]:
-            for boundary in doc["resources"][resource]:
-                if boundary in SKIP_METRICS:
-                    continue
-                value = doc["resources"][resource][boundary]
-                metric = doc["type"] + "." + resource + "." + boundary
-                timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
-                timeseries_list.append(timeseries)
+            for doc_metric in doc["resources"][resource]:
+                if doc_metric in PERSIST_METRICS:
+                    value = doc["resources"][resource][doc_metric]
+                    metric = doc["type"] + "." + resource + "." + doc_metric
+                    timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
+                    timeseries_list.append(timeseries)
 
         return timeseries_list
     except (ValueError, KeyError) as e:

@@ -10,12 +10,16 @@ POLLING_TIME = 2
 
 def check_node_rescaler_status(node_rest_endpoint):
     try:
-        r = requests.get("http://" + node_rest_endpoint + ":8000/heartbeat", headers={'Accept': 'application/json'})
+        endpoint = "http://" + node_rest_endpoint + ":8000/heartbeat"
+        r = requests.get(endpoint, headers={'Accept': 'application/json'})
         if r.status_code == 200:
             return True
         else:
             return False
     except requests.exceptions.ConnectionError:
+        print("WARNING -> host: " + endpoint + " is unresponsive")
+        return False
+    except Exception:
         return False
 
 
@@ -36,7 +40,7 @@ while True:
         else:
             alive.append(service["name"])
 
-    for node_REST_service in ["dante", "victoria"]:
+    for node_REST_service in ["dante"]:
         if check_node_rescaler_status(node_REST_service):
             alive.append(node_REST_service + "_node_rescaler")
         else:

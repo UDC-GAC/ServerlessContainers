@@ -66,7 +66,7 @@ def set_node_resources(node_name, resources):
                     node_dict[DICT_MEM_LABEL] = mem_resources
 
                 if DICT_DISK_LABEL in resources:
-                    disk_success, disk_resource = set_node_net(resources[DICT_DISK_LABEL])
+                    disk_success, disk_resource = set_node_disk(node_name, resources[DICT_DISK_LABEL])
                     node_dict[DICT_DISK_LABEL] = disk_resource
                     # disks_changed = list()
                     # for disk in resources[DICT_DISK_LABEL]:
@@ -111,10 +111,10 @@ def get_node_resources(node_name):
 
             disk_success, disk_resources = get_node_disks(container)  # LXD Dependent
             node_dict[DICT_DISK_LABEL] = disk_resources[0]
-
+            # TODO support multiple disks
             net_success, net_resources = get_node_networks(container)  # LXD Dependent
             node_dict[DICT_NET_LABEL] = net_resources[0]
-
+            # TODO support multiple networks
             return node_dict
         else:
             # If container not running, skip

@@ -41,8 +41,13 @@ def update_container_current_values(container_name, resources):
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
 
-        new_structure["resources"][resource]["current"] = resources[resource][
-            translate_map[resource]["limit_label"]]
+        #TODO FIX disk limit is retrieved in bytes/s but it is expected in Mbits
+        if resource is "disk":
+            bandwidth = resources[resource][translate_map[resource]["limit_label"]]
+            bandwidth = int( bandwidth / 1048576)
+            new_structure["resources"][resource]["current"] = bandwidth
+        else:
+            new_structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
 
     MyUtils.update_structure(new_structure, db_handler, debug, max_tries=1)
 
@@ -98,9 +103,13 @@ def persist_applications(container_resources_dict):
                     app["resources"][resource]["current"] += \
                         container_resources_dict[c]["resources"][resource][translate_map[resource]["limit_label"]]
                 else:
-                    MyUtils.logging_error(
-                        "Container info " + c["name"] + "is missing for app : " +
-                        app["name"] + ", app info will not be accurate", debug)
+                    if "name" in c and "name" in app:
+                        MyUtils.logging_error(
+                            "Container info " + c["name"] + "is missing for app : " +
+                            app["name"] + ", app info will not be accurate", debug)
+                    else:
+                        MyUtils.logging_error("Error with app or container info", debug)
+                        #TODO this error should be more self-explanatory
 
         MyUtils.update_structure(app, db_handler, debug)
 

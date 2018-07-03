@@ -79,6 +79,8 @@ def generate_container_energy_metrics(container, host_info):
 
     # Generate the container energy information from the container cpu and the host cpu and energy info
     new_container = MyUtils.copy_structure_base(container)
+    new_container["resources"] = {}
+    new_container["resources"]["energy"] = {}
     new_container["resources"]["energy"]["current"] = float(
         host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
 

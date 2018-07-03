@@ -74,7 +74,7 @@ def get_node_cpus(container_name):
             effective_cpus += (int(ranges[1]) - int(ranges[0])) + 1
 
         # Get the effective limit of the container, if allowance is set, then it
-    # is limited by number of cpus available otherwise it is the number of
+    # is medium-limit by number of cpus available otherwise it is the number of
     # cores multiplied per 100 for percentage
     if cpu_limit == -1:
         effective_limit = effective_cpus * 100
@@ -159,7 +159,7 @@ def get_node_mem(container_name):
 
     mem_limit_converted = int(mem_limit) / 1048576  # Convert to MB
     if mem_limit_converted > 65536:
-        # more than 64G?, probably not limited so set to -1 ('unlimited')
+        # more than 64G?, probably not medium-limit so set to -1 ('unlimited')
         mem_limit_converted = str(-1)
         final_dict["unit"] = "unlimited"
     else:
@@ -251,24 +251,40 @@ def get_node_disk_limits(container_name):
 def set_node_disk(container_name, disk_resource):
     major = disk_resource["major"]
     minor = disk_resource["minor"]
-    blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_name])
-    if DISK_READ_LIMIT_LABEL in disk_resource:
-        limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
-        devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
-
-        op = write_cgroup_file_value(devices_read_limit_path, str(major + ":" + minor + " " + limit_read))
-        if not op["success"]:
-            # Something happened
-            return False, op
 
     if DISK_WRITE_LIMIT_LABEL in disk_resource:
         limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
-        devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
+        try:
+            mydir = os.getcwd()
+            set_disk_bandwidth = subprocess.Popen(
+                ["/bin/bash", mydir + "/" + "set_bandwidth.sh", container_name, major+":"+minor, limit_write], stderr=subprocess.PIPE)
+            #set_disk_bandwidth.wait()
+            out, err = set_disk_bandwidth.communicate()
+            if set_disk_bandwidth.returncode == 0:
+                pass
+            else:
+                return False, {"error": "exit code of set_disk_bandwidth was: " + str(set_disk_bandwidth.returncode) + " with error message: " + err}
+        except subprocess.CalledProcessError as e:
+            return False, {"error": str(e)}
 
-        op = write_cgroup_file_value(devices_write_limit_path, str(major + ":" + minor + " " + limit_write))
-        if not op["success"]:
-            # Something happened
-            return False, op
+    # blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_name])
+    # if DISK_READ_LIMIT_LABEL in disk_resource:
+    #     limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
+    #     devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
+    #
+    #     op = write_cgroup_file_value(devices_read_limit_path, str(major + ":" + minor + " " + limit_read))
+    #     if not op["success"]:
+    #         # Something happened
+    #         return False, op
+    #
+    # if DISK_WRITE_LIMIT_LABEL in disk_resource:
+    #     limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+    #     devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
+    #
+    #     op = write_cgroup_file_value(devices_write_limit_path, str(major + ":" + minor + " " + limit_write))
+    #     if not op["success"]:
+    #         # Something happened
+    #         return False, op
 
     # Nothing bad happened
     return True, disk_resource
@@ -285,12 +301,12 @@ def get_node_disks(container_name, devices):
         major_minor_str = major + ":" + minor
 
         if major_minor_str in limits_read:
-            device_read_limit = limits_read[major_minor_str]
+            device_read_limit = int(limits_read[major_minor_str])
         else:
             device_read_limit = -1
 
         if major_minor_str in limits_write:
-            device_write_limit = limits_write[major_minor_str]
+            device_write_limit = int(limits_write[major_minor_str])
         else:
             device_write_limit = -1
 
@@ -346,11 +362,12 @@ def set_interface_limit(interface_name, net):
         tc = subprocess.Popen(
             ["tc", "qdisc", "add", "dev", interface_name, "root", "tbf", "rate", net_limit, "burst",
              "1000kb", "latency", "100ms"], stderr=subprocess.PIPE)
-        tc.wait()
+        #tc.wait()
+        out, err = tc.communicate()
         if tc.returncode == 0:
             return True, net
         else:
-            return False, {"error": "exit code of tc was: " + str(tc.returncode)}
+            return False, {"error": "exit code of tc was: " + str(tc.returncode) + " with error: " + str(err)}
     except subprocess.CalledProcessError as e:
         return False, {"error": str(e)}
 

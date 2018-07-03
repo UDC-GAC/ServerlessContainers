@@ -197,6 +197,7 @@ def correct_container_state(resources, limits_document):
 
 def invalid_container_state(resources, limits_document):
     limits = limits_document["resources"]
+    # TODO add support for disk and net
     for resource in ["cpu", "mem"]:
         max_value = try_get_value(resources[resource], "max")
         current_value = try_get_value(resources[resource], "current")
@@ -252,7 +253,12 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
 
     for rule in rules:
         try:
-            if rule["active"] and rule["generates"] == "events" and jsonLogic(rule["rule"], data[rule["resource"]]):
+            # Check that the rule is active, the resource to watch is guarded and that the rule is activated
+            if rule["active"] and \
+                    resources[rule["resource"]]["guard"] and \
+                    rule["generates"] == "events" and \
+                    jsonLogic(rule["rule"], data[rule["resource"]]):
+
                 event_name = MyUtils.generate_event_name(rule["action"]["events"], rule["resource"])
                 if event_name:
                     events.append(dict(
@@ -295,7 +301,7 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                 # If rescaling a container, check that the current resource value exists, otherwise there
                 # is nothing to rescale
                 if is_container(structure) and "current" not in structure["resources"][resource_label]:
-                    MyUtils.logging_warning("No current value for container'" + structure[
+                    MyUtils.logging_warning("No current value for container' " + structure[
                         "name"] + "' and resource '" + resource_label + "', can't rescale", debug)
                     continue
 
@@ -517,6 +523,9 @@ def guard():
 
         epoch_end = time.time()
         processing_time = epoch_end - epoch_start
+
+        MyUtils.logging_info("Epoch processed at " + MyUtils.get_time_now_string(), debug)
+        MyUtils.logging_info("---------", debug)
 
         if benchmark:
             MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to process " + str(

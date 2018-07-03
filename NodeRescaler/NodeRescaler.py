@@ -30,6 +30,7 @@ def set_container_resources(container_name):
     if container_name != "":
         success, applied_config = node_resource_manager.set_node_resources(container_name, request.json)
         if not success:
+            # Todo Improve the failure detection, filter out which set process failed and report it
             return Response(json.dumps(applied_config), status=500, mimetype='application/json')
         else:
             applied_config = node_resource_manager.get_node_resources(container_name)

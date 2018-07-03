@@ -1,5 +1,7 @@
 # /usr/bin/python
 from __future__ import print_function
+
+import random
 import time
 import logging
 import sys
@@ -11,12 +13,21 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def beat(db_handler, service_name):
-    service = db_handler.get_service(service_name)
-    service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
-    service["heartbeat"] = time.time()
-    db_handler.update_service(service)
+def resilient_beat(db_handler, service_name, max_tries=10):
+    try:
+        service = db_handler.get_service(service_name)
+        service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
+        service["heartbeat"] = time.time()
+        db_handler.update_service(service)
+    except requests.HTTPError as e:
+        if max_tries > 0:
+            time.sleep((1000 + random.randint(1, 200)) / 1000)
+            resilient_beat(db_handler, service_name, max_tries - 1)
+        else:
+            raise e
 
+def beat(db_handler, service_name):
+    resilient_beat(db_handler, service_name, max_tries=5)
 
 def get_config_value(config, default_config, key):
     try:
@@ -167,5 +178,7 @@ def generate_event_name(event, resource):
 
     elif "up" in event["scale"] and event["scale"]["up"] > 0:
         final_string = resource.title() + "Bottleneck"
+    else:
+        return None
 
     return final_string

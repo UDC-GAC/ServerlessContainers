@@ -4,18 +4,18 @@
     "cpu_num": "0-7"
   },
   "disk": {
-    "device_path": "/dev/mapper/lxd-node1_data",
-    "disk_read_limit": -1,
-    "disk_write_limit": -1,
+    "device_path": "/dev/mapper/lxd-node1_data0",
+    "disk_read_limit": "0",
+    "disk_write_limit": "0",
     "major": "253",
-    "minor": "16",
-    "mountpoint": "/mnt/volumes/nodes/node1/data/"
+    "minor": "3",
+    "mountpoint": "/mnt/volumes/nodes/node1_data0/"
   },
   "mem": {
     "mem_limit": -1
   },
   "net": {
-    "device_name_in_host": "vethEPEI2G",
+    "device_name_in_host": "vethQFQ8N9",
     "net_limit": -1
   }
 }

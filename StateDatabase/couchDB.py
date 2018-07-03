@@ -38,6 +38,13 @@ class CouchDBServer:
         else:
             return True
 
+    def compact_database(self, database):
+        r = requests.post(self.server + "/" + database + "/_compact", headers=self.post_doc_headers)
+        if r.status_code != 202:
+            r.raise_for_status()
+        else:
+            return json.loads(r.text)["ok"]
+
     def get_all_database_docs(self, database):
         docs = list()
         r = requests.get(self.server + "/" + database + "/_all_docs")
