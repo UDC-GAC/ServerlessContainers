@@ -50,13 +50,13 @@ if handler.database_exists("structures"):
         name="app1",
         guard=True,
         resources=dict(
-            cpu=dict(max=800, min=40),
-            net=dict(max=400, min=40),
-            disk=dict(max=400, min=40),
-            mem=dict(max=46000, min=1024),
-            energy=dict(max=60, min=0)
+            cpu=dict(max=700, min=100, guard=True),
+            mem=dict(max=24576, min=4096, guard=False),
+            disk=dict(max=400, min=40, guard=False),
+            net=dict(max=400, min=40, guard=False),
+            energy=dict(max=60, min=0, guard=False)
         ),
-        containers=["node0","node1","node2","node3"]
+        containers=["node1","node2","node3"]
     )
     handler.add_structure(app)
 

@@ -255,9 +255,9 @@ def set_node_disk(container_name, disk_resource):
     if DISK_WRITE_LIMIT_LABEL in disk_resource:
         limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
         try:
-            mydir = os.getcwd()
+            set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
             set_disk_bandwidth = subprocess.Popen(
-                ["/bin/bash", mydir + "/" + "set_bandwidth.sh", container_name, major+":"+minor, limit_write], stderr=subprocess.PIPE)
+                ["/bin/bash", set_bandwidth_script_path + "/" + "set_bandwidth.sh", container_name, major+":"+minor, limit_write], stderr=subprocess.PIPE)
             #set_disk_bandwidth.wait()
             out, err = set_disk_bandwidth.communicate()
             if set_disk_bandwidth.returncode == 0:

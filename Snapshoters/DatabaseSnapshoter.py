@@ -15,7 +15,7 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-PERSIST_METRICS = ["max", "min", "upper", "lower", "current"]
+PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage"]
 
 def translate_doc_to_timeseries(doc):
     try:

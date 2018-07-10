@@ -393,17 +393,18 @@ def process_serverless_structure(config, structure, usages, limits, rules):
     triggered_events = match_usages_and_limits(structure["name"], rules, usages, limits["resources"],
                                                structure["resources"])
 
-    # Create events, data movement, slow
+    # Remote database operation
     db_handler.add_events(triggered_events)
 
-    # Get all the events, data movement, slow
+    # Remote database operation
     all_events = db_handler.get_events(structure)
 
     # Filter the events according to timestamp
     filtered_events, old_events = filter_old_events(all_events, event_timeout)
 
-    # Remove the old events, data movement, slow
-    db_handler.delete_events(old_events)
+    if old_events:
+        # Remote database operation
+        db_handler.delete_events(old_events)
 
     # If there are no events, nothing else to do as no requests will be generated
     if filtered_events:
@@ -413,12 +414,15 @@ def process_serverless_structure(config, structure, usages, limits, rules):
         # Match events and rules to generate requests
         triggered_requests, events_to_remove = match_rules_and_events(structure, rules, reduced_events, limits, usages)
 
-        # Remove events that generated the request, data movement, slow
+        # Remove events that generated the request
+        # Remote database operation
         for event in events_to_remove:
             db_handler.delete_num_events_by_structure(structure, event, events_to_remove[event])
 
-        # Create requests, data movement, slow
-        db_handler.add_requests(triggered_requests)
+        if triggered_requests:
+            # Remote database operation
+            db_handler.add_requests(triggered_requests)
+
     else:
         triggered_requests = list()
 
@@ -430,6 +434,8 @@ def process_serverless_structure(config, structure, usages, limits, rules):
 def serverless(config, structures):
     window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
     window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
+
+    # Remote database operation
     rules = db_handler.get_rules()
 
     for structure in structures:
@@ -449,7 +455,7 @@ def serverless(config, structures):
                 metrics_to_generate = GUARDIAN_CONTAINER_METRICS
                 tag = "host"
 
-            # Data retrieving, slow
+            # Remote database operation
             usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference, window_delay,
                                                              metrics_to_retrieve, metrics_to_generate)
 
@@ -461,7 +467,7 @@ def serverless(config, structures):
 
             resources = structure["resources"]
 
-            # Data retrieving, slow
+            # Remote database operation
             limits = db_handler.get_limits(structure)
 
             if not limits:
@@ -478,6 +484,8 @@ def serverless(config, structures):
                     debug)
                 # str(e) + " " + str(traceback.format_exc()), debug)
                 limits = correct_container_state(resources, limits)
+
+                # Remote database operation
                 db_handler.update_limit(limits)
 
             process_serverless_structure(config, structure, usages, limits, rules)
@@ -503,7 +511,7 @@ def guard():
         config = service["config"]
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-        benchmark = False
+        benchmark = True
         guard_policy = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "GUARD_POLICY")
         structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
 
@@ -525,12 +533,11 @@ def guard():
         processing_time = epoch_end - epoch_start
 
         MyUtils.logging_info("Epoch processed at " + MyUtils.get_time_now_string(), debug)
-        MyUtils.logging_info("---------", debug)
 
         if benchmark:
             MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to process " + str(
                 len(structures)) + " nodes at " + MyUtils.get_time_now_string(), debug)
-
+        MyUtils.logging_info("---------", debug)
         time.sleep(window_difference)
 
 

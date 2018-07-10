@@ -73,6 +73,19 @@ class CouchDBServer:
         else:
             return True
 
+    def __add_bulk_docs(self, database, docs):
+        docs_data = {"docs": docs}
+        r = requests.post(self.server + "/" + database + "/_bulk_docs", data=json.dumps(docs_data), headers=self.post_doc_headers)
+        if r.status_code != 201:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __delete_bulk_docs(self, database, docs):
+        for doc in docs:
+            doc["_deleted"] = True
+        self.__add_bulk_docs(database, docs)
+
     def __merge(self, input_dict, output_dict):
         for key, value in input_dict.items():
             if isinstance(value, dict):
@@ -142,26 +155,22 @@ class CouchDBServer:
         self.__add_doc(self.__events_db_name, event)
 
     def add_events(self, events):
-        for event in events:
-            self.add_event(event)
+        self.__add_bulk_docs(self.__events_db_name, events)
 
     def get_events(self, structure):
         return self.find_documents_by_matches(self.__events_db_name, {"structure": structure["name"]})
 
     def delete_num_events_by_structure(self, structure, event_name, event_num):
-        num_deleted = 0
-        events = self.get_all_database_docs(self.__events_db_name)
-        for event in events:
-            if event["structure"] == structure["name"] and event["name"] == event_name and num_deleted < event_num:
-                self.__delete_doc(self.__events_db_name, event["_id"], event["_rev"])
-                num_deleted += 1
+        events = self.find_documents_by_matches(self.__events_db_name, {"structure": structure["name"], "name": event_name})
+        event_num = min(len(events),event_num)
+        events_to_delete = events[0:event_num]
+        self.__delete_bulk_docs(self.__events_db_name, events_to_delete)
 
     def delete_event(self, event):
         self.__delete_doc(self.__events_db_name, event["_id"], event["_rev"])
 
     def delete_events(self, events):
-        for event in events:
-            self.delete_event(event)
+        self.__delete_bulk_docs(self.__events_db_name, events)
 
     # LIMITS #
     def add_limit(self, limit):
@@ -189,8 +198,7 @@ class CouchDBServer:
         self.__add_doc(self.__requests_db_name, req)
 
     def add_requests(self, reqs):
-        for request in reqs:
-            self.add_request(request)
+        self.__add_bulk_docs(self.__requests_db_name, reqs)
 
     def delete_request(self, request):
         self.__delete_doc(self.__requests_db_name, request["_id"], request["_rev"])

@@ -72,12 +72,12 @@ if handler.database_exists("rules"):
                     2]},
                 {"<=": [
                     {"var": "events.scale.down"},
-                    3]}
+                    2]}
             ]}),
         events_to_remove=2,
         generates="requests",
         action={"requests": ["CpuRescaleUp"]},
-        amount=50,
+        amount=75,
         rescale_by="amount",
         active=True
     )
@@ -168,7 +168,7 @@ if handler.database_exists("rules"):
                     2]},
                 {"<=": [
                     {"var": "events.scale.down"},
-                   3]}
+                   2]}
             ]}),
         generates="requests",
         events_to_remove=2,

@@ -8,14 +8,14 @@
     "disk_read_limit": "52426800",
     "disk_write_limit": "52426800",
     "major": "253",
-    "minor": "4",
+    "minor": "3",
     "mountpoint": "/mnt/volumes/nodes/node2_data0"
   },
   "mem": {
     "mem_limit": "8192"
   },
   "net": {
-    "device_name_in_host": "veth3A8K44",
+    "device_name_in_host": "veth9LUPOK",
     "net_limit": 200
   }
 }

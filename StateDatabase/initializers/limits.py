@@ -19,7 +19,7 @@ if handler.database_exists("limits"):
             type='limit',
             name=c,
             resources=dict(
-                cpu=dict(upper=170, lower=150, boundary=45),
+                cpu=dict(upper=170, lower=150, boundary=35),
                 mem=dict(upper=8000, lower=6000, boundary=1024),
                 disk=dict(upper=100, lower=20, boundary=10),
                 net=dict(upper=100, lower=20, boundary=10),
@@ -32,7 +32,7 @@ if handler.database_exists("limits"):
         type='limit',
         name='app1',
         resources=dict(
-            cpu=dict(upper=300, lower=100, boundary=50),
+            cpu=dict(upper=200, lower=150, boundary=50),
             mem=dict(upper=14000, lower=2000, boundary=4000),
             disk=dict(upper=100, lower=10, boundary=20),
             net=dict(upper=100, lower=10, boundary=20),

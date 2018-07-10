@@ -416,9 +416,10 @@ def single_container_rescale(request, app_containers):
             action=MyUtils.generate_request_name(amount, resource),
             timestamp=int(time.time()))
         generate_requests([new_request], request["structure"])
-        return True
+        MyUtils.get_resource(best_fit_container, resource)["current"] += amount
+        return True, best_fit_container
     else:
-        return False
+        return False, {}
 
 
 def rescale_application(request, structure_name):
@@ -436,10 +437,24 @@ def rescale_application(request, structure_name):
             host_info_cache[container["host"]] = db_handler.get_structure(container["host"])
 
     # First try to fill the request by scaling just one container
-    success = single_container_rescale(request, app_containers)
+    success, container_to_rescale = single_container_rescale(request, app_containers)
+
+    # If unsuccessful, try to do it by multiple, smaller, rescaling operations
     if not success:
+        total_amount = request["amount"]
+        splits = int(3)
+        smaller_amount = int(total_amount / splits)
+        request["amount"] = smaller_amount
+        success, iterations = True, 0
+        while success and iterations < splits:
+            iterations += 1
+            success, container_to_rescale = single_container_rescale(request, app_containers)
+            for c in app_containers:
+                if c["name"] == container_to_rescale["name"]:
+                    app_containers.remove(c)
+                    app_containers.append(container_to_rescale)
+    else:
         pass
-        # TODO implement multiple container rescale?
 
 
 def process_requests(reqs):
