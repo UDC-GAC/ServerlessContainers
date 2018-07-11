@@ -33,7 +33,13 @@
     {
       "metrics": [
         {
-          "metric": "structure.energy.usage",
+          "metric": "structure.energy.max",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },{
+          "metric": "structure.energy.current",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"

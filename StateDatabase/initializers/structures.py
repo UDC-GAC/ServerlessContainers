@@ -22,8 +22,8 @@ if handler.database_exists("structures"):
             name=c,
             guard=True,
             resources=dict(
-                cpu=dict(max=200, min=10, guard=True),
-                mem=dict(max=8192, min=1024, guard=True),
+                cpu=dict(max=200, min=10, fixed=50, guard=True),
+                mem=dict(max=8192, min=1024, fixed=2048, guard=True),
                 disk=dict(max=100, min=10, guard=False),
                 net=dict(max=100, min=10, guard=False),
                 energy=dict(max=20, min=0, guard=False)
@@ -50,13 +50,13 @@ if handler.database_exists("structures"):
         name="app1",
         guard=True,
         resources=dict(
-            cpu=dict(max=700, min=100, guard=True),
-            mem=dict(max=24576, min=4096, guard=False),
+            cpu=dict(max=800, min=100, guard=False),
+            mem=dict(max=32768, min=4096, guard=False),
             disk=dict(max=400, min=40, guard=False),
             net=dict(max=400, min=40, guard=False),
-            energy=dict(max=60, min=0, guard=False)
+            energy=dict(max=80, min=0, guard=True)
         ),
-        containers=["node1","node2","node3"]
+        containers=["node0","node1","node2","node3"]
     )
     handler.add_structure(app)
 

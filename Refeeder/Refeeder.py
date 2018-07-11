@@ -1,6 +1,8 @@
 # /usr/bin/python
 from __future__ import print_function
 
+from threading import Thread
+
 from requests import HTTPError
 
 import MyUtils.MyUtils as MyUtils
@@ -97,7 +99,7 @@ def generate_application_energy_metrics(application, updated_containers):
     if "energy" not in application["resources"]:
         application["resources"]["energy"] = dict()
 
-    application["resources"]["energy"]["usage"] = total_energy
+    application["resources"]["energy"]["current"] = total_energy
     return application
 
 
@@ -115,33 +117,42 @@ def generate_application_metrics(application):
     return application
 
 
+def refeed_container(container, updated_containers):
+    # Get the host cpu and energy usages
+    try:
+        host_name = container["host"]
+        host_info = get_host_usages(host_name)
+
+        # Check that both cpu and energy information have been retrieved for the host
+        for required_info in ["cpu", "energy"]:
+            if host_info[required_info] == NO_METRIC_DATA_DEFAULT_VALUE:
+                MyUtils.logging_error(
+                    "Error, no host '" + required_info + "' info available for: " + host_name
+                    + " so no info can be generated for container: " + container["name"], debug)
+                continue
+
+    except HTTPError:
+        MyUtils.logging_error(
+            "Error, no info available for: " + container["host"], debug)
+        return
+
+    # Generate the energy information, if unsuccessful, None will be returned
+    container = generate_container_energy_metrics(container, host_info)
+    if container:
+        MyUtils.update_structure(container, db_handler, debug)
+        updated_containers.append(container)
+
+
 def refeed_containers(containers):
     updated_containers = list()
+    threads = []
     for container in containers:
+        process = Thread(target=refeed_container, args=(container, updated_containers,))
+        process.start()
+        threads.append(process)
 
-        # Get the host cpu and energy usages
-        try:
-            host_name = container["host"]
-            host_info = get_host_usages(host_name)
-
-            # Check that both cpu and energy information have been retrieved for the host
-            for required_info in ["cpu", "energy"]:
-                if host_info[required_info] == NO_METRIC_DATA_DEFAULT_VALUE:
-                    MyUtils.logging_error(
-                        "Error, no host '" + required_info + "' info available for: " + host_name
-                        + " so no info can be generated for container: " + container["name"], debug)
-                    continue
-
-        except HTTPError:
-            MyUtils.logging_error(
-                "Error, no info available for: " + container["host"], debug)
-            continue
-
-        # Generate the energy information, if unsuccessful, None will be returned
-        container = generate_container_energy_metrics(container, host_info)
-        if container:
-            MyUtils.update_structure(container, db_handler, debug)
-            updated_containers.append(container)
+    for process in threads:
+        process.join()
 
     return updated_containers
 
@@ -151,6 +162,22 @@ def refeed_applications(applications, updated_containers):
         application = generate_application_metrics(application)
         application = generate_application_energy_metrics(application, updated_containers)
         MyUtils.update_structure(application, db_handler, debug)
+
+
+def refeed_thread(containers):
+    # Process and measure time
+    epoch_start = time.time()
+
+    containers = refeed_containers(containers)
+
+    applications = MyUtils.get_structures(db_handler, debug, subtype="application")
+    if applications:
+        refeed_applications(applications, containers)
+
+    epoch_end = time.time()
+    processing_time = epoch_end - epoch_start
+
+    MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to refeed", debug)
 
 
 def refeed():
@@ -180,13 +207,20 @@ def refeed():
             # As no container info is available, no application information will be able to be generated
             continue
 
-        containers = refeed_containers(containers)
+        thread = Thread(target=refeed_thread, args=(containers,))
+        thread.start()
 
-        applications = MyUtils.get_structures(db_handler, debug, subtype="application")
-        if applications:
-            refeed_applications(applications, containers)
+        MyUtils.logging_info("Refeed processed at " + MyUtils.get_time_now_string(), debug)
+        time.sleep(window_difference)
 
-        time.sleep(polling_frequency)
+        if thread.isAlive():
+            delay_start = time.time()
+            MyUtils.logging_warning("Previous thread didn't finish before next poll is due, with window time of " + str(
+                window_difference) + " seconds, at " + MyUtils.get_time_now_string(), debug)
+            MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
+            thread.join()
+            delay_end = time.time()
+            MyUtils.logging_warning("Resulting delay of: " + str(delay_end - delay_start) + " seconds", debug)
 
 
 def main():

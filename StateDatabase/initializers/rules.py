@@ -32,7 +32,7 @@ if handler.database_exists("rules"):
                 ]
             }),
         generates="events", action={"events": {"scale": {"up": 1}}},
-        active=True
+        active=False
     )
 
     cpu_dropped_lower = dict(
@@ -53,7 +53,7 @@ if handler.database_exists("rules"):
                     {"var": "structure.cpu.min"}]}]}),
         generates="events",
         action={"events": {"scale": {"down": 1}}},
-        active=True
+        active=False
     )
 
     handler.add_rule(cpu_exceeded_upper)
@@ -67,7 +67,7 @@ if handler.database_exists("rules"):
         name='CpuRescaleUp',
         rule=dict(
             {"and": [
-                {">": [
+                {">=": [
                     {"var": "events.scale.up"},
                     2]},
                 {"<=": [
@@ -79,7 +79,7 @@ if handler.database_exists("rules"):
         action={"requests": ["CpuRescaleUp"]},
         amount=75,
         rescale_by="amount",
-        active=True
+        active=False
     )
 
     CpuRescaleDown = dict(
@@ -89,7 +89,7 @@ if handler.database_exists("rules"):
         name='CpuRescaleDown',
         rule=dict(
             {"and": [
-                {">": [
+                {">=": [
                     {"var": "events.scale.down"},
                     8]},
                 {"==": [
@@ -101,7 +101,7 @@ if handler.database_exists("rules"):
         action={"requests": ["CpuRescaleDown"]},
         amount=-20,
         rescale_by="fit_to_usage",
-        active=True,
+        active=False,
     )
 
     handler.add_rule(CpuRescaleUp)
@@ -129,7 +129,7 @@ if handler.database_exists("rules"):
             }),
         generates="events",
         action={"events": {"scale": {"up": 1}}},
-        active=True
+        active=False
     )
 
     mem_dropped_lower = dict(
@@ -150,7 +150,7 @@ if handler.database_exists("rules"):
                     {"var": "structure.mem.min"}]}]}),
         generates="events",
         action={"events": {"scale": {"down": 1}}},
-        active=True
+        active=False
     )
 
     handler.add_rule(mem_exceeded_upper)
@@ -163,7 +163,7 @@ if handler.database_exists("rules"):
         name='MemRescaleUp',
         rule=dict(
             {"and": [
-                {">": [
+                {">=": [
                     {"var": "events.scale.up"},
                     2]},
                 {"<=": [
@@ -175,7 +175,7 @@ if handler.database_exists("rules"):
         action={"requests": ["MemRescaleUp"]},
         amount=2048,
         rescale_by="amount",
-        active=True
+        active=False
     )
 
     MemRescaleDown = dict(
@@ -185,7 +185,7 @@ if handler.database_exists("rules"):
         name='MemRescaleDown',
         rule=dict(
             {"and": [
-                {">": [
+                {">=": [
                     {"var": "events.scale.down"},
                     8]},
                 {"==": [
@@ -198,7 +198,7 @@ if handler.database_exists("rules"):
         amount=-512,
         percentage_reduction=50,
         rescale_by="fit_to_usage",
-        active=True
+        active=False
     )
 
     handler.add_rule(MemRescaleUp)
@@ -220,4 +220,65 @@ if handler.database_exists("rules"):
     )
     handler.add_rule(energy_exceeded_upper)
 
+    EnergyRescaleDown = dict(
+        _id='EnergyRescaleDown',
+        type='rule',
+        resource="energy",
+        name='EnergyRescaleDown',
+        rule=dict(
+            {"and": [
+                {"<=": [
+                    {"var": "events.scale.down"},
+                    4]},
+                {">=": [
+                    {"var": "events.scale.up"},
+                    2]}
+            ]}),
+        generates="requests",
+        events_to_remove=2,
+        action={"requests": ["CpuRescaleDown"]},
+        amount=-40,
+        rescale_by="amount",
+        active=True
+    )
+    handler.add_rule(EnergyRescaleDown)
 
+
+
+    energy_dropped_lower = dict(
+        _id='energy_dropped_lower',
+        type='rule',
+        resource="energy",
+        name='energy_dropped_lower',
+        rule=dict(
+            {"and": [
+                {"<": [
+                    {"var": "structure.energy.current"},
+                    {"var": "structure.energy.max"}]}]}),
+        generates="events", action={"events": {"scale": {"down": 1}}},
+        active=True
+    )
+    handler.add_rule(energy_dropped_lower)
+
+    EnergyRescaleUp = dict(
+        _id='EnergyRescaleUp',
+        type='rule',
+        resource="energy",
+        name='EnergyRescaleUp',
+        rule=dict(
+            {"and": [
+                {">=": [
+                    {"var": "events.scale.down"},
+                    2]},
+                {"<=": [
+                    {"var": "events.scale.up"},
+                    4]}
+            ]}),
+        generates="requests",
+        events_to_remove=2,
+        action={"requests": ["CpuRescaleUp"]},
+        amount=40,
+        rescale_by="amount",
+        active=True
+    )
+    handler.add_rule(EnergyRescaleUp)

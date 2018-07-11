@@ -38,7 +38,7 @@ def check_unstable_configuration():
     for rule in rules:
         if rule["generates"] == "requests":
             event_count = int(rule["events_to_remove"])
-            event_window_time_to_trigger = window_timelapse * (event_count + 3)
+            event_window_time_to_trigger = window_timelapse * (event_count + 1)
             # Leave a slight buffer time to account for processing overheads
             if event_window_time_to_trigger > event_timeout:
                 MyUtils.logging_warning(

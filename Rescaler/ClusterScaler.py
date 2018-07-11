@@ -447,12 +447,20 @@ def rescale_application(request, structure_name):
         request["amount"] = smaller_amount
         success, iterations = True, 0
         while success and iterations < splits:
-            iterations += 1
             success, container_to_rescale = single_container_rescale(request, app_containers)
-            for c in app_containers:
-                if c["name"] == container_to_rescale["name"]:
-                    app_containers.remove(c)
-                    app_containers.append(container_to_rescale)
+            if not success:
+                # TODO couldn't completely rescale the application as some split of a major rescaling operation could not be completed
+                MyUtils.logging_warning(
+                    "App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been rescaled".format(
+                        request["structure"], str(iterations * smaller_amount), request["resource"]), debug)
+                break
+            else:
+                # If rescaling was successfull, update the container's resources as they have been rescaled
+                for c in app_containers:
+                    if c["name"] == container_to_rescale["name"]:
+                        app_containers.remove(c)
+                        app_containers.append(container_to_rescale)
+                iterations += 1
     else:
         pass
 

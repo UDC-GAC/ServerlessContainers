@@ -1,5 +1,8 @@
 # /usr/bin/python
 from __future__ import print_function
+
+from threading import Thread
+
 import MyUtils.MyUtils as MyUtils
 import time
 import traceback
@@ -18,17 +21,18 @@ GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident']}
 
-BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage']
+BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage', 'structure.energy.usage']
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
-    'structure.mem.usage': ['structure.mem.usage']}
+    'structure.mem.usage': ['structure.mem.usage'],
+    'structure.energy.usage': ['structure.energy.usage']}
 
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
 
 TAGS = {"container": "host", "application": "structure"}
 
-translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage"}
+translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage",}
 
 RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
@@ -90,10 +94,13 @@ def reduce_structure_events(structure_events):
 
 
 def get_container_resources_str(resource_label, resources_dict, limits_dict, usages_dict):
-    if usages_dict[translator_dict[resource_label]] == NO_METRIC_DATA_DEFAULT_VALUE:
+    if not usages_dict or usages_dict[translator_dict[resource_label]] == NO_METRIC_DATA_DEFAULT_VALUE:
         usage_value_string = NOT_AVAILABLE_STRING
     else:
         usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
+
+    if resource_label not in limits_dict:
+        limits_dict[resource_label] = {}
 
     return (str(try_get_value(resources_dict[resource_label], "max")) + "," +
             str(try_get_value(resources_dict[resource_label], "current")) + "," +
@@ -104,6 +111,10 @@ def get_container_resources_str(resource_label, resources_dict, limits_dict, usa
 
 
 def adjust_if_invalid_amount(amount, resource, structure, limits):
+    # TODO special case for energy, try to fix
+    if resource == "energy":
+        return amount
+
     current_value = structure["resources"][resource]["current"] + amount
     lower_limit = limits["resources"][resource]["lower"] + amount
     max_limit = structure["resources"][resource]["max"]
@@ -157,11 +168,18 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
 
 
 def get_container_energy_str(resources_dict, limits_dict):
+    if "energy" not in limits_dict:
+        limits_dict["energy"] = {}
+
     return (str(try_get_value(resources_dict["energy"], "max")) + "," +
-            str(try_get_value(limits_dict["energy"], "upper")) + "," +
             str(try_get_value(resources_dict["energy"], "current")) + "," +
-            str(try_get_value(limits_dict["energy"], "lower")) + "," +
             str(try_get_value(resources_dict["energy"], "min")))
+
+    # return (str(try_get_value(resources_dict["energy"], "max")) + "," +
+    #         str(try_get_value(limits_dict["energy"], "upper")) + "," +
+    #         str(try_get_value(resources_dict["energy"], "usage")) + "," +
+    #         str(try_get_value(limits_dict["energy"], "lower")) + "," +
+    #         str(try_get_value(resources_dict["energy"], "min")))
 
 
 def correct_container_state(resources, limits_document):
@@ -341,6 +359,12 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                     action=MyUtils.generate_request_name(amount, resource_label),
                     timestamp=int(time.time()))
 
+
+                # TODO fix if necessary as energy is not a 'real' resource but an abstraction
+                # For the moment, energy rescaling is mapped to cpu rescaling
+                if resource_label == "energy":
+                    request["resource"] = "cpu"
+
                 if is_container(structure):
                     request["host"] = structure["host"]
 
@@ -362,9 +386,8 @@ def match_rules_and_events(structure, rules, events, limits, usages):
 
 # CAN'T OR DON'T HAVE TO BE TESTED
 # Their logic is simple and the used functions inside them are tested
-def print_debug_info(container, usages, triggered_events, triggered_requests):
+def print_debug_info(container, usages, limits, triggered_events, triggered_requests):
     resources = container["resources"]
-    limits = db_handler.get_limits(container)["resources"]
 
     container_name_str = "@" + container["name"]
 
@@ -428,7 +451,8 @@ def process_serverless_structure(config, structure, usages, limits, rules):
 
     # DEBUG AND INFO OUTPUT
     if debug:
-        print_debug_info(structure, usages, triggered_events, triggered_requests)
+        limits = db_handler.get_limits(structure)["resources"]
+        print_debug_info(structure, usages, limits, triggered_events, triggered_requests)
 
 
 def serverless(config, structures):
@@ -496,6 +520,55 @@ def serverless(config, structures):
                 debug)
 
 
+def process_fixed_resources_structure(resources, structure):
+    triggered_requests = list()
+    for resource in resources:
+        if not resources[resource]["guard"]:
+            continue
+
+        if "fixed" in structure["resources"][resource] and "current" in structure["resources"][resource]:
+            fixed_value = structure["resources"][resource]["fixed"]
+            current_value = structure["resources"][resource]["current"]
+            if fixed_value != current_value:
+                amount = fixed_value - current_value
+                request = dict(
+                    type="request",
+                    resource=resource,
+                    amount=int(amount),
+                    structure=structure["name"],
+                    action=MyUtils.generate_request_name(amount, resource),
+                    timestamp=int(time.time()))
+
+                if is_container(structure):
+                    request["host"] = structure["host"]
+
+                db_handler.add_request(request)
+                triggered_requests.append(request)
+        else:
+            MyUtils.logging_warning(
+                "structure: " + structure["name"] + " has no 'current' or 'fixed' value for resource: " + resource, debug)
+
+    # DEBUG AND INFO OUTPUT
+    if debug:
+        print_debug_info(structure, {}, {}, [], triggered_requests)
+
+def fixed_resource_amount(structures):
+    for structure in structures:
+        try:
+            # Check if structure is guarded
+            if "guard" not in structure or not structure["guard"]:
+                continue
+
+            resources = structure["resources"]
+
+            process_fixed_resources_structure(resources, structure)
+
+        except Exception as e:
+            MyUtils.logging_error(
+                "error with structure: " + structure["name"] + " " + str(e) + " " + str(traceback.format_exc()),
+                debug)
+
+
 def guard():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
     global debug
@@ -520,25 +593,28 @@ def guard():
         if not structures:
             continue
 
-        # Process and measure time
-        epoch_start = time.time()
-
         if guard_policy == "serverless":
-            serverless(config, structures)
+            thread = Thread(target=serverless, args=(config, structures,))
+        elif guard_policy == "fixed_amount":
+            thread = Thread(target=fixed_resource_amount, args=(structures,))
         # Default option will be serverless
         else:
-            serverless(config, structures)
+            thread = Thread(target=serverless, args=(config, structures,))
 
-        epoch_end = time.time()
-        processing_time = epoch_end - epoch_start
+        thread.start()
 
-        MyUtils.logging_info("Epoch processed at " + MyUtils.get_time_now_string(), debug)
-
-        if benchmark:
-            MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to process " + str(
-                len(structures)) + " nodes at " + MyUtils.get_time_now_string(), debug)
-        MyUtils.logging_info("---------", debug)
+        MyUtils.logging_info("Epoch processed at " + MyUtils.get_time_now_string() + " with " + guard_policy + " policy", debug)
         time.sleep(window_difference)
+
+        if thread.isAlive():
+            delay_start = time.time()
+            MyUtils.logging_warning("Previous thread didn't finish before next poll is due, with window time of " + str(
+                window_difference) + " seconds, at " + MyUtils.get_time_now_string(), debug)
+            MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
+            thread.join()
+            delay_end = time.time()
+            MyUtils.logging_warning("Resulting delay of: " + str(delay_end - delay_start) + " seconds", debug)
+
 
 
 def main():

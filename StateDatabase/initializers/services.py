@@ -20,8 +20,8 @@ if handler.database_exists("services"):
             GUARD_POLICY="serverless",
             STRUCTURE_GUARDED="container",
             WINDOW_TIMELAPSE=10,
-            WINDOW_DELAY=20,
-            EVENT_TIMEOUT=70,
+            WINDOW_DELAY=10,
+            EVENT_TIMEOUT=100,
             DEBUG=True
         )
     )
@@ -33,7 +33,7 @@ if handler.database_exists("services"):
         config=dict(
             DEBUG=True,
             POLLING_FREQUENCY=5,
-            REQUEST_TIMEOUT=30
+            REQUEST_TIMEOUT=15
         )
     )
 
@@ -42,7 +42,7 @@ if handler.database_exists("services"):
         type="service",
         heartbeat="",
         config=dict(
-            POLLING_FREQUENCY=3,
+            POLLING_FREQUENCY=5,
             DEBUG=True
         )
     )
