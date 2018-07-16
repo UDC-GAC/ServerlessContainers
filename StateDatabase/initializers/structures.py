@@ -49,12 +49,13 @@ if handler.database_exists("structures"):
         subtype='application',
         name="app1",
         guard=True,
+        guard_policy="serverless",
         resources=dict(
             cpu=dict(max=800, min=100, guard=False),
             mem=dict(max=32768, min=4096, guard=False),
             disk=dict(max=400, min=40, guard=False),
             net=dict(max=400, min=40, guard=False),
-            energy=dict(max=80, min=0, guard=True)
+            energy=dict(max=30, min=0, guard=True)
         ),
         containers=["node0","node1","node2","node3"]
     )

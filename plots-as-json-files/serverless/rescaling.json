@@ -15,7 +15,8 @@
           "tags": [
             "host=node0"
           ]
-        },{
+        },
+        {
           "metric": "proc.cpu.kernel",
           "aggregator": "zimsum",
           "tags": [
@@ -77,7 +78,8 @@
         "ymin": 0,
         "ymax": 9000
       }
-    },{
+    },
+    {
       "metrics": [
         {
           "metric": "structure.disk.current",
@@ -92,7 +94,8 @@
           "tags": [
             "host=node0"
           ]
-        },{
+        },
+        {
           "metric": "proc.disk.writes.mb",
           "aggregator": "zimsum",
           "tags": [
@@ -177,7 +180,8 @@
           "tags": [
             "host=node1"
           ]
-        },{
+        },
+        {
           "metric": "proc.cpu.kernel",
           "aggregator": "zimsum",
           "tags": [
@@ -239,7 +243,8 @@
         "ymin": 0,
         "ymax": 9000
       }
-    },{
+    },
+    {
       "metrics": [
         {
           "metric": "structure.disk.current",
@@ -254,7 +259,8 @@
           "tags": [
             "host=node1"
           ]
-        },{
+        },
+        {
           "metric": "proc.disk.writes.mb",
           "aggregator": "zimsum",
           "tags": [
@@ -339,7 +345,8 @@
           "tags": [
             "host=node2"
           ]
-        },{
+        },
+        {
           "metric": "proc.cpu.kernel",
           "aggregator": "zimsum",
           "tags": [
@@ -401,7 +408,8 @@
         "ymin": 0,
         "ymax": 9000
       }
-    },{
+    },
+    {
       "metrics": [
         {
           "metric": "structure.disk.current",
@@ -416,7 +424,8 @@
           "tags": [
             "host=node2"
           ]
-        },{
+        },
+        {
           "metric": "proc.disk.writes.mb",
           "aggregator": "zimsum",
           "tags": [
@@ -501,7 +510,8 @@
           "tags": [
             "host=node3"
           ]
-        },{
+        },
+        {
           "metric": "proc.cpu.kernel",
           "aggregator": "zimsum",
           "tags": [
@@ -563,7 +573,8 @@
         "ymin": 0,
         "ymax": 9000
       }
-    },{
+    },
+    {
       "metrics": [
         {
           "metric": "structure.disk.current",
@@ -578,7 +589,8 @@
           "tags": [
             "host=node3"
           ]
-        },{
+        },
+        {
           "metric": "proc.disk.writes.mb",
           "aggregator": "zimsum",
           "tags": [

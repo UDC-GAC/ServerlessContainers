@@ -26,8 +26,10 @@ def resilient_beat(db_handler, service_name, max_tries=10):
         else:
             raise e
 
+
 def beat(db_handler, service_name):
     resilient_beat(db_handler, service_name, max_tries=5)
+
 
 def get_config_value(config, default_config, key):
     try:
@@ -159,8 +161,6 @@ def generate_request_name(amount, resource):
 
 
 def generate_event_name(event, resource):
-    final_string = None
-
     if "scale" not in event:
         raise ValueError("Missing 'scale' key")
 
@@ -171,7 +171,10 @@ def generate_event_name(event, resource):
             and "down" in event["scale"] and event["scale"]["down"] > 0:
         # SPECIAL CASE OF HEAVY HYSTERESIS
         # raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
-        return None
+        if event["scale"]["up"] > event["scale"]["down"]:
+            final_string = resource.title() + "Bottleneck"
+        else:
+            final_string = resource.title() + "Underuse"
 
     elif "down" in event["scale"] and event["scale"]["down"] > 0:
         final_string = resource.title() + "Underuse"
@@ -179,6 +182,6 @@ def generate_event_name(event, resource):
     elif "up" in event["scale"] and event["scale"]["up"] > 0:
         final_string = resource.title() + "Bottleneck"
     else:
-        return None
+        raise ValueError("Error generating event name")
 
     return final_string

@@ -229,16 +229,16 @@ if handler.database_exists("rules"):
             {"and": [
                 {"<=": [
                     {"var": "events.scale.down"},
-                    4]},
+                    1]},
                 {">=": [
                     {"var": "events.scale.up"},
-                    2]}
+                    5]}
             ]}),
         generates="requests",
-        events_to_remove=2,
+        events_to_remove=5,
         action={"requests": ["CpuRescaleDown"]},
-        amount=-40,
-        rescale_by="amount",
+        amount=-20,
+        rescale_by="proportional",
         active=True
     )
     handler.add_rule(EnergyRescaleDown)
@@ -269,16 +269,16 @@ if handler.database_exists("rules"):
             {"and": [
                 {">=": [
                     {"var": "events.scale.down"},
-                    2]},
+                    5]},
                 {"<=": [
                     {"var": "events.scale.up"},
-                    4]}
+                    1]}
             ]}),
         generates="requests",
-        events_to_remove=2,
+        events_to_remove=5,
         action={"requests": ["CpuRescaleUp"]},
-        amount=40,
-        rescale_by="amount",
+        amount=20,
+        rescale_by="proportional",
         active=True
     )
     handler.add_rule(EnergyRescaleUp)

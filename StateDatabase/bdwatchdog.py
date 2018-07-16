@@ -9,7 +9,7 @@ class BDWatchdog:
     OPENTSDB_PORT = 4242
     NO_METRIC_DATA_DEFAULT_VALUE = -1
 
-    def __init__(self, server='http://' + OPENTSDB_URL + ':' + str(int(OPENTSDB_PORT))):
+    def __init__(self, server="http://{0}:{1}".format(OPENTSDB_URL, str(int(OPENTSDB_PORT)))):
         self.server = server
 
     def get_points(self, query):

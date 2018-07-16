@@ -32,12 +32,11 @@ BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": 
 
 TAGS = {"container": "host", "application": "structure"}
 
-translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage",}
+translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage"}
 
 RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
-                         "EVENT_TIMEOUT": 40, "DEBUG": True, "GUARD_POLICY": "serverless",
-                         "STRUCTURE_GUARDED": "container"}
+                         "EVENT_TIMEOUT": 40, "DEBUG": True, "STRUCTURE_GUARDED": "container"}
 SERVICE_NAME = "guardian"
 debug = True
 
@@ -50,16 +49,13 @@ MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1.5
 
 def check_unset_values(value, label):
     if value == NOT_AVAILABLE_STRING:
-        raise ValueError("value for '" + label + "' is not set or is not available.")
+        raise ValueError("value for '{0}' is not set or is not available.".format(label))
 
 
 def check_invalid_values(value1, label1, value2, label2, resource="n/a"):
     if value1 > value2:
-        raise ValueError(
-            "in resources: " + resource +
-            " value for '" + label1 + "': " + str(value1) +
-            " is greater than " +
-            " value for '" + label2 + "': " + str(value2))
+        raise ValueError("in resources: {0} value for '{1}': {2} is greater than value for '{3}': {4}".format(
+            resource, label1, str(value1), label2, str(value2)))
 
 
 def try_get_value(d, key):
@@ -99,15 +95,18 @@ def get_container_resources_str(resource_label, resources_dict, limits_dict, usa
     else:
         usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
 
-    if resource_label not in limits_dict:
-        limits_dict[resource_label] = {}
-
-    return (str(try_get_value(resources_dict[resource_label], "max")) + "," +
-            str(try_get_value(resources_dict[resource_label], "current")) + "," +
-            str(try_get_value(limits_dict[resource_label], "upper")) + "," +
-            usage_value_string + "," +
-            str(try_get_value(limits_dict[resource_label], "lower")) + "," +
-            str(try_get_value(resources_dict[resource_label], "min")))
+    if not limits_dict and not usages_dict:
+        return ",".join([str(try_get_value(resources_dict[resource_label], "max")),
+                         str(try_get_value(resources_dict[resource_label], "current")),
+                         str(try_get_value(resources_dict[resource_label], "fixed")),
+                         str(try_get_value(resources_dict[resource_label], "min"))])
+    else:
+        return ",".join([str(try_get_value(resources_dict[resource_label], "max")),
+                     str(try_get_value(resources_dict[resource_label], "current")),
+                     str(try_get_value(limits_dict[resource_label], "upper")),
+                     usage_value_string,
+                     str(try_get_value(limits_dict[resource_label], "lower")),
+                     str(try_get_value(resources_dict[resource_label], "min"))])
 
 
 def adjust_if_invalid_amount(amount, resource, structure, limits):
@@ -147,13 +146,8 @@ def get_amount_from_percentage_reduction(structure, usages, resource, percentage
 
 def get_amount_from_fit_reduction(structure, usages, resource, limits):
     current_resource_limit = structure["resources"][resource]["current"]
-    upper_resource_limit = limits["resources"][resource]["upper"]
-    lower_resource_limit = limits["resources"][resource]["lower"]
-
     upper_to_lower_window = limits["resources"][resource]["boundary"]
     current_to_upper_window = limits["resources"][resource]["boundary"]
-    # upper_to_lower_window = upper_resource_limit - lower_resource_limit
-    # current_to_upper_window = current_resource_limit - upper_resource_limit
     current_resource_usage = usages[translator_dict[resource]]
 
     # Set the limit so that the resource usage is placed in between the upper and lower limits
@@ -167,25 +161,24 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
     return -1 * difference
 
 
-def get_container_energy_str(resources_dict, limits_dict):
-    if "energy" not in limits_dict:
-        limits_dict["energy"] = {}
+# TODO only used for energy
+def get_amount_from_proportional(structure, resource):
+    max_resource_limit = structure["resources"][resource]["max"]
+    current_resource_limit = structure["resources"][resource]["current"]
+    difference = max_resource_limit - current_resource_limit
+    energy_aplification = 10  # How many cpu shares to rescale per watt
+    return difference * energy_aplification
 
-    return (str(try_get_value(resources_dict["energy"], "max")) + "," +
-            str(try_get_value(resources_dict["energy"], "current")) + "," +
-            str(try_get_value(resources_dict["energy"], "min")))
 
-    # return (str(try_get_value(resources_dict["energy"], "max")) + "," +
-    #         str(try_get_value(limits_dict["energy"], "upper")) + "," +
-    #         str(try_get_value(resources_dict["energy"], "usage")) + "," +
-    #         str(try_get_value(limits_dict["energy"], "lower")) + "," +
-    #         str(try_get_value(resources_dict["energy"], "min")))
+def get_container_energy_str(resources_dict):
+    return ",".join([str(try_get_value(resources_dict["energy"], "max")),
+                     str(try_get_value(resources_dict["energy"], "current")),
+                     str(try_get_value(resources_dict["energy"], "min"))])
 
 
 def correct_container_state(resources, limits_document):
     limits = limits_document["resources"]
     for resource in ["cpu", "mem"]:
-        max_value = try_get_value(resources[resource], "max")
         current_value = try_get_value(resources[resource], "current")
         upper_value = try_get_value(limits[resource], "upper")
         lower_value = try_get_value(limits[resource], "lower")
@@ -243,15 +236,14 @@ def invalid_container_state(resources, limits_document):
         if current_value != NOT_AVAILABLE_STRING:
             if current_value - boundary < upper_value:
                 raise ValueError(
-                    "value for 'current': " + str(current_value) +
-                    " is too close (less than " + str(boundary) + ") to " +
-                    "value for 'upper': " + str(upper_value))
+                    "value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
+                        str(current_value), str(boundary), str(upper_value)))
+
             elif current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
                 raise ValueError(
-                    "value for 'current': " + str(current_value) +
-                    " is too far (more than " + str(
-                        int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary)) + ") from " +
-                    "value for 'upper': " + str(upper_value))
+                    "value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
+                        str(current_value), str(
+                            int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary)), str(upper_value)))
 
 
 def match_usages_and_limits(structure_name, rules, usages, limits, resources):
@@ -289,8 +281,8 @@ def match_usages_and_limits(structure_name, rules, usages, limits, resources):
                     )
         except KeyError as e:
             MyUtils.logging_warning(
-                "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
-                debug)
+                "rule: {0} is missing a parameter {1} {2}".format(rule["name"], str(e),
+                                                                  str(traceback.format_exc())), debug)
 
     return events
 
@@ -319,8 +311,9 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                 # If rescaling a container, check that the current resource value exists, otherwise there
                 # is nothing to rescale
                 if is_container(structure) and "current" not in structure["resources"][resource_label]:
-                    MyUtils.logging_warning("No current value for container' " + structure[
-                        "name"] + "' and resource '" + resource_label + "', can't rescale", debug)
+                    MyUtils.logging_warning(
+                        "No current value for container' {0}' and resource '{1}', can't rescale".format(
+                            structure["name"], resource_label), debug)
                     continue
 
                 if "rescale_by" in rule.keys():
@@ -335,19 +328,23 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                         elif rule["rescale_by"] == "fit_to_usage":
                             amount = get_amount_from_fit_reduction(structure, usages, resource_label, limits)
 
+                        elif rule["rescale_by"] == "proportional" and rule["resource"] == "energy":
+                            amount = get_amount_from_proportional(structure, resource_label)
+
                         else:
                             amount = rule["amount"]
                     except KeyError:
                         # Error because current value may not be available and it is
                         # required for methods like percentage reduction
                         MyUtils.logging_warning(
-                            "error in trying to compute rescaling amount for rule '" + rule["name"] + "' : " + str(
-                                traceback.format_exc()), debug)
+                            "error in trying to compute rescaling amount for rule '{0}' : {1}".format(
+                                rule["name"], str(traceback.format_exc())), debug)
                         amount = rule["amount"]
                 else:
                     amount = rule["amount"]
-                    MyUtils.logging_warning("No rescale_by policy is set in rule : '" + rule[
-                        "name"] + "', falling back to default amount: " + str(amount), debug)
+                    MyUtils.logging_warning(
+                        "No rescale_by policy is set in rule : '{0}', falling back to default amount: {1}".format(
+                            rule["name"], str(amount)), debug)
 
                 amount = adjust_if_invalid_amount(amount, resource_label, structure, limits)
 
@@ -358,7 +355,6 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                     structure=structure["name"],
                     action=MyUtils.generate_request_name(amount, resource_label),
                     timestamp=int(time.time()))
-
 
                 # TODO fix if necessary as energy is not a 'real' resource but an abstraction
                 # For the moment, energy rescaling is mapped to cpu rescaling
@@ -378,7 +374,8 @@ def match_rules_and_events(structure, rules, events, limits, usages):
 
         except KeyError as e:
             MyUtils.logging_warning(
-                "rule: " + rule["name"] + " is missing a parameter " + str(e) + " " + str(traceback.format_exc()),
+                "rule: {0} is missing a parameter {1} {2} ".format(rule["name"], str(e),
+                                                                   str(traceback.format_exc())),
                 debug)
 
     return generated_requests, events_to_remove
@@ -390,23 +387,19 @@ def print_debug_info(container, usages, limits, triggered_events, triggered_requ
     resources = container["resources"]
 
     container_name_str = "@" + container["name"]
-
-    resources_str = "#RESOURCES: " + \
-                    "cpu(" + get_container_resources_str("cpu", resources, limits, usages) + ")" + \
-                    " - " + \
-                    "mem(" + get_container_resources_str("mem", resources, limits, usages) + ")" + \
-                    " - " + \
-                    "energy(" + get_container_energy_str(resources, limits) + ")"
+    container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
+    resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
+        get_container_resources_str("cpu", resources, limits, usages),
+        get_container_resources_str("mem", resources, limits, usages),
+        get_container_energy_str(resources))
 
     ev, req = list(), list()
     for event in triggered_events:
         ev.append(event["name"])
     for request in triggered_requests:
         req.append(request["action"])
-
-    triggered_requests_and_events = "#TRIGGERED EVENTS " + str(ev) + " AND TRIGGERED REQUESTS " + str(req)
-
-    MyUtils.logging_info(" ".join([container_name_str, resources_str, triggered_requests_and_events]), debug)
+    triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
+    MyUtils.logging_info(" ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]), debug)
 
 
 def process_serverless_structure(config, structure, usages, limits, rules):
@@ -435,7 +428,8 @@ def process_serverless_structure(config, structure, usages, limits, rules):
         reduced_events = reduce_structure_events(filtered_events)
 
         # Match events and rules to generate requests
-        triggered_requests, events_to_remove = match_rules_and_events(structure, rules, reduced_events, limits, usages)
+        triggered_requests, events_to_remove = match_rules_and_events(structure, rules, reduced_events, limits,
+                                                                      usages)
 
         # Remove events that generated the request
         # Remote database operation
@@ -455,69 +449,62 @@ def process_serverless_structure(config, structure, usages, limits, rules):
         print_debug_info(structure, usages, limits, triggered_events, triggered_requests)
 
 
-def serverless(config, structures):
+def serverless(config, structure, rules):
     window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
     window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
 
-    # Remote database operation
-    rules = db_handler.get_rules()
+    try:
+        # Check if structure is guarded
+        if "guard" not in structure or not structure["guard"]:
+            return
 
-    for structure in structures:
+        # Check if structure is being monitored, otherwise, ignore
         try:
-            # Check if structure is guarded
-            if "guard" not in structure or not structure["guard"]:
-                continue
+            metrics_to_retrieve = BDWATCHDOG_METRICS[structure["subtype"]]
+            metrics_to_generate = GUARDIAN_METRICS[structure["subtype"]]
+            tag = TAGS[structure["subtype"]]
+        except KeyError:
+            # Default is container
+            metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
+            metrics_to_generate = GUARDIAN_CONTAINER_METRICS
+            tag = "host"
 
-            # Check if structure is being monitored, otherwise, ignore
-            try:
-                metrics_to_retrieve = BDWATCHDOG_METRICS[structure["subtype"]]
-                metrics_to_generate = GUARDIAN_METRICS[structure["subtype"]]
-                tag = TAGS[structure["subtype"]]
-            except KeyError:
-                # Default is container
-                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
-                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
-                tag = "host"
+        # Remote database operation
+        usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference,
+                                                         window_delay,
+                                                         metrics_to_retrieve, metrics_to_generate)
+
+        # Skip this structure if all the usage metrics are unavailable
+        if all([usages[metric] == NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+            MyUtils.logging_warning("structure: {0} has no usage data".format(structure["name"]), debug)
+            return
+
+        resources = structure["resources"]
+
+        # Remote database operation
+        limits = db_handler.get_limits(structure)
+
+        if not limits:
+            MyUtils.logging_warning("structure: {0} has no limits".format(structure["name"]), debug)
+            return
+
+        try:
+            invalid_container_state(resources, limits)
+        except ValueError as e:
+            MyUtils.logging_warning(
+                "structure: {0} has invalid state with its limits and resources, will try to correct: {1}".format(
+                    structure["name"], str(e)), debug)
+            limits = correct_container_state(resources, limits)
 
             # Remote database operation
-            usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference, window_delay,
-                                                             metrics_to_retrieve, metrics_to_generate)
+            db_handler.update_limit(limits)
 
-            # Skip this structure if all the usage metrics are unavailable
-            if all([usages[metric] == NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                MyUtils.logging_warning(
-                    "structure: " + structure["name"] + " has no usage data", debug)
-                continue
+        process_serverless_structure(config, structure, usages, limits, rules)
 
-            resources = structure["resources"]
-
-            # Remote database operation
-            limits = db_handler.get_limits(structure)
-
-            if not limits:
-                MyUtils.logging_warning(
-                    "structure: " + structure["name"] + " has no limits", debug)
-                continue
-
-            try:
-                invalid_container_state(resources, limits)
-            except ValueError as e:
-                MyUtils.logging_warning(
-                    "structure: " + structure[
-                        "name"] + " has invalid state with its limits and resources, will try to correct: " + str(e),
-                    debug)
-                # str(e) + " " + str(traceback.format_exc()), debug)
-                limits = correct_container_state(resources, limits)
-
-                # Remote database operation
-                db_handler.update_limit(limits)
-
-            process_serverless_structure(config, structure, usages, limits, rules)
-
-        except Exception as e:
-            MyUtils.logging_error(
-                "error with structure: " + structure["name"] + " " + str(e) + " " + str(traceback.format_exc()),
-                debug)
+    except Exception as e:
+        MyUtils.logging_error(
+            "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
+            debug)
 
 
 def process_fixed_resources_structure(resources, structure):
@@ -546,27 +533,40 @@ def process_fixed_resources_structure(resources, structure):
                 triggered_requests.append(request)
         else:
             MyUtils.logging_warning(
-                "structure: " + structure["name"] + " has no 'current' or 'fixed' value for resource: " + resource, debug)
+                "structure: {0} has no 'current' or 'fixed' value for resource: {1}".format(
+                    structure["name"], resource), debug)
 
     # DEBUG AND INFO OUTPUT
     if debug:
         print_debug_info(structure, {}, {}, [], triggered_requests)
 
-def fixed_resource_amount(structures):
+
+def fixed_resource_amount(structure):
+    try:
+        # Check if structure is guarded
+        if "guard" not in structure or not structure["guard"]:
+            return
+
+        process_fixed_resources_structure(structure["resources"], structure)
+
+    except Exception as e:
+        MyUtils.logging_error(
+            "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
+            debug)
+
+
+def guard_structures(config, structures):
     for structure in structures:
-        try:
-            # Check if structure is guarded
-            if "guard" not in structure or not structure["guard"]:
-                continue
+        # Remote database operation
+        rules = db_handler.get_rules()
 
-            resources = structure["resources"]
-
-            process_fixed_resources_structure(resources, structure)
-
-        except Exception as e:
-            MyUtils.logging_error(
-                "error with structure: " + structure["name"] + " " + str(e) + " " + str(traceback.format_exc()),
-                debug)
+        if structure["guard_policy"] == "serverless":
+            serverless(config, structure, rules)
+        elif structure["guard_policy"] == "fixed":
+            fixed_resource_amount(structure)
+        else:
+            # Default option will be serverless
+            serverless(config, structure, rules)
 
 
 def guard():
@@ -584,44 +584,35 @@ def guard():
         config = service["config"]
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-        benchmark = True
-        guard_policy = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "GUARD_POLICY")
         structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
+        thread = None
 
         # Data retrieving, slow
         structures = MyUtils.get_structures(db_handler, debug, subtype=structure_guarded)
-        if not structures:
-            continue
+        if structures:
+            thread = Thread(target=guard_structures, args=(config, structures,))
+            thread.start()
 
-        if guard_policy == "serverless":
-            thread = Thread(target=serverless, args=(config, structures,))
-        elif guard_policy == "fixed_amount":
-            thread = Thread(target=fixed_resource_amount, args=(structures,))
-        # Default option will be serverless
-        else:
-            thread = Thread(target=serverless, args=(config, structures,))
-
-        thread.start()
-
-        MyUtils.logging_info("Epoch processed at " + MyUtils.get_time_now_string() + " with " + guard_policy + " policy", debug)
+        MyUtils.logging_info(
+            "Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)
 
-        if thread.isAlive():
+        if thread and thread.isAlive():
             delay_start = time.time()
-            MyUtils.logging_warning("Previous thread didn't finish before next poll is due, with window time of " + str(
-                window_difference) + " seconds, at " + MyUtils.get_time_now_string(), debug)
+            MyUtils.logging_warning(
+                "Previous thread didn't finish before next poll is due, with window time of " +
+                "{0} seconds, at {1}".format(str(window_difference), MyUtils.get_time_now_string()), debug)
             MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
             thread.join()
             delay_end = time.time()
-            MyUtils.logging_warning("Resulting delay of: " + str(delay_end - delay_start) + " seconds", debug)
-
+            MyUtils.logging_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
 
 
 def main():
     try:
         guard()
     except Exception as e:
-        MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug=True)
+        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

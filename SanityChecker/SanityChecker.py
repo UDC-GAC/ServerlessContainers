@@ -1,8 +1,6 @@
 # /usr/bin/python
 from __future__ import print_function
 
-import requests
-
 import MyUtils.MyUtils as MyUtils
 import time
 import traceback
@@ -23,8 +21,8 @@ def compact_databases():
         if success:
             compacted_dbs.append(db)
         else:
-            MyUtils.logging_warning("Database '" + db + "' could not be compacted", debug)
-    MyUtils.logging_info("Databases " + str(compacted_dbs) + " have been compacted", debug)
+            MyUtils.logging_warning("Database {0} could not be compacted".format(db), debug)
+    MyUtils.logging_info("Databases {0} have been compacted".format(str(compacted_dbs)), debug)
 
 
 def check_unstable_configuration():
@@ -39,12 +37,12 @@ def check_unstable_configuration():
         if rule["generates"] == "requests":
             event_count = int(rule["events_to_remove"])
             event_window_time_to_trigger = window_timelapse * (event_count + 1)
-            # Leave a slight buffer time to account for processing overheads
+            # Leave a slight buffer time to account for window times skewness
             if event_window_time_to_trigger > event_timeout:
                 MyUtils.logging_warning(
-                    "Rule: '" + rule["name"] + "' could never be activated -> guardian event timeout: '" + str(
-                        event_timeout) + "', number of events required to trigger the rule: '" + str(
-                            event_count) + "' and guardian polling time: '" + str(window_timelapse) + "'", debug)
+                    "Rule: '{0}' could never be activated -> guardian event timeout: '{1}', number of events" +
+                    " required to trigger the rule: '{2}' and guardian polling time: '{3}'".format(
+                        rule["name"], str(event_timeout), str(event_count), str(window_timelapse)), debug)
 
 
 def check_sanity():
@@ -61,7 +59,7 @@ def check_sanity():
 
         compact_databases()
         check_unstable_configuration()
-        MyUtils.logging_info("Sanity checked at " + MyUtils.get_time_now_string(), debug)
+        MyUtils.logging_info("Sanity checked at {0}".format(MyUtils.get_time_now_string()), debug)
 
         time_waited = 0
         heartbeat_delay = 10  # seconds
@@ -76,7 +74,7 @@ def main():
     try:
         check_sanity()
     except Exception as e:
-        MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug=True)
+        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

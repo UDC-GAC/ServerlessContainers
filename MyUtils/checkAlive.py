@@ -8,16 +8,16 @@ time_window_allowed = 20  # 1 minute
 POLLING_TIME = 2
 
 
-def check_node_rescaler_status(node_rest_endpoint):
+def check_rest_api(rest_endpoint):
     try:
-        endpoint = "http://" + node_rest_endpoint + ":8000/heartbeat"
+        endpoint = "http://{0}:8000/heartbeat".format(rest_endpoint)
         r = requests.get(endpoint, headers={'Accept': 'application/json'})
         if r.status_code == 200:
             return True
         else:
             return False
     except requests.exceptions.ConnectionError:
-        print("WARNING -> host: " + endpoint + " is unresponsive")
+        print("WARNING -> host: {0} is unresponsive".format(rest_endpoint))
         return False
     except Exception:
         return False
@@ -26,7 +26,7 @@ def check_node_rescaler_status(node_rest_endpoint):
 while True:
     dead, alive = list(), list()
 
-    services = db.get_all_database_docs("services")
+    services = db.get_services()
 
     for service in services:
         if "heartbeat" not in service:
@@ -40,19 +40,19 @@ while True:
         else:
             alive.append(service["name"])
 
-    for node_REST_service in ["dante"]:
-        if check_node_rescaler_status(node_REST_service):
-            alive.append(node_REST_service + "_node_rescaler")
+    for REST_service in ["dante-rescaler", "orchestrator"]:
+        if check_rest_api(REST_service):
+            alive.append(REST_service)
         else:
-            dead.append(node_REST_service + "_node_rescaler")
+            dead.append(REST_service)
 
     print("AT: " + str(time.strftime("%D %H:%M:%S", time.localtime())))
-    print
+    print("")
     print("!---- ALIVE ------!")
     for a in alive:
         print(a)
 
-    print
+    print("")
     print("!---- DEAD -------!")
     for d in dead:
         print(d)

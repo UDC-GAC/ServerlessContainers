@@ -1,7 +1,7 @@
 {
   "cpu": {
     "cpu_allowance_limit": "200",
-    "cpu_num": "5,7"
+    "cpu_num": "3,7"
   },
   "disk": {
     "device_path": "/dev/mapper/lxd-node3_data0",

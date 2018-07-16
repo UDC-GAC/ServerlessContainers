@@ -76,7 +76,7 @@ def generate_container_energy_metrics(container, host_info):
 
     # Check that the container has cpu information available
     if container_info["cpu"] == NO_METRIC_DATA_DEFAULT_VALUE:
-        MyUtils.logging_error("Error, no container info available for: " + container_name, debug)
+        MyUtils.logging_error("Error, no container info available for: {0}".format(container_name), debug)
         return None
 
     # Generate the container energy information from the container cpu and the host cpu and energy info
@@ -126,14 +126,12 @@ def refeed_container(container, updated_containers):
         # Check that both cpu and energy information have been retrieved for the host
         for required_info in ["cpu", "energy"]:
             if host_info[required_info] == NO_METRIC_DATA_DEFAULT_VALUE:
-                MyUtils.logging_error(
-                    "Error, no host '" + required_info + "' info available for: " + host_name
-                    + " so no info can be generated for container: " + container["name"], debug)
+                MyUtils.logging_error("Error, no host '{0}' info available for: {1} so no info can be generated for "
+                                      "container: {2}".format(required_info, host_name, container["name"]), debug)
                 continue
 
     except HTTPError:
-        MyUtils.logging_error(
-            "Error, no info available for: " + container["host"], debug)
+        MyUtils.logging_error("Error, no info available for: {0}".format(container["host"]), debug)
         return
 
     # Generate the energy information, if unsuccessful, None will be returned
@@ -176,8 +174,7 @@ def refeed_thread(containers):
 
     epoch_end = time.time()
     processing_time = epoch_end - epoch_start
-
-    MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to refeed", debug)
+    MyUtils.logging_info("It took {0} seconds to refeed".format(str("%.2f" % processing_time)), debug)
 
 
 def refeed():
@@ -197,7 +194,6 @@ def refeed():
         config = service["config"]
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
         window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
-        polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
         # Data retrieving, slow
@@ -209,25 +205,25 @@ def refeed():
 
         thread = Thread(target=refeed_thread, args=(containers,))
         thread.start()
-
-        MyUtils.logging_info("Refeed processed at " + MyUtils.get_time_now_string(), debug)
+        MyUtils.logging_info("Refeed processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)
 
         if thread.isAlive():
             delay_start = time.time()
-            MyUtils.logging_warning("Previous thread didn't finish before next poll is due, with window time of " + str(
-                window_difference) + " seconds, at " + MyUtils.get_time_now_string(), debug)
+            MyUtils.logging_warning(
+                "Previous thread didn't finish before next poll is due, with window time of {0} seconds, at {1}".format(
+                    str(window_difference), MyUtils.get_time_now_string()), debug)
             MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
             thread.join()
             delay_end = time.time()
-            MyUtils.logging_warning("Resulting delay of: " + str(delay_end - delay_start) + " seconds", debug)
+            MyUtils.logging_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
 
 
 def main():
     try:
         refeed()
     except Exception as e:
-        MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug=True)
+        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

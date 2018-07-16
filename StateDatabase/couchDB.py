@@ -1,7 +1,6 @@
 # /usr/bin/python
 import random
 import time
-
 import requests
 import json
 
@@ -15,6 +14,7 @@ class CouchDBServer:
     __rules_db_name = "rules"
     __events_db_name = "events"
     __requests_db_name = "requests"
+    __profiles_db_name = "profiles"
     __MAX_UPDATE_TRIES = 10
 
     def __init__(self, server='http://couchdb:5984'):
@@ -45,7 +45,7 @@ class CouchDBServer:
         else:
             return json.loads(r.text)["ok"]
 
-    def get_all_database_docs(self, database):
+    def __get_all_database_docs(self, database):
         docs = list()
         r = requests.get(self.server + "/" + database + "/_all_docs")
         if r.status_code != 200:
@@ -53,14 +53,14 @@ class CouchDBServer:
         else:
             rows = json.loads(r.text)["rows"]
             for row in rows:
-                req_doc = requests.get(self.server + "/" + database + "/" + row["id"])
+                req_doc = requests.get("/".join([self.server, database, row["id"]]))
                 docs.append(dict(req_doc.json()))
             return docs
 
     # PRIVATE CRUD METHODS #
 
     def __delete_doc(self, database, docid, rev):
-        r = requests.delete(self.server + "/" + database + "/" + str(docid) + "?rev=" + str(rev))
+        r = requests.delete("{0}/{1}/{2}?rev={3}".format(self.server, database, str(docid), str(rev)))
         if r.status_code != 200:
             r.raise_for_status()
         else:
@@ -75,7 +75,8 @@ class CouchDBServer:
 
     def __add_bulk_docs(self, database, docs):
         docs_data = {"docs": docs}
-        r = requests.post(self.server + "/" + database + "/_bulk_docs", data=json.dumps(docs_data), headers=self.post_doc_headers)
+        r = requests.post(self.server + "/" + database + "/_bulk_docs", data=json.dumps(docs_data),
+                          headers=self.post_doc_headers)
         if r.status_code != 201:
             r.raise_for_status()
         else:
@@ -105,7 +106,7 @@ class CouchDBServer:
                 # update revision and retry after slightly random wait
                 if 0 <= previous_tries < max_tries:
                     time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
-                    new_doc = self.find_documents_by_matches(database, {"_id": doc["_id"]})[0]
+                    new_doc = self.__find_documents_by_matches(database, {"_id": doc["_id"]})[0]
                     doc["_rev"] = new_doc["_rev"]
                     doc = self.__merge(doc, new_doc)
                     return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
@@ -121,7 +122,7 @@ class CouchDBServer:
         else:
             return True
 
-    def find_documents_by_matches(self, database, selectors):
+    def __find_documents_by_matches(self, database, selectors):
         query = {"selector": {}}
 
         for key in selectors:
@@ -134,18 +135,26 @@ class CouchDBServer:
         else:
             return req_docs.json()["docs"]
 
+    def __find_document_by_name(self, database, doc_name):
+        docs = self.__find_documents_by_matches(database, {"name": doc_name})
+        if not docs:
+            raise ValueError("Document with name {0} not found in database {1}".format(doc_name, database))
+        else:
+            # Return the first one as it should only be one
+            return dict(docs[0])
+
     # STRUCTURES #
     def add_structure(self, structure):
         return self.__add_doc(self.__structures_db_name, structure)
 
     def get_structure(self, structure_name):
-        return dict(self.find_documents_by_matches(self.__structures_db_name, {"name": structure_name})[0])
+        return self.__find_document_by_name(self.__structures_db_name, structure_name)
 
     def get_structures(self, subtype=None):
         if subtype is None:
-            return self.get_all_database_docs(self.__structures_db_name)
+            return self.__get_all_database_docs(self.__structures_db_name)
         else:
-            return self.find_documents_by_matches(self.__structures_db_name, {"subtype": subtype})
+            return self.__find_documents_by_matches(self.__structures_db_name, {"subtype": subtype})
 
     def update_structure(self, structure, max_tries=10):
         return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
@@ -158,11 +167,12 @@ class CouchDBServer:
         self.__add_bulk_docs(self.__events_db_name, events)
 
     def get_events(self, structure):
-        return self.find_documents_by_matches(self.__events_db_name, {"structure": structure["name"]})
+        return self.__find_documents_by_matches(self.__events_db_name, {"structure": structure["name"]})
 
     def delete_num_events_by_structure(self, structure, event_name, event_num):
-        events = self.find_documents_by_matches(self.__events_db_name, {"structure": structure["name"], "name": event_name})
-        event_num = min(len(events),event_num)
+        events = self.__find_documents_by_matches(self.__events_db_name,
+                                                  {"structure": structure["name"], "name": event_name})
+        event_num = min(len(events), event_num)
         events_to_delete = events[0:event_num]
         self.__delete_bulk_docs(self.__events_db_name, events_to_delete)
 
@@ -176,11 +186,14 @@ class CouchDBServer:
     def add_limit(self, limit):
         return self.__add_doc(self.__limits_db_name, limit)
 
+    def get_all_limits(self):
+        return self.__get_all_database_docs(self.__limits_db_name)
+
     def get_limits(self, structure):
-        # Return just the first item, as it should only be one, otherwise return none
-        limits = self.find_documents_by_matches(self.__limits_db_name, {"name": structure["name"]})
+        # Return just the first item, as it should only be one 'limits' document, otherwise raise error
+        limits = self.__find_documents_by_matches(self.__limits_db_name, {"name": structure["name"]})
         if not limits:
-            return None
+            raise ValueError("Structure with name {0} has no limits".format(structure["name"]))
         else:
             return limits[0]
 
@@ -190,9 +203,9 @@ class CouchDBServer:
     # REQUESTS #
     def get_requests(self, structure=None):
         if structure is None:
-            return self.get_all_database_docs(self.__requests_db_name)
+            return self.__get_all_database_docs(self.__requests_db_name)
         else:
-            return self.find_documents_by_matches(self.__requests_db_name, {"structure": structure["name"]})
+            return self.__find_documents_by_matches(self.__requests_db_name, {"structure": structure["name"]})
 
     def add_request(self, req):
         self.__add_doc(self.__requests_db_name, req)
@@ -208,27 +221,33 @@ class CouchDBServer:
         return self.__add_doc(self.__rules_db_name, rule)
 
     def get_rule(self, rule_name):
-        docs = self.find_documents_by_matches(self.__rules_db_name, {"name": rule_name})
-        if not docs:
-            raise ValueError("Rule " + rule_name + " not found")
-        else:
-            # Return the first one as it should only be one
-            return dict(docs[0])
+        return self.__find_document_by_name(self.__rules_db_name, rule_name)
 
     def get_rules(self):
-        return self.get_all_database_docs(self.__rules_db_name)
+        return self.__get_all_database_docs(self.__rules_db_name)
 
     def update_rule(self, rule):
         return self.__resilient_update_doc(self.__rules_db_name, rule)
 
+    # PROFILES #
+    def add_profile(self, profile):
+        return self.__add_doc(self.__profiles_db_name, profile)
+
+    def get_profiles(self):
+        return self.__get_all_database_docs(self.__profiles_db_name)
+
+    def get_profile(self, profile_name):
+        return self.__find_document_by_name(self.__profiles_db_name, profile_name)
+
+    def update_profile(self, profile):
+        return self.__resilient_update_doc(self.__profiles_db_name, profile)
+
     # SERVICES #
+    def get_services(self):
+        return self.__get_all_database_docs(self.__services_db_name)
+
     def get_service(self, service_name):
-        docs = self.find_documents_by_matches(self.__services_db_name, {"name": service_name})
-        if not docs:
-            raise ValueError("Service " + service_name + " not found")
-        else:
-            # Return the first one as it should only be one
-            return dict(docs[0])
+        return self.__find_document_by_name(self.__services_db_name, service_name)
 
     def add_service(self, service):
         return self.__add_doc(self.__services_db_name, service)

@@ -17,7 +17,6 @@ if handler.database_exists("services"):
         type="service",
         heartbeat="",
         config=dict(
-            GUARD_POLICY="serverless",
             STRUCTURE_GUARDED="container",
             WINDOW_TIMELAPSE=10,
             WINDOW_DELAY=10,
@@ -61,7 +60,6 @@ if handler.database_exists("services"):
         type="service",
         heartbeat="",
         config=dict(
-            POLLING_FREQUENCY=5,
             WINDOW_TIMELAPSE=5,
             WINDOW_DELAY=20,
             DEBUG=True
@@ -77,6 +75,7 @@ if handler.database_exists("services"):
             DEBUG=True
         )
     )
+
 
     handler.add_service(scaler)
     handler.add_service(guardian)

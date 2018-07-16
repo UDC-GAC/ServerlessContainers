@@ -13,6 +13,7 @@ def read_cgroup_file_value(file_path):
                 value = file_handler.readline().rstrip("\n")
             return {"success": True, "data": value}
         else:
+            # TODO string replacement
             return {"success": False, "error": str("Couldn't access file: " + file_path)}
     except IOError as e:
         return {"success": False, "error": str(e)}
@@ -26,6 +27,7 @@ def write_cgroup_file_value(file_path, value):
                 file_handler.write(str(value))
             return {"success": True, "data": value}
         else:
+            # TODO string replacement
             return {"success": False, "error": str("Couldn't access file: " + file_path)}
     except IOError as e:
         return {"success": False, "error": str(e)}
@@ -177,6 +179,7 @@ def set_node_mem(container_name, mem_resource):
             value_megabytes = str(value)
         elif value < LOWER_LIMIT_MEGABYTES:
             # Don't allow values lower than an amount like 64 MB as it will probably block the container
+            # TODO string replacement
             return False, {"error": "Memory limit is too low, less than " + str(LOWER_LIMIT_MEGABYTES) + " MB"}
         else:
             value_megabytes = str(value) + 'M'
@@ -257,12 +260,14 @@ def set_node_disk(container_name, disk_resource):
         try:
             set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
             set_disk_bandwidth = subprocess.Popen(
+                # TODO string replacement
                 ["/bin/bash", set_bandwidth_script_path + "/" + "set_bandwidth.sh", container_name, major+":"+minor, limit_write], stderr=subprocess.PIPE)
             #set_disk_bandwidth.wait()
             out, err = set_disk_bandwidth.communicate()
             if set_disk_bandwidth.returncode == 0:
                 pass
             else:
+                # TODO string replacement
                 return False, {"error": "exit code of set_disk_bandwidth was: " + str(set_disk_bandwidth.returncode) + " with error message: " + err}
         except subprocess.CalledProcessError as e:
             return False, {"error": str(e)}
@@ -350,8 +355,10 @@ def unset_interface_limit(interface_name):
         if tc.returncode == 0:
             return True
         else:
+            # TODO string replacement
             return False, {"error": "exit code of tc was: " + str(tc.returncode)}
     except subprocess.CalledProcessError as e:
+        # TODO string replacement
         return False, {"error": "error trying to execute command:  " + str(e)}
 
 
@@ -367,6 +374,7 @@ def set_interface_limit(interface_name, net):
         if tc.returncode == 0:
             return True, net
         else:
+            # TODO string replacement
             return False, {"error": "exit code of tc was: " + str(tc.returncode) + " with error: " + str(err)}
     except subprocess.CalledProcessError as e:
         return False, {"error": str(e)}

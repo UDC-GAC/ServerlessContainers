@@ -15,7 +15,8 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage"]
+PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed"]
+
 
 def translate_doc_to_timeseries(doc):
     try:
@@ -25,22 +26,22 @@ def translate_doc_to_timeseries(doc):
         timeseries_list = list()
         for resource in doc["resources"]:
             for doc_metric in doc["resources"][resource]:
-                if doc_metric in PERSIST_METRICS:
+                if doc_metric in PERSIST_METRICS and doc_metric in doc["resources"][resource]:
                     value = doc["resources"][resource][doc_metric]
-                    metric = doc["type"] + "." + resource + "." + doc_metric
+                    metric = ".".join([doc["type"], resource, doc_metric])
                     timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
                     timeseries_list.append(timeseries)
 
         return timeseries_list
     except (ValueError, KeyError) as e:
-        MyUtils.logging_error("Error " + str(e) + " " + str(traceback.format_exc() + " with document: " + str(doc)),
+        MyUtils.logging_error("Error {0} {1} with document: {2} ".format(str(e), str(traceback.format_exc()), str(doc)),
                               debug)
         raise
 
 
 def get_limits():
     docs = list()
-    for limit in db_handler.get_all_database_docs("limits"):
+    for limit in db_handler.get_all_limits():
         docs += translate_doc_to_timeseries(limit)
     return docs
 
@@ -89,20 +90,20 @@ def persist():
         if docs != list():
             success, info = OpenTSDB_sender.send_json_documents(docs)
             if not success:
-                MyUtils.logging_error("Couldn't properly post documents, error : ", debug)
-                MyUtils.logging_error(json.dumps(info["error"]), debug)
+                MyUtils.logging_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])),
+                                      debug)
                 fail_count += 1
             else:
                 MyUtils.logging_info(
-                    "Post was done at: " + time.strftime("%D %H:%M:%S", time.localtime()) + " with " + str(
-                        len(docs)) + " documents", debug)
+                    "Post was done at: {0} with {1} documents".format(time.strftime("%D %H:%M:%S", time.localtime()),
+                                                                      str(len(docs))), debug)
                 fail_count = 0
         else:
             MyUtils.logging_warning("Couldn't retrieve any info.", debug)
 
         # If too many errors, abort
         if fail_count >= MAX_FAIL_NUM:
-            MyUtils.logging_error("TSDB SENDER failed for " + str(fail_count) + " times, exiting.", debug)
+            MyUtils.logging_error("TSDB SENDER failed for {0} times, exiting.".format(str(fail_count)), debug)
             exit(1)
 
         time.sleep(polling_frequency)
@@ -112,7 +113,7 @@ def main():
     try:
         persist()
     except Exception as e:
-        MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug=True)
+        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

@@ -18,15 +18,19 @@
 
 # NODE RESOURCES
     ./build/tsdb mkmetric structure.cpu.current
+    ./build/tsdb mkmetric structure.cpu.fixed
     ./build/tsdb mkmetric structure.cpu.max
     ./build/tsdb mkmetric structure.cpu.min
     ./build/tsdb mkmetric structure.mem.current
+    ./build/tsdb mkmetric structure.mem.fixed
     ./build/tsdb mkmetric structure.mem.max
     ./build/tsdb mkmetric structure.mem.min
     ./build/tsdb mkmetric structure.disk.current
+    ./build/tsdb mkmetric structure.disk.fixed
     ./build/tsdb mkmetric structure.disk.max
     ./build/tsdb mkmetric structure.disk.min
     ./build/tsdb mkmetric structure.net.current
+    ./build/tsdb mkmetric structure.net.fixed
     ./build/tsdb mkmetric structure.net.max
     ./build/tsdb mkmetric structure.net.min
     ./build/tsdb mkmetric structure.energy.current

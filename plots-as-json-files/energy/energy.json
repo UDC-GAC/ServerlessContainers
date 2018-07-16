@@ -38,7 +38,8 @@
           "tags": [
             "structure=app1"
           ]
-        },{
+        },
+        {
           "metric": "structure.energy.current",
           "aggregator": "zimsum",
           "tags": [

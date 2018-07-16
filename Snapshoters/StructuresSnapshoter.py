@@ -44,16 +44,16 @@ def update_container_current_values(container_name, resources):
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
 
-        #TODO FIX disk limit is retrieved in bytes/s but it is expected in Mbits
+        # TODO FIX disk limit is retrieved in bytes/s but it is expected in Mbits
         if resource is "disk":
             bandwidth = resources[resource][translate_map[resource]["limit_label"]]
-            bandwidth = int( bandwidth / 1048576)
+            bandwidth = int(bandwidth / 1048576)
             new_structure["resources"][resource]["current"] = bandwidth
         else:
-            new_structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
+            new_structure["resources"][resource]["current"] = resources[resource][
+                translate_map[resource]["limit_label"]]
 
-    MyUtils.update_structure(new_structure, db_handler, debug, max_tries=1)
-
+    MyUtils.update_structure(new_structure, db_handler, debug, max_tries=3)
 
 
 def thread_persist_container(container, container_resources_dict):
@@ -63,8 +63,9 @@ def thread_persist_container(container, container_resources_dict):
     try:
         resources = MyUtils.get_container_resources(container_name)
     except requests.exceptions.HTTPError as e:
-        MyUtils.logging_error("Error trying to get container " +
-                              str(container_name) + " info " + str(e) + traceback.format_exc(), debug)
+        MyUtils.logging_error(
+            "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),
+            debug)
         return
 
     # Persist by updating the Database current value
@@ -76,6 +77,7 @@ def thread_persist_container(container, container_resources_dict):
 
     # Persist through time series sent to OpenTSDB
     # generate_timeseries(container_name, resources)
+
 
 def persist_containers():
     # Try to get the containers, if unavailable, return
@@ -95,7 +97,6 @@ def persist_containers():
         process.join()
 
     return container_resources_dict
-
 
 
 # def persist_containers():
@@ -151,11 +152,11 @@ def persist_applications(container_resources_dict):
                 else:
                     if "name" in c and "name" in app:
                         MyUtils.logging_error(
-                            "Container info " + c["name"] + "is missing for app : " +
-                            app["name"] + ", app info will not be accurate", debug)
+                            "Container info {0} is missing for app : {1}, app info will not be accurate".format(
+                                c["name"], app["name"]), debug)
                     else:
                         MyUtils.logging_error("Error with app or container info", debug)
-                        #TODO this error should be more self-explanatory
+                        # TODO this error should be more self-explanatory
 
         MyUtils.update_structure(app, db_handler, debug)
 
@@ -169,9 +170,7 @@ def persist_thread():
 
     epoch_end = time.time()
     processing_time = epoch_end - epoch_start
-
-    MyUtils.logging_info("It took " + str("%.2f" % processing_time) + " seconds to snapshot structures", debug)
-
+    MyUtils.logging_info("It took {0} seconds to snapshot structures".format(str("%.2f" % processing_time)), debug)
 
 
 def persist():
@@ -192,25 +191,25 @@ def persist():
 
         thread = Thread(target=persist_thread, args=())
         thread.start()
-
-        MyUtils.logging_info("Structures snapshoted at " + MyUtils.get_time_now_string(), debug)
+        MyUtils.logging_info("Structures snapshoted at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)
 
         if thread.isAlive():
             delay_start = time.time()
-            MyUtils.logging_warning("Previous thread didn't finish before next poll is due, with polling time of " + str(
-                polling_frequency) + " seconds, at " + MyUtils.get_time_now_string(), debug)
+            MyUtils.logging_warning(
+                "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}" +
+                "".format(str(polling_frequency), MyUtils.get_time_now_string()), debug)
             MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
             thread.join()
             delay_end = time.time()
-            MyUtils.logging_warning("Resulting delay of: " + str(delay_end - delay_start) + " seconds", debug)
+            MyUtils.logging_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
 
 
 def main():
     try:
         persist()
     except Exception as e:
-        MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug=True)
+        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
