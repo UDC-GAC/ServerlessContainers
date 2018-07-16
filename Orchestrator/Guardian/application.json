@@ -1,0 +1,7 @@
+{
+  "DEBUG": true,
+  "EVENT_TIMEOUT": 60,
+  "STRUCTURE_GUARDED": "application",
+  "WINDOW_DELAY": 10,
+  "WINDOW_TIMELAPSE": 10
+}

@@ -1,0 +1,97 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node0"
+          ]
+        },{
+          "metric": "structure.mem.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node0"
+          ]
+        }
+      ]
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node1"
+          ]
+        },{
+          "metric": "structure.mem.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node1"
+          ]
+        }
+      ]
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node2"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node2"
+          ]
+        },{
+          "metric": "structure.mem.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node2"
+          ]
+        }
+      ]
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node3"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node3"
+          ]
+        },{
+          "metric": "structure.mem.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node3"
+          ]
+        }
+      ]
+    }
+  ]
+}

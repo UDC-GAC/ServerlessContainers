@@ -1,0 +1,276 @@
+#!/usr/bin/python
+import json
+
+from flask import Flask, g
+from flask import Response
+from flask import abort
+from flask import jsonify
+from flask import request
+import StateDatabase.couchDB as couchDB
+
+app = Flask(__name__)
+
+
+def get_db():
+    """Opens a new database connection if there is none yet for the current application context."""
+    if not hasattr(g, 'db_handler'):
+        g.db_handler = couchDB.CouchDBServer()
+    return g.db_handler
+
+
+@app.route("/profile/", methods=['GET'])
+def get_profiles():
+    return jsonify(get_db().get_profiles())
+
+
+@app.route("/profile/<profile_name>", methods=['GET'])
+def get_profile(profile_name):
+    try:
+        profile = get_db().get_profile(profile_name)
+    except ValueError:
+        return abort(404)
+    return jsonify(profile)
+
+
+@app.route("/profile/<profile_name>", methods=['PUT'])
+def set_profile(profile_name):
+    data = request.json
+    if not data:
+        return abort(400, {"message": "empty content"})
+
+    try:
+        profile = get_db().get_profile(profile_name)
+    except ValueError:
+        return abort(404)
+
+    for key in data:
+        if key in ["_id", "_rev", "name", "type"]:
+            continue
+        else:
+            profile[key] = data[key]
+    get_db().update_profile(profile)
+    return jsonify(profile)
+
+
+@app.route("/service/", methods=['GET'])
+def get_services():
+    return jsonify(get_db().get_services())
+
+
+@app.route("/service/<service_name>", methods=['GET'])
+def get_service(service_name):
+    try:
+        service = get_db().get_service(service_name)
+    except ValueError:
+        return abort(404)
+    return jsonify(service)
+
+
+@app.route("/service/<service_name>", methods=['PUT'])
+def set_service_information(service_name):
+    if service_name == "":
+        abort(400)
+
+    try:
+        service = get_db().get_service(service_name)
+    except ValueError:
+        return abort(404)
+
+    data = request.json
+    for key in data:
+        service["config"][key] = data[key]
+
+    get_db().update_service(service)
+
+    return jsonify(201)
+
+
+@app.route("/rule/", methods=['GET'])
+def get_rules():
+    return jsonify(get_db().get_rules())
+
+
+@app.route("/rule/<rule_name>", methods=['GET'])
+def get_rule(rule_name):
+    return jsonify(get_db().get_rule(rule_name))
+
+
+@app.route("/rule/<rule_name>", methods=['PUT'])
+def set_rule(rule_name):
+    pass
+
+
+@app.route("/rule/<rule_name>/activate", methods=['PUT'])
+def activate_rule(rule_name):
+    rule = get_db().get_rule(rule_name)
+    rule["active"] = True
+    get_db().update_rule(rule)
+    return jsonify(201)
+
+
+@app.route("/rule/<rule_name>/deactivate", methods=['PUT'])
+def deactivate_rule(rule_name):
+    rule = get_db().get_rule(rule_name)
+    rule["active"] = False
+    get_db().update_rule(rule)
+    return jsonify(201)
+
+
+def retrieve_structure(structure_name):
+    try:
+        return get_db().get_structure(structure_name)
+    except ValueError:
+        return abort(404)
+
+
+@app.route("/structure/", methods=['GET'])
+def get_structures():
+    return jsonify(get_db().get_structures())
+
+
+@app.route("/structure/<structure_name>", methods=['GET'])
+def get_structure(structure_name):
+    return jsonify(retrieve_structure(structure_name))
+
+
+@app.route("/structure/<structure_name>/resources", methods=['GET'])
+def get_structure_resources(structure_name):
+    return jsonify(retrieve_structure(structure_name)["resources"])
+
+
+@app.route("/structure/<structure_name>/resources/<resource>", methods=['GET'])
+def get_structure_resource(structure_name, resource):
+    try:
+        return jsonify(retrieve_structure(structure_name)["resources"][resource])
+    except KeyError:
+        return abort(404)
+
+
+@app.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['GET'])
+def get_structure_parameter_of_resource(structure_name, resource, parameter):
+    try:
+        return jsonify(retrieve_structure(structure_name)["resources"][resource][parameter])
+    except KeyError:
+        return abort(404)
+
+
+@app.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['PUT'])
+def set_structure_parameter_of_resource(structure_name, resource, parameter):
+    structure = retrieve_structure(structure_name)
+    try:
+        value = int(request.json["value"])
+        if value < 0:
+            return abort(400)
+        structure["resources"][resource][parameter] = value
+        get_db().update_structure(structure)
+    except KeyError:
+        abort(404)
+    return jsonify(201)
+
+@app.route("/structure/<structure_name>/guard", methods=['PUT'])
+def set_structure_to_guarded(structure_name,):
+    structure = retrieve_structure(structure_name)
+    structure["guard"] = True
+    get_db().update_structure(structure)
+    return jsonify(201)
+
+@app.route("/structure/<structure_name>/unguard", methods=['PUT'])
+def set_structure_to_unguarded(structure_name):
+    structure = retrieve_structure(structure_name)
+    structure["guard"] = False
+    get_db().update_structure(structure)
+    return jsonify(201)
+
+
+@app.route("/structure/<structure_name>/resources/<resource>/guard", methods=['PUT'])
+def set_structure_resource_to_guarded(structure_name, resource):
+    structure = retrieve_structure(structure_name)
+    structure["resources"][resource]["guard"] = True
+    get_db().update_structure(structure)
+    return jsonify(201)
+
+
+@app.route("/structure/<structure_name>/resources/<resource>/unguard", methods=['PUT'])
+def set_structure_resource_to_unguarded(structure_name, resource):
+    structure = retrieve_structure(structure_name)
+    structure["resources"][resource]["guard"] = False
+    get_db().update_structure(structure)
+    return jsonify(201)
+
+
+@app.route("/structure/<structure_name>/limits", methods=['GET'])
+def get_structure_limits(structure_name):
+    try:
+        return jsonify(get_db().get_limits(retrieve_structure(structure_name))["resources"])
+    except ValueError:
+        return abort(404)
+
+
+@app.route("/structure/<structure_name>/limits/<resource>", methods=['GET'])
+def get_structure_resource_limits(structure_name, resource):
+    try:
+        return jsonify(get_db().get_limits(retrieve_structure(structure_name))["resources"][resource])
+    except ValueError:
+        return abort(404)
+
+
+@app.route("/structure/<structure_name>/profile/<profile_name>", methods=['PUT'])
+def set_structure_profile(structure_name, profile_name):
+    def __apply_profile_to_container(container):
+        for resource in container["resources"]:
+            if resource in profile["resources"]:
+                container["resources"][resource]["fixed"] = profile["resources"][resource]
+
+    try:
+        profile = get_db().get_profile(profile_name)
+        structure = get_db().get_structure(structure_name)
+    except ValueError:
+        return abort(404)
+
+    if structure["subtype"] != "container" and structure["subtype"] != "application":
+        return abort(400, {
+            "message": "only structures of subtype \'container\' or \'application\' " +
+                       "can be used when profiles are applied"})
+
+    if structure["subtype"] == "container":
+        __apply_profile_to_container(structure)
+        get_db().update_structure(structure)
+
+    if structure["subtype"] == "application":
+        for c in structure["containers"]:
+            container = get_db().get_structure(c)
+            __apply_profile_to_container(container)
+            get_db().update_structure(container)
+
+    return jsonify(201)
+
+
+@app.route("/structure/<structure_name>/guard_policy/serverless", methods=['PUT'])
+def set_structure_guard_policy_to_serverless(structure_name):
+    try:
+        structure = get_db().get_structure(structure_name)
+        structure["guard_policy"] = "serverless"
+        get_db().update_structure(structure)
+    except ValueError:
+        return abort(404)
+    return jsonify(201)
+
+
+@app.route("/structure/<structure_name>/guard_policy/fixed", methods=['PUT'])
+def set_structure_guard_policy_to_fixed(structure_name):
+    try:
+        structure = get_db().get_structure(structure_name)
+        structure["guard_policy"] = "fixed"
+        get_db().update_structure(structure)
+    except ValueError:
+        return abort(404)
+    return jsonify(201)
+
+
+@app.route("/heartbeat", methods=['GET'])
+def heartbeat():
+    return Response(json.dumps({"status": "alive"}), status=200, mimetype='application/json')
+
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=8000)
