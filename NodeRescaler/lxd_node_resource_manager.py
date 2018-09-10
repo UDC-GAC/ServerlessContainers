@@ -16,7 +16,11 @@ from node_resource_manager import set_node_disk
 from node_resource_manager import set_node_net
 
 urllib3.disable_warnings()
-LXD_PASSWORD = "testlxd"
+
+LXD_CRT = '/root/lxd.crt'
+LXD_KEY = '/root/lxd.key'
+LXD_ENDPOINT = 'https://localhost:8443'
+
 DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
 DICT_DISK_LABEL = "disk"
@@ -46,8 +50,7 @@ def get_node_networks(container):
 
 
 def set_node_resources(node_name, resources):
-    client = Client(endpoint='https://localhost:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
-                    verify=False)
+    client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
     if resources is None:
         # No resources to set
         return False, {}
@@ -95,9 +98,7 @@ def set_node_resources(node_name, resources):
 
 
 def get_node_resources(node_name):
-    client = Client(endpoint='https://localhost:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
-                    verify=False)
-    # client.authenticate(LXD_PASSWORD)
+    client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
     try:
         container = client.containers.get(node_name)
         if container.status == "Running":
@@ -110,10 +111,19 @@ def get_node_resources(node_name):
             node_dict[DICT_MEM_LABEL] = mem_resources
 
             disk_success, disk_resources = get_node_disks(container)  # LXD Dependent
-            node_dict[DICT_DISK_LABEL] = disk_resources[0]
+            if type(disk_resources) == list and len(disk_resources) > 0:
+                node_dict[DICT_DISK_LABEL] = disk_resources[0]
+            elif disk_resources:
+                node_dict[DICT_DISK_LABEL] = disk_resources
+            else:
+                node_dict[DICT_DISK_LABEL] = []
             # TODO support multiple disks
+
             net_success, net_resources = get_node_networks(container)  # LXD Dependent
-            node_dict[DICT_NET_LABEL] = net_resources[0]
+            if net_resources:
+                node_dict[DICT_NET_LABEL] = net_resources[0]
+            else:
+                node_dict[DICT_NET_LABEL] = []
             # TODO support multiple networks
             return node_dict
         else:
@@ -125,11 +135,10 @@ def get_node_resources(node_name):
 
 
 def get_all_nodes():
-    client = Client(endpoint='https://localhost:8443', cert=('/home/jonatan/lxd.crt', '/home/jonatan/lxd.key'),
-                    verify=False)
+    client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
     containers = client.containers.all()
     containers_dict = dict()
-    client.authenticate('bogus')
+    # client.authenticate('bogus')
     for c in containers:
         if c.status == "Running":
             containers_dict[c.name] = get_node_resources(c.name)

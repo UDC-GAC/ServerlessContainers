@@ -150,6 +150,77 @@
           "metric": "structure.mem.current",
           "aggregator": "zimsum",
           "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "limit.mem.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "limit.mem.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "limit.mem.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "limit.mem.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
             "structure=app1"
           ]
         },
@@ -177,7 +248,7 @@
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 35000
+        "ymax": 65000
       }
     }
   ]

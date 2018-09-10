@@ -140,6 +140,76 @@
         "ymin": 0,
         "ymax": 300
       }
+    },{
+      "metrics": [
+        {
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "structure.cpu.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 300
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "structure.cpu.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 300
+      }
     }
   ]
 }

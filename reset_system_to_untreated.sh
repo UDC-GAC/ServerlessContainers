@@ -8,12 +8,11 @@ bash $RESCALER_PATH/NodeRescaler/config/small-limit/update_all.sh
 echo "Resetting host resources accounting"
 python $RESCALER_PATH/StateDatabase/initializers/reset_host_structure_info.py
 
-echo "Setting Guardian to guard applications"
-bash $RESCALER_PATH/Orchestrator/Guardian/set_to_app.sh
+bash $RESCALER_PATH/Orchestrator/Guardian/set_to_container.sh
 
 
-echo "Setting application to guarded"
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh app1
+echo "Setting application to unguarded"
+bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh app1
 
 echo "Setting container nodes to unguarded"
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node0
@@ -22,12 +21,6 @@ bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node2
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node3
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node4
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node5
-
-echo "Setting application to serverless"
-bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_serverless.sh app1
-
-echo "Setting application resources [energy] to guarded"
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh app1 energy
 
 echo "Setting application resources [cpu,mem,disk,net,energy] to unguarded"
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 cpu
@@ -61,11 +54,11 @@ bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 d
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 net
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 energy
 
-echo "Activating energy rules"
-bash $RESCALER_PATH/Orchestrator/Rules/activate_rule.sh EnergyRescaleDown
-bash $RESCALER_PATH/Orchestrator/Rules/activate_rule.sh EnergyRescaleUp
-bash $RESCALER_PATH/Orchestrator/Rules/activate_rule.sh energy_dropped_lower
-bash $RESCALER_PATH/Orchestrator/Rules/activate_rule.sh energy_exceeded_upper
+echo "Deactivating energy rules"
+bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh EnergyRescaleDown
+bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh EnergyRescaleUp
+bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh energy_dropped_lower
+bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh energy_exceeded_upper
 
 echo "Deactivating rescaling rules"
 bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh CpuRescaleDown

@@ -8,8 +8,8 @@ database = "limits"
 initializer_utils.remove_db(database)
 initializer_utils.create_db(database)
 
-containers = ["node0", "node1", "node2", "node3"]
-hosts = ["es-udc-dec-jonatan-dante"]
+containers = ["node0", "node1", "node2", "node3", "node4", "node5"]
+hosts = ["c14-13"]
 applications = ["app1"]
 # CREATE LIMITS
 if handler.database_exists("limits"):

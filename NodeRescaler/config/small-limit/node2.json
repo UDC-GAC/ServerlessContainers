@@ -1,21 +1,20 @@
 {
   "cpu": {
     "cpu_allowance_limit": "200",
-    "cpu_num": "2,6"
+    "cpu_num": "4,5"
   },
   "disk": {
-    "device_path": "/dev/mapper/lxd-node2_data0",
     "disk_read_limit": "52426800",
     "disk_write_limit": "52426800",
-    "major": "253",
-    "minor": "3",
-    "mountpoint": "/mnt/volumes/nodes/node2_data0"
+    "major": "8",
+    "minor": "64",
+    "mountpoint": "/data/4"
   },
   "mem": {
     "mem_limit": "8192"
   },
   "net": {
-    "device_name_in_host": "veth9LUPOK",
+    "device_name_in_host": "vethBQP70Y",
     "net_limit": 200
   }
 }

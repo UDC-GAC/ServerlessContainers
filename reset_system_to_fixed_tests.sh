@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 DEV_PATH=$HOME/development
 export RESCALER_PATH=$DEV_PATH/automatic-rescaler
 
@@ -15,6 +16,8 @@ bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh node0
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh node1
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh node2
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh node3
+bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh node4
+bash $RESCALER_PATH/Orchestrator/Structures/set_to_guarded.sh node5
 
 echo "Setting container rsources [cpu,mem] to guarded"
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node0 cpu
@@ -25,6 +28,10 @@ bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node2 cpu
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node2 mem
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node3 cpu
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node3 mem
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node4 cpu
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node4 mem
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node5 cpu
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_guarded.sh node5 mem
 
 echo "Setting container resources [disk,net,energy] to unguarded"
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 disk
@@ -39,6 +46,12 @@ bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node2 e
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 disk
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 net
 bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 energy
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 disk
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 net
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 energy
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 disk
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 net
+bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 energy
 
 echo "Setting application to unguarded"
 bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh app1
@@ -48,6 +61,8 @@ bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_fixed.sh node0
 bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_fixed.sh node1
 bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_fixed.sh node2
 bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_fixed.sh node3
+bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_fixed.sh node4
+bash $RESCALER_PATH/Orchestrator/Structures/set_policy_to_fixed.sh node5
 
 echo "Activating rescaling rules"
 bash $RESCALER_PATH/Orchestrator/Rules/activate_rule.sh CpuRescaleDown

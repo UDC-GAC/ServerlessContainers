@@ -8,8 +8,8 @@ database = "structures"
 initializer_utils.remove_db(database)
 initializer_utils.create_db(database)
 
-containers = ["node0", "node1", "node2", "node3"]
-hosts = ["es-udc-dec-jonatan-dante"]
+containers = ["node0", "node1", "node2", "node3", "node4", "node5"]
+hosts = ["c14-13"]
 
 # CREATE STRUCTURES
 if handler.database_exists("structures"):
@@ -18,7 +18,8 @@ if handler.database_exists("structures"):
         container = dict(
             type='structure',
             subtype='container',
-            host='es-udc-dec-jonatan-dante',
+            guard_policy="serverless",
+            host='c14-13',
             name=c,
             guard=True,
             resources=dict(
@@ -51,13 +52,13 @@ if handler.database_exists("structures"):
         guard=True,
         guard_policy="serverless",
         resources=dict(
-            cpu=dict(max=800, min=100, guard=False),
-            mem=dict(max=32768, min=4096, guard=False),
-            disk=dict(max=400, min=40, guard=False),
-            net=dict(max=400, min=40, guard=False),
-            energy=dict(max=30, min=0, guard=True)
+            cpu=dict(max=1200, min=200, guard=False),
+            mem=dict(max=49176, min=12288, guard=False),
+            disk=dict(max=600, min=60, guard=False),
+            net=dict(max=600, min=60, guard=False),
+            energy=dict(max=120, min=0, guard=True)
         ),
-        containers=["node0","node1","node2","node3"]
+        containers=["node0","node1","node2","node3","node4","node5"]
     )
     handler.add_structure(app)
 

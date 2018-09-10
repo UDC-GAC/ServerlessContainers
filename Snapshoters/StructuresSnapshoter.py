@@ -61,7 +61,8 @@ def thread_persist_container(container, container_resources_dict):
 
     # Try to get the container resources, if unavailable, continue with others
     try:
-        resources = MyUtils.get_container_resources(container_name)
+        # TODO FIX
+        resources = MyUtils.get_container_resources(db_handler, container_name)
     except requests.exceptions.HTTPError as e:
         MyUtils.logging_error(
             "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),

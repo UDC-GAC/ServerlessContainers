@@ -23,7 +23,8 @@ def write_cgroup_file_value(file_path, value):
     # Write only 1 line for these files as they are 'virtual' files
     try:
         if os.path.isfile(file_path) and os.access(file_path, os.W_OK):
-            with open(file_path, 'w') as file_handler:
+            # with open(file_path, 'w') as file_handler:
+            with open(file_path, 'r+') as file_handler:
                 file_handler.write(str(value))
             return {"success": True, "data": value}
         else:
@@ -49,7 +50,7 @@ def get_node_cpus(container_name):
     if op["success"]:
         cpu_limit = int(op["data"])
         if cpu_limit != -1:
-            # A limit is set, else leave it untouched
+            # A limit is set, else leave it untouchedset_node_mem
             cpu_limit = int(op["data"]) / TICKS_PER_CPU_PERCENTAGE
     else:
         return False, op
@@ -184,11 +185,17 @@ def set_node_mem(container_name, mem_resource):
         else:
             value_megabytes = str(value) + 'M'
 
+        # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
+        swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.memsw.limit_in_bytes"])
         memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
-        op = write_cgroup_file_value(memory_limit_path, value_megabytes)
-        if not op["success"]:
-            # Something happened
-            return False, op
+        swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+        mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+        if not mem_op["success"]:
+            # Something happened with memory limit
+            return False, mem_op
+        if not swap_op["success"]:
+            # Something happened with swap limit
+            return False, swap_op
         # Nothing bad happened
         return True, {MEM_LIMIT_LABEL: value}
     else:
@@ -203,7 +210,7 @@ DISK_WRITE_LIMIT_LABEL = "disk_write_limit"
 def get_system_mounted_filesystems():
     df = subprocess.Popen(["df", "--output=source,target"], stdout=subprocess.PIPE)
     trim = subprocess.Popen(["tr", "-s", "[:blank:]", ","], stdin=df.stdout, stdout=subprocess.PIPE)
-    lines = trim.communicate()[0].strip().split('\n')
+    lines = trim.communicate()[0].decode('utf-8').strip().split('\n')
     return lines
 
 
@@ -216,11 +223,30 @@ def get_device_path_from_mounted_filesystem(path):
     return "not-found"
 
 
-def get_device_major_minor(device_path):
+def get_device_major_minor_from_volumes(device_path):
     dmsetup = subprocess.Popen(
         ["dmsetup", "info", "-c", "-o", "major,minor", "--separator=,", "--noheadings", device_path],
         stdout=subprocess.PIPE)
-    return dmsetup.communicate()[0].strip().split(",")
+    result = dmsetup.communicate()[0]
+    if dmsetup.returncode == 0:
+        # TODO check that this still works for volumes
+        return result.decode('utf-8').strip().split(",")
+    else:
+        return None
+
+
+def get_device_major_minor_raw_device(device_path):
+    stat = subprocess.Popen(
+        ["stat", "-c", "%t,%T", device_path],
+        stdout=subprocess.PIPE)
+
+    out, err = stat.communicate()
+    if stat.returncode == 0:
+        both = out.decode('utf-8').split(",")
+        major_hex, minor_hex = both[0], both[1]
+        return str(int(major_hex, 16)), str(int(minor_hex, 16))
+    else:
+        return None
 
 
 def get_node_disk_limits(container_name):
@@ -258,17 +284,21 @@ def set_node_disk(container_name, disk_resource):
     if DISK_WRITE_LIMIT_LABEL in disk_resource:
         limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
         try:
-            set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
+            # TODO FIX the path issue
+            #set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
+            set_bandwidth_script_path = "/".join([os.getcwd()])
             set_disk_bandwidth = subprocess.Popen(
                 # TODO string replacement
-                ["/bin/bash", set_bandwidth_script_path + "/" + "set_bandwidth.sh", container_name, major+":"+minor, limit_write], stderr=subprocess.PIPE)
-            #set_disk_bandwidth.wait()
+                ["/bin/bash", set_bandwidth_script_path + "/" + "set_bandwidth.sh", container_name, major + ":" + minor,
+                 limit_write], stderr=subprocess.PIPE)
+            # set_disk_bandwidth.wait()
             out, err = set_disk_bandwidth.communicate()
             if set_disk_bandwidth.returncode == 0:
                 pass
             else:
                 # TODO string replacement
-                return False, {"error": "exit code of set_disk_bandwidth was: " + str(set_disk_bandwidth.returncode) + " with error message: " + err}
+                return False, {"error": "exit code of set_disk_bandwidth was: " + str(
+                    set_disk_bandwidth.returncode) + " with error message: " + str(err)}
         except subprocess.CalledProcessError as e:
             return False, {"error": str(e)}
 
@@ -295,13 +325,38 @@ def set_node_disk(container_name, disk_resource):
     return True, disk_resource
 
 
+def get_device_major_minor(device_path):
+    # Try next for partitions or devices
+    major_minor = get_device_major_minor_raw_device(device_path)
+    if major_minor and major_minor != ("0","0"):
+        #TODO FIX this or find a solution, partitions can't be limited, only devices
+        if device_path.startswith("/dev/sd"):
+            device_path = device_path[0:8]
+            major_minor = get_device_major_minor_raw_device(device_path)
+            if major_minor and major_minor != ("0", "0"):
+                return major_minor[0], major_minor[1]
+
+    # Try first for volume devices
+    major_minor = get_device_major_minor_from_volumes(device_path)
+    if major_minor:
+        return major_minor[0], major_minor[1]
+
+
+
+    return None
+
 def get_node_disks(container_name, devices):
     retrieved_disks = list()
     limits_read, limits_write = get_node_disk_limits(container_name)
     for device in devices.keys():
         device_mountpoint = devices[device]["source"]
         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
-        major, minor = get_device_major_minor(device_path)
+
+        try:
+            major, minor = get_device_major_minor(device_path)
+        except TypeError as e:
+            #None was returned
+            return False, {"error": str(e)}
 
         major_minor_str = major + ":" + minor
 
@@ -337,13 +392,18 @@ NET_LIMIT_LABEL = "net_limit"
 
 def get_interface_limit(interface_name):
     tc = subprocess.Popen(["tc", "-d", "qdisc", "show", "dev", interface_name], stdout=subprocess.PIPE)
-    lines = tc.communicate()[0].strip().split(",")
+    # TODO make sure to add the decode line everywhere necessary (where communicate is used)
+    lines = tc.communicate()[0].decode('utf-8').strip().split(",")
     parts = list()
     for line in lines:
         parts = line.rstrip("\n").split()  # Just 1 line should be available
         break
     if len(parts) > 6:
-        return int(parts[7].strip("Mbit"))
+        if parts[7].endswith("Mbit"):
+            return int(parts[7].strip("Mbit"))
+        elif parts[7].endswith("Kbit"):
+            return int(parts[7].strip("Kbit")) / 1024
+
     else:
         return -1
 
@@ -369,7 +429,7 @@ def set_interface_limit(interface_name, net):
         tc = subprocess.Popen(
             ["tc", "qdisc", "add", "dev", interface_name, "root", "tbf", "rate", net_limit, "burst",
              "1000kb", "latency", "100ms"], stderr=subprocess.PIPE)
-        #tc.wait()
+        # tc.wait()
         out, err = tc.communicate()
         if tc.returncode == 0:
             return True, net
@@ -419,7 +479,6 @@ def get_node_networks(networks):
             net_dict[NET_UNIT_NAME_LABEL] = "unlimited"
         else:
             net_dict[NET_UNIT_NAME_LABEL] = "Mbit"
-
 
         retrieved_nets.append(net_dict)
 

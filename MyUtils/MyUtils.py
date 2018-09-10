@@ -60,8 +60,12 @@ def get_time_now_string():
     return str(time.strftime("%D %H:%M:%S", time.localtime()))
 
 
-def get_container_resources(container_name):
-    r = requests.get("http://dante:8000/container/" + container_name, headers={'Accept': 'application/json'})
+def get_container_resources(db_handler, container_name):
+    # TODO this shouldn't be done here
+    container = db_handler.get_structure(container_name)
+    container_host = container["host"]
+
+    r = requests.get("http://"+container_host+":8000/container/" + container_name, headers={'Accept': 'application/json'})
     if r.status_code == 200:
         return dict(r.json())
     else:

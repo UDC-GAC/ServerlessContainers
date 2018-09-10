@@ -6,13 +6,13 @@
           "metric": "sys.cpu.energy",
           "aggregator": "zimsum",
           "tags": [
-            "host=es-udc-dec-jonatan-dante"
+            "host=c14-13"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 80
+        "ymax": 130
       }
     },
     {
@@ -27,7 +27,7 @@
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 80
+        "ymax": 40
       }
     },
     {
@@ -49,7 +49,7 @@
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 80
+        "ymax": 130
       }
     }
   ]

@@ -281,28 +281,29 @@ def process_request(request, real_resources, database_resources):
             request["action"], request["structure"], json.dumps(new_resources)), debug)
 
         try:
+            pass
             # Get the previous values in case the scaling is not successfully and fully applied
             # previous_resource_limit = real_resources[resource]["current"]
 
             # Apply changes through a REST call
             # TODO FIX to use the port number
-            applied_resources = set_container_resources(structure_name, host, "8000", new_resources)
+            #applied_resources = set_container_resources(structure_name, host, "8000", new_resources)
 
             # Get the applied value
-            current_value = applied_resources[resource][current_value_label[resource]]
+            #current_value = applied_resources[resource][current_value_label[resource]]
 
             # Update the limits
-            limits = db_handler.get_limits({"name": structure_name})
-            limits["resources"][resource]["upper"] += request["amount"]
-            limits["resources"][resource]["lower"] += request["amount"]
-            db_handler.update_limit(limits)
+            #limits = db_handler.get_limits({"name": structure_name})
+            #limits["resources"][resource]["upper"] += request["amount"]
+            #limits["resources"][resource]["lower"] += request["amount"]
+            #db_handler.update_limit(limits)
 
-            # Update the structure current value
-            structure = db_handler.get_structure(structure_name)
-            updated_structure = MyUtils.copy_structure_base(structure)
-            updated_structure["resources"][resource] = dict()
-            updated_structure["resources"][resource]["current"] = current_value
-            MyUtils.update_structure(updated_structure, db_handler, debug=False, max_tries=2)
+            # Update the structure current value but with a low priority (2 tries)
+            #structure = db_handler.get_structure(structure_name)
+            #updated_structure = MyUtils.copy_structure_base(structure)
+            #updated_structure["resources"][resource] = dict()
+            #updated_structure["resources"][resource]["current"] = current_value
+            #MyUtils.update_structure(updated_structure, db_handler, debug=False, max_tries=2)
 
         except Exception as e:
             MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)
@@ -318,7 +319,8 @@ def rescale_container(request, structure_name):
             host_info_cache[request["host"]] = db_handler.get_structure(request["host"])
 
         # Get the resources the container is using from its host NodeScaler (the 'current' value)
-        real_resources = MyUtils.get_container_resources(structure_name)
+        # TODO FIX
+        real_resources = MyUtils.get_container_resources(db_handler, structure_name)
 
         # Get the resources reported in the database (the 'max, min' values)
         database_resources = db_handler.get_structure(structure_name)

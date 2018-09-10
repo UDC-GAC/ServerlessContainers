@@ -1,7 +1,3 @@
 #!/usr/bin/env bash
-DEV_PATH=$HOME/development
-RESCALER_PATH=$DEV_PATH/automatic-rescaler
-BDWACHDOG_PATH=$DEV_PATH/metrics-to-time-series
-export PYTHONPATH=$RESCALER_PATH:$BDWACHDOG_PATH
-
-tmux new -d -s "NodeRescaler" "python NodeRescaler/NodeRescaler.py"
+tmux new -d -s "NodeRescaler" "source set_pythonpath.sh && cd $RESCALER_PATH/NodeRescaler && gunicorn --bind 0.0.0.0:8000 wsgi:app -w 2"
+#tmux new -d -s "NodeRescaler" "source set_pythonpath.sh && python3.6 NodeRescaler/NodeRescaler.py"

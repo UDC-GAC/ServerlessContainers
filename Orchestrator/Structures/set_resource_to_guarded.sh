@@ -1,1 +1,1 @@
-curl -X PUT -H "Content-Type: application/json"  http://orchestrator:8000/structure/$1/resources/$2/guard
+curl -X PUT -H "Content-Type: application/json"  http://orchestrator:5000/structure/$1/resources/$2/guard

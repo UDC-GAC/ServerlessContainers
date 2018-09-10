@@ -40,9 +40,10 @@ def check_unstable_configuration():
             # Leave a slight buffer time to account for window times skewness
             if event_window_time_to_trigger > event_timeout:
                 MyUtils.logging_warning(
-                    "Rule: '{0}' could never be activated -> guardian event timeout: '{1}', number of events" +
-                    " required to trigger the rule: '{2}' and guardian polling time: '{3}'".format(
-                        rule["name"], str(event_timeout), str(event_count), str(window_timelapse)), debug)
+                    "Rule: '{0}' could never be activated -> guardian event timeout: '{1}', number of events".format(
+                        rule["name"], str(event_timeout)) +
+                    " required to trigger the rule: '{0}' and guardian polling time: '{1}'".format(
+                        str(event_count), str(window_timelapse)), debug)
 
 
 def check_sanity():

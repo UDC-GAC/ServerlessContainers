@@ -7,6 +7,7 @@ from flask import abort
 from flask import jsonify
 from flask import request
 import StateDatabase.couchDB as couchDB
+from MyUtils import MyUtils
 
 app = Flask(__name__)
 
@@ -157,12 +158,21 @@ def get_structure_parameter_of_resource(structure_name, resource, parameter):
 @app.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['PUT'])
 def set_structure_parameter_of_resource(structure_name, resource, parameter):
     structure = retrieve_structure(structure_name)
+    new_structure = MyUtils.copy_structure_base(structure)
     try:
         value = int(request.json["value"])
         if value < 0:
             return abort(400)
-        structure["resources"][resource][parameter] = value
-        get_db().update_structure(structure)
+        new_structure["resources"] = dict()
+        new_structure["resources"][resource] = dict()
+        new_structure["resources"][resource][parameter] = value
+        get_db().update_structure(new_structure)
+
+        # TODO FIX this should not really be done
+        #structure = retrieve_structure(structure_name)
+        #if structure["resources"][resource][parameter] != value:
+        #    set_structure_parameter_of_resource(structure_name, resource, parameter)
+
     except KeyError:
         abort(404)
     return jsonify(201)
@@ -273,4 +283,4 @@ def heartbeat():
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=5000)

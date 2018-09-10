@@ -143,6 +143,78 @@
         "ymin": 0,
         "ymax": 200
       }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "structure.net.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 200
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "structure.net.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 200
+      }
     }
   ]
 }

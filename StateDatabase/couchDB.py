@@ -16,6 +16,8 @@ class CouchDBServer:
     __requests_db_name = "requests"
     __profiles_db_name = "profiles"
     __MAX_UPDATE_TRIES = 10
+    __DATABASE_TIMEOUT = 5
+
 
     def __init__(self, server='http://couchdb:5984'):
         self.server = server
@@ -47,7 +49,7 @@ class CouchDBServer:
 
     def __get_all_database_docs(self, database):
         docs = list()
-        r = requests.get(self.server + "/" + database + "/_all_docs")
+        r = requests.get(self.server + "/" + database + "/_all_docs", timeout=self.__DATABASE_TIMEOUT)
         if r.status_code != 200:
             r.raise_for_status()
         else:

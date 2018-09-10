@@ -92,6 +92,52 @@
           ]
         }
       ]
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },{
+          "metric": "structure.mem.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        }
+      ]
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "proc.mem.resident",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },{
+          "metric": "structure.mem.fixed",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        }
+      ]
     }
   ]
 }
