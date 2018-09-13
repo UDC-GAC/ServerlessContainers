@@ -16,11 +16,16 @@ bdwatchdog = StateDatabase.bdwatchdog.BDWatchdog()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
 db_handler = couchDB.CouchDBServer()
 
-BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident']
+BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident', 'proc.disk.writes.mb',
+                      'proc.disk.reads.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']
 BDWATCHDOG_ENERGY_METRICS = ['sys.cpu.user', 'sys.cpu.kernel', 'sys.cpu.energy']
-GUARDIAN_METRICS = {'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'], 'proc.mem.resident': ['proc.mem.resident']}
-ANALYZER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'], 'energy': ['sys.cpu.energy']}
-ANALYZER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident']}
+GUARDIAN_METRICS = {'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'], 'proc.mem.resident': ['proc.mem.resident'],
+                    'proc.disk.writes.mb': ['proc.disk.writes.mb'], 'proc.disk.reads.mb': ['proc.disk.reads.mb'],
+                    'proc.net.tcp.in.mb': ['proc.net.tcp.in.mb'], 'proc.net.tcp.out.mb': ['proc.net.tcp.out.mb']}
+REFEEDER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'], 'energy': ['sys.cpu.energy']}
+REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident'],
+                                'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
+                                'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "DEBUG": True}
 SERVICE_NAME = "refeeder"
@@ -48,7 +53,7 @@ def get_container_usages(container_name):
     global window_difference
     global window_delay
     container_info = bdwatchdog.get_structure_usages({"host": container_name}, window_difference, window_delay,
-                                                     BDWATCHDOG_METRICS, ANALYZER_APPLICATION_METRICS,
+                                                     BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS,
                                                      downsample=window_difference)
     return container_info
 
@@ -62,7 +67,7 @@ def get_host_usages(host_name):
         # Data retrieving, slow
         host_info = bdwatchdog.get_structure_usages({"host": host_name}, window_difference,
                                                     window_delay, BDWATCHDOG_ENERGY_METRICS,
-                                                    ANALYZER_ENERGY_METRICS)
+                                                    REFEEDER_ENERGY_METRICS)
         host_info_cache[host_name] = host_info
     return host_info
 
@@ -83,7 +88,7 @@ def generate_container_energy_metrics(container, host_info):
     new_container = MyUtils.copy_structure_base(container)
     new_container["resources"] = {}
     new_container["resources"]["energy"] = {}
-    new_container["resources"]["energy"]["current"] = float(
+    new_container["resources"]["energy"]["usage"] = float(
         host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
 
     return new_container
@@ -94,12 +99,12 @@ def generate_application_energy_metrics(application, updated_containers):
     for c in updated_containers:
         # Check if container is used for this application and if it has energy information
         if c["name"] in application["containers"] and "energy" in c["resources"] \
-                and "current" in c["resources"]["energy"]:
-            total_energy += c["resources"]["energy"]["current"]
+                and "usage" in c["resources"]["energy"]:
+            total_energy += c["resources"]["energy"]["usage"]
     if "energy" not in application["resources"]:
         application["resources"]["energy"] = dict()
 
-    application["resources"]["energy"]["current"] = total_energy
+    application["resources"]["energy"]["usage"] = total_energy
     return application
 
 

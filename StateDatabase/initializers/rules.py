@@ -213,7 +213,7 @@ if handler.database_exists("rules"):
         rule=dict(
             {"and": [
                 {">": [
-                    {"var": "structure.energy.current"},
+                    {"var": "structure.energy.usage"},
                     {"var": "structure.energy.max"}]}]}),
         generates="events", action={"events": {"scale": {"up": 1}}},
         active=True
@@ -253,7 +253,7 @@ if handler.database_exists("rules"):
         rule=dict(
             {"and": [
                 {"<": [
-                    {"var": "structure.energy.current"},
+                    {"var": "structure.energy.usage"},
                     {"var": "structure.energy.max"}]}]}),
         generates="events", action={"events": {"scale": {"down": 1}}},
         active=True

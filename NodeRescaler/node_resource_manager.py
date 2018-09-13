@@ -361,12 +361,16 @@ def get_node_disks(container_name, devices):
         major_minor_str = major + ":" + minor
 
         if major_minor_str in limits_read:
+            # Convert the limits to Mbits/s
             device_read_limit = int(limits_read[major_minor_str])
+            device_read_limit = int(device_read_limit / (1048576))
         else:
             device_read_limit = -1
 
         if major_minor_str in limits_write:
+            # Convert the limits to Mbits/s
             device_write_limit = int(limits_write[major_minor_str])
+            device_write_limit = int(device_write_limit / (1048576))
         else:
             device_write_limit = -1
 
@@ -375,6 +379,7 @@ def get_node_disks(container_name, devices):
         disk_dict["device_path"] = device_path
         disk_dict["major"] = major
         disk_dict["minor"] = minor
+        disk_dict["unit"] = "Mbit"
         disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
         disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
 

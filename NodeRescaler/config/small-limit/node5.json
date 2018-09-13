@@ -1,11 +1,11 @@
 {
   "cpu": {
-    "cpu_allowance_limit": "200",
-    "cpu_num": "10,11"
+    "cpu_allowance_limit": "300",
+    "cpu_num": "10,11,17"
   },
   "disk": {
-    "disk_read_limit": "52426800",
-    "disk_write_limit": "52426800",
+    "disk_read_limit": "104857600",
+    "disk_write_limit": "104857600",
     "major": "8",
     "minor": "112",
     "mountpoint": "/data/7"
@@ -14,7 +14,7 @@
     "mem_limit": "8192"
   },
   "net": {
-    "device_name_in_host": "vethNVJ0OE",
+    "device_name_in_host": "veth1Y0C4J",
     "net_limit": 200
   }
 }

@@ -7,7 +7,7 @@ import time
 class BDWatchdog:
     OPENTSDB_URL = "opentsdb"
     OPENTSDB_PORT = 4242
-    NO_METRIC_DATA_DEFAULT_VALUE = -1
+    NO_METRIC_DATA_DEFAULT_VALUE = 0 #-1
 
     def __init__(self, server="http://{0}:{1}".format(OPENTSDB_URL, str(int(OPENTSDB_PORT)))):
         self.server = server

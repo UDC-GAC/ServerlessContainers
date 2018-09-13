@@ -11,6 +11,7 @@ from src.pipelines import send_to_OpenTSDB as OpenTSDB_sender
 
 db_handler = couchDB.CouchDBServer()
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
+OPENTSDB_STORED_VALUES_AS_NULL = 0
 SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
@@ -28,13 +29,14 @@ def translate_doc_to_timeseries(doc):
             for doc_metric in doc["resources"][resource]:
                 if doc_metric in PERSIST_METRICS and doc_metric in doc["resources"][resource]:
                     value = doc["resources"][resource][doc_metric]
-                    if value:
+                    if value or value == 0:
                         metric = ".".join([doc["type"], resource, doc_metric])
                         timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
                         timeseries_list.append(timeseries)
                     else:
-                        #TODO what to do when a metric value is null?
-                        pass
+                        MyUtils.logging_error(
+                            "Error with document: {0}, doc metric {1} has null value '{2}', assuming a value of '{3}'".format(str(doc),doc_metric,value,OPENTSDB_STORED_VALUES_AS_NULL), debug)
+
         return timeseries_list
     except (ValueError, KeyError) as e:
         MyUtils.logging_error("Error {0} {1} with document: {2} ".format(str(e), str(traceback.format_exc()), str(doc)),

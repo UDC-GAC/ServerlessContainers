@@ -44,19 +44,13 @@ def update_container_current_values(container_name, resources):
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
 
-        # TODO FIX disk limit is retrieved in bytes/s but it is expected in Mbits
-        if resource is "disk":
-            bandwidth = resources[resource][translate_map[resource]["limit_label"]]
-            bandwidth = int(bandwidth / 1048576)
-            new_structure["resources"][resource]["current"] = bandwidth
-        else:
-            new_structure["resources"][resource]["current"] = resources[resource][
-                translate_map[resource]["limit_label"]]
+        new_structure["resources"][resource]["current"] = resources[resource][
+            translate_map[resource]["limit_label"]]
 
     MyUtils.update_structure(new_structure, db_handler, debug, max_tries=3)
 
 
-def thread_persist_container(container, container_resources_dict):
+def thread_persist_container(container):
     container_name = container["name"]
 
     # Try to get the container resources, if unavailable, continue with others
@@ -72,10 +66,6 @@ def thread_persist_container(container, container_resources_dict):
     # Persist by updating the Database current value
     update_container_current_values(container_name, resources)
 
-    # Add the container info to the container info cache
-    container_resources_dict[container_name] = container
-    container_resources_dict[container_name]["resources"] = resources
-
     # Persist through time series sent to OpenTSDB
     # generate_timeseries(container_name, resources)
 
@@ -88,48 +78,21 @@ def persist_containers():
 
     # Retrieve each container resources, persist them and store them to generate host info
     container_resources_dict = dict()
+
+    # UNTHREADED, allows cacheable container information
+    # for container in containers:
+    #    thread_persist_container(container, container_resources_dict)
+    # return container_resources_dict
+
+    # THREADED, doesn't allow cacheable container information
     threads = []
     for container in containers:
-        process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
+        process = Thread(target=thread_persist_container, args=(container,))
         process.start()
         threads.append(process)
 
     for process in threads:
         process.join()
-
-    return container_resources_dict
-
-
-# def persist_containers():
-#     # Try to get the containers, if unavailable, return
-#     containers = MyUtils.get_structures(db_handler, debug, subtype="container")
-#     if not containers:
-#         return
-#
-#     # Retrieve each container resources, persist them and store them to generate host info
-#     container_resources_dict = dict()
-#     for container in containers:
-#         container_name = container["name"]
-#
-#         # Try to get the container resources, if unavailable, continue with others
-#         try:
-#             resources = MyUtils.get_container_resources(container_name)
-#         except requests.exceptions.HTTPError as e:
-#             MyUtils.logging_error("Error trying to get container " +
-#                                   str(container_name) + " info " + str(e) + traceback.format_exc(), debug)
-#             continue
-#
-#         # Persist by updating the Database current value
-#         update_container_current_values(container_name, resources)
-#
-#         # Add the container info to the container info cache
-#         container_resources_dict[container_name] = container
-#         container_resources_dict[container_name]["resources"] = resources
-#
-#         # Persist through time series sent to OpenTSDB
-#         # generate_timeseries(container_name, resources)
-#
-#     return container_resources_dict
 
 
 def persist_applications(container_resources_dict):
@@ -144,17 +107,20 @@ def persist_applications(container_resources_dict):
             app["resources"][resource]["current"] = 0
 
         application_containers = app["containers"]
-        for c in application_containers:
+        for container_name in application_containers:
             for resource in RESOURCES:
-                if c in container_resources_dict:
+                if container_name in container_resources_dict and container_resources_dict[container_name][
+                    "resources"][resource][translate_map[resource]["limit_label"]]:
 
                     app["resources"][resource]["current"] += \
-                        container_resources_dict[c]["resources"][resource][translate_map[resource]["limit_label"]]
+                        container_resources_dict[container_name]["resources"][resource][
+                            translate_map[resource]["limit_label"]]
                 else:
-                    if "name" in c and "name" in app:
+                    if "name" in container_resources_dict[container_name] and "name" in app:
                         MyUtils.logging_error(
-                            "Container info {0} is missing for app : {1}, app info will not be accurate".format(
-                                c["name"], app["name"]), debug)
+                            "Container info {0} is missing for app : {1} and resource {2} resource,".format(
+                                container_name, app["name"], resource)
+                            +" app info will not be totally accurate", debug)
                     else:
                         MyUtils.logging_error("Error with app or container info", debug)
                         # TODO this error should be more self-explanatory
@@ -162,11 +128,39 @@ def persist_applications(container_resources_dict):
         MyUtils.update_structure(app, db_handler, debug)
 
 
+def get_container_resources_dict():
+    containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+    if not containers:
+        return
+
+    # Retrieve each container resources, persist them and store them to generate host info
+    container_resources_dict = dict()
+
+    for container in containers:
+        container_name = container["name"]
+        try:
+            resources = MyUtils.get_container_resources(db_handler, container_name)
+        except requests.exceptions.HTTPError as e:
+            MyUtils.logging_error(
+                "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),
+                debug)
+            return
+        container_resources_dict[container_name] = container
+        container_resources_dict[container_name]["resources"] = resources
+    return container_resources_dict
+
+
 def persist_thread():
     # Process and measure time
     epoch_start = time.time()
 
-    container_resources_dict = persist_containers()
+    # UNTHREDAED for cacheable container information
+    # container_resources_dict = persist_containers()
+    # persist_applications(container_resources_dict)
+
+    # FULLY THREADED, more requests but faster due to parallelism
+    persist_containers()
+    container_resources_dict = get_container_resources_dict()
     persist_applications(container_resources_dict)
 
     epoch_end = time.time()
@@ -198,8 +192,8 @@ def persist():
         if thread.isAlive():
             delay_start = time.time()
             MyUtils.logging_warning(
-                "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}" +
-                "".format(str(polling_frequency), MyUtils.get_time_now_string()), debug)
+                "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}".format(
+                    str(polling_frequency), MyUtils.get_time_now_string()), debug)
             MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
             thread.join()
             delay_end = time.time()

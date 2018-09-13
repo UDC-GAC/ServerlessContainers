@@ -23,7 +23,7 @@ if handler.database_exists("structures"):
             name=c,
             guard=True,
             resources=dict(
-                cpu=dict(max=200, min=10, fixed=50, guard=True),
+                cpu=dict(max=300, min=30, fixed=50, guard=True),
                 mem=dict(max=8192, min=1024, fixed=2048, guard=True),
                 disk=dict(max=100, min=10, guard=False),
                 net=dict(max=100, min=10, guard=False),
@@ -52,7 +52,7 @@ if handler.database_exists("structures"):
         guard=True,
         guard_policy="serverless",
         resources=dict(
-            cpu=dict(max=1200, min=200, guard=False),
+            cpu=dict(max=1800, min=300, guard=False),
             mem=dict(max=49176, min=12288, guard=False),
             disk=dict(max=600, min=60, guard=False),
             net=dict(max=600, min=60, guard=False),

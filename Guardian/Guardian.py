@@ -164,7 +164,7 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
 # TODO only used for energy
 def get_amount_from_proportional(structure, resource):
     max_resource_limit = structure["resources"][resource]["max"]
-    current_resource_limit = structure["resources"][resource]["current"]
+    current_resource_limit = structure["resources"][resource]["usage"]
     difference = max_resource_limit - current_resource_limit
     energy_aplification = 10  # How many cpu shares to rescale per watt
     return difference * energy_aplification
@@ -172,7 +172,7 @@ def get_amount_from_proportional(structure, resource):
 
 def get_container_energy_str(resources_dict):
     return ",".join([str(try_get_value(resources_dict["energy"], "max")),
-                     str(try_get_value(resources_dict["energy"], "current")),
+                     str(try_get_value(resources_dict["energy"], "usage")),
                      str(try_get_value(resources_dict["energy"], "min"))])
 
 

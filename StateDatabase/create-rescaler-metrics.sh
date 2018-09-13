@@ -41,4 +41,6 @@
 # APPLICATION RESOURCES
     ./build/tsdb mkmetric structure.cpu.usage
     ./build/tsdb mkmetric structure.mem.usage
+    ./build/tsdb mkmetric structure.disk.usage
+    ./build/tsdb mkmetric structure.net.usage
     ./build/tsdb mkmetric structure.energy.usage
