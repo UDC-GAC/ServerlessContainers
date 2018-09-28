@@ -10,6 +10,7 @@ import MyUtils.MyUtils as MyUtils
 from src.pipelines import send_to_OpenTSDB as OpenTSDB_sender
 
 db_handler = couchDB.CouchDBServer()
+opentsdb_Session = requests.Session()
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
 OPENTSDB_STORED_VALUES_AS_NULL = 0
 SERVICE_NAME = "database_snapshoter"
@@ -93,7 +94,7 @@ def persist():
 
         # Send the data
         if docs != list():
-            success, info = OpenTSDB_sender.send_json_documents(docs)
+            success, info = OpenTSDB_sender.send_json_documents(docs, opentsdb_Session)
             if not success:
                 MyUtils.logging_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])),
                                       debug)

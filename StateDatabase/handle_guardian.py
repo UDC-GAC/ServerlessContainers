@@ -29,7 +29,7 @@ def switch_to_application(guardian):
         if "rescale_by" in rule:
 
             if rule["name"].endswith("Down"):
-                #rule["rescale_by"] = "fit_to_usage"
+                # rule["rescale_by"] = "fit_to_usage"
                 rule["rescale_by"] = "amount"
 
             if rule["name"].endswith("Up"):

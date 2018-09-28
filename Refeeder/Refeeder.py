@@ -86,8 +86,8 @@ def generate_container_energy_metrics(container, host_info):
 
     # Generate the container energy information from the container cpu and the host cpu and energy info
     new_container = MyUtils.copy_structure_base(container)
-    new_container["resources"] = {}
-    new_container["resources"]["energy"] = {}
+    new_container["resources"] = dict()
+    new_container["resources"]["energy"] = dict()
     new_container["resources"]["energy"]["usage"] = float(
         host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
 
@@ -141,6 +141,7 @@ def refeed_container(container, updated_containers):
 
     # Generate the energy information, if unsuccessful, None will be returned
     container = generate_container_energy_metrics(container, host_info)
+
     if container:
         MyUtils.update_structure(container, db_handler, debug)
         updated_containers.append(container)

@@ -85,6 +85,23 @@ def set_service_information(service_name):
 
     return jsonify(201)
 
+@app.route("/service/<service_name>/<key>", methods=['PUT'])
+def set_service_value(service_name, key):
+    if service_name == "":
+        abort(400)
+
+    try:
+        service = get_db().get_service(service_name)
+    except ValueError:
+        return abort(404)
+
+    value = int(request.json["value"])
+    service["config"][key] = value
+
+    get_db().update_service(service)
+
+    return jsonify(201)
+
 
 @app.route("/rule/", methods=['GET'])
 def get_rules():
@@ -168,43 +185,48 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
         new_structure["resources"][resource][parameter] = value
         get_db().update_structure(new_structure)
 
-        # TODO FIX this should not really be done
-        #structure = retrieve_structure(structure_name)
-        #if structure["resources"][resource][parameter] != value:
-        #    set_structure_parameter_of_resource(structure_name, resource, parameter)
-
     except KeyError:
         abort(404)
     return jsonify(201)
 
+
 @app.route("/structure/<structure_name>/guard", methods=['PUT'])
-def set_structure_to_guarded(structure_name,):
+def set_structure_to_guarded(structure_name, ):
     structure = retrieve_structure(structure_name)
-    structure["guard"] = True
-    get_db().update_structure(structure)
+    new_structure = MyUtils.copy_structure_base(structure)
+    new_structure["guard"] = True
+    get_db().update_structure(new_structure)
     return jsonify(201)
+
 
 @app.route("/structure/<structure_name>/unguard", methods=['PUT'])
 def set_structure_to_unguarded(structure_name):
     structure = retrieve_structure(structure_name)
-    structure["guard"] = False
-    get_db().update_structure(structure)
+    new_structure = MyUtils.copy_structure_base(structure)
+    new_structure["guard"] = False
+    get_db().update_structure(new_structure)
     return jsonify(201)
 
 
 @app.route("/structure/<structure_name>/resources/<resource>/guard", methods=['PUT'])
 def set_structure_resource_to_guarded(structure_name, resource):
     structure = retrieve_structure(structure_name)
-    structure["resources"][resource]["guard"] = True
-    get_db().update_structure(structure)
+    new_structure = MyUtils.copy_structure_base(structure)
+    new_structure["resources"] = dict()
+    new_structure["resources"][resource] = dict()
+    new_structure["resources"][resource]["guard"] = True
+    get_db().update_structure(new_structure)
     return jsonify(201)
 
 
 @app.route("/structure/<structure_name>/resources/<resource>/unguard", methods=['PUT'])
 def set_structure_resource_to_unguarded(structure_name, resource):
     structure = retrieve_structure(structure_name)
-    structure["resources"][resource]["guard"] = False
-    get_db().update_structure(structure)
+    new_structure = MyUtils.copy_structure_base(structure)
+    new_structure["resources"] = dict()
+    new_structure["resources"][resource] = dict()
+    new_structure["resources"][resource]["guard"] = False
+    get_db().update_structure(new_structure)
     return jsonify(201)
 
 
@@ -258,9 +280,10 @@ def set_structure_profile(structure_name, profile_name):
 @app.route("/structure/<structure_name>/guard_policy/serverless", methods=['PUT'])
 def set_structure_guard_policy_to_serverless(structure_name):
     try:
-        structure = get_db().get_structure(structure_name)
-        structure["guard_policy"] = "serverless"
-        get_db().update_structure(structure)
+        structure = retrieve_structure(structure_name)
+        new_structure = MyUtils.copy_structure_base(structure)
+        new_structure["guard_policy"] = "serverless"
+        get_db().update_structure(new_structure)
     except ValueError:
         return abort(404)
     return jsonify(201)
@@ -269,9 +292,10 @@ def set_structure_guard_policy_to_serverless(structure_name):
 @app.route("/structure/<structure_name>/guard_policy/fixed", methods=['PUT'])
 def set_structure_guard_policy_to_fixed(structure_name):
     try:
-        structure = get_db().get_structure(structure_name)
-        structure["guard_policy"] = "fixed"
-        get_db().update_structure(structure)
+        structure = retrieve_structure(structure_name)
+        new_structure = MyUtils.copy_structure_base(structure)
+        new_structure["guard_policy"] = "fixed"
+        get_db().update_structure(new_structure)
     except ValueError:
         return abort(404)
     return jsonify(201)

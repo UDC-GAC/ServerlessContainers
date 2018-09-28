@@ -215,41 +215,6 @@
         "ymin": 0,
         "ymax": 9000
       }
-    },{
-      "metrics": [
-        {
-          "metric": "structure.mem.current",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=app1"
-          ]
-        },
-        {
-          "metric": "structure.mem.usage",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=app1"
-          ]
-        },
-        {
-          "metric": "limit.mem.lower",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=app1"
-          ]
-        },
-        {
-          "metric": "limit.mem.upper",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=app1"
-          ]
-        }
-      ],
-      "yranges": {
-        "ymin": 0,
-        "ymax": 65000
-      }
     }
   ]
 }

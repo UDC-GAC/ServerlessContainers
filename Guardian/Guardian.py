@@ -17,15 +17,29 @@ NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog_handler.NO_METRIC_DATA_DEFAULT_VALUE
 db_handler = couchDB.CouchDBServer()
 
 BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
+#BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident', 'proc.disk.writes.mb',
+#                                'proc.disk.reads.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']
+
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident']}
+# GUARDIAN_CONTAINER_METRICS = {
+#     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
+#     'structure.mem.usage': ['proc.mem.resident'],
+#     'structure.disk.usage': ['proc.disk.reads.mb'],
+#     'structure.net.usage': ['proc.disk.reads.mb', 'proc.net.tcp.in.mb']}
 
 BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage', 'structure.energy.usage']
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
     'structure.mem.usage': ['structure.mem.usage'],
     'structure.energy.usage': ['structure.energy.usage']}
+#GUARDIAN_APPLICATION_METRICS = {
+#    'structure.cpu.usage': ['structure.cpu.usage'],
+#    'structure.mem.usage': ['structure.mem.usage'],
+#    'structure.disk.usage': ['structure.disk.usage'],
+#    'structure.net.usage': ['structure.net.usage'],
+#    'structure.energy.usage': ['structure.energy.usage']}
 
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
@@ -33,8 +47,11 @@ BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": 
 TAGS = {"container": "host", "application": "structure"}
 
 translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage"}
+#translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage",
+#                   "disk": "structure.disk.usage", "net": "structure.net.usage"}
 
-RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
+#RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
+RESOURCES = ['cpu', 'mem', 'energy']
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
                          "EVENT_TIMEOUT": 40, "DEBUG": True, "STRUCTURE_GUARDED": "container"}
 SERVICE_NAME = "guardian"
@@ -43,6 +60,9 @@ debug = True
 NOT_AVAILABLE_STRING = "n/a"
 MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
 MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1.5
+
+NON_ADJUSTABLE_RESOURCES = ["energy"]
+CPU_SHARES_PER_WATT = 10 #7  # How many cpu shares to rescale per watt
 
 
 # TESTED
@@ -102,16 +122,15 @@ def get_container_resources_str(resource_label, resources_dict, limits_dict, usa
                          str(try_get_value(resources_dict[resource_label], "min"))])
     else:
         return ",".join([str(try_get_value(resources_dict[resource_label], "max")),
-                     str(try_get_value(resources_dict[resource_label], "current")),
-                     str(try_get_value(limits_dict[resource_label], "upper")),
-                     usage_value_string,
-                     str(try_get_value(limits_dict[resource_label], "lower")),
-                     str(try_get_value(resources_dict[resource_label], "min"))])
+                         str(try_get_value(resources_dict[resource_label], "current")),
+                         str(try_get_value(limits_dict[resource_label], "upper")),
+                         usage_value_string,
+                         str(try_get_value(limits_dict[resource_label], "lower")),
+                         str(try_get_value(resources_dict[resource_label], "min"))])
 
 
 def adjust_if_invalid_amount(amount, resource, structure, limits):
-    # TODO special case for energy, try to fix
-    if resource == "energy":
+    if resource in NON_ADJUSTABLE_RESOURCES:
         return amount
 
     current_value = structure["resources"][resource]["current"] + amount
@@ -161,13 +180,12 @@ def get_amount_from_fit_reduction(structure, usages, resource, limits):
     return -1 * difference
 
 
-# TODO only used for energy
-def get_amount_from_proportional(structure, resource):
+def get_amount_from_proportional_energy_rescaling(structure, resource):
     max_resource_limit = structure["resources"][resource]["max"]
     current_resource_limit = structure["resources"][resource]["usage"]
     difference = max_resource_limit - current_resource_limit
-    energy_aplification = 10  # How many cpu shares to rescale per watt
-    return difference * energy_aplification
+    energy_aplification = CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
+    return int(difference * energy_aplification)
 
 
 def get_container_energy_str(resources_dict):
@@ -208,7 +226,6 @@ def correct_container_state(resources, limits_document):
 
 def invalid_container_state(resources, limits_document):
     limits = limits_document["resources"]
-    # TODO add support for disk and net
     for resource in ["cpu", "mem"]:
         max_value = try_get_value(resources[resource], "max")
         current_value = try_get_value(resources[resource], "current")
@@ -329,7 +346,7 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                             amount = get_amount_from_fit_reduction(structure, usages, resource_label, limits)
 
                         elif rule["rescale_by"] == "proportional" and rule["resource"] == "energy":
-                            amount = get_amount_from_proportional(structure, resource_label)
+                            amount = get_amount_from_proportional_energy_rescaling(structure, resource_label)
 
                         else:
                             amount = rule["amount"]
@@ -357,12 +374,15 @@ def match_rules_and_events(structure, rules, events, limits, usages):
                     timestamp=int(time.time()))
 
                 # TODO fix if necessary as energy is not a 'real' resource but an abstraction
-                # For the moment, energy rescaling is mapped to cpu rescaling
+                # For the moment, energy rescaling is uniquely mapped to cpu rescaling
                 if resource_label == "energy":
                     request["resource"] = "cpu"
+                    request["for_energy"] = True
 
                 if is_container(structure):
                     request["host"] = structure["host"]
+                    request["host_rescaler_ip"] = structure["host_rescaler_ip"]
+                    request["host_rescaler_port"] = structure["host_rescaler_port"]
 
                 generated_requests.append(request)
 
@@ -399,7 +419,8 @@ def print_debug_info(container, usages, limits, triggered_events, triggered_requ
     for request in triggered_requests:
         req.append(request["action"])
     triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
-    MyUtils.logging_info(" ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]), debug)
+    MyUtils.logging_info(
+        " ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]), debug)
 
 
 def process_serverless_structure(config, structure, usages, limits, rules):
@@ -528,6 +549,8 @@ def process_fixed_resources_structure(resources, structure):
 
                 if is_container(structure):
                     request["host"] = structure["host"]
+                    request["host_rescaler_ip"] = structure["host_rescaler_ip"]
+                    request["host_rescaler_port"] = structure["host_rescaler_port"]
 
                 db_handler.add_request(request)
                 triggered_requests.append(request)

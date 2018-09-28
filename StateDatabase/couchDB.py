@@ -18,30 +18,30 @@ class CouchDBServer:
     __MAX_UPDATE_TRIES = 10
     __DATABASE_TIMEOUT = 5
 
-
     def __init__(self, server='http://couchdb:5984'):
         self.server = server
+        self.session = requests.Session()
 
     def database_exists(self, database):
-        r = requests.head(self.server + "/" + database)
+        r = self.session.head(self.server + "/" + database)
         return r.status_code == 200
 
     def create_database(self, database):
-        r = requests.put(self.server + "/" + database)
+        r = self.session.put(self.server + "/" + database)
         if r.status_code != 201:
             r.raise_for_status()
         else:
             return True
 
     def remove_database(self, database):
-        r = requests.delete(self.server + "/" + database)
+        r = self.session.delete(self.server + "/" + database)
         if r.status_code != 200:
             r.raise_for_status()
         else:
             return True
 
     def compact_database(self, database):
-        r = requests.post(self.server + "/" + database + "/_compact", headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database + "/_compact", headers=self.post_doc_headers)
         if r.status_code != 202:
             r.raise_for_status()
         else:
@@ -49,27 +49,27 @@ class CouchDBServer:
 
     def __get_all_database_docs(self, database):
         docs = list()
-        r = requests.get(self.server + "/" + database + "/_all_docs", timeout=self.__DATABASE_TIMEOUT)
+        r = self.session.get(self.server + "/" + database + "/_all_docs", timeout=self.__DATABASE_TIMEOUT)
         if r.status_code != 200:
             r.raise_for_status()
         else:
             rows = json.loads(r.text)["rows"]
             for row in rows:
-                req_doc = requests.get("/".join([self.server, database, row["id"]]))
+                req_doc = self.session.get("/".join([self.server, database, row["id"]]))
                 docs.append(dict(req_doc.json()))
             return docs
 
     # PRIVATE CRUD METHODS #
 
     def __delete_doc(self, database, docid, rev):
-        r = requests.delete("{0}/{1}/{2}?rev={3}".format(self.server, database, str(docid), str(rev)))
+        r = self.session.delete("{0}/{1}/{2}?rev={3}".format(self.server, database, str(docid), str(rev)))
         if r.status_code != 200:
             r.raise_for_status()
         else:
             return True
 
     def __add_doc(self, database, doc):
-        r = requests.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200:
             r.raise_for_status()
         else:
@@ -77,8 +77,8 @@ class CouchDBServer:
 
     def __add_bulk_docs(self, database, docs):
         docs_data = {"docs": docs}
-        r = requests.post(self.server + "/" + database + "/_bulk_docs", data=json.dumps(docs_data),
-                          headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database + "/_bulk_docs", data=json.dumps(docs_data),
+                              headers=self.post_doc_headers)
         if r.status_code != 201:
             r.raise_for_status()
         else:
@@ -101,7 +101,7 @@ class CouchDBServer:
         return output_dict
 
     def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=1000, max_tries=10):
-        r = requests.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
@@ -130,8 +130,8 @@ class CouchDBServer:
         for key in selectors:
             query["selector"][key] = selectors[key]
 
-        req_docs = requests.post(self.server + "/" + database + "/_find", data=json.dumps(query),
-                                 headers={'Content-Type': 'application/json'})
+        req_docs = self.session.post(self.server + "/" + database + "/_find", data=json.dumps(query),
+                                     headers={'Content-Type': 'application/json'})
         if req_docs.status_code != 200:
             req_docs.raise_for_status()
         else:

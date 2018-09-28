@@ -22,7 +22,11 @@
             "structure=node0"
           ]
         }
-      ]
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
     },{
       "metrics": [
         {
@@ -45,7 +49,11 @@
             "structure=node1"
           ]
         }
-      ]
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
     },{
       "metrics": [
         {
@@ -68,7 +76,11 @@
             "structure=node2"
           ]
         }
-      ]
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
     },{
       "metrics": [
         {
@@ -91,7 +103,11 @@
             "structure=node3"
           ]
         }
-      ]
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
     },{
       "metrics": [
         {
@@ -114,7 +130,11 @@
             "structure=node4"
           ]
         }
-      ]
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
     },{
       "metrics": [
         {
@@ -137,7 +157,11 @@
             "structure=node5"
           ]
         }
-      ]
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 9000
+      }
     }
   ]
 }

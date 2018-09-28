@@ -1,8 +1,8 @@
 # /usr/bin/python
 import StateDatabase.couchDB as couchDB
-import StateDatabase.initializers.initializer_utils as CouchDB_Utils
+import StateDatabase.initializers.initializer_utils as couchdb_utils
 
-initializer_utils = CouchDB_Utils.CouchDB_Utils()
+initializer_utils = couchdb_utils.CouchDBUtils()
 handler = couchDB.CouchDBServer()
 database = "limits"
 initializer_utils.remove_db(database)
@@ -11,9 +11,10 @@ initializer_utils.create_db(database)
 containers = ["node0", "node1", "node2", "node3", "node4", "node5"]
 hosts = ["c14-13"]
 applications = ["app1"]
+
 # CREATE LIMITS
 if handler.database_exists("limits"):
-    print ("Adding 'limits' documents")
+    print("Adding 'limits' documents")
     for c in containers:
         container = dict(
             type='limit',
@@ -40,5 +41,3 @@ if handler.database_exists("limits"):
         )
     )
     handler.add_limit(application)
-
-

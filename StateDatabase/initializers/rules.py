@@ -1,8 +1,8 @@
 # /usr/bin/python
 import StateDatabase.couchDB as couchDB
-import StateDatabase.initializers.initializer_utils as CouchDB_Utils
+import StateDatabase.initializers.initializer_utils as couchdb_utils
 
-initializer_utils = CouchDB_Utils.CouchDB_Utils()
+initializer_utils = couchdb_utils.CouchDBUtils()
 handler = couchDB.CouchDBServer()
 database = "rules"
 initializer_utils.remove_db(database)
@@ -10,7 +10,7 @@ initializer_utils.create_db(database)
 
 # CREATE RULES
 if handler.database_exists("rules"):
-    print ("Adding 'rules' documents")
+    print("Adding 'rules' documents")
 
     # CPU
     cpu_exceeded_upper = dict(
@@ -29,7 +29,7 @@ if handler.database_exists("rules"):
                 {"<": [
                     {"var": "structure.cpu.current"},
                     {"var": "structure.cpu.max"}]}
-                ]
+            ]
             }),
         generates="events", action={"events": {"scale": {"up": 1}}},
         active=False
@@ -168,12 +168,12 @@ if handler.database_exists("rules"):
                     2]},
                 {"<=": [
                     {"var": "events.scale.down"},
-                   2]}
+                    2]}
             ]}),
         generates="requests",
         events_to_remove=2,
         action={"requests": ["MemRescaleUp"]},
-        amount=2048,
+        amount=3072,
         rescale_by="amount",
         active=False
     )
@@ -232,18 +232,16 @@ if handler.database_exists("rules"):
                     1]},
                 {">=": [
                     {"var": "events.scale.up"},
-                    5]}
+                    4]}
             ]}),
         generates="requests",
-        events_to_remove=5,
+        events_to_remove=4,
         action={"requests": ["CpuRescaleDown"]},
         amount=-20,
         rescale_by="proportional",
         active=True
     )
     handler.add_rule(EnergyRescaleDown)
-
-
 
     energy_dropped_lower = dict(
         _id='energy_dropped_lower',
@@ -269,13 +267,13 @@ if handler.database_exists("rules"):
             {"and": [
                 {">=": [
                     {"var": "events.scale.down"},
-                    5]},
+                    3]},
                 {"<=": [
                     {"var": "events.scale.up"},
                     1]}
             ]}),
         generates="requests",
-        events_to_remove=5,
+        events_to_remove=3,
         action={"requests": ["CpuRescaleUp"]},
         amount=20,
         rescale_by="proportional",

@@ -13,8 +13,7 @@ def read_cgroup_file_value(file_path):
                 value = file_handler.readline().rstrip("\n")
             return {"success": True, "data": value}
         else:
-            # TODO string replacement
-            return {"success": False, "error": str("Couldn't access file: " + file_path)}
+            return {"success": False, "error": "Couldn't access file: {0}".format(file_path)}
     except IOError as e:
         return {"success": False, "error": str(e)}
 
@@ -23,13 +22,12 @@ def write_cgroup_file_value(file_path, value):
     # Write only 1 line for these files as they are 'virtual' files
     try:
         if os.path.isfile(file_path) and os.access(file_path, os.W_OK):
-            # with open(file_path, 'w') as file_handler:
-            with open(file_path, 'r+') as file_handler:
+            with open(file_path, 'w') as file_handler:
+            #with open(file_path, 'r+') as file_handler:
                 file_handler.write(str(value))
             return {"success": True, "data": value}
         else:
-            # TODO string replacement
-            return {"success": False, "error": str("Couldn't access file: " + file_path)}
+            return {"success": False, "error": "Couldn't access file: {0}".format(file_path)}
     except IOError as e:
         return {"success": False, "error": str(e)}
 
@@ -176,26 +174,39 @@ def set_node_mem(container_name, mem_resource):
     # Assume an integer for megabytes, add the M and set to cgroups
     if MEM_LIMIT_LABEL in mem_resource:
         value = int(mem_resource[MEM_LIMIT_LABEL])
+        value_megabytes_integer = 0
         if value is -1:
             value_megabytes = str(value)
         elif value < LOWER_LIMIT_MEGABYTES:
             # Don't allow values lower than an amount like 64 MB as it will probably block the container
-            # TODO string replacement
-            return False, {"error": "Memory limit is too low, less than " + str(LOWER_LIMIT_MEGABYTES) + " MB"}
+            return False, {"error": "Memory limit is too low, less than {0} MB".format(str(LOWER_LIMIT_MEGABYTES))}
         else:
+            value_megabytes_integer = value
             value_megabytes = str(value) + 'M'
+
 
         # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
         swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.memsw.limit_in_bytes"])
         memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
-        swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
-        mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+
+        # Get the current memory limit in megabytes, that should be equal to the swap space
+        success, current_mem_value = get_node_mem(container_name)
+        current_mem_value = current_mem_value[MEM_LIMIT_LABEL]
+        if current_mem_value < value_megabytes_integer:
+            # If we are to lower the amount, first memory, then swap
+            mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+            swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+        else:
+            # If we are to increase the amount, first swap, then memory
+            swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+            mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+
         if not mem_op["success"]:
             # Something happened with memory limit
-            return False, mem_op
+            return False, "Memory error {0}".format(mem_op)
         if not swap_op["success"]:
             # Something happened with swap limit
-            return False, swap_op
+            return False, "Memory error {0}".format(swap_op)
         # Nothing bad happened
         return True, {MEM_LIMIT_LABEL: value}
     else:
@@ -285,20 +296,18 @@ def set_node_disk(container_name, disk_resource):
         limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
         try:
             # TODO FIX the path issue
-            #set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
+            # set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
             set_bandwidth_script_path = "/".join([os.getcwd()])
             set_disk_bandwidth = subprocess.Popen(
-                # TODO string replacement
-                ["/bin/bash", set_bandwidth_script_path + "/" + "set_bandwidth.sh", container_name, major + ":" + minor,
+                ["/bin/bash", "{0}/set_bandwidth.sh".format(set_bandwidth_script_path), container_name,
+                 "{0}:{1}".format(major, minor),
                  limit_write], stderr=subprocess.PIPE)
-            # set_disk_bandwidth.wait()
             out, err = set_disk_bandwidth.communicate()
             if set_disk_bandwidth.returncode == 0:
                 pass
             else:
-                # TODO string replacement
-                return False, {"error": "exit code of set_disk_bandwidth was: " + str(
-                    set_disk_bandwidth.returncode) + " with error message: " + str(err)}
+                return False, {"error": "exit code of set_disk_bandwidth was: {0} with error message: {1}".format(str(
+                    set_disk_bandwidth.returncode), str(err))}
         except subprocess.CalledProcessError as e:
             return False, {"error": str(e)}
 
@@ -328,8 +337,8 @@ def set_node_disk(container_name, disk_resource):
 def get_device_major_minor(device_path):
     # Try next for partitions or devices
     major_minor = get_device_major_minor_raw_device(device_path)
-    if major_minor and major_minor != ("0","0"):
-        #TODO FIX this or find a solution, partitions can't be limited, only devices
+    if major_minor and major_minor != ("0", "0"):
+        # TODO FIX this or find a solution, partitions can't be limited, only devices
         if device_path.startswith("/dev/sd"):
             device_path = device_path[0:8]
             major_minor = get_device_major_minor_raw_device(device_path)
@@ -341,36 +350,39 @@ def get_device_major_minor(device_path):
     if major_minor:
         return major_minor[0], major_minor[1]
 
-
-
     return None
+
 
 def get_node_disks(container_name, devices):
     retrieved_disks = list()
     limits_read, limits_write = get_node_disk_limits(container_name)
     for device in devices.keys():
+        # TODO FIX
+        if device == "bdev":
+            continue
         device_mountpoint = devices[device]["source"]
         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
 
         try:
             major, minor = get_device_major_minor(device_path)
         except TypeError as e:
-            #None was returned
-            return False, {"error": str(e)}
+            # None was returned
+            continue
+            #return False, {"error": str(e)}
 
         major_minor_str = major + ":" + minor
 
         if major_minor_str in limits_read:
             # Convert the limits to Mbits/s
             device_read_limit = int(limits_read[major_minor_str])
-            device_read_limit = int(device_read_limit / (1048576))
+            device_read_limit = int(device_read_limit / 1048576)
         else:
             device_read_limit = -1
 
         if major_minor_str in limits_write:
             # Convert the limits to Mbits/s
             device_write_limit = int(limits_write[major_minor_str])
-            device_write_limit = int(device_write_limit / (1048576))
+            device_write_limit = int(device_write_limit / 1048576)
         else:
             device_write_limit = -1
 
@@ -420,11 +432,9 @@ def unset_interface_limit(interface_name):
         if tc.returncode == 0:
             return True
         else:
-            # TODO string replacement
-            return False, {"error": "exit code of tc was: " + str(tc.returncode)}
+            return False, {"error": "exit code of tc was: {0}".format(str(tc.returncode))}
     except subprocess.CalledProcessError as e:
-        # TODO string replacement
-        return False, {"error": "error trying to execute command:  " + str(e)}
+        return False, {"error": "error trying to execute command: {0}".format(str(e))}
 
 
 # tc qdisc add dev veth6UQ01E root tbf rate 100Mbit burst 1000kb latency 100ms
@@ -439,8 +449,7 @@ def set_interface_limit(interface_name, net):
         if tc.returncode == 0:
             return True, net
         else:
-            # TODO string replacement
-            return False, {"error": "exit code of tc was: " + str(tc.returncode) + " with error: " + str(err)}
+            return False, {"error": "exit code of tc was: {0} with error: {1}".format(str(tc.returncode), str(err))}
     except subprocess.CalledProcessError as e:
         return False, {"error": str(e)}
 

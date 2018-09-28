@@ -2,71 +2,52 @@
 DEV_PATH=$HOME/development
 export RESCALER_PATH=$DEV_PATH/automatic-rescaler
 
-echo "Setting container resources"
-bash $RESCALER_PATH/NodeRescaler/config/small-limit/update_all.sh
+nodes=( node0 node1 node2 node3 node4 node5 )
+resources=( cpu mem disk net energy )
+resource_rules=( CpuRescaleDown CpuRescaleUp MemRescaleDown MemRescaleUp cpu_dropped_lower cpu_exceeded_upper mem_dropped_lower mem_exceeded_upper )
+energy_rules=( EnergyRescaleDown EnergyRescaleUp energy_dropped_lower energy_exceeded_upper )
 
-echo "Resetting host resources accounting"
-python $RESCALER_PATH/StateDatabase/initializers/reset_host_structure_info.py
-
-bash $RESCALER_PATH/Orchestrator/Guardian/set_to_container.sh
-
+echo "Setting Guardian to guard containers"
+bash $RESCALER_PATH/Orchestrator/Guardian/set_to_container.sh > /dev/null
 
 echo "Setting application to unguarded"
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh app1
+bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh app1 > /dev/null
 
 echo "Setting container nodes to unguarded"
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node0
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node1
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node2
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node3
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node4
-bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh node5
+for i in "${nodes[@]}"
+do
+	bash $RESCALER_PATH/Orchestrator/Structures/set_to_unguarded.sh $i > /dev/null
+done
+
+echo "Setting container resources [cpu,mem,disk,net,energy] to unguarded"
+for i in "${nodes[@]}"
+do
+    for j in "${resources[@]}"
+    do
+	bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh $i $j > /dev/null
+    done
+done
 
 echo "Setting application resources [cpu,mem,disk,net,energy] to unguarded"
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 cpu
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 mem
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 disk
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 net
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node0 energy
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node1 cpu
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node1 mem
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node1 disk
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node1 net
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node1 energy
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node2 cpu
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node2 mem
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node2 disk
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node2 net
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node2 energy
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 cpu
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 mem
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 disk
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 net
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node3 energy
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 cpu
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 mem
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 disk
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 net
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node4 energy
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 cpu
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 mem
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 disk
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 net
-bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh node5 energy
+for j in "${resources[@]}"
+do
+    bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh app1 $j > /dev/null
+done
+
+echo "Setting container resources [cpu] to normal"
+for i in "${nodes[@]}"
+do
+    bash $RESCALER_PATH/Orchestrator/Structures/set_structure_cpu_max.sh $i 200 > /dev/null
+done
+
+echo "Deactivating resource rules"
+for i in "${resource_rules[@]}"
+do
+    bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh $i > /dev/null
+done
 
 echo "Deactivating energy rules"
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh EnergyRescaleDown
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh EnergyRescaleUp
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh energy_dropped_lower
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh energy_exceeded_upper
-
-echo "Deactivating rescaling rules"
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh CpuRescaleDown
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh CpuRescaleUp
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh MemRescaleDown
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh MemRescaleUp
-
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh cpu_dropped_lower
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh cpu_exceeded_upper
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh mem_dropped_lower
-bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh mem_exceeded_upper
+for i in "${energy_rules[@]}"
+do
+    bash $RESCALER_PATH/Orchestrator/Rules/deactivate_rule.sh $i > /dev/null
+done

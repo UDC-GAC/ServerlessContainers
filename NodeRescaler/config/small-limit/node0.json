@@ -1,7 +1,7 @@
 {
   "cpu": {
-    "cpu_allowance_limit": "300",
-    "cpu_num": "0,1,12"
+    "cpu_allowance_limit": "200",
+    "cpu_num": "0,1"
   },
   "disk": {
     "disk_read_limit": "104857600",
@@ -14,7 +14,7 @@
     "mem_limit": "8192"
   },
   "net": {
-    "device_name_in_host": "vethK6JFAY",
+    "device_name_in_host": "vethW5A4LA",
     "net_limit": 200
   }
 }

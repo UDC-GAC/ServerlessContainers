@@ -6,6 +6,7 @@ from flask import Response
 from flask import abort
 from flask import jsonify
 from flask import request
+from werkzeug.serving import WSGIRequestHandler
 
 import lxd_node_resource_manager as node_resource_manager
 
@@ -60,4 +61,5 @@ def heartbeat():
 
 
 if __name__ == "__main__":
+    WSGIRequestHandler.protocol_version = "HTTP/1.1"
     app.run(host='0.0.0.0', port=8000)

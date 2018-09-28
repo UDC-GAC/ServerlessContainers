@@ -4,13 +4,15 @@ import requests
 import StateDatabase.couchDB as couchDB
 
 db = couchDB.CouchDBServer()
-time_window_allowed = 20  # 1 minute
+time_window_allowed = 30  # seconds
 POLLING_TIME = 5
+
+REST_SERVICES = [("orchestrator", "5000"), ("c14-13-rescaler", "8000")]
 
 
 def check_rest_api(rest_endpoint):
     try:
-        endpoint = "http://{0}:{1}/heartbeat".format(rest_endpoint[0],rest_endpoint[1])
+        endpoint = "http://{0}:{1}/heartbeat".format(rest_endpoint[0], rest_endpoint[1])
         r = requests.get(endpoint, headers={'Accept': 'application/json'}, timeout=2)
         if r.status_code == 200:
             return True
@@ -40,7 +42,7 @@ while True:
         else:
             alive.append(service["name"])
 
-    for REST_service in [("orchestrator","5000"), ("c14-13-rescaler","8000")]:
+    for REST_service in REST_SERVICES:
         if check_rest_api(REST_service):
             alive.append(REST_service[0])
         else:

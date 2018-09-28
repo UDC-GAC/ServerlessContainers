@@ -6,86 +6,62 @@ handler = couchDB.CouchDBServer()
 dante = handler.get_structure("c14-13")
 dante["resources"] = {
     "mem": {
-      "max": 49176,
-      "free": 0
+        "max": 49152,
+        "free": 0
     },
     "cpu": {
-      "core_usage_mapping": {
-        "0": {
-          "node0": 100,
-          "free": 0
+        "core_usage_mapping": {
+            "0": {
+                "node0": 100,
+                "free": 0
+            },
+            "1": {
+                "node0": 100,
+                "free": 0
+            },
+            "2": {
+                "node1": 100,
+                "free": 0
+            },
+            "3": {
+                "node1": 100,
+                "free": 0
+            },
+            "4": {
+                "node2": 100,
+                "free": 0
+            },
+            "5": {
+                "node2": 100,
+                "free": 0
+            },
+            "6": {
+                "node3": 100,
+                "free": 0
+            },
+            "7": {
+                "node3": 100,
+                "free": 0
+            },
+            "8": {
+                "node4": 100,
+                "free": 0
+            },
+            "9": {
+                "node4": 100,
+                "free": 0
+            },
+            "10": {
+                "node5": 100,
+                "free": 0
+            },
+            "11": {
+                "node5": 100,
+                "free": 0
+            }
         },
-        "1": {
-          "node0": 100,
-          "free": 0
-        },
-        "2": {
-          "node1": 100,
-          "free": 0
-        },
-        "3": {
-          "node1": 100,
-          "free": 0
-        },
-        "4": {
-          "node2": 100,
-          "free": 0
-        },
-        "5": {
-          "node2": 100,
-          "free": 0
-        },
-        "6": {
-          "node3": 100,
-          "free": 0
-        },
-        "7": {
-          "node3": 100,
-          "free": 0
-        },
-        "8": {
-          "node4": 100,
-          "free": 0
-        },
-        "9": {
-          "node4": 100,
-          "free": 0
-        },
-        "10": {
-          "node5": 100,
-          "free": 0
-        },
-        "11": {
-          "node5": 100,
-          "free": 0
-        },
-        "12": {
-          "node0": 100,
-          "free": 0
-        },
-        "13": {
-          "node1": 100,
-          "free": 0
-        },
-        "14": {
-          "node2": 100,
-          "free": 0
-        },
-        "15": {
-          "node3": 100,
-          "free": 0
-        },
-        "16": {
-          "node4": 100,
-          "free": 0
-        },
-        "17": {
-          "node5": 100,
-          "free": 0
-        }
-      },
-      "max": 1800,
-      "free": 0
+        "max": 1200,
+        "free": 0
     }
-  }
+}
 handler.update_structure(dante)

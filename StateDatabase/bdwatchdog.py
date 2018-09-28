@@ -7,13 +7,14 @@ import time
 class BDWatchdog:
     OPENTSDB_URL = "opentsdb"
     OPENTSDB_PORT = 4242
-    NO_METRIC_DATA_DEFAULT_VALUE = 0 #-1
+    NO_METRIC_DATA_DEFAULT_VALUE = 0  # -1
 
     def __init__(self, server="http://{0}:{1}".format(OPENTSDB_URL, str(int(OPENTSDB_PORT)))):
         self.server = server
+        self.session = requests.Session()
 
     def get_points(self, query):
-        r = requests.post(self.server + "/api/query", data=json.dumps(query),
+        r = self.session.post(self.server + "/api/query", data=json.dumps(query),
                           headers={'content-type': 'application/json', 'Accept': 'application/json'})
         if r.status_code == 200:
             return json.loads(r.text)
@@ -21,7 +22,7 @@ class BDWatchdog:
             r.raise_for_status()
 
     def get_structure_usages(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics,
-                             downsample=1):
+                             downsample=5):
         usages = dict()
         subquery = list()
         for metric in retrieve_metrics:

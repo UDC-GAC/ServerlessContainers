@@ -1,8 +1,8 @@
 # /usr/bin/python
 import StateDatabase.couchDB as couchDB
-import StateDatabase.initializers.initializer_utils as CouchDB_Utils
+import StateDatabase.initializers.initializer_utils as couchdb_utils
 
-initializer_utils = CouchDB_Utils.CouchDB_Utils()
+initializer_utils = couchdb_utils.CouchDBUtils()
 handler = couchDB.CouchDBServer()
 database = "services"
 initializer_utils.remove_db(database)
@@ -10,7 +10,7 @@ initializer_utils.create_db(database)
 
 # CREATE SERVICES
 if handler.database_exists("services"):
-    print ("Adding 'services' document")
+    print("Adding 'services' document")
 
     guardian = dict(
         name="guardian",
@@ -32,7 +32,7 @@ if handler.database_exists("services"):
         config=dict(
             DEBUG=True,
             POLLING_FREQUENCY=5,
-            REQUEST_TIMEOUT=15
+            REQUEST_TIMEOUT=30
         )
     )
 
@@ -71,11 +71,10 @@ if handler.database_exists("services"):
         type="service",
         heartbeat="",
         config=dict(
-            DELAY=120,
+            DELAY=30,
             DEBUG=True
         )
     )
-
 
     handler.add_service(scaler)
     handler.add_service(guardian)
@@ -83,5 +82,3 @@ if handler.database_exists("services"):
     handler.add_service(node_state_snapshoter)
     handler.add_service(refeeder)
     handler.add_service(sanity_checker)
-
-

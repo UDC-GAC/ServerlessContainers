@@ -12,6 +12,7 @@ import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
 
 db_handler = couchDB.CouchDBServer()
+rescaler_http_session = requests.Session()
 RESOURCES = ["cpu", "mem", "net", "disk"]
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
@@ -39,7 +40,7 @@ def generate_timeseries(container_name, resources):
 def update_container_current_values(container_name, resources):
     database_structure = db_handler.get_structure(container_name)
     new_structure = MyUtils.copy_structure_base(database_structure)
-
+    new_structure["resources"] = dict()
     for resource in RESOURCES:
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
@@ -54,13 +55,9 @@ def thread_persist_container(container):
     container_name = container["name"]
 
     # Try to get the container resources, if unavailable, continue with others
-    try:
-        # TODO FIX
-        resources = MyUtils.get_container_resources(db_handler, container_name)
-    except requests.exceptions.HTTPError as e:
-        MyUtils.logging_error(
-            "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),
-            debug)
+    resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
+    if not resources:
+        MyUtils.logging_error("Couldn't get container's {0} resources".format(container_name), debug)
         return
 
     # Persist by updating the Database current value
@@ -138,13 +135,12 @@ def get_container_resources_dict():
 
     for container in containers:
         container_name = container["name"]
-        try:
-            resources = MyUtils.get_container_resources(db_handler, container_name)
-        except requests.exceptions.HTTPError as e:
-            MyUtils.logging_error(
-                "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),
-                debug)
-            return
+
+        resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
+        if not resources:
+            MyUtils.logging_error("Couldn't get container's {0} resources".format(container_name), debug)
+            continue
+
         container_resources_dict[container_name] = container
         container_resources_dict[container_name]["resources"] = resources
     return container_resources_dict

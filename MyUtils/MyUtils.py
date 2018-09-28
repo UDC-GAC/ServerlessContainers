@@ -60,16 +60,23 @@ def get_time_now_string():
     return str(time.strftime("%D %H:%M:%S", time.localtime()))
 
 
-def get_container_resources(db_handler, container_name):
-    # TODO this shouldn't be done here
-    container = db_handler.get_structure(container_name)
-    container_host = container["host"]
+def get_container_resources(container, rescaler_http_session, debug):
+    container_name = container["name"]
+    try:
+        container_host_ip = container["host_rescaler_ip"]
+        container_host_port = container["host_rescaler_port"]
 
-    r = requests.get("http://"+container_host+":8000/container/" + container_name, headers={'Accept': 'application/json'})
-    if r.status_code == 200:
-        return dict(r.json())
-    else:
-        r.raise_for_status()
+        full_address = "http://{0}:{1}/container/{2}".format(container_host_ip, container_host_port, container_name)
+        r = rescaler_http_session.get(full_address, headers={'Accept': 'application/json'})
+        if r.status_code == 200:
+            return dict(r.json())
+        else:
+            r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        logging_error(
+            "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),
+            debug)
+        return None
 
 
 def register_service(db_handler, service):
@@ -127,7 +134,10 @@ def get_cpu_list(cpu_num_string):
 
 
 def copy_structure_base(structure):
-    keys_to_copy = ["_id", "type", "host", "subtype", "name", "resources"]
+    keys_to_copy = ["_id", "type", "subtype", "name"]
+    # TODO FIX, some structures types have specific fields, fix accordingly
+    if structure["subtype"] is "container":
+        keys_to_copy.append("host")
     new_struct = dict()
     for key in keys_to_copy:
         new_struct[key] = structure[key]

@@ -1,8 +1,8 @@
 {
   "resources" : {
     "cpu": 200,
-    "disk": 50,
     "mem": 8192,
+    "disk": 50,
     "net": 200
   }
 }

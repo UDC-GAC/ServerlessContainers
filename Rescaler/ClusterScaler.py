@@ -10,17 +10,20 @@ import traceback
 import logging
 import StateDatabase.bdwatchdog as bdwatchdog
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 600, "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 60, "DEBUG": True}
 SERVICE_NAME = "scaler"
 db_handler = couchDB.CouchDBServer()
+rescaler_http_session = requests.Session()
 bdwatchdog_handler = bdwatchdog.BDWatchdog()
 debug = True
 
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
-                                "mem": ['proc.mem.resident', 'proc.mem.virtual']}
-RESCALER_CONTAINER_METRICS = {
-    'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
-    'mem': ['proc.mem.resident']}
+                                "mem": ['proc.mem.resident'],
+                                "disk": ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
+                                "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
+RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident'],
+                              'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
+                              'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
 host_info_cache = dict()
 
@@ -58,8 +61,8 @@ def filter_requests(request_timeout):
             structure_requests_dict[structure][action] = request
 
     for structure in structure_requests_dict:
-        key = structure_requests_dict[structure].keys()[0]
-        final_requests.append(structure_requests_dict[structure][key])
+        for action in structure_requests_dict[structure]:
+            final_requests.append(structure_requests_dict[structure][action])
 
     return final_requests
 
@@ -78,14 +81,24 @@ def get_cpu_list(cpu_num_string):
     return cpu_list
 
 
+
+
 def apply_cpu_request(request, database_resources, real_resources, amount):
     global host_info_cache
     resource = request["resource"]
-    resource_dict = {resource: {}}
     structure_name = request["structure"]
     host_info = host_info_cache[request["host"]]
-    current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
+
     core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
+
+    # Check the container's core mapping and correct it is necessary
+    #current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
+    #cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
+    #current_cpu_limit, used_cores = check_container_cpu_mapping(structure_name, request, core_usage_map, cpu_list,
+    #                                                            current_cpu_limit)
+
+    current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
+    cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
 
     host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
     host_cpu_list = [str(i) for i in range(host_max_cores)]
@@ -96,7 +109,6 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
         if structure_name not in core_usage_map[core]:
             core_usage_map[core][structure_name] = 0
 
-    cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
     used_cores = list(cpu_list)  # copy
 
     if amount > 0:
@@ -169,6 +181,10 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
     host_info_cache[request["host"]]["resources"]["cpu"]["free"] -= amount
 
     # Return the dictionary to set the resources
+    if any(core in used_cores for core in ["12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23"]):
+        raise ValueError("ERROR, setting wrong cpus")
+
+    resource_dict = {resource: {}}
     resource_dict["cpu"]["cpu_num"] = ",".join(used_cores)
     resource_dict["cpu"]["cpu_allowance_limit"] = int(current_cpu_limit + amount)
 
@@ -189,14 +205,23 @@ def apply_mem_request(request, database_resources, real_resources, amount):
 
 
 def apply_disk_request(request, database_resources, real_resources, amount):
-    # TODO implement disk rescaling
     resource_dict = {request["resource"]: {}}
+    current_disk_limit = get_current_resource_value(database_resources, real_resources, request["resource"])
+
+    # Return the dictionary to set the resources
+    resource_dict["disk"]["disk_read_limit"] = str(int(amount + current_disk_limit))
+    resource_dict["disk"]["disk_write_limit"] = str(int(amount + current_disk_limit))
+
     return resource_dict
 
 
 def apply_net_request(request, database_resources, real_resources, amount):
-    # TODO implement net rescaling
     resource_dict = {request["resource"]: {}}
+    current_net_limit = get_current_resource_value(database_resources, real_resources, request["resource"])
+
+    # Return the dictionary to set the resources
+    resource_dict["net"]["net_limit"] = str(int(amount + current_net_limit))
+
     return resource_dict
 
 
@@ -255,10 +280,11 @@ def apply_request(request, real_resources, database_resources):
     return apply_request_by_resource[resource](request, database_resources, real_resources, amount)
 
 
-def set_container_resources(container, node_rescaler_endpoint, node_rescaler_port, resources):
-    r = requests.put("http://{0}:{1}/container/{2}".format(node_rescaler_endpoint, node_rescaler_port, container),
-                     data=json.dumps(resources),
-                     headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
+def set_container_resources(container, node_rescaler_endpoint, node_rescaler_port, resources, rescaler_http_session):
+    r = rescaler_http_session.put(
+        "http://{0}:{1}/container/{2}".format(node_rescaler_endpoint, node_rescaler_port, container),
+        data=json.dumps(resources),
+        headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
     if r.status_code == 201:
         return dict(r.json())
     else:
@@ -268,10 +294,12 @@ def set_container_resources(container, node_rescaler_endpoint, node_rescaler_por
 
 def process_request(request, real_resources, database_resources):
     global host_info_cache
-    host = request["host"]
+    rescaler_ip = request["host_rescaler_ip"]
+    rescaler_port = request["host_rescaler_port"]
     structure_name = request["structure"]
     resource = request["resource"]
-    current_value_label = {"cpu": "cpu_allowance_limit", "mem": "mem_limit"}
+    current_value_label = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk": "disk_read_limit",
+                           "net": "net_limit"}
 
     # Apply the request and get the new resources to set
     new_resources = apply_request(request, real_resources, database_resources)
@@ -285,24 +313,24 @@ def process_request(request, real_resources, database_resources):
             # previous_resource_limit = real_resources[resource]["current"]
 
             # Apply changes through a REST call
-            # TODO FIX to use the port number
-            applied_resources = set_container_resources(structure_name, host, "8000", new_resources)
+            applied_resources = set_container_resources(structure_name, rescaler_ip, rescaler_port, new_resources,
+                                                        rescaler_http_session)
 
             # Get the applied value
             current_value = applied_resources[resource][current_value_label[resource]]
 
             # Update the limits
-            limits = db_handler.get_limits({"name": structure_name})
-            limits["resources"][resource]["upper"] += request["amount"]
-            limits["resources"][resource]["lower"] += request["amount"]
-            db_handler.update_limit(limits)
+            # limits = db_handler.get_limits({"name": structure_name})
+            # limits["resources"][resource]["upper"] += request["amount"]
+            # limits["resources"][resource]["lower"] += request["amount"]
+            # db_handler.update_limit(limits)
 
             # Update the structure current value but with a low priority (2 tries)
-            structure = db_handler.get_structure(structure_name)
-            updated_structure = MyUtils.copy_structure_base(structure)
-            updated_structure["resources"][resource] = dict()
-            updated_structure["resources"][resource]["current"] = current_value
-            MyUtils.update_structure(updated_structure, db_handler, debug=False, max_tries=2)
+            # structure = db_handler.get_structure(structure_name)
+            # updated_structure = MyUtils.copy_structure_base(structure)
+            # updated_structure["resources"][resource] = dict()
+            # updated_structure["resources"][resource]["current"] = current_value
+            # MyUtils.update_structure(updated_structure, db_handler, debug=False, max_tries=2)
 
         except Exception as e:
             MyUtils.logging_error(str(e) + " " + str(traceback.format_exc()), debug)
@@ -317,12 +345,15 @@ def rescale_container(request, structure_name):
         if request["host"] not in host_info_cache:
             host_info_cache[request["host"]] = db_handler.get_structure(request["host"])
 
-        # Get the resources the container is using from its host NodeScaler (the 'current' value)
-        # TODO FIX
-        real_resources = MyUtils.get_container_resources(db_handler, structure_name)
-
-        # Get the resources reported in the database (the 'max, min' values)
+        # Needed for the resources reported in the database (the 'max, min' values)
         database_resources = db_handler.get_structure(structure_name)
+
+        # Get the resources the container is using from its host NodeScaler (the 'current' value)
+        container = database_resources
+        real_resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
+        if not real_resources:
+            MyUtils.logging_error("Couldn't get container's {0} resources, can't rescale".format(structure_name), debug)
+            return
 
         # Process the request
         process_request(request, real_resources, database_resources)
@@ -371,7 +402,8 @@ def single_container_rescale(request, app_containers):
                                                          metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
         MyUtils.get_resource(container, resource)["usage"] = usages[resource]
         if amount < 0:
-            # Check that the container has enough free resource shares available to be released and that it would be able
+            # Check that the container has enough free resource shares
+            # available to be released and that it would be able
             # to be rescaled without dropping under the minimum value
             if MyUtils.get_resource(container, resource)["current"] < resource_shares:
                 # Container doesn't have enough resources to free
@@ -390,8 +422,8 @@ def single_container_rescale(request, app_containers):
             if host_info_cache[container_host]["resources"][resource]["free"] < resource_shares:
                 # Container's host doesn't have enough free resources
                 pass
-            elif MyUtils.get_resource(container, resource)["current"] + amount > container["resources"][resource][
-                "max"]:
+            elif MyUtils.get_resource(container, resource)["current"] + \
+                    amount > container["resources"][resource]["max"]:
                 # Container can't get that amount without exceeding the maximum
                 pass
             else:
@@ -406,20 +438,37 @@ def single_container_rescale(request, app_containers):
                 best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
             else:
                 best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
+            # if "for_energy" in request and request["for_energy"]:
+            #     if amount < 0:
+            #         best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
+            #     else:
+            #         best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
+            # else:
+            #     if amount < 0:
+            #         best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
+            #     else:
+            #         best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
 
+        # Generate the new request
         new_request = dict(
             type="request",
             resource=resource,
             amount=amount,
             host=best_fit_container["host"],
+            host_rescaler_ip=best_fit_container["host_rescaler_ip"],
+            host_rescaler_port=best_fit_container["host_rescaler_port"],
             structure=best_fit_container["name"],
             action=MyUtils.generate_request_name(amount, resource),
             timestamp=int(time.time()))
-        generate_requests([new_request], request["structure"])
-        MyUtils.get_resource(best_fit_container, resource)["current"] += amount
-        return True, best_fit_container
+
+        # generate_requests([new_request], request["structure"])
+
+        # Update the containers resources
+        # MyUtils.get_resource(best_fit_container, resource)["current"] += amount
+
+        return True, best_fit_container, new_request
     else:
-        return False, {}
+        return False, {}, {}
 
 
 def rescale_application(request, structure_name):
@@ -443,32 +492,54 @@ def rescale_application(request, structure_name):
     # if not success:
 
     total_amount = request["amount"]
-    splits = int(4)
 
-    # TODO Can't have more splits than containers as if two splits fall on the same container, only one will be applied
-    # due to the 'latest rescaling only' policy
+    if total_amount == 0:
+        MyUtils.logging_info("Empty request at".format(MyUtils.get_time_now_string()), debug)
+        return
+    splits = abs(total_amount / 12)  # len(app_containers)
+
+    if splits == 0:
+        splits = 1
+
+    # Can't have more splits than containers as if two splits fall on the same container,
+    # only one will be applied due to the 'latest rescaling only' policy
     smaller_amount = int(total_amount / splits)
     request["amount"] = smaller_amount
     success, iterations = True, 0
+    generated_requests = dict()
     while success and iterations < splits:
-        success, container_to_rescale = single_container_rescale(request, app_containers)
+        success, container_to_rescale, generated_request = single_container_rescale(request, app_containers)
         if not success:
-            # TODO couldn't completely rescale the application as some split of a major rescaling operation could
-            # not be completed
-            MyUtils.logging_warning(
-                "App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been rescaled".format(
-                    request["structure"], str(iterations * smaller_amount), request["resource"]), debug)
             break
         else:
             # If rescaling was successful, update the container's resources as they have been rescaled
             for c in app_containers:
-                if c["name"] == container_to_rescale["name"]:
+                container_name = c["name"]
+                if container_name == container_to_rescale["name"]:
+                    if container_name not in generated_requests:
+                        generated_requests[container_name] = list()
+
+                    generated_requests[container_name].append(generated_request)
+                    MyUtils.get_resource(container_to_rescale, request["resource"])["current"] += request["amount"]
                     app_containers.remove(c)
                     app_containers.append(container_to_rescale)
-            iterations += 1
+                    break
 
-    # else:
-    #    pass
+        iterations += 1
+
+    for c in generated_requests:
+        final_request = dict(generated_requests[c][0])
+        final_request["amount"] = 0
+        for request in generated_requests[c][0:]:
+            final_request["amount"] += request["amount"]
+        generate_requests([final_request], request["structure"])
+
+    if iterations < splits:
+        # Couldn't completely rescale the application as some split of a major rescaling operation could
+        # not be completed
+        MyUtils.logging_warning(
+            "App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been rescaled".format(
+                request["structure"], str(iterations * smaller_amount), request["resource"]), debug)
 
 
 def process_requests(reqs):
@@ -504,7 +575,7 @@ def persist_new_host_information():
         success, tries, max_tries = False, 0, 10
         while not success:
             try:
-                db_handler.update_structure(data)
+                MyUtils.update_structure(data, db_handler, debug)
                 success = True
                 MyUtils.logging_info("Structure : {0} -> {1} updated at time: {2}".format(
                     data["subtype"], data["name"], time.strftime("%D %H:%M:%S", time.localtime())), debug)
@@ -516,7 +587,8 @@ def persist_new_host_information():
 
 
 rescaling_function = {"container": rescale_container, "application": rescale_application}
-apply_request_by_resource = {"cpu": apply_cpu_request, "mem": apply_mem_request}
+apply_request_by_resource = {"cpu": apply_cpu_request, "mem": apply_mem_request, "disk": apply_disk_request,
+                             "net": apply_net_request}
 
 
 def scale():
