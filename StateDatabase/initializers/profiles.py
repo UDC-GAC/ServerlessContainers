@@ -17,7 +17,7 @@ if handler.database_exists(database):
         name="small_limit",
         resources=dict(
             cpu=200,
-            mem=8192,
+            mem=10240,
             disk=50,
             net=200,
         )

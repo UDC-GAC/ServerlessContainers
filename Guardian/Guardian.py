@@ -491,9 +491,9 @@ def serverless(config, structure, rules):
             tag = "host"
 
         # Remote database operation
-        usages = bdwatchdog_handler.get_structure_usages({tag: structure["name"]}, window_difference,
-                                                         window_delay,
-                                                         metrics_to_retrieve, metrics_to_generate)
+        usages = bdwatchdog_handler.get_structure_timeseries({tag: structure["name"]}, window_difference,
+                                                             window_delay,
+                                                             metrics_to_retrieve, metrics_to_generate)
 
         # Skip this structure if all the usage metrics are unavailable
         if all([usages[metric] == NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):

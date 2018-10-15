@@ -11,10 +11,10 @@
     "mountpoint": "/data/5"
   },
   "mem": {
-    "mem_limit": "8192"
+    "mem_limit": "10240"
   },
   "net": {
-    "device_name_in_host": "vethL5TBWS",
+    "device_name_in_host": "vethQ53G08",
     "net_limit": 200
   }
 }

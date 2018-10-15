@@ -16,7 +16,7 @@ class CouchDBServer:
     __requests_db_name = "requests"
     __profiles_db_name = "profiles"
     __MAX_UPDATE_TRIES = 10
-    __DATABASE_TIMEOUT = 5
+    __DATABASE_TIMEOUT = 10
 
     def __init__(self, server='http://couchdb:5984'):
         self.server = server

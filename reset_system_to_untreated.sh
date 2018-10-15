@@ -22,23 +22,20 @@ done
 echo "Setting container resources [cpu,mem,disk,net,energy] to unguarded"
 for i in "${nodes[@]}"
 do
-    for j in "${resources[@]}"
-    do
-	bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh $i $j > /dev/null
-    done
+    bash $RESCALER_PATH/Orchestrator/Structures/set_many_resource_to_unguarded.sh $i ${resources[@]} > /dev/null
 done
 
 echo "Setting application resources [cpu,mem,disk,net,energy] to unguarded"
 for j in "${resources[@]}"
 do
-    bash $RESCALER_PATH/Orchestrator/Structures/set_resource_to_unguarded.sh app1 $j > /dev/null
+    bash $RESCALER_PATH/Orchestrator/Structures/set_many_resource_to_unguarded.sh app1 ${resources[@]} > /dev/null
 done
 
-echo "Setting container resources [cpu] to normal"
-for i in "${nodes[@]}"
-do
-    bash $RESCALER_PATH/Orchestrator/Structures/set_structure_cpu_max.sh $i 200 > /dev/null
-done
+#echo "Setting container resources [cpu] to normal"
+#for i in "${nodes[@]}"
+#do
+#    bash $RESCALER_PATH/Orchestrator/Structures/set_structure_cpu_max.sh $i 200 > /dev/null
+#done
 
 echo "Deactivating resource rules"
 for i in "${resource_rules[@]}"

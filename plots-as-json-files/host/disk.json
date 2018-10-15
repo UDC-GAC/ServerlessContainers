@@ -1,0 +1,34 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=c14-13",
+            "disk=sda"
+          ]
+        },{
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=c14-13",
+            "disk=sdb"
+          ]
+        },{
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=c14-13",
+            "disk=sdk"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    }
+  ]
+}

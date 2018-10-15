@@ -6,7 +6,7 @@ handler = couchDB.CouchDBServer()
 dante = handler.get_structure("c14-13")
 dante["resources"] = {
     "mem": {
-        "max": 49152,
+        "max": 61440,
         "free": 0
     },
     "cpu": {

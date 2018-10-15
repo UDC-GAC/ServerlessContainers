@@ -25,10 +25,10 @@ if handler.database_exists("structures"):
             name=c,
             guard=True,
             resources=dict(
-                cpu=dict(max=200, min=50, fixed=50, guard=True),
-                mem=dict(max=8192, min=4096, fixed=2048, guard=True),
+                cpu=dict(max=200, min=50, fixed=150, guard=True),
+                mem=dict(max=10240, min=3072, fixed=6144, guard=True),
                 disk=dict(max=100, min=20, guard=False),
-                net=dict(max=100, min=20, guard=False),
+                net=dict(max=200, min=100, guard=False),
                 energy=dict(max=20, min=0, guard=False)
             )
         )
@@ -57,7 +57,7 @@ if handler.database_exists("structures"):
             cpu=dict(max=1200, min=400, guard=False),
             mem=dict(max=49152, min=24576, guard=False),
             disk=dict(max=600, min=120, guard=False),
-            net=dict(max=600, min=120, guard=False),
+            net=dict(max=1200, min=600, guard=False),
             energy=dict(max=120, min=0, guard=True)
         ),
         containers=["node0", "node1", "node2", "node3", "node4", "node5"]

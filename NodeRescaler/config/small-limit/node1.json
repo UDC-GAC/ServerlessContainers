@@ -11,10 +11,10 @@
     "mountpoint": "/data/3"
   },
   "mem": {
-    "mem_limit": "8192"
+    "mem_limit": "10240"
   },
   "net": {
-    "device_name_in_host": "vethYUU53A",
+    "device_name_in_host": "vethK55MRX",
     "net_limit": 200
   }
 }

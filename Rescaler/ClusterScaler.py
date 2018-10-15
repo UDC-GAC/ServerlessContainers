@@ -81,8 +81,6 @@ def get_cpu_list(cpu_num_string):
     return cpu_list
 
 
-
-
 def apply_cpu_request(request, database_resources, real_resources, amount):
     global host_info_cache
     resource = request["resource"]
@@ -92,9 +90,9 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
     core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
 
     # Check the container's core mapping and correct it is necessary
-    #current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
-    #cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
-    #current_cpu_limit, used_cores = check_container_cpu_mapping(structure_name, request, core_usage_map, cpu_list,
+    # current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
+    # cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
+    # current_cpu_limit, used_cores = check_container_cpu_mapping(structure_name, request, core_usage_map, cpu_list,
     #                                                            current_cpu_limit)
 
     current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
@@ -398,8 +396,8 @@ def single_container_rescale(request, app_containers):
     resource_shares = abs(amount)
     for container in app_containers:
         metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
-        usages = bdwatchdog_handler.get_structure_usages({"host": container["name"]}, 10, 20,
-                                                         metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
+        usages = bdwatchdog_handler.get_structure_timeseries({"host": container["name"]}, 10, 20,
+                                                             metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
         MyUtils.get_resource(container, resource)["usage"] = usages[resource]
         if amount < 0:
             # Check that the container has enough free resource shares
@@ -639,10 +637,17 @@ def scale():
 
 
 def main():
-    try:
-        scale()
-    except Exception as e:
-        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+    MAX_RELOADS = 2
+    load = 0
+    while load <= MAX_RELOADS:
+        try:
+            # This functions acts like an infinite loop and should never return aside from an exception
+            scale()
+        except Exception as e:
+            MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        load += 1
+        MyUtils.logging_error("Reloading {0} for the {1} time out of {2}".format(SERVICE_NAME, load, MAX_RELOADS),
+                              debug=True)
 
 
 if __name__ == "__main__":

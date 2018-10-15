@@ -13,16 +13,23 @@ class BDWatchdog:
         self.server = server
         self.session = requests.Session()
 
-    def get_points(self, query):
-        r = self.session.post(self.server + "/api/query", data=json.dumps(query),
-                          headers={'content-type': 'application/json', 'Accept': 'application/json'})
-        if r.status_code == 200:
-            return json.loads(r.text)
-        else:
-            r.raise_for_status()
+    def get_points(self, query, tries=3):
+        try:
+            r = self.session.post(self.server + "/api/query", data=json.dumps(query),
+                              headers={'content-type': 'application/json', 'Accept': 'application/json'})
+            if r.status_code == 200:
+                return json.loads(r.text)
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries-= 1
+            if tries <= 0:
+                raise e
+            else:
+                self.get_points(query, tries)
 
-    def get_structure_usages(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics,
-                             downsample=5):
+    def get_structure_timeseries(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics,
+                                 downsample=5):
         usages = dict()
         subquery = list()
         for metric in retrieve_metrics:
@@ -34,6 +41,7 @@ class BDWatchdog:
         query = dict(start=start, end=end, queries=subquery)
         result = self.get_points(query)
 
+        #TODO FIX result may be None
         for metric in result:
             dps = metric["dps"]
             summatory = sum(dps.values())

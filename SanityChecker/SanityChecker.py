@@ -58,7 +58,9 @@ def check_unstable_configuration():
             "Error doing configuration check up: {0} {1}".format(str(e), str(traceback.format_exc())), debug)
 
 
-def fix_container_cpu_mapping(container, cpu_used_cores, cpu_used_shares):
+def fix_container_cpu_mapping(container, cpu_used_cores, cpu_used_shares, max_cpu_limit):
+    if cpu_used_shares > max_cpu_limit:
+        return False
     rescaler_ip = container["host_rescaler_ip"]
     rescaler_port = container["host_rescaler_port"]
     structure_name = container["name"]
@@ -76,11 +78,17 @@ def fix_container_cpu_mapping(container, cpu_used_cores, cpu_used_shares):
         return False
 
 
-def check_container_cpu_mapping(container, core_usage_map, cpu_used_cores, cpu_used_shares):
+def check_container_cpu_mapping(container, host_info, cpu_used_cores, cpu_used_shares):
+    host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
+    host_cpu_list = [str(i) for i in range(host_max_cores)]
+    core_usage_map = host_info["resources"]["cpu"]["core_usage_mapping"]
+
     cpu_accounted_shares = 0
     cpu_accounted_cores = list()
     container_name = container["name"]
     for core in core_usage_map:
+        if core not in host_cpu_list:
+            continue
         if container_name in core_usage_map[core] and core_usage_map[core][container_name] != 0:
             cpu_accounted_shares += core_usage_map[core][container_name]
             cpu_accounted_cores.append(core)
@@ -108,23 +116,27 @@ def check_core_mapping():
                 continue
 
             host_info = host_info_cache[container["host"]]
-            core_usage_map = host_info["resources"]["cpu"]["core_usage_mapping"]
 
+            max_cpu_limit = database_resources["cpu"]["max"]
             current_cpu_limit = get_current_resource_value(database_resources, real_resources, "cpu")
             cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
 
             success, actual_used_cores, actual_used_shares = \
-                check_container_cpu_mapping(container, core_usage_map, cpu_list, current_cpu_limit)
+                check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
+
             if not success:
                 MyUtils.logging_error("Detected invalid core mapping, trying to automatically fix.", debug)
-                if fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares):
-                    MyUtils.logging_error("Succeded fixing {} container's core mapping".format(container["name"]), debug)
+                if fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares, max_cpu_limit):
+                    MyUtils.logging_error("Succeded fixing {0} container's core mapping".format(container["name"]),
+                                          debug)
                 else:
-                    MyUtils.logging_error("Failed in fixing {} container's core mapping".format(container["name"]), debug)
+                    MyUtils.logging_error("Failed in fixing {0} container's core mapping".format(container["name"]),
+                                          debug)
         MyUtils.logging_info("Core mapping has been validated", debug)
     except Exception as e:
         MyUtils.logging_error(
             "Error doing core mapping check up: {0} {1}".format(str(e), str(traceback.format_exc())), debug)
+
 
 def check_sanity():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)

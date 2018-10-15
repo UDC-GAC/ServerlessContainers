@@ -3,6 +3,7 @@ from __future__ import print_function
 
 from threading import Thread
 
+import requests
 from requests import HTTPError
 
 import MyUtils.MyUtils as MyUtils
@@ -52,9 +53,13 @@ def merge(output_dict, input_dict):
 def get_container_usages(container_name):
     global window_difference
     global window_delay
-    container_info = bdwatchdog.get_structure_usages({"host": container_name}, window_difference, window_delay,
-                                                     BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS,
-                                                     downsample=window_difference)
+    try:
+        container_info = bdwatchdog.get_structure_timeseries({"host": container_name}, window_difference, window_delay,
+                                                             BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS,
+                                                             downsample=window_difference)
+    except requests.ConnectionError as e:
+        MyUtils.logging_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        raise e
     return container_info
 
 
@@ -65,9 +70,16 @@ def get_host_usages(host_name):
         host_info = host_info_cache[host_name]
     else:
         # Data retrieving, slow
-        host_info = bdwatchdog.get_structure_usages({"host": host_name}, window_difference,
-                                                    window_delay, BDWATCHDOG_ENERGY_METRICS,
-                                                    REFEEDER_ENERGY_METRICS)
+
+        try:
+            host_info = bdwatchdog.get_structure_timeseries({"host": host_name}, window_difference,
+                                                            window_delay, BDWATCHDOG_ENERGY_METRICS,
+                                                            REFEEDER_ENERGY_METRICS)
+        except requests.ConnectionError as e:
+            MyUtils.logging_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+            raise e
+
+
         host_info_cache[host_name] = host_info
     return host_info
 
@@ -88,6 +100,7 @@ def generate_container_energy_metrics(container, host_info):
     new_container = MyUtils.copy_structure_base(container)
     new_container["resources"] = dict()
     new_container["resources"]["energy"] = dict()
+    # TODO FIX ZeroDivisionError
     new_container["resources"]["energy"]["usage"] = float(
         host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
 

@@ -20,8 +20,8 @@ if handler.database_exists("limits"):
             type='limit',
             name=c,
             resources=dict(
-                cpu=dict(upper=170, lower=150, boundary=45),
-                mem=dict(upper=8000, lower=6000, boundary=1024),
+                cpu=dict(upper=170, lower=150, boundary=25),
+                mem=dict(upper=8000, lower=6000, boundary=1536),
                 disk=dict(upper=100, lower=20, boundary=10),
                 net=dict(upper=100, lower=20, boundary=10),
                 energy=dict(upper=15, lower=5, boundary=3)

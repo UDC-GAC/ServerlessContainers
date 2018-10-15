@@ -1,6 +1,5 @@
 #!/usr/bin/python
 import json
-
 from flask import Flask, g
 from flask import Response
 from flask import abort
@@ -84,6 +83,7 @@ def set_service_information(service_name):
     get_db().update_service(service)
 
     return jsonify(201)
+
 
 @app.route("/service/<service_name>/<key>", methods=['PUT'])
 def set_service_value(service_name, key):
@@ -217,6 +217,41 @@ def set_structure_resource_to_guarded(structure_name, resource):
     new_structure["resources"][resource]["guard"] = True
     get_db().update_structure(new_structure)
     return jsonify(201)
+
+
+def set_structure_multiple_resources_to_guard_state(structure_name, request, state):
+    data = request.json
+    if not data:
+        return abort(400, {"message": "empty content"})
+    try:
+        resources = data["resources"]
+        if not isinstance(resources, (list, str)):
+            return abort(400, {"message": "invalid content, resources must be a list or a string"})
+        elif isinstance(resources, str):
+            resources = [resources]
+    except (KeyError, TypeError):
+        return abort(400, {"message": "invalid content, must be a json object with resources as key"})
+
+    structure = retrieve_structure(structure_name)
+    new_structure = MyUtils.copy_structure_base(structure)
+    new_structure["resources"] = dict()
+    for resource in resources:
+        if resource not in ["cpu", "mem", "disk", "net", "energy"]:
+            continue
+        else:
+            new_structure["resources"][resource] = {"guard": state}
+    get_db().update_structure(new_structure)
+    return jsonify(201)
+
+
+@app.route("/structure/<structure_name>/resources/guard", methods=['PUT'])
+def set_structure_multiple_resources_to_guarded(structure_name):
+    return set_structure_multiple_resources_to_guard_state(structure_name, request, True)
+
+
+@app.route("/structure/<structure_name>/resources/unguard", methods=['PUT'])
+def set_structure_multiple_resources_to_unguarded(structure_name):
+    return set_structure_multiple_resources_to_guard_state(structure_name, request, False)
 
 
 @app.route("/structure/<structure_name>/resources/<resource>/unguard", methods=['PUT'])

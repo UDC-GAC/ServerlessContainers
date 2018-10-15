@@ -60,7 +60,7 @@ if handler.database_exists("services"):
         type="service",
         heartbeat="",
         config=dict(
-            WINDOW_TIMELAPSE=5,
+            WINDOW_TIMELAPSE=7,
             WINDOW_DELAY=20,
             DEBUG=True
         )
