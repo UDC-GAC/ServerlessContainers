@@ -27,7 +27,7 @@ before_install:
 
     - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
 
-    - wgethttps://archive.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
+    - wget https://archive.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
     - tar -xvzf apache-couchdb-2.0.0.tar.gz
     - cd apache-couchdb-2.0.0/
     - sudo ./configure
