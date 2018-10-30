@@ -20,8 +20,25 @@ before_install:
     - pip install pytest pytest-cov
     - pip install coveralls
 
+    - apt-get update
+    - apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libmozjs185-dev libcurl4-openssl-dev
+
+    - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
+
+    - wget http://www-us.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
+    - tar -xvzf apache-couchdb-2.0.0.tar.gz
+    - cd apache-couchdb-2.0.0/
+    - ./configure
+    - make release
+
+    - find rel/couchdb -type d -exec chmod 0770 {} \;
+    - chmod 0644 rel/couchdb/etc/*
+    - rel/couchdb/bin/couchdb 2>/dev/null &
+
+
 script:
-   - export PYTHONPATH=. && nosetests --exclude=StateDatabase --with-coverage
+   - export PYTHONPATH=. && nosetests --with-coverage
+#   - export PYTHONPATH=. && nosetests --exclude=StateDatabase --with-coverage
 #  - python3.6 -m unittest Guardian/testGuardian.py
 #  - python3.6 -m unittest MyUtils/testMyUtils.py
 #  - python3.6 -m unittest StateDatabase/testcouchDB.py
