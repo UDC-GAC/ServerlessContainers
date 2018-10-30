@@ -19,6 +19,7 @@ install:
 before_install:
     - pip install pytest pytest-cov
     - pip install coveralls
+    - source set_pythonpath.sh
 
 script:
   - nosetests --exclude=StateDatabase --with-coverage
