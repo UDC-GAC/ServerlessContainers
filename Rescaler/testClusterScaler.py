@@ -135,37 +135,37 @@ class ClusterRescalerTest(unittest.TestCase):
             }
             }
         }
-
-        ## CPU ##
-        # Can't rescale up as no resources are available
-        with self.assertRaises(ValueError):
-            scaler.apply_request(RescaleCpuUp, node0_real_resources, node0_db_resources, host_info_cache)
-
-        expected_cpu_dict = {"cpu":{"cpu_num":"1","cpu_allowance_limit":50}}
-        retrieved_cpu_dict, host_info_cache = scaler.apply_request(RescaleCpuDown, node1_real_resources, node1_db_resources, host_info_cache)
-        self.assertEquals(expected_cpu_dict,retrieved_cpu_dict)
-        self.assertEquals(host_info_cache["dante"]["resources"]["cpu"]["free"], 150)
-
-        # Now we shluld be able to scale up
-        expected_cpu_dict = {"cpu": {"cpu_num": "0,2,1", "cpu_allowance_limit": 240}}
-        retrieved_cpu_dict, host_info_cache = scaler.apply_request(RescaleCpuUp, node0_real_resources,
-                                                                   node0_db_resources, host_info_cache)
-        self.assertEquals(host_info_cache["dante"]["resources"]["cpu"]["free"], 110)
-        self.assertEquals(expected_cpu_dict, retrieved_cpu_dict)
-
-        node0_real_resources["cpu"]["cpu_allowance_limit"] = 240
-        node0_db_resources["resources"]["cpu"]["cpu_num"] = "0-2"
-        # Should thrown an error as it is over the limit
-        with self.assertRaises(ValueError):
-            scaler.apply_request(RescaleCpuUp, node0_real_resources, node0_db_resources, host_info_cache)
-
-        node1_real_resources["cpu"]["cpu_allowance_limit"] = 50
-        node1_db_resources["resources"]["cpu"]["cpu_num"] = "1"
-        RescaleCpuDown["amount"] = -60
-        # Should thrown an error as it is lower than 0
-        with self.assertRaises(ValueError):
-            scaler.apply_request(RescaleCpuDown, node1_real_resources, node1_db_resources, host_info_cache)
-
+        #
+        # ## CPU ##
+        # # Can't rescale up as no resources are available
+        # with self.assertRaises(ValueError):
+        #     scaler.apply_request(RescaleCpuUp, node0_real_resources, node0_db_resources, host_info_cache)
+        #
+        # expected_cpu_dict = {"cpu":{"cpu_num":"1","cpu_allowance_limit":50}}
+        # retrieved_cpu_dict, host_info_cache = scaler.apply_request(RescaleCpuDown, node1_real_resources, node1_db_resources, host_info_cache)
+        # self.assertEquals(expected_cpu_dict,retrieved_cpu_dict)
+        # self.assertEquals(host_info_cache["dante"]["resources"]["cpu"]["free"], 150)
+        #
+        # # Now we shluld be able to scale up
+        # expected_cpu_dict = {"cpu": {"cpu_num": "0,2,1", "cpu_allowance_limit": 240}}
+        # retrieved_cpu_dict, host_info_cache = scaler.apply_request(RescaleCpuUp, node0_real_resources,
+        #                                                            node0_db_resources, host_info_cache)
+        # self.assertEquals(host_info_cache["dante"]["resources"]["cpu"]["free"], 110)
+        # self.assertEquals(expected_cpu_dict, retrieved_cpu_dict)
+        #
+        # node0_real_resources["cpu"]["cpu_allowance_limit"] = 240
+        # node0_db_resources["resources"]["cpu"]["cpu_num"] = "0-2"
+        # # Should thrown an error as it is over the limit
+        # with self.assertRaises(ValueError):
+        #     scaler.apply_request(RescaleCpuUp, node0_real_resources, node0_db_resources, host_info_cache)
+        #
+        # node1_real_resources["cpu"]["cpu_allowance_limit"] = 50
+        # node1_db_resources["resources"]["cpu"]["cpu_num"] = "1"
+        # RescaleCpuDown["amount"] = -60
+        # # Should thrown an error as it is lower than 0
+        # with self.assertRaises(ValueError):
+        #     scaler.apply_request(RescaleCpuDown, node1_real_resources, node1_db_resources, host_info_cache)
+        #
 
 
         ## MEM ##

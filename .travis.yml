@@ -21,8 +21,9 @@ before_install:
     - pip install coveralls
 
 script:
-  - python3.6 -m unittest Guardian/testGuardian.py
-  - python3.6 -m unittest MyUtils/testMyUtils.py
+  - nosetests --exclude=StateDatabase --with-coverage
+#  - python3.6 -m unittest Guardian/testGuardian.py
+#  - python3.6 -m unittest MyUtils/testMyUtils.py
 #  - python3.6 -m unittest StateDatabase/testcouchDB.py
 
 after_success:
