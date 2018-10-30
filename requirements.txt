@@ -1,0 +1,8 @@
+urllib3==1.22
+Werkzeug==0.14.1
+Flask==1.0.2
+Flask-CAS==1.0.1
+Flask-SQLAlchemy==2.3.2
+json-logic-qubit==0.9
+pylxd==2.2.7
+requests==2.18.4

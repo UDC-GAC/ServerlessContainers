@@ -7,7 +7,7 @@ import traceback
 import logging
 import StateDatabase.couchDB as couchDB
 import MyUtils.MyUtils as MyUtils
-from src.pipelines import send_to_OpenTSDB as OpenTSDB_sender
+import StateDatabase.send_to_OpenTSDB as OpenTSDB_sender
 
 db_handler = couchDB.CouchDBServer()
 opentsdb_Session = requests.Session()

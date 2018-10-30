@@ -1,4 +1,3 @@
-import unittest
 from unittest import TestCase
 
 from MyUtils.MyUtils import generate_request_name, get_cpu_list

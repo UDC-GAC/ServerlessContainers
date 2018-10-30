@@ -12,23 +12,22 @@ from StateDatabase.initializers.structures import base_container
 class DocumentTest(TestCase):
     __database = None
     __database_type = None
+    __server_address = "localhost"
 
     def set_database(self, database_type, database_test_name):
         self.__database_type = database_type
         self.__database = database_test_name
 
     def tearDown(self):
-        self.initializer_utils.remove_db(self.__database)
+        self.handler.remove_database(self.__database)
         self.handler.close_connection()
-        self.initializer_utils.close_connection()
 
     def setUp(self):
-        self.initializer_utils = couchdb_utils.CouchDBUtils()
-        self.handler = couchDB.CouchDBServer()
+        self.handler = couchDB.CouchDBServer(server='http://{0}:5984'.format(self.__server_address))
         self.handler.set_database_name(self.__database_type, self.__database)
         if self.handler.database_exists(self.__database):
-            self.initializer_utils.remove_db(self.__database)
-        self.initializer_utils.create_db(self.__database)
+            self.handler.remove_database(self.__database)
+        self.handler.create_database(self.__database)
 
 
 class StructureTest(DocumentTest):
@@ -120,8 +119,8 @@ class LimitsTest(DocumentTest):
 class EventsAndRequestsTest(DocumentTest):
 
     def tearDown(self):
-        self.initializer_utils.remove_db("events-test")
-        self.initializer_utils.remove_db("requests-test")
+        self.handler.remove_database("events-test")
+        self.handler.remove_database("requests-test")
         self.handler.close_connection()
         self.initializer_utils.close_connection()
 
@@ -132,12 +131,12 @@ class EventsAndRequestsTest(DocumentTest):
         self.handler.set_database_name("requests", "requests-test")
 
         if self.handler.database_exists("events-test"):
-            self.initializer_utils.remove_db("events-test")
-        self.initializer_utils.create_db("events-test")
+            self.handler.remove_database("events-test")
+        self.handler.create_database("events-test")
 
         if self.handler.database_exists("requests-test"):
-            self.initializer_utils.remove_db("requests-test")
-        self.initializer_utils.create_db("requests-test")
+            self.handler.remove_database("requests-test")
+        self.handler.create_database("requests-test")
 
     def testEvents(self):
         structure = {

@@ -1,9 +1,16 @@
 language: python
 python:
   - "2.7"
-  - "3.4"
+  - "3.6"
 install:
   - pip install -r requirements.txt
 
+services:
+  - couchdb
+
+#before_script:
+#  - curl -X PUT localhost:5984/system_test
+
 script:
-  - unittest
+  - python3.6 -m unittest Guardian/testGuardian.py MyUtils/testMyUtils.py StateDatabase/testcouchDB.py
+
