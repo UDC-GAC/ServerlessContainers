@@ -36,6 +36,7 @@ before_install:
     - find rel/couchdb -type d -exec chmod 0770 {} \;
     - sudo chmod 0644 rel/couchdb/etc/*
     - sudo rel/couchdb/bin/couchdb 2>/dev/null &
+    - cd ..
 
 
 script:
