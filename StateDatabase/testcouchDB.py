@@ -1,6 +1,4 @@
-import unittest
 import StateDatabase.couchDB as couchDB
-import StateDatabase.initializers.initializer_utils as couchdb_utils
 from unittest import TestCase
 
 from Guardian.Guardian import match_usages_and_limits, reduce_structure_events, match_rules_and_events

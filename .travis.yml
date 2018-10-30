@@ -9,6 +9,12 @@ install:
 services:
   - couchdb
 
+before_script:
+  - curl -X PUT localhost:5984/structures-test
+  - curl -X PUT localhost:5984/limits-test
+  - curl -X PUT localhost:5984/events-test
+  - curl -X PUT localhost:5984/requests-test
+
 script:
   - python3.6 -m unittest Guardian/testGuardian.py MyUtils/testMyUtils.py StateDatabase/testcouchDB.py
 
