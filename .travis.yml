@@ -16,6 +16,8 @@ install:
 #  - curl -X PUT localhost:5984/requests-test
 #  - curl localhost:5984
 
+sudo: true
+
 before_install:
     - pip install pytest pytest-cov
     - pip install coveralls
