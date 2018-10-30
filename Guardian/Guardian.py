@@ -59,7 +59,7 @@ debug = True
 
 NOT_AVAILABLE_STRING = "n/a"
 MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
-MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1.5
+MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
 CPU_SHARES_PER_WATT = 10 #7  # How many cpu shares to rescale per watt
@@ -81,7 +81,7 @@ def check_invalid_values(value1, label1, value2, label2, resource="n/a"):
 def try_get_value(d, key):
     try:
         return int(d[key])
-    except KeyError:
+    except (KeyError, ValueError):
         return NOT_AVAILABLE_STRING
 
 
@@ -194,8 +194,7 @@ def get_container_energy_str(resources_dict):
                      str(try_get_value(resources_dict["energy"], "min"))])
 
 
-def correct_container_state(resources, limits_document):
-    limits = limits_document["resources"]
+def correct_container_state(resources, limits):
     for resource in ["cpu", "mem"]:
         current_value = try_get_value(resources[resource], "current")
         upper_value = try_get_value(limits[resource], "upper")
@@ -211,21 +210,19 @@ def correct_container_state(resources, limits_document):
             check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
             check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
             check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
-            if current_value != NOT_AVAILABLE_STRING and current_value - boundary <= upper_value:
+            if current_value != NOT_AVAILABLE_STRING and current_value - boundary < upper_value:
                 raise ValueError()
             if current_value != NOT_AVAILABLE_STRING and current_value - int(
-                    MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) >= upper_value:
+                    MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
                 raise ValueError()
         except ValueError:
             limits[resource]["upper"] = resources[resource]["current"] - boundary
             limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, min_value)
 
-    limits_document["resources"] = limits
-    return limits_document
+    return limits
 
 
-def invalid_container_state(resources, limits_document):
-    limits = limits_document["resources"]
+def invalid_container_state(resources, limits):
     for resource in ["cpu", "mem"]:
         max_value = try_get_value(resources[resource], "max")
         current_value = try_get_value(resources[resource], "current")
@@ -427,8 +424,7 @@ def process_serverless_structure(config, structure, usages, limits, rules):
     event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
 
     # Match usages and rules to generate events
-    triggered_events = match_usages_and_limits(structure["name"], rules, usages, limits["resources"],
-                                               structure["resources"])
+    triggered_events = match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
 
     # Remote database operation
     db_handler.add_events(triggered_events)
@@ -503,7 +499,7 @@ def serverless(config, structure, rules):
         resources = structure["resources"]
 
         # Remote database operation
-        limits = db_handler.get_limits(structure)
+        limits = db_handler.get_limits(structure)["resources"]
 
         if not limits:
             MyUtils.logging_warning("structure: {0} has no limits".format(structure["name"]), debug)
@@ -518,7 +514,7 @@ def serverless(config, structure, rules):
             limits = correct_container_state(resources, limits)
 
             # Remote database operation
-            db_handler.update_limit(limits)
+            db_handler.update_limit(dict(resources=limits))
 
         process_serverless_structure(config, structure, usages, limits, rules)
 

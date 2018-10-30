@@ -22,6 +22,27 @@ class CouchDBServer:
         self.server = server
         self.session = requests.Session()
 
+    def close_connection(self):
+        self.session.close()
+
+    def set_database_name(self, database_type, database_name):
+        if database_type == "structures":
+            self.__structures_db_name = database_name
+        elif database_type == "services":
+            self.__services_db_name = database_name
+        elif database_type == "limits":
+            self.__limits_db_name = database_name
+        elif database_type == "rules":
+            self.__rules_db_name = database_name
+        elif database_type == "events":
+            self.__events_db_name = database_name
+        elif database_type == "requests":
+            self.__requests_db_name = database_name
+        elif database_type == "profiles":
+            self.__profiles_db_name = database_name
+        else:
+            pass
+
     def database_exists(self, database):
         r = self.session.head(self.server + "/" + database)
         return r.status_code == 200

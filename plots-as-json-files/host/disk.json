@@ -23,6 +23,13 @@
             "host=c14-13",
             "disk=sdk"
           ]
+        },{
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=c14-13",
+            "disk=sdl"
+          ]
         }
       ],
       "yranges": {

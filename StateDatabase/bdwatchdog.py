@@ -9,20 +9,23 @@ class BDWatchdog:
     OPENTSDB_PORT = 4242
     NO_METRIC_DATA_DEFAULT_VALUE = 0  # -1
 
-    def __init__(self, server="http://{0}:{1}".format(OPENTSDB_URL, str(int(OPENTSDB_PORT)))):
-        self.server = server
+    def __init__(self, server=None):
+        if not server:
+            self.server = "http://{0}:{1}".format(self.OPENTSDB_URL, str(int(self.OPENTSDB_PORT)))
+        else:
+            self.server = server
         self.session = requests.Session()
 
     def get_points(self, query, tries=3):
         try:
             r = self.session.post(self.server + "/api/query", data=json.dumps(query),
-                              headers={'content-type': 'application/json', 'Accept': 'application/json'})
+                                  headers={'content-type': 'application/json', 'Accept': 'application/json'})
             if r.status_code == 200:
                 return json.loads(r.text)
             else:
                 r.raise_for_status()
         except requests.ConnectionError as e:
-            tries-= 1
+            tries -= 1
             if tries <= 0:
                 raise e
             else:
@@ -41,7 +44,7 @@ class BDWatchdog:
         query = dict(start=start, end=end, queries=subquery)
         result = self.get_points(query)
 
-        #TODO FIX result may be None
+        # TODO FIX result may be None
         for metric in result:
             dps = metric["dps"]
             summatory = sum(dps.values())

@@ -8,15 +8,24 @@ class CouchDBUtils:
     def __init__(self):
         self.handler = couchDB.CouchDBServer()
 
+    def close_connection(self):
+        self.handler.close_connection()
+
     def create_db(self, database):
-        print("Creating database: " + database)
-        if self.handler.create_database(database):
-            print("Database " + database + " created")
+        if not self.handler.database_exists(database):
+            if self.handler.create_database(database):
+                print("Database " + database + " created")
+            else:
+                print("Database " + database + " couldn't be created")
+        else:
+            print("Database " + database + "already exists")
 
     def remove_db(self, database):
-        print("Removing database: " + database)
-        try:
+        if self.handler.database_exists(database):
             if self.handler.remove_database(database):
                 print("Database " + database + " removed")
-        except requests.exceptions.HTTPError:
-            pass
+            else:
+                print("Database " + database + " couldn't be removed")
+        else:
+            print("Database " + database + "doesn't exist")
+

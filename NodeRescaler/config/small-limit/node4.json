@@ -14,7 +14,7 @@
     "mem_limit": "10240"
   },
   "net": {
-    "device_name_in_host": "veth8IBN91",
+    "device_name_in_host": "veth19XG2L",
     "net_limit": 200
   }
 }

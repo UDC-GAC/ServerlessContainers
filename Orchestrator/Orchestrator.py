@@ -281,6 +281,21 @@ def get_structure_resource_limits(structure_name, resource):
         return abort(404)
 
 
+@app.route("/structure/<structure_name>/limits/<resource>/boundary", methods=['PUT'])
+def set_structure_resource_limit_boundary(structure_name, resource):
+    structure = retrieve_structure(structure_name)
+    structure_limits = get_db().get_limits(structure)
+    try:
+        value = int(request.json["value"])
+        if value < 0:
+            return abort(400)
+
+        structure_limits["resources"][resource]["boundary"] = value
+        get_db().update_limit(structure_limits)
+    except KeyError:
+        abort(404)
+    return jsonify(201)
+
 @app.route("/structure/<structure_name>/profile/<profile_name>", methods=['PUT'])
 def set_structure_profile(structure_name, profile_name):
     def __apply_profile_to_container(container):

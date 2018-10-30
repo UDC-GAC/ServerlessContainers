@@ -13,6 +13,7 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+# DON'T NEED TO TEST
 def resilient_beat(db_handler, service_name, max_tries=10):
     try:
         service = db_handler.get_service(service_name)
@@ -27,10 +28,12 @@ def resilient_beat(db_handler, service_name, max_tries=10):
             raise e
 
 
+# DON'T NEED TO TEST
 def beat(db_handler, service_name):
     resilient_beat(db_handler, service_name, max_tries=5)
 
 
+# DON'T NEED TO TEST
 def get_config_value(config, default_config, key):
     try:
         return config[key]
@@ -38,28 +41,33 @@ def get_config_value(config, default_config, key):
         return default_config[key]
 
 
+# DON'T NEED TO TEST
 def logging_info(message, debug):
     logging.info(message)
     if debug:
         print("INFO: " + message)
 
 
+# DON'T NEED TO TEST
 def logging_warning(message, debug):
     logging.warning(message)
     if debug:
         print("WARN: " + message)
 
 
+# DON'T NEED TO TEST
 def logging_error(message, debug):
     logging.error(message)
     if debug:
         eprint("ERROR: " + message)
 
 
+# DON'T NEED TO TEST
 def get_time_now_string():
     return str(time.strftime("%D %H:%M:%S", time.localtime()))
 
 
+# CAN'T TEST
 def get_container_resources(container, rescaler_http_session, debug):
     container_name = container["name"]
     try:
@@ -79,6 +87,7 @@ def get_container_resources(container, rescaler_http_session, debug):
         return None
 
 
+# CAN'T TEST
 def register_service(db_handler, service):
     try:
         existing_service = db_handler.get_service(service["name"])
@@ -90,6 +99,7 @@ def register_service(db_handler, service):
     db_handler.add_service(service)
 
 
+# CAN'T TEST
 def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_seconds=2):
     fails = 0
     success = False
@@ -118,6 +128,7 @@ def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_
     return service
 
 
+# TESTED
 # Tranlsate something like '2-5,7' to [2,3,4,7]
 def get_cpu_list(cpu_num_string):
     cpu_list = list()
@@ -144,10 +155,12 @@ def copy_structure_base(structure):
     return new_struct
 
 
+# DON'T NEED TO TEST
 def get_resource(structure, resource):
     return structure["resources"][resource]
 
 
+# CAN'T TEST
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
@@ -157,6 +170,7 @@ def update_structure(structure, db_handler, debug, max_tries=10):
         logging_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
 
 
+# CAN'T TEST
 def get_structures(db_handler, debug, subtype="application"):
     try:
         return db_handler.get_structures(subtype=subtype)
@@ -165,15 +179,19 @@ def get_structures(db_handler, debug, subtype="application"):
         return None
 
 
+# TESTED
 def generate_request_name(amount, resource):
-    if amount < 0:
+    if not amount:
+        raise ValueError()
+    if int(amount) < 0:
         return resource.title() + "RescaleDown"
-    elif amount > 0:
+    elif int(amount) > 0:
         return resource.title() + "RescaleUp"
     else:
-        return None
+        raise ValueError()
 
 
+# TESTED
 def generate_event_name(event, resource):
     if "scale" not in event:
         raise ValueError("Missing 'scale' key")
