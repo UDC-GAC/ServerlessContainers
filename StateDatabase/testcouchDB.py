@@ -117,16 +117,15 @@ class LimitsTest(DocumentTest):
 
 
 class EventsAndRequestsTest(DocumentTest):
+    __server_address = "localhost"
 
     def tearDown(self):
         self.handler.remove_database("events-test")
         self.handler.remove_database("requests-test")
         self.handler.close_connection()
-        self.initializer_utils.close_connection()
 
     def setUp(self):
-        self.initializer_utils = couchdb_utils.CouchDBUtils()
-        self.handler = couchDB.CouchDBServer()
+        self.handler = couchDB.CouchDBServer(server='http://{0}:5984'.format(self.__server_address))
         self.handler.set_database_name("events", "events-test")
         self.handler.set_database_name("requests", "requests-test")
 
