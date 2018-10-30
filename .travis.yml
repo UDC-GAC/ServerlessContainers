@@ -6,15 +6,18 @@ python:
 install:
   - pip install -r requirements.txt
 
-services:
-  - couchdb
+#services:
+#  - couchdb
 
-before_script:
-  - curl -X PUT localhost:5984/structures-test
-  - curl -X PUT localhost:5984/limits-test
-  - curl -X PUT localhost:5984/events-test
-  - curl -X PUT localhost:5984/requests-test
+#before_script:
+#  - curl -X PUT localhost:5984/structures-test
+#  - curl -X PUT localhost:5984/limits-test
+#  - curl -X PUT localhost:5984/events-test
+#  - curl -X PUT localhost:5984/requests-test
+#  - curl localhost:5984
 
 script:
-  - python3.6 -m unittest Guardian/testGuardian.py MyUtils/testMyUtils.py StateDatabase/testcouchDB.py
+  - python3.6 -m unittest Guardian/testGuardian.py
+  - python3.6 -m unittest MyUtils/testMyUtils.py
+#  - python3.6 -m unittest StateDatabase/testcouchDB.py
 
