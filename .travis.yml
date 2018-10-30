@@ -16,8 +16,14 @@ install:
 #  - curl -X PUT localhost:5984/requests-test
 #  - curl localhost:5984
 
+before_install:
+    - pip install pytest pytest-cov
+    - pip install coveralls
+
 script:
   - python3.6 -m unittest Guardian/testGuardian.py
   - python3.6 -m unittest MyUtils/testMyUtils.py
 #  - python3.6 -m unittest StateDatabase/testcouchDB.py
 
+after_success:
+    - coveralls
