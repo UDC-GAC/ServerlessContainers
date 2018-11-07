@@ -1,20 +1,20 @@
 # /usr/bin/python
 from __future__ import print_function
 
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 import MyUtils.MyUtils as MyUtils
 import json
 import time
 import requests
 import traceback
 import logging
-import StateDatabase.bdwatchdog as bdwatchdog
+import StateDatabase.opentsdb as bdwatchdog
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 60, "DEBUG": True}
 SERVICE_NAME = "scaler"
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
-bdwatchdog_handler = bdwatchdog.BDWatchdog()
+bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
 debug = True
 
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],

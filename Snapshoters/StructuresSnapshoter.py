@@ -8,7 +8,7 @@ import json
 import time
 import traceback
 import logging
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 import MyUtils.MyUtils as MyUtils
 
 db_handler = couchDB.CouchDBServer()
@@ -105,19 +105,24 @@ def persist_applications(container_resources_dict):
 
         application_containers = app["containers"]
         for container_name in application_containers:
-            for resource in RESOURCES:
-                if container_name in container_resources_dict and container_resources_dict[container_name][
-                    "resources"][resource][translate_map[resource]["limit_label"]]:
 
-                    app["resources"][resource]["current"] += \
-                        container_resources_dict[container_name]["resources"][resource][
-                            translate_map[resource]["limit_label"]]
-                else:
+            if container_name not in container_resources_dict:
+                MyUtils.logging_error(
+                    "Container info {0} is missing for app : {1}".format(container_name, app["name"])
+                    + " app info will not be totally accurate", debug)
+                continue
+
+            for resource in RESOURCES:
+                try:
+                    current_resource_label = translate_map[resource]["limit_label"]
+                    container_resources = container_resources_dict[container_name]["resources"]
+                    app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
+                except KeyError:
                     if "name" in container_resources_dict[container_name] and "name" in app:
                         MyUtils.logging_error(
                             "Container info {0} is missing for app : {1} and resource {2} resource,".format(
                                 container_name, app["name"], resource)
-                            +" app info will not be totally accurate", debug)
+                            + " app info will not be totally accurate", debug)
                     else:
                         MyUtils.logging_error("Error with app or container info", debug)
                         # TODO this error should be more self-explanatory

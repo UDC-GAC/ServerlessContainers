@@ -10,10 +10,10 @@ import MyUtils.MyUtils as MyUtils
 import time
 import traceback
 import logging
-import StateDatabase.couchDB as couchDB
-import StateDatabase.bdwatchdog
+import StateDatabase.couchdb as couchDB
+import StateDatabase.opentsdb
 
-bdwatchdog = StateDatabase.bdwatchdog.BDWatchdog()
+bdwatchdog = StateDatabase.opentsdb.OpenTSDBServer()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
 db_handler = couchDB.CouchDBServer()
 
@@ -100,10 +100,9 @@ def generate_container_energy_metrics(container, host_info):
     new_container = MyUtils.copy_structure_base(container)
     new_container["resources"] = dict()
     new_container["resources"]["energy"] = dict()
-    # TODO FIX ZeroDivisionError
-    new_container["resources"]["energy"]["usage"] = float(
-        host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
-
+    if int(host_info["cpu"]) > 0:
+        new_container["resources"]["energy"]["usage"] = float(
+            host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
     return new_container
 
 

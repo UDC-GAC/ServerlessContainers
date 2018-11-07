@@ -67,6 +67,23 @@ def get_time_now_string():
     return str(time.strftime("%D %H:%M:%S", time.localtime()))
 
 
+def get_host_containers(container_host_ip, container_host_port, rescaler_http_session, debug):
+    try:
+        full_address = "http://{0}:{1}/container/".format(container_host_ip, container_host_port)
+        r = rescaler_http_session.get(full_address, headers={'Accept': 'application/json'})
+        if r.status_code == 200:
+            return dict(r.json())
+        else:
+            r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        logging_error(
+            "Error trying to get container info {0} {1}".format(str(e), traceback.format_exc()),
+            debug)
+        return None
+
+
+
+
 # CAN'T TEST
 def get_container_resources(container, rescaler_http_session, debug):
     container_name = container["name"]

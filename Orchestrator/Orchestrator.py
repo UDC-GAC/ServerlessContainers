@@ -5,7 +5,7 @@ from flask import Response
 from flask import abort
 from flask import jsonify
 from flask import request
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 from MyUtils import MyUtils
 
 app = Flask(__name__)

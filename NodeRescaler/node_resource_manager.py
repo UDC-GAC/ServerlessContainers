@@ -358,7 +358,7 @@ def get_node_disks(container_name, devices):
     limits_read, limits_write = get_node_disk_limits(container_name)
     for device in devices.keys():
         # TODO FIX
-        if device == "bdev" or device == "development" or device == "root":
+        if device == "bdev" or device == "development" or device == "production" or device == "root":
             continue
         device_mountpoint = devices[device]["source"]
         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)

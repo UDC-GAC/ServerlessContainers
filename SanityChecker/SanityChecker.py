@@ -7,7 +7,7 @@ import MyUtils.MyUtils as MyUtils
 import time
 import traceback
 import logging
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 from Rescaler.ClusterScaler import get_current_resource_value, set_container_resources
 
 db_handler = couchDB.CouchDBServer()

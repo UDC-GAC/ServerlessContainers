@@ -7,7 +7,8 @@ import json
 
 class CouchDBServer:
     post_doc_headers = {'content-type': 'application/json'}
-
+    __COUCHDB_URL = "couchdb"
+    __COUCHDB_PORT = 5984
     __structures_db_name = "structures"
     __services_db_name = "services"
     __limits_db_name = "limits"
@@ -18,8 +19,18 @@ class CouchDBServer:
     __MAX_UPDATE_TRIES = 10
     __DATABASE_TIMEOUT = 10
 
-    def __init__(self, server='http://couchdb:5984'):
-        self.server = server
+    def __init__(self,  couchdb_url=None, couchdbdb_port=None):
+        if not couchdb_url:
+            couchdb_url = self.__COUCHDB_URL
+        if not couchdbdb_port:
+            couchdbdb_port = self.__COUCHDB_PORT
+        else:
+            try:
+                couchdbdb_port = int(couchdbdb_port)
+            except ValueError:
+                couchdbdb_port = self.__COUCHDB_PORT
+
+        self.server = "http://{0}:{1}".format(couchdb_url, str(couchdbdb_port))
         self.session = requests.Session()
 
     def close_connection(self):

@@ -1,7 +1,7 @@
-import StateDatabase.couchDB as couchDB
+from StateDatabase.couchdb import CouchDBServer
 from unittest import TestCase
 
-from Guardian.Guardian import match_usages_and_limits, reduce_structure_events, match_rules_and_events
+from Guardian.Guardian import Guardian
 from StateDatabase.initializers.limits import base_limits
 from StateDatabase.initializers.rules import cpu_exceeded_upper, CpuRescaleUp
 from StateDatabase.initializers.structures import base_container
@@ -11,6 +11,7 @@ class DocumentTest(TestCase):
     __database = None
     __database_type = None
     __server_address = "localhost"
+    __server_port = "5984"
 
     def set_database(self, database_type, database_test_name):
         self.__database_type = database_type
@@ -21,11 +22,12 @@ class DocumentTest(TestCase):
         self.handler.close_connection()
 
     def setUp(self):
-        self.handler = couchDB.CouchDBServer(server='http://{0}:5984'.format(self.__server_address))
+        self.handler = CouchDBServer(self.__server_address, self.__server_port)
         self.handler.set_database_name(self.__database_type, self.__database)
         if self.handler.database_exists(self.__database):
             self.handler.remove_database(self.__database)
         self.handler.create_database(self.__database)
+        self.guardian = Guardian()
 
 
 class StructureTest(DocumentTest):
@@ -116,6 +118,7 @@ class LimitsTest(DocumentTest):
 
 class EventsAndRequestsTest(DocumentTest):
     __server_address = "localhost"
+    __server_port = "5984"
 
     def tearDown(self):
         self.handler.remove_database("events-test")
@@ -123,7 +126,7 @@ class EventsAndRequestsTest(DocumentTest):
         self.handler.close_connection()
 
     def setUp(self):
-        self.handler = couchDB.CouchDBServer(server='http://{0}:5984'.format(self.__server_address))
+        self.handler = CouchDBServer(self.__server_address, self.__server_port)
         self.handler.set_database_name("events", "events-test")
         self.handler.set_database_name("requests", "requests-test")
 
@@ -134,6 +137,8 @@ class EventsAndRequestsTest(DocumentTest):
         if self.handler.database_exists("requests-test"):
             self.handler.remove_database("requests-test")
         self.handler.create_database("requests-test")
+
+        self.guardian = Guardian()
 
     def testEvents(self):
         structure = {
@@ -185,13 +190,14 @@ class EventsAndRequestsTest(DocumentTest):
         num_needed_events = rescale_rule["rule"]["and"][0][">="][1]
 
         for i in range(num_needed_events):
-            events += match_usages_and_limits(structure["name"], event_rules, usages, limits["resources"],
-                                              structure["resources"])
-        reduced_events = reduce_structure_events(events)
+            events += self.guardian.match_usages_and_limits(structure["name"], event_rules, usages, limits["resources"],
+                                                            structure["resources"])
+        reduced_events = self.guardian.reduce_structure_events(events)
 
-        generated_requests, events_to_remove = match_rules_and_events(structure, rescaling_rules, reduced_events,
-                                                                      limits,
-                                                                      usages)
+        generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules,
+                                                                                    reduced_events,
+                                                                                    limits["resources"],
+                                                                                    usages)
 
         TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
         self.handler.add_events(events)

@@ -7,14 +7,8 @@ install:
   - pip install -r requirements.txt
 
 #services:
-#  - couchdb
 
 #before_script:
-#  - curl -X PUT localhost:5984/structures-test
-#  - curl -X PUT localhost:5984/limits-test
-#  - curl -X PUT localhost:5984/events-test
-#  - curl -X PUT localhost:5984/requests-test
-#  - curl localhost:5984
 
 sudo: true
 
@@ -24,15 +18,12 @@ before_install:
 
     - sudo apt-get update
     - sudo apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libmozjs185-dev libcurl4-openssl-dev
-
     - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
-
     - wget https://archive.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
     - tar -xvzf apache-couchdb-2.0.0.tar.gz
     - cd apache-couchdb-2.0.0/
     - sudo ./configure
     - sudo make release
-
     - find rel/couchdb -type d -exec chmod 0770 {} \;
     - sudo chmod 0644 rel/couchdb/etc/*
     - sudo rel/couchdb/bin/couchdb 2>/dev/null &

@@ -1,5 +1,5 @@
 # /usr/bin/python
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 import StateDatabase.initializers.initializer_utils as CouchDB_Utils
 
 small_limit = dict(

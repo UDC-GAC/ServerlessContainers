@@ -1,5 +1,5 @@
 # /usr/bin/python
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 import StateDatabase.initializers.initializer_utils as couchdb_utils
 
 containers = ["node0", "node1", "node2", "node3", "node4", "node5"]

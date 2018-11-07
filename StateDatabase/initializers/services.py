@@ -1,8 +1,8 @@
 # /usr/bin/python
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 import StateDatabase.initializers.initializer_utils as couchdb_utils
 
-guardian = dict(
+guardian_service = dict(
     name="guardian",
     type="service",
     heartbeat="",
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     if handler.database_exists("services"):
         print("Adding 'services' document")
         handler.add_service(scaler)
-        handler.add_service(guardian)
+        handler.add_service(guardian_service)
         handler.add_service(database_snapshoter)
         handler.add_service(node_state_snapshoter)
         handler.add_service(refeeder)

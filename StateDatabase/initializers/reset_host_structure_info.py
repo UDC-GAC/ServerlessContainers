@@ -1,5 +1,5 @@
 # /usr/bin/python
-import StateDatabase.couchDB as couchDB
+import StateDatabase.couchdb as couchDB
 
 if __name__ == "__main__":
     handler = couchDB.CouchDBServer()
