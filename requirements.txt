@@ -6,3 +6,5 @@ Flask-SQLAlchemy
 json-logic-qubit
 pylxd
 requests
+json_logic
+launchpadlib
