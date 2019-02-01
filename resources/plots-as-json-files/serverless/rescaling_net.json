@@ -1,0 +1,262 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node0"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node0"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 220
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node1"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node1"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 220
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node2"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node2"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node2"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node2"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node2"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 220
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node3"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node3"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node3"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node3"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node3"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 220
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node4"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node4"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 220
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.in.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "proc.net.tcp.out.mb",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=node5"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=node5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 220
+      }
+    }
+  ]
+}

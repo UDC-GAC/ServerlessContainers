@@ -1,0 +1,176 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "structure.cpu.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.cpu.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.cpu.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 2000
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "structure.mem.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.mem.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.mem.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 80000
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.disk.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.disk.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.disk.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "structure.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 700
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.net.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.net.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.net.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "structure.net.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 1400
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "structure.energy.max",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "structure.energy.min",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "structure.energy.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 180
+      }
+    }
+  ]
+}
