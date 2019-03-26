@@ -42,7 +42,7 @@
           "metric": "sys.cpu.energy",
           "aggregator": "zimsum",
           "tags": [
-            "host=c14-13"
+            "host=es-udc-dec-jonatan-dante"
           ]
         }
       ],

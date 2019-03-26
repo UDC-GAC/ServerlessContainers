@@ -1,13 +1,15 @@
 # /usr/bin/python
 from __future__ import print_function
+
 import requests
 import json
 import time
 import traceback
 import logging
-import StateDatabase.couchdb as couchdb
-import StateDatabase.opentsdb as opentsdb
-import MyUtils.MyUtils as MyUtils
+
+import AutomaticRescaler.src.StateDatabase.couchdb as couchdb
+import AutomaticRescaler.src.StateDatabase.opentsdb as opentsdb
+import AutomaticRescaler.src.MyUtils.MyUtils as MyUtils
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_hanlder = opentsdb.OpenTSDBServer()

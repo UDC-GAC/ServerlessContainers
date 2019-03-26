@@ -483,24 +483,26 @@ class Guardian():
             resources = structure["resources"]
 
             # Remote database operation
-            limits = self.couchdb_handler.get_limits(structure)["resources"]
+            limits = self.couchdb_handler.get_limits(structure)
+            limits_resources = limits["resources"]
 
-            if not limits:
+            if not limits_resources:
                 MyUtils.logging_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
             try:
-                self.invalid_container_state(resources, limits)
+                self.invalid_container_state(resources, limits_resources)
             except ValueError as e:
                 MyUtils.logging_warning(
                     "structure: {0} has invalid state with its limits and resources, will try to correct: {1}".format(
                         structure["name"], str(e)), self.debug)
-                limits = self.correct_container_state(resources, limits)
+                corrected_limits = self.correct_container_state(resources, limits_resources)
 
                 # Remote database operation
-                self.couchdb_handler.update_limit(dict(resources=limits))
+                limits["resources"] = corrected_limits
+                self.couchdb_handler.update_limit(limits)
 
-            self.process_serverless_structure(config, structure, usages, limits, rules)
+            self.process_serverless_structure(config, structure, usages, limits_resources, rules)
 
         except Exception as e:
             MyUtils.logging_error(

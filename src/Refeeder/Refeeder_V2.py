@@ -2,18 +2,16 @@
 from __future__ import print_function
 
 from threading import Thread
-
 import requests
-from requests import HTTPError
 import time
 import traceback
 import logging
 
 import AutomaticRescaler.src.MyUtils.MyUtils as MyUtils
 import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
-import AutomaticRescaler.src.StateDatabase.opentsdb as openTSDB
+import AutomaticRescaler.src.StateDatabase.opentsdb as OpenTSDB
 
-bdwatchdog = openTSDB.OpenTSDBServer()
+bdwatchdog = OpenTSDB.OpenTSDBServer()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
 db_handler = couchDB.CouchDBServer()
 
@@ -40,8 +38,7 @@ window_difference = 10
 window_delay = 10
 host_info_cache = dict()
 
-REFEED_ENERGY = False
-
+REFEED_ENERGY = True
 
 def merge(output_dict, input_dict):
     for key in input_dict:
@@ -72,6 +69,7 @@ def get_host_usages(host_name):
         host_info = host_info_cache[host_name]
     else:
         # Data retrieving, slow
+
         try:
             host_info = bdwatchdog.get_structure_timeseries({"host": host_name}, window_difference,
                                                             window_delay, BDWATCHDOG_ENERGY_METRICS,
@@ -82,42 +80,6 @@ def get_host_usages(host_name):
 
         host_info_cache[host_name] = host_info
     return host_info
-
-
-def generate_container_energy_metrics(container, host_info):
-    global window_difference, window_delay
-    container_name = container["name"]
-
-    # Get the container infomation
-    container_info = get_container_usages(container_name)
-
-    # Check that the container has cpu information available
-    if container_info["cpu"] == NO_METRIC_DATA_DEFAULT_VALUE:
-        MyUtils.logging_error("Error, no container info available for: {0}".format(container_name), debug)
-        return None
-
-    # Generate the container energy information from the container cpu and the host cpu and energy info
-    new_container = MyUtils.copy_structure_base(container)
-    new_container["resources"] = dict()
-    new_container["resources"]["energy"] = dict()
-    if int(host_info["cpu"]) > 0:
-        new_container["resources"]["energy"]["usage"] = float(
-            host_info["energy"] * (container_info["cpu"] / host_info["cpu"]))
-    return new_container
-
-
-def generate_application_energy_metrics(application, updated_containers):
-    total_energy = 0
-    for c in updated_containers:
-        # Check if container is used for this application and if it has energy information
-        if c["name"] in application["containers"] and "energy" in c["resources"] \
-                and "usage" in c["resources"]["energy"]:
-            total_energy += c["resources"]["energy"]["usage"]
-    if "energy" not in application["resources"]:
-        application["resources"]["energy"] = dict()
-
-    application["resources"]["energy"]["usage"] = total_energy
-    return application
 
 
 def generate_application_metrics(application):
@@ -134,61 +96,19 @@ def generate_application_metrics(application):
     return application
 
 
-def refeed_container(container, updated_containers):
-    # Get the host cpu and energy usages
-    try:
-        host_name = container["host"]
-        host_info = get_host_usages(host_name)
-
-        # Check that both cpu and energy information have been retrieved for the host
-        for required_info in ["cpu", "energy"]:
-            if host_info[required_info] == NO_METRIC_DATA_DEFAULT_VALUE:
-                MyUtils.logging_error("Error, no host '{0}' info available for: {1} so no info can be generated for "
-                                      "container: {2}".format(required_info, host_name, container["name"]), debug)
-                continue
-
-    except HTTPError:
-        MyUtils.logging_error("Error, no info available for: {0}".format(container["host"]), debug)
-        return
-
-    # Generate the energy information, if unsuccessful, None will be returned
-    container = generate_container_energy_metrics(container, host_info)
-
-    if container:
-        MyUtils.update_structure(container, db_handler, debug)
-        updated_containers.append(container)
-
-
-def refeed_containers(containers):
-    updated_containers = list()
-    threads = []
-    for container in containers:
-        process = Thread(target=refeed_container, args=(container, updated_containers,))
-        process.start()
-        threads.append(process)
-
-    for process in threads:
-        process.join()
-
-    return updated_containers
-
-
-def refeed_applications(applications, updated_containers):
+def refeed_applications(applications):
     for application in applications:
         application = generate_application_metrics(application)
-        application = generate_application_energy_metrics(application, updated_containers)
         MyUtils.update_structure(application, db_handler, debug)
 
 
-def refeed_thread(containers):
+def refeed_thread():
     # Process and measure time
     epoch_start = time.time()
 
-    containers = refeed_containers(containers)
-
     applications = MyUtils.get_structures(db_handler, debug, subtype="application")
     if applications:
-        refeed_applications(applications, containers)
+        refeed_applications(applications)
 
     epoch_end = time.time()
     processing_time = epoch_end - epoch_start
@@ -221,7 +141,7 @@ def refeed():
             # As no container info is available, no application information will be able to be generated
             continue
 
-        thread = Thread(target=refeed_thread, args=(containers,))
+        thread = Thread(target=refeed_thread, args=())
         thread.start()
         MyUtils.logging_info("Refeed processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)

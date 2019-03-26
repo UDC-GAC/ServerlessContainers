@@ -1,6 +1,6 @@
 # /usr/bin/python
-import StateDatabase.couchdb as couchDB
-import StateDatabase.initializers.initializer_utils as couchdb_utils
+import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
+import AutomaticRescaler.src.StateDatabase.initializers.initializer_utils as couchdb_utils
 
 cpu_exceeded_upper = dict(
     _id='cpu_exceeded_upper',

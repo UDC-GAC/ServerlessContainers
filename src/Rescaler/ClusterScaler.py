@@ -547,7 +547,9 @@ def process_requests(reqs):
 
         # Retrieve structure info
         structure = db_handler.get_structure(structure_name)
-
+        # TODO
+        # Could be optimized, the structure is retrieved, only its subtype is used and then in the
+        # rescaling funtion it is retrieved again, at least in the container's case
         # Rescale the structure accordingly, whether it is a container or an application
         rescaling_function[structure["subtype"]](request, structure_name)
 

@@ -5,20 +5,20 @@ from pylxd import Client
 from pylxd.exceptions import NotFound
 
 # Getters
-from node_resource_manager import get_node_cpus
-from node_resource_manager import get_node_mem
-from node_resource_manager import get_node_disks as cgroups_get_node_disks
-from node_resource_manager import get_node_networks as cgroups_get_node_networks
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_cpus
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_mem
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_disks as cgroups_get_node_disks
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_networks as cgroups_get_node_networks
 # Setters
-from node_resource_manager import set_node_cpus
-from node_resource_manager import set_node_mem
-from node_resource_manager import set_node_disk
-from node_resource_manager import set_node_net
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_cpus
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_mem
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_disk
+from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_net
 
 urllib3.disable_warnings()
 
-LXD_CRT = '/root/lxd.crt'
-LXD_KEY = '/root/lxd.key'
+LXD_CRT = '/home/jonatan/lxd.crt'
+LXD_KEY = '/home/jonatan/lxd.key'
 LXD_ENDPOINT = 'https://localhost:8443'
 
 DICT_CPU_LABEL = "cpu"

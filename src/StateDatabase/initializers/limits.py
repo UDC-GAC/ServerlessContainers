@@ -1,9 +1,8 @@
 # /usr/bin/python
-import StateDatabase.couchdb as couchDB
-import StateDatabase.initializers.initializer_utils as couchdb_utils
+import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
+import AutomaticRescaler.src.StateDatabase.initializers.initializer_utils as couchdb_utils
 
-containers = ["node0", "node1", "node2", "node3", "node4", "node5"]
-hosts = ["c14-13"]
+containers = ["node0", "node1", "node2", "node3"]
 applications = ["app1"]
 
 base_limits = dict(

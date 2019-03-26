@@ -2,14 +2,14 @@
 from __future__ import print_function
 
 from threading import Thread
-
 import requests
 import json
 import time
 import traceback
 import logging
-import StateDatabase.couchdb as couchDB
-import MyUtils.MyUtils as MyUtils
+
+import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
+import AutomaticRescaler.src.MyUtils.MyUtils as MyUtils
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
@@ -38,6 +38,9 @@ def generate_timeseries(container_name, resources):
 
 
 def update_container_current_values(container_name, resources):
+    if not resources:
+        MyUtils.logging_error("Unable to get resource info for container {0}".format(container_name), debug)
+
     database_structure = db_handler.get_structure(container_name)
     new_structure = MyUtils.copy_structure_base(database_structure)
     new_structure["resources"] = dict()
@@ -45,8 +48,12 @@ def update_container_current_values(container_name, resources):
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
 
-        new_structure["resources"][resource]["current"] = resources[resource][
-            translate_map[resource]["limit_label"]]
+        if resource not in resources or not resources[resource]:
+            MyUtils.logging_error("Unable to get info for resource {0} for container {1}".format(resource,container_name), debug)
+            new_structure["resources"][resource]["current"] = 0
+        else:
+            new_structure["resources"][resource]["current"] = resources[resource][
+                translate_map[resource]["limit_label"]]
 
     MyUtils.update_structure(new_structure, db_handler, debug, max_tries=3)
 
@@ -116,7 +123,13 @@ def persist_applications(container_resources_dict):
                 try:
                     current_resource_label = translate_map[resource]["limit_label"]
                     container_resources = container_resources_dict[container_name]["resources"]
-                    app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
+
+                    if resource not in container_resources or not container_resources[resource]:
+                        MyUtils.logging_error(
+                            "Unable to get info for resource {0} for container {1} when computing {2} resources".format(
+                                resource, container_name, app["name"]), debug)
+                    else:
+                        app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
                 except KeyError:
                     if "name" in container_resources_dict[container_name] and "name" in app:
                         MyUtils.logging_error(

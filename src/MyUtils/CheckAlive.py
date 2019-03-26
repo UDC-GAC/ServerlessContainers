@@ -1,7 +1,7 @@
 # /usr/bin/python
 import time
 import requests
-import StateDatabase.couchdb as couchDB
+import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
 
 
 def check_rest_api(service_endpoint, service_port):
@@ -73,8 +73,7 @@ def main():
     POLLING_TIME = 5
     while True:
         #REST_SERVICES = [("orchestrator", "orchestrator", "5000"), ("dante-rescaler", "dante-rescaler", "8000")]
-        REST_SERVICES = [("orchestrator", "orchestrator", "5000"), ("c14-1-rescaler", "c14-1-rescaler", "8000"),
-                         ("c14-2-rescaler", "c14-2-rescaler", "8000")]
+        REST_SERVICES = [("orchestrator", "orchestrator", "5000"), ("dante-rescaler", "dante-rescaler", "8000")]
         dead, alive = sort_services_dead_and_alive(db.get_services(), REST_SERVICES, time_window_allowed)
 
         print("AT: " + str(time.strftime("%D %H:%M:%S", time.localtime())))

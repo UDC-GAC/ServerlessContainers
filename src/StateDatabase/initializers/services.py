@@ -1,6 +1,6 @@
 # /usr/bin/python
-import StateDatabase.couchdb as couchDB
-import StateDatabase.initializers.initializer_utils as couchdb_utils
+import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
+import AutomaticRescaler.src.StateDatabase.initializers.initializer_utils as couchdb_utils
 
 guardian_service = dict(
     name="guardian",

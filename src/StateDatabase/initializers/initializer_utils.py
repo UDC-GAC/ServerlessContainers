@@ -1,7 +1,5 @@
 # /usr/bin/python
-import StateDatabase.couchdb as couchDB
-import requests
-
+import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
 
 class CouchDBUtils:
 
