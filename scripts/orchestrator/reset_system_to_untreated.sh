@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-DEV_PATH=$HOME/development/bdwatchdog
-export RESCALER_PATH=$DEV_PATH/AutomaticRescaler
-export ORCHESTRATOR_PATH=$RESCALER_PATH/src/Orchestrator/
+export ORCHESTRATOR_PATH=$HOME/development/AutomaticRescaler/src/Orchestrator
 
 nodes=( node0 node1 node2 node3 node4 node5 )
 resources=( cpu mem disk net energy )
@@ -13,6 +11,9 @@ bash $ORCHESTRATOR_PATH/Guardian/set_to_container.sh > /dev/null
 
 echo "Setting application to unguarded"
 bash $ORCHESTRATOR_PATH/Structures/set_to_unguarded.sh app1 > /dev/null
+
+echo "Setting application resources [energy] to unguarded"
+bash $ORCHESTRATOR_PATH/Structures/set_resource_to_unguarded.sh app1 energy > /dev/null
 
 echo "Setting container nodes to unguarded"
 for i in "${nodes[@]}"

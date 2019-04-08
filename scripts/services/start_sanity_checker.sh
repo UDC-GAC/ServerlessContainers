@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-tmux new -d -s "SanityChecker" "python3 SanityChecker/SanityChecker.py"
+tmux new -d -s "SanityChecker" "source set_pythonpath.sh; python3 SanityChecker/SanityChecker.py"
 

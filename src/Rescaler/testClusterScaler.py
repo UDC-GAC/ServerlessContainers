@@ -1,5 +1,5 @@
 import unittest
-import Rescaler.ClusterScaler as scaler
+import src.Rescaler.ClusterScaler as scaler
 
 
 class ClusterRescalerTest(unittest.TestCase):

@@ -1,7 +1,7 @@
 # /usr/bin/python
 import time
 import requests
-import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.couchdb as couchDB
 
 
 def check_rest_api(service_endpoint, service_port):

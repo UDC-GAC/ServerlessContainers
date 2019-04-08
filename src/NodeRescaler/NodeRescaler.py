@@ -8,7 +8,7 @@ from flask import jsonify
 from flask import request
 from werkzeug.serving import WSGIRequestHandler
 
-import AutomaticRescaler.src.NodeRescaler.lxd_node_resource_manager as node_resource_manager
+import src.NodeRescaler.lxd_node_resource_manager as node_resource_manager
 
 app = Flask(__name__)
 

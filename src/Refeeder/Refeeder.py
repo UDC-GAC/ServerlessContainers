@@ -9,9 +9,9 @@ import time
 import traceback
 import logging
 
-import AutomaticRescaler.src.MyUtils.MyUtils as MyUtils
-import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
-import AutomaticRescaler.src.StateDatabase.opentsdb as openTSDB
+import src.MyUtils.MyUtils as MyUtils
+import src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.opentsdb as openTSDB
 
 bdwatchdog = openTSDB.OpenTSDBServer()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
@@ -60,7 +60,7 @@ def get_container_usages(container_name):
                                                              BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS,
                                                              downsample=window_difference)
     except requests.ConnectionError as e:
-        MyUtils.logging_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        MyUtils.log_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
         raise e
     return container_info
 
@@ -77,7 +77,7 @@ def get_host_usages(host_name):
                                                             window_delay, BDWATCHDOG_ENERGY_METRICS,
                                                             REFEEDER_ENERGY_METRICS)
         except requests.ConnectionError as e:
-            MyUtils.logging_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+            MyUtils.log_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
             raise e
 
         host_info_cache[host_name] = host_info
@@ -93,7 +93,7 @@ def generate_container_energy_metrics(container, host_info):
 
     # Check that the container has cpu information available
     if container_info["cpu"] == NO_METRIC_DATA_DEFAULT_VALUE:
-        MyUtils.logging_error("Error, no container info available for: {0}".format(container_name), debug)
+        MyUtils.log_error("Error, no container info available for: {0}".format(container_name), debug)
         return None
 
     # Generate the container energy information from the container cpu and the host cpu and energy info
@@ -143,12 +143,12 @@ def refeed_container(container, updated_containers):
         # Check that both cpu and energy information have been retrieved for the host
         for required_info in ["cpu", "energy"]:
             if host_info[required_info] == NO_METRIC_DATA_DEFAULT_VALUE:
-                MyUtils.logging_error("Error, no host '{0}' info available for: {1} so no info can be generated for "
+                MyUtils.log_error("Error, no host '{0}' info available for: {1} so no info can be generated for "
                                       "container: {2}".format(required_info, host_name, container["name"]), debug)
                 continue
 
     except HTTPError:
-        MyUtils.logging_error("Error, no info available for: {0}".format(container["host"]), debug)
+        MyUtils.log_error("Error, no info available for: {0}".format(container["host"]), debug)
         return
 
     # Generate the energy information, if unsuccessful, None will be returned
@@ -192,7 +192,7 @@ def refeed_thread(containers):
 
     epoch_end = time.time()
     processing_time = epoch_end - epoch_start
-    MyUtils.logging_info("It took {0} seconds to refeed".format(str("%.2f" % processing_time)), debug)
+    MyUtils.log_info("It took {0} seconds to refeed".format(str("%.2f" % processing_time)), debug)
 
 
 def refeed():
@@ -223,25 +223,25 @@ def refeed():
 
         thread = Thread(target=refeed_thread, args=(containers,))
         thread.start()
-        MyUtils.logging_info("Refeed processed at {0}".format(MyUtils.get_time_now_string()), debug)
+        MyUtils.log_info("Refeed processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)
 
         if thread.isAlive():
             delay_start = time.time()
-            MyUtils.logging_warning(
+            MyUtils.log_warning(
                 "Previous thread didn't finish before next poll is due, with window time of {0} seconds, at {1}".format(
                     str(window_difference), MyUtils.get_time_now_string()), debug)
-            MyUtils.logging_warning("Going to wait until thread finishes before proceeding", debug)
+            MyUtils.log_warning("Going to wait until thread finishes before proceeding", debug)
             thread.join()
             delay_end = time.time()
-            MyUtils.logging_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
+            MyUtils.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
 
 
 def main():
     try:
         refeed()
     except Exception as e:
-        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        MyUtils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

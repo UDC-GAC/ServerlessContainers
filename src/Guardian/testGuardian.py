@@ -2,19 +2,19 @@ import random
 import unittest
 import time
 
-import StateDatabase
-from Guardian.Guardian import CPU_SHARES_PER_WATT, NOT_AVAILABLE_STRING
-from MyUtils import MyUtils
-from MyUtils.MyUtils import generate_event_name
+import src.StateDatabase
+from src.Guardian.Guardian import CPU_SHARES_PER_WATT, NOT_AVAILABLE_STRING
+from src.MyUtils import MyUtils
+from src.MyUtils.MyUtils import generate_event_name
 from unittest import TestCase
-from Guardian import Guardian
-from StateDatabase.couchdb import CouchDBServer
-from StateDatabase.initializers.limits import base_limits
-from StateDatabase.initializers.rules import mem_exceeded_upper, mem_dropped_lower, MemRescaleUp, MemRescaleDown, \
+from src.Guardian import Guardian
+from src.StateDatabase.couchdb import CouchDBServer
+from src.StateDatabase.initializers.limits import base_limits
+from src.StateDatabase.initializers.rules import mem_exceeded_upper, mem_dropped_lower, MemRescaleUp, MemRescaleDown, \
     cpu_exceeded_upper, cpu_dropped_lower, energy_dropped_lower, energy_exceeded_upper, CpuRescaleUp, CpuRescaleDown, \
     EnergyRescaleDown, EnergyRescaleUp
-from StateDatabase.initializers.services import guardian_service
-from StateDatabase.opentsdb import OpenTSDBServer
+from src.StateDatabase.initializers.services import guardian_service
+from src.StateDatabase.opentsdb import OpenTSDBServer
 
 
 class GuardianTest(TestCase):
@@ -109,26 +109,26 @@ class GuardianTest(TestCase):
 
         # State should be valid
         resources, limits = get_valid_state()
-        TestCase.assertEqual(self, first=limits, second=self.guardian.correct_container_state(resources, limits))
+        TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
 
         # Make resources and limits invalid because invalid boundary
         for resource in ["cpu", "mem"]:
             resources, limits = get_valid_state()
             # Upper too close to current
             limits[resource]["upper"] = resources[resource]["current"] - int(limits[resource]["boundary"] / 2)
-            TestCase.assertEqual(self, first=limits, second=self.guardian.correct_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
 
             # Upper too far away to current
             limits[resource]["upper"] = resources[resource]["current"] - limits[resource]["boundary"] * 2
-            TestCase.assertEqual(self, first=limits, second=self.guardian.correct_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
 
             # Lower too close to upper
             limits[resource]["lower"] = limits[resource]["upper"] - int(limits[resource]["boundary"] / 2)
-            TestCase.assertEqual(self, first=limits, second=self.guardian.correct_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
 
             # Lower too far away to upper
             limits[resource]["lower"] = limits[resource]["upper"] - limits[resource]["boundary"] * 2
-            TestCase.assertEqual(self, first=limits, second=self.guardian.correct_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
 
     def test_invalid_container_state(self):
         def get_valid_state():
@@ -146,7 +146,8 @@ class GuardianTest(TestCase):
 
         # State should be valid
         resources, limits = get_valid_state()
-        self.assertFalse(self.guardian.invalid_container_state(resources, limits))
+        for resource in ["cpu", "mem"]:
+            self.assertFalse(self.guardian.check_invalid_container_state(resources, limits, resource))
 
         # Make resources and limits invalid because unset
         for resource in ["cpu", "mem"]:
@@ -158,7 +159,7 @@ class GuardianTest(TestCase):
                 if doc_type == "resource":
                     resources[resource][label] = NOT_AVAILABLE_STRING
                 with self.assertRaises(ValueError):
-                    self.guardian.invalid_container_state(resources, limits)
+                    self.guardian.check_invalid_container_state(resources, limits, resource)
 
         for resource in ["cpu", "mem"]:
             # Invalid because max < current
@@ -166,27 +167,27 @@ class GuardianTest(TestCase):
             resources[resource]["max"], resources[resource]["current"] = \
                 resources[resource]["current"], resources[resource]["max"]
             with self.assertRaises(ValueError):
-                self.guardian.invalid_container_state(resources, limits)
+                self.guardian.check_invalid_container_state(resources, limits, resource)
 
             # Invalid because current < upper
             resources, limits = get_valid_state()
             resources[resource]["current"], limits[resource]["upper"] = \
                 limits[resource]["upper"], resources[resource]["current"]
             with self.assertRaises(ValueError):
-                self.guardian.invalid_container_state(resources, limits)
+                self.guardian.check_invalid_container_state(resources, limits, resource)
 
             # Invalid because upper < lower
             resources, limits = get_valid_state()
             limits[resource]["upper"], limits[resource]["lower"] = limits[resource]["lower"], limits[resource]["upper"]
             with self.assertRaises(ValueError):
-                self.guardian.invalid_container_state(resources, limits)
+                self.guardian.check_invalid_container_state(resources, limits, resource)
 
             # Invalid because lower < min
             resources, limits = get_valid_state()
             resources[resource]["min"], limits[resource]["lower"] = \
                 limits[resource]["lower"], resources[resource]["min"]
             with self.assertRaises(ValueError):
-                self.guardian.invalid_container_state(resources, limits)
+                self.guardian.check_invalid_container_state(resources, limits, resource)
 
         # Make resources and limits invalid because invalid boundary
         for resource in ["cpu", "mem"]:
@@ -194,11 +195,11 @@ class GuardianTest(TestCase):
             # Upper too close to current
             limits[resource]["upper"] = resources[resource]["current"] - int(limits[resource]["boundary"] / 2)
             with self.assertRaises(ValueError):
-                self.guardian.invalid_container_state(resources, limits)
+                self.guardian.check_invalid_container_state(resources, limits, resource)
             # Upper too far away to current
             limits[resource]["upper"] = resources[resource]["current"] - limits[resource]["boundary"] * 2
             with self.assertRaises(ValueError):
-                self.guardian.invalid_container_state(resources, limits)
+                self.guardian.check_invalid_container_state(resources, limits, resource)
 
             # resources, limits = get_valid_state()
             # # Lower too close to upper
@@ -232,11 +233,11 @@ class GuardianTest(TestCase):
         }
 
         TestCase.assertEqual(self, first="300,200,140,22.57,70,50",
-                             second=self.guardian.get_container_resources_str("cpu", resources_dict, limits_dict,
-                                                                              usages_dict))
+                             second=self.guardian.get_resource_str_summary("cpu", resources_dict, limits_dict,
+                                                                           usages_dict))
         TestCase.assertEqual(self, first="8192,2048,8000,2341.97,7000,256",
-                             second=self.guardian.get_container_resources_str("mem", resources_dict, limits_dict,
-                                                                              usages_dict))
+                             second=self.guardian.get_resource_str_summary("mem", resources_dict, limits_dict,
+                                                                           usages_dict))
 
     def test_container_energy_str(self):
         resources_dict = dict(
@@ -246,39 +247,37 @@ class GuardianTest(TestCase):
         TestCase.assertEqual(self, first="50,20,0", second=self.guardian.get_container_energy_str(resources_dict))
 
     def test_adjust_if_invalid_amount(self):
-        resource = "cpu"
-        structure = {"resources": {"cpu": {"max": 400, "min": 50, "current": 200}}}
-        limits = {"cpu": {"upper": 150, "lower": 100}}
+        structure_resources = {"max": 400, "min": 50, "current": 200}
+        structure_limits = {"upper": 150, "lower": 100}
 
         # Correct cases
         TestCase.assertEqual(self, first=70,
-                             second=self.guardian.adjust_if_invalid_amount(70, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(70, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=100,
-                             second=self.guardian.adjust_if_invalid_amount(100, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(100, structure_resources, structure_limits))
 
         # Over the max
         TestCase.assertEqual(self, first=200,
-                             second=self.guardian.adjust_if_invalid_amount(250, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(250, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=200,
-                             second=self.guardian.adjust_if_invalid_amount(260, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(260, structure_resources, structure_limits))
 
         # Correct cases
         TestCase.assertEqual(self, first=-10,
-                             second=self.guardian.adjust_if_invalid_amount(-10, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(-10, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=-50,
-                             second=self.guardian.adjust_if_invalid_amount(-50, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(-50, structure_resources, structure_limits))
 
         # Under the minimum
         TestCase.assertEqual(self, first=-50,
-                             second=self.guardian.adjust_if_invalid_amount(-60, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(-60, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=-50,
-                             second=self.guardian.adjust_if_invalid_amount(-100, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(-100, structure_resources, structure_limits))
 
-        resource = "energy"
-        structure = {"resources": {"energy": {"max": 40, "min": 5, "current": 20}}}
-        limits = {"resources": {"energy": {"upper": 15, "lower": 10}}}
+        structure_resources = {"max": 40, "min": 5, "current": 20}
+        structure_limits = {"upper": 15, "lower": 10}
         TestCase.assertEqual(self, first=10,
-                             second=self.guardian.adjust_if_invalid_amount(10, resource, structure, limits))
+                             second=self.guardian.adjust_if_invalid_amount(10, structure_resources, structure_limits))
 
     def test_get_amount_from_percentage_reduction(self):
         resource = "mem"
@@ -313,10 +312,9 @@ class GuardianTest(TestCase):
         check()
 
     def test_get_amount_from_fit_reduction(self):
-        resource = "mem"
-        structure = {"resources": {"mem": {"max": 4096, "min": 256, "current": 2000}}}
-        usages = {"structure.mem.usage": 700}
-        limits = {"mem": {"upper": 1500, "lower": 1000, "boundary": 500}}
+        current_resource_limit = 2000
+        current_resource_usage = 700
+        boundary = 500
 
         # To properly fit the limit, the usage (700) has to be placed between the upper and lower limit,
         # keeping the inter-limit boundary (500) so the new limits should be (950,450)
@@ -324,7 +322,8 @@ class GuardianTest(TestCase):
         # current value to apply should be (upper limit)950 + 500(boundary) = 1450
         # so the amount to reduce is 2000 - 1450 = 550
         TestCase.assertEqual(self,
-                             first=self.guardian.get_amount_from_fit_reduction(structure, usages, resource, limits),
+                             first=self.guardian.get_amount_from_fit_reduction(current_resource_limit, boundary,
+                                                                               current_resource_usage),
                              second=-550)
 
     def test_match_usages_and_limits(self):
@@ -486,7 +485,7 @@ class GuardianServelerssIntegrationTest(TestCase):
         self.guardian.opentsdb_handler = self.opentsdb
 
     def test_serverless(self):
-        guardian_service = StateDatabase.initializers.services.guardian_service
+        guardian_service = src.StateDatabase.initializers.services.guardian_service
         testing_node_name = "testingNode{0}".format(str(random.randint(0, 10)))
         structure = {"guard": True, "guard_policy": "serverless", "host": "c14-13", "host_rescaler_ip": "c14-13",
                      "host_rescaler_port": "8000",
@@ -547,7 +546,7 @@ class GuardianServelerssIntegrationTest(TestCase):
         for rule in event_rules + rescaling_rules:
             self.couchdb.add_rule(rule)
 
-        time.sleep(2) # Let the documents be persisted
+        time.sleep(2)  # Let the documents be persisted
 
         # Unguard the structure and check that nothing happens
         del (structure["guard"])
@@ -599,9 +598,9 @@ class GuardianServelerssIntegrationTest(TestCase):
             fake_docs.append(doc)
         success, error = self.opentsdb.send_json_documents(fake_docs)
         self.assertTrue(success)
-        time.sleep(2) # Let the time series database persist the new metrics
+        time.sleep(2)  # Let the time series database persist the new metrics
         self.guardian.serverless(self.couchdb.get_service("guardian")["config"], structure, self.couchdb.get_rules())
-        time.sleep(1) # Let the documents be persisted
+        time.sleep(1)  # Let the documents be persisted
         events = self.couchdb.get_events(structure)
         TestCase.assertEqual(self, first=1, second=len(events))
         TestCase.assertEqual(self, first="CpuBottleneck", second=events[0]["name"])
@@ -629,7 +628,7 @@ class GuardianServelerssIntegrationTest(TestCase):
             time.sleep(1)  # Let the time series database persist the new metrics
             self.guardian.serverless(self.couchdb.get_service("guardian")["config"], structure,
                                      self.couchdb.get_rules())
-            #time.sleep(1)  # Let the documents be persisted
+            # time.sleep(1)  # Let the documents be persisted
             if i + 1 < num_needed_events:
                 events = self.couchdb.get_events(structure)
                 TestCase.assertEqual(self, first=i + 1, second=len(events))

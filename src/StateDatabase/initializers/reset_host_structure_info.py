@@ -1,5 +1,5 @@
 # /usr/bin/python
-import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.couchdb as couchDB
 
 if __name__ == "__main__":
     handler = couchDB.CouchDBServer()

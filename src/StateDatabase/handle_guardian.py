@@ -1,5 +1,5 @@
 # /usr/bin/python
-import StateDatabase.couchdb as couchDB
+import src.StateDatabase.couchdb as couchDB
 import sys
 
 handler = couchDB.CouchDBServer()

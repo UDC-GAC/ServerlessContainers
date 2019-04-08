@@ -5,15 +5,15 @@ from pylxd import Client
 from pylxd.exceptions import NotFound
 
 # Getters
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_cpus
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_mem
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_disks as cgroups_get_node_disks
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import get_node_networks as cgroups_get_node_networks
+from src.NodeRescaler.node_resource_manager import get_node_cpus
+from src.NodeRescaler.node_resource_manager import get_node_mem
+from src.NodeRescaler.node_resource_manager import get_node_disks as cgroups_get_node_disks
+from src.NodeRescaler.node_resource_manager import get_node_networks as cgroups_get_node_networks
 # Setters
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_cpus
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_mem
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_disk
-from AutomaticRescaler.src.NodeRescaler.node_resource_manager import set_node_net
+from src.NodeRescaler.node_resource_manager import set_node_cpus
+from src.NodeRescaler.node_resource_manager import set_node_mem
+from src.NodeRescaler.node_resource_manager import set_node_disk
+from src.NodeRescaler.node_resource_manager import set_node_net
 
 urllib3.disable_warnings()
 

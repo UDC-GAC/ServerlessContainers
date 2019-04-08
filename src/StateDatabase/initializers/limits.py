@@ -1,6 +1,6 @@
 # /usr/bin/python
-import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
-import AutomaticRescaler.src.StateDatabase.initializers.initializer_utils as couchdb_utils
+import src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.initializers.initializer_utils as couchdb_utils
 
 containers = ["node0", "node1", "node2", "node3"]
 applications = ["app1"]

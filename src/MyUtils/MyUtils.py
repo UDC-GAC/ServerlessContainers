@@ -42,21 +42,21 @@ def get_config_value(config, default_config, key):
 
 
 # DON'T NEED TO TEST
-def logging_info(message, debug):
+def log_info(message, debug):
     logging.info(message)
     if debug:
         print("INFO: " + message)
 
 
 # DON'T NEED TO TEST
-def logging_warning(message, debug):
+def log_warning(message, debug):
     logging.warning(message)
     if debug:
         print("WARN: " + message)
 
 
 # DON'T NEED TO TEST
-def logging_error(message, debug):
+def log_error(message, debug):
     logging.error(message)
     if debug:
         eprint("ERROR: " + message)
@@ -76,7 +76,7 @@ def get_host_containers(container_host_ip, container_host_port, rescaler_http_se
         else:
             r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        logging_error(
+        log_error(
             "Error trying to get container info {0} {1}".format(str(e), traceback.format_exc()),
             debug)
         return None
@@ -98,7 +98,7 @@ def get_container_resources(container, rescaler_http_session, debug):
         else:
             r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        logging_error(
+        log_error(
             "Error trying to get container {0} info {1} {2}".format(container_name, str(e), traceback.format_exc()),
             debug)
         return None
@@ -132,14 +132,14 @@ def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_
             fails += 1
             if fails >= max_allowed_failures:
                 message = "Fatal error, couldn't retrieve service."
-                logging_error(message, True)
+                log_error(message, True)
                 raise Exception(message)
             else:
                 time.sleep(time_backoff_seconds)
 
     if not service or "config" not in service:
         message = "Fatal error, couldn't retrieve service configuration."
-        logging_error(message, True)
+        log_error(message, True)
         raise Exception(message)
 
     return service
@@ -184,7 +184,7 @@ def update_structure(structure, db_handler, debug, max_tries=10):
         print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
               + time.strftime("%D %H:%M:%S", time.localtime()))
     except requests.exceptions.HTTPError:
-        logging_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
+        log_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
 
 
 # CAN'T TEST
@@ -192,7 +192,7 @@ def get_structures(db_handler, debug, subtype="application"):
     try:
         return db_handler.get_structures(subtype=subtype)
     except (requests.exceptions.HTTPError, ValueError):
-        logging_warning("Couldn't retrieve " + subtype + " info.", debug=debug)
+        log_warning("Couldn't retrieve " + subtype + " info.", debug=debug)
         return None
 
 

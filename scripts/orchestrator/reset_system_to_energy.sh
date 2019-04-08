@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-DEV_PATH=$HOME/development/bdwatchdog
-export RESCALER_PATH=$DEV_PATH/AutomaticRescaler
-export ORCHESTRATOR_PATH=$RESCALER_PATH/src/Orchestrator
+export ORCHESTRATOR_PATH=$HOME/development/AutomaticRescaler/src/Orchestrator
 
 nodes=( node0 node1 node2 node3 )
 resources=( cpu mem disk net energy )

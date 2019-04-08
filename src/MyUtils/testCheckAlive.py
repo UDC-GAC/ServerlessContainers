@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from MyUtils.CheckAlive import service_is_alive, classify_service, sort_services_dead_and_alive
+from src.MyUtils.CheckAlive import service_is_alive, classify_service, sort_services_dead_and_alive
 
 
 class CheckAliveTest(TestCase):

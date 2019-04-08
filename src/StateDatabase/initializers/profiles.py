@@ -1,6 +1,6 @@
 # /usr/bin/python
-import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
-import AutomaticRescaler.src.StateDatabase.initializers.initializer_utils as CouchDB_Utils
+import src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.initializers.initializer_utils as CouchDB_Utils
 
 small_limit = dict(
     type='profile',

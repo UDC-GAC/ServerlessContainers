@@ -357,7 +357,7 @@ def get_node_disks(container_name, devices):
     retrieved_disks = list()
     limits_read, limits_write = get_node_disk_limits(container_name)
     for device in devices.keys():
-        # TODO FIX
+        # TODO FIX, ignored devices should be obtained from a file
         if device == "bdev" or device == "development" or device == "production" or device == "root":
             continue
         device_mountpoint = devices[device]["source"]

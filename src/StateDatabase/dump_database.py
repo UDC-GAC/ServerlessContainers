@@ -2,7 +2,7 @@
 import json
 import time
 
-import StateDatabase.couchdb as couchDB
+import src.StateDatabase.couchdb as couchDB
 
 
 def dump_to_file(filename, content):

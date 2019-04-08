@@ -1,10 +1,4 @@
-urllib3
-Werkzeug
-Flask
-Flask-CAS
-Flask-SQLAlchemy
-json-logic-qubit
-pylxd
-requests
-json_logic
-launchpadlib
+json-logic-qubit==0.9.1
+requests==2.21.0
+Flask==1.0.2
+pylxd==2.2.8

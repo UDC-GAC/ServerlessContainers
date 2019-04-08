@@ -7,43 +7,25 @@ import traceback
 import logging
 from json_logic import jsonLogic
 
-import AutomaticRescaler.src.MyUtils.MyUtils as MyUtils
-import AutomaticRescaler.src.StateDatabase.couchdb as couchDB
-import AutomaticRescaler.src.StateDatabase.opentsdb as bdwatchdog
+import src.MyUtils.MyUtils as MyUtils
+import src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.opentsdb as bdwatchdog
 
 BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
-# BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident', 'proc.disk.writes.mb',
-#                                'proc.disk.reads.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']
-
+BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage', 'structure.energy.usage']
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident']}
-# GUARDIAN_CONTAINER_METRICS = {
-#     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
-#     'structure.mem.usage': ['proc.mem.resident'],
-#     'structure.disk.usage': ['proc.disk.reads.mb'],
-#     'structure.net.usage': ['proc.disk.reads.mb', 'proc.net.tcp.in.mb']}
-
-BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage', 'structure.energy.usage']
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
     'structure.mem.usage': ['structure.mem.usage'],
     'structure.energy.usage': ['structure.energy.usage']}
-# GUARDIAN_APPLICATION_METRICS = {
-#    'structure.cpu.usage': ['structure.cpu.usage'],
-#    'structure.mem.usage': ['structure.mem.usage'],
-#    'structure.disk.usage': ['structure.disk.usage'],
-#    'structure.net.usage': ['structure.net.usage'],
-#    'structure.energy.usage': ['structure.energy.usage']}
-
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
 
 TAGS = {"container": "host", "application": "structure"}
 
 translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage"}
-# translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage",
-#                   "disk": "structure.disk.usage", "net": "structure.net.usage"}
 
 # RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 
@@ -56,11 +38,12 @@ MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
 MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
-CPU_SHARES_PER_WATT = 10  # 7  # How many cpu shares to rescale per watt
+CPU_SHARES_PER_WATT = 5  # 7  # How many cpu shares to rescale per watt
 
 
-class Guardian():
+class Guardian:
     """ Guardian class that implements all the logic for this service"""
+
     def __init__(self):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchDB.CouchDBServer()
@@ -78,23 +61,45 @@ class Guardian():
                 resource, label1, str(value1), label2, str(value2)))
 
     def try_get_value(self, d, key):
+        """
+        Parameters:
+            d : dict -> A dictionary with strings as keys
+            key : string -> A string used as key for a dictionary of integers
+
+        Returns:
+            The value stored in the dictionary or a specific value if it is not in it or if it is not an valid integer
+        """
         try:
             return int(d[key])
         except (KeyError, ValueError):
             return NOT_AVAILABLE_STRING
 
     def filter_old_events(self, structure_events, event_timeout):
-        valid_events = list()
-        invalid_events = list()
+        """
+        Parameters:
+            structure_events : list -> A list of the events triggered in the past for a specific structure
+            event_timeout : integer -> A timeout in seconds
+
+        Returns:
+            A tuple of lists of events that either fall in the time window between
+            (now - timeout) and (now), the valid events, or outside of it, the invalid ones.
+        """
+        valid, invalid = list(), list()
         for event in structure_events:
-            # If event is too old, remove it, otherwise keep it
             if event["timestamp"] < time.time() - event_timeout:
-                invalid_events.append(event)
+                invalid.append(event)
             else:
-                valid_events.append(event)
-        return valid_events, invalid_events
+                valid.append(event)
+        return valid, invalid
 
     def reduce_structure_events(self, structure_events):
+        """
+        Parameters:
+            structure_events : list ->
+
+        Returns:
+            A dictionary with the added up events in a signle dictionary
+        """
         events_reduced = {"action": {}}
         for event in structure_events:
             resource = event["resource"]
@@ -105,72 +110,90 @@ class Guardian():
                 events_reduced["action"][resource]["events"]["scale"][key] += value
         return events_reduced["action"]
 
-    def get_container_resources_str(self, resource_label, resources_dict, limits_dict, usages_dict):
+    def get_resource_str_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
+        """
+        Parameters:
+            resource_label : string -> the name of the resource to access the dictionaries
+            resources_dict : dict -> a dictionary with the metrics (e.g., max, min) of the resources
+            limits_dict : dict -> a dictionary with the limits (e.g., lower, upper) of the resources
+            usages_dict : dict -> a dictionary with the usages of the resources
+
+        Returns:
+            A string that summarizes the state of a resource in terms of its metrics
+        """
+        metrics = resources_dict[resource_label]
+        limits = limits_dict[resource_label]
+
         if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
             usage_value_string = NOT_AVAILABLE_STRING
         else:
             usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
 
+        strings = list()
         if not limits_dict and not usages_dict:
-            return ",".join([str(self.try_get_value(resources_dict[resource_label], "max")),
-                             str(self.try_get_value(resources_dict[resource_label], "current")),
-                             str(self.try_get_value(resources_dict[resource_label], "fixed")),
-                             str(self.try_get_value(resources_dict[resource_label], "min"))])
+            for field in ["max", "current", "max", "min"]:
+                strings.append(str(self.try_get_value(metrics, field)))
         else:
-            return ",".join([str(self.try_get_value(resources_dict[resource_label], "max")),
-                             str(self.try_get_value(resources_dict[resource_label], "current")),
-                             str(self.try_get_value(limits_dict[resource_label], "upper")),
-                             usage_value_string,
-                             str(self.try_get_value(limits_dict[resource_label], "lower")),
-                             str(self.try_get_value(resources_dict[resource_label], "min"))])
+            for field in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits),
+                          ("min", metrics)]:
+                strings.append(str(self.try_get_value(field[1], field[0])))
+            strings.insert(3, usage_value_string)  # Manually add the usage metric
 
-    def adjust_if_invalid_amount(self, amount, resource, structure, limits):
-        if resource in NON_ADJUSTABLE_RESOURCES:
-            return amount
+        return ",".join(strings)
 
-        current_value = structure["resources"][resource]["current"] + amount
-        lower_limit = limits[resource]["lower"] + amount
-        max_limit = structure["resources"][resource]["max"]
-        min_limit = structure["resources"][resource]["min"]
+    def adjust_if_invalid_amount(self, amount, structure_resources, structure_limits):
+        """
+        Parameters:
+            amount : integer -> a number representing the amount to reduce or increase from the current value
+            structure_resources : dict ->
+            structure_limits : dict ->
+
+        Returns:
+            The amount adjusted (trimmed) in case it would exceed any limit
+        """
+        expected_value = structure_resources["current"] + amount
+        lower_limit = structure_limits["lower"] + amount
+        max_limit = structure_resources["max"]
+        min_limit = structure_resources["min"]
 
         if lower_limit < min_limit:
-            # The amount to reduce is too big, adjust it so that the lower limit is
-            # set to the minimum
+            # The amount to reduce is too big, adjust it so that the lower limit is set to the minimum
             amount += (min_limit - lower_limit)
-        elif current_value > max_limit:
-            # The amount to increase is too big, adjust it so that the current limit is
-            # set to the maximum
-            amount -= (current_value - max_limit)
+        elif expected_value > max_limit:
+            # The amount to increase is too big, adjust it so that the current limit is set to the maximum
+            amount -= (expected_value - max_limit)
 
         return amount
 
     def get_amount_from_percentage_reduction(self, structure, usages, resource, percentage_reduction):
         current_resource_limit = structure["resources"][resource]["current"]
         current_resource_usage = usages[translator_dict[resource]]
-
         difference = current_resource_limit - current_resource_usage
-
         if percentage_reduction > MAX_PERCENTAGE_REDUCTION_ALLOWED:
             percentage_reduction = MAX_PERCENTAGE_REDUCTION_ALLOWED
-
         amount = int(-1 * (percentage_reduction * difference) / 100)
         return amount
 
-    def get_amount_from_fit_reduction(self, structure, usages, resource, limits):
-        current_resource_limit = structure["resources"][resource]["current"]
-        upper_to_lower_window = limits[resource]["boundary"]
-        current_to_upper_window = limits[resource]["boundary"]
-        current_resource_usage = usages[translator_dict[resource]]
+    def get_amount_from_fit_reduction(self, current_resource_limit, boundary, current_resource_usage):
+        """
+        Parameters:
+            structure : dict ->
+            usages : dict ->
+            resource : string ->
+            limits : dict ->
+
+        Returns:
+            The amount to be reduced from the fit to usage policy.
+        """
+        upper_to_lower_window = boundary
+        current_to_upper_window = boundary
 
         # Set the limit so that the resource usage is placed in between the upper and lower limits
         # and keeping the boundary between the upper and the real resource limits
         desired_applied_resource_limit = \
-            current_resource_usage + \
-            upper_to_lower_window / 2 + \
-            current_to_upper_window
+            current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
 
-        difference = current_resource_limit - desired_applied_resource_limit
-        return -1 * difference
+        return -1 * (current_resource_limit - desired_applied_resource_limit)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, resource):
         max_resource_limit = structure["resources"][resource]["max"]
@@ -180,73 +203,65 @@ class Guardian():
         return int(difference * energy_aplification)
 
     def get_container_energy_str(self, resources_dict):
-        return ",".join([str(self.try_get_value(resources_dict["energy"], "max")),
-                         str(self.try_get_value(resources_dict["energy"], "usage")),
-                         str(self.try_get_value(resources_dict["energy"], "min"))])
+        """
+        Parameters:
+            resources_dict : dict -> A dictionary with all the resources' information
 
-    def correct_container_state(self, resources, limits):
+        Returns:
+            A string that summarizes the state of the enery resource
+        """
+        energy_dict = resources_dict["energy"]
+        string = list()
+        for field in ["max", "usage", "min"]:
+            string.append(str(self.try_get_value(energy_dict, field)))
+        return ",".join(string)
+
+    def adjust_container_state(self, resources, limits):
         for resource in ["cpu", "mem"]:
-            current_value = self.try_get_value(resources[resource], "current")
-            upper_value = self.try_get_value(limits[resource], "upper")
-            lower_value = self.try_get_value(limits[resource], "lower")
-            min_value = self.try_get_value(resources[resource], "min")
-            boundary = limits[resource]["boundary"]
-
-            # Can't correct this, so let it raise the exception
-            # check_invalid_values(current_value, "current", max_value, "max")
-
-            # Correct the chain current > upper > lower, including boundary between current and upper
-            try:
-                self.check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
-                self.check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
-                self.check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
-                if current_value != NOT_AVAILABLE_STRING and current_value - boundary < upper_value:
-                    raise ValueError()
-                if current_value != NOT_AVAILABLE_STRING and current_value - int(
-                        MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
-                    raise ValueError()
-            except ValueError:
-                limits[resource]["upper"] = resources[resource]["current"] - boundary
-                limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, min_value)
-
+            errors = True
+            while errors:
+                try:
+                    self.check_invalid_container_state(resources, limits, resource)
+                    errors = False
+                except ValueError:
+                    # Correct the chain current > upper > lower, including boundary between current and upper
+                    boundary = limits[resource]["boundary"]
+                    limits[resource]["upper"] = resources[resource]["current"] - boundary
+                    limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
         return limits
 
-    def invalid_container_state(self, resources, limits):
-        for resource in ["cpu", "mem"]:
-            max_value = self.try_get_value(resources[resource], "max")
-            current_value = self.try_get_value(resources[resource], "current")
-            upper_value = self.try_get_value(limits[resource], "upper")
-            lower_value = self.try_get_value(limits[resource], "lower")
-            min_value = self.try_get_value(resources[resource], "min")
-            boundary = limits[resource]["boundary"]
+    def check_invalid_container_state(self, resources, limits, resource):
+        data = {"res": resources, "lim": limits}
+        values_tuples = [("max", "res"), ("current", "res"), ("upper", "lim"), ("lower", "lim"), ("min", "res")]
+        values = dict()
+        for value, type in values_tuples:
+            values[value] = self.try_get_value(data[type][resource], value)
+        values["boundary"] = data["lim"][resource]["boundary"]
 
-            # Check values are set and valid, except for current as it may have not been persisted yet
-            self.check_unset_values(max_value, "max")
-            self.check_unset_values(upper_value, "upper")
-            self.check_unset_values(lower_value, "lower")
-            self.check_unset_values(min_value, "min")
+        # Check values are set and valid, except for current as it may have not been persisted yet
+        for value in values:
+            self.check_unset_values(values[value], value)
 
-            # Check if the first value is greater than the second
-            # check the full chain "max > upper > current > lower > min"
-            if current_value != NOT_AVAILABLE_STRING:
-                self.check_invalid_values(current_value, "current", max_value, "max")
-            self.check_invalid_values(upper_value, "upper", current_value, "current", resource=resource)
-            self.check_invalid_values(lower_value, "lower", upper_value, "upper", resource=resource)
-            self.check_invalid_values(min_value, "min", lower_value, "lower", resource=resource)
+        # Check if the first value is greater than the second
+        # check the full chain "max > upper > current > lower > min"
+        if values["current"] != NOT_AVAILABLE_STRING:
+            self.check_invalid_values(values["current"], "current", values["max"], "max")
+        self.check_invalid_values(values["upper"], "upper", values["current"], "current", resource=resource)
+        self.check_invalid_values(values["lower"], "lower", values["upper"], "upper", resource=resource)
+        self.check_invalid_values(values["min"], "min", values["lower"], "lower", resource=resource)
 
-            # Check that there is a boundary between values, like the current and upper, so
-            # that the limit can be surpassed
-            if current_value != NOT_AVAILABLE_STRING:
-                if current_value - boundary < upper_value:
-                    raise ValueError(
-                        "value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
-                            str(current_value), str(boundary), str(upper_value)))
+        # Check that there is a boundary between values, like the current and upper, so
+        # that the limit can be surpassed
+        if values["current"] != NOT_AVAILABLE_STRING:
+            if values["current"] - values["boundary"] < values["upper"]:
+                raise ValueError(
+                    "value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
+                        str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
-                elif current_value - int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary) > upper_value:
-                    raise ValueError(
-                        "value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
-                            str(current_value), str(
-                                int(MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER * boundary)), str(upper_value)))
+            elif values["current"] - values["boundary"] > values["upper"]:
+                raise ValueError(
+                    "value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
+                        str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
         events = []
@@ -282,9 +297,9 @@ class Guardian():
                             timestamp=int(time.time()))
                         )
             except KeyError as e:
-                MyUtils.logging_warning(
-                    "rule: {0} is missing a parameter {1} {2}".format(rule["name"], str(e),
-                                                                      str(traceback.format_exc())), self.debug)
+                MyUtils.log_warning(
+                    "rule: {0} is missing a parameter {1} {2}".format(rule["name"],
+                                                                      str(e), str(traceback.format_exc())), self.debug)
 
         return events
 
@@ -310,7 +325,7 @@ class Guardian():
                     # If rescaling a container, check that the current resource value exists, otherwise there
                     # is nothing to rescale
                     if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
-                        MyUtils.logging_warning(
+                        MyUtils.log_warning(
                             "No current value for container' {0}' and resource '{1}', can't rescale".format(
                                 structure["name"], resource_label), self.debug)
                         continue
@@ -325,7 +340,10 @@ class Guardian():
                                     structure, usages, resource_label, int(rule["percentage_reduction"]))
 
                             elif rule["rescale_by"] == "fit_to_usage":
-                                amount = self.get_amount_from_fit_reduction(structure, usages, resource_label, limits)
+                                current_resource_limit = structure["resources"][resource_label]["current"]
+                                boundary = limits[resource_label]["boundary"]
+                                usage = usages[translator_dict[resource_label]]
+                                amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
 
                             elif rule["rescale_by"] == "proportional" and rule["resource"] == "energy":
                                 amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
@@ -335,18 +353,23 @@ class Guardian():
                         except KeyError:
                             # Error because current value may not be available and it is
                             # required for methods like percentage reduction
-                            MyUtils.logging_warning(
+                            MyUtils.log_warning(
                                 "error in trying to compute rescaling amount for rule '{0}' : {1}".format(
                                     rule["name"], str(traceback.format_exc())), self.debug)
                             amount = rule["amount"]
                     else:
                         amount = rule["amount"]
-                        MyUtils.logging_warning(
+                        MyUtils.log_warning(
                             "No rescale_by policy is set in rule : '{0}', falling back to default amount: {1}".format(
                                 rule["name"], str(amount)), self.debug)
 
-                    amount = self.adjust_if_invalid_amount(amount, resource_label, structure, limits)
+                    # If the resource is susceptible to check, ensure that it does not surpass any limit
+                    if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                        structure_resources = structure["resources"][resource_label]
+                        structure_limits = limits[resource_label]
+                        amount = self.adjust_if_invalid_amount(amount, structure_resources, structure_limits)
 
+                    # Create the Request
                     request = dict(
                         type="request",
                         resource=resource_label,
@@ -375,10 +398,9 @@ class Guardian():
                     events_to_remove[event_name] += rule["events_to_remove"]
 
             except KeyError as e:
-                MyUtils.logging_warning(
+                MyUtils.log_warning(
                     "rule: {0} is missing a parameter {1} {2} ".format(rule["name"], str(e),
-                                                                       str(traceback.format_exc())),
-                    self.debug)
+                                                                       str(traceback.format_exc())), self.debug)
 
         return generated_requests, events_to_remove
 
@@ -390,8 +412,8 @@ class Guardian():
         container_name_str = "@" + container["name"]
         container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
         resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
-            self.get_container_resources_str("cpu", resources, limits, usages),
-            self.get_container_resources_str("mem", resources, limits, usages),
+            self.get_resource_str_summary("cpu", resources, limits, usages),
+            self.get_resource_str_summary("mem", resources, limits, usages),
             self.get_container_energy_str(resources))
 
         ev, req = list(), list()
@@ -400,7 +422,7 @@ class Guardian():
         for request in triggered_requests:
             req.append(request["action"])
         triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
-        MyUtils.logging_info(
+        MyUtils.log_info(
             " ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
             self.debug)
 
@@ -447,7 +469,6 @@ class Guardian():
 
         # DEBUG AND INFO OUTPUT
         if self.debug:
-            limits = self.couchdb_handler.get_limits(structure)["resources"]
             self.print_debug_info(structure, usages, limits, triggered_events, triggered_requests)
 
     def serverless(self, config, structure, rules):
@@ -477,7 +498,7 @@ class Guardian():
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                MyUtils.logging_warning("structure: {0} has no usage data".format(structure["name"]), self.debug)
+                MyUtils.log_warning("structure: {0} has no usage data".format(structure["name"]), self.debug)
                 return
 
             resources = structure["resources"]
@@ -487,25 +508,18 @@ class Guardian():
             limits_resources = limits["resources"]
 
             if not limits_resources:
-                MyUtils.logging_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
+                MyUtils.log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
-            try:
-                self.invalid_container_state(resources, limits_resources)
-            except ValueError as e:
-                MyUtils.logging_warning(
-                    "structure: {0} has invalid state with its limits and resources, will try to correct: {1}".format(
-                        structure["name"], str(e)), self.debug)
-                corrected_limits = self.correct_container_state(resources, limits_resources)
+            limits["resources"] = self.adjust_container_state(resources, limits_resources)
 
-                # Remote database operation
-                limits["resources"] = corrected_limits
-                self.couchdb_handler.update_limit(limits)
+            # Remote database operation
+            self.couchdb_handler.update_limit(limits)
 
             self.process_serverless_structure(config, structure, usages, limits_resources, rules)
 
         except Exception as e:
-            MyUtils.logging_error(
+            MyUtils.log_error(
                 "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
                 self.debug)
 
@@ -533,10 +547,11 @@ class Guardian():
                         request["host_rescaler_ip"] = structure["host_rescaler_ip"]
                         request["host_rescaler_port"] = structure["host_rescaler_port"]
 
+                    # Remote database operation
                     self.couchdb_handler.add_request(request)
                     triggered_requests.append(request)
             else:
-                MyUtils.logging_warning(
+                MyUtils.log_warning(
                     "structure: {0} has no 'current' or 'fixed' value for resource: {1}".format(
                         structure["name"], resource), self.debug)
 
@@ -553,7 +568,7 @@ class Guardian():
             self.process_fixed_resources_structure(structure["resources"], structure)
 
         except Exception as e:
-            MyUtils.logging_error(
+            MyUtils.log_error(
                 "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
                 self.debug)
 
@@ -590,26 +605,26 @@ class Guardian():
             structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
             thread = None
 
-            # Data retrieving, slow
+            # Remote database operation
             structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
             if structures:
                 thread = Thread(target=self.guard_structures, args=(config, structures,))
                 thread.start()
 
-            MyUtils.logging_info(
+            MyUtils.log_info(
                 "Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)
             time.sleep(window_difference)
 
             if thread and thread.isAlive():
                 delay_start = time.time()
-                MyUtils.logging_warning(
+                MyUtils.log_warning(
                     "Previous thread didn't finish before next poll is due, with window time of " +
                     "{0} seconds, at {1}".format(str(window_difference), MyUtils.get_time_now_string()), self.debug)
-                MyUtils.logging_warning("Going to wait until thread finishes before proceeding", self.debug)
+                MyUtils.log_warning("Going to wait until thread finishes before proceeding", self.debug)
                 thread.join()
                 delay_end = time.time()
-                MyUtils.logging_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)),
-                                        self.debug)
+                MyUtils.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)),
+                                    self.debug)
 
 
 def main():
@@ -617,7 +632,7 @@ def main():
         guardian = Guardian()
         guardian.guard()
     except Exception as e:
-        MyUtils.logging_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        MyUtils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
