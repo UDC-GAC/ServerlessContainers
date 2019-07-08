@@ -43,6 +43,7 @@
 
     ./build/tsdb mkmetric structure.energy.usage
     ./build/tsdb mkmetric structure.energy.current
+    ./build/tsdb mkmetric structure.energy.shares
     ./build/tsdb mkmetric structure.energy.max
     ./build/tsdb mkmetric structure.energy.min
 

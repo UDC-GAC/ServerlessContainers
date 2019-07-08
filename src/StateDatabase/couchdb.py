@@ -15,7 +15,7 @@ class CouchDBServer:
     __rules_db_name = "rules"
     __events_db_name = "events"
     __requests_db_name = "requests"
-    __profiles_db_name = "profiles"
+    __users_db_name = "users"
     __MAX_UPDATE_TRIES = 10
     __DATABASE_TIMEOUT = 10
 
@@ -190,6 +190,9 @@ class CouchDBServer:
         else:
             return self.__find_documents_by_matches(self.__structures_db_name, {"subtype": subtype})
 
+    def delete_structure(self, structure):
+        self.__delete_doc(self.__structures_db_name, structure["_id"], structure["_rev"])
+
     def update_structure(self, structure, max_tries=10):
         return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
 
@@ -264,17 +267,17 @@ class CouchDBServer:
         return self.__resilient_update_doc(self.__rules_db_name, rule)
 
     # PROFILES #
-    def add_profile(self, profile):
-        return self.__add_doc(self.__profiles_db_name, profile)
+    def add_user(self, user):
+        return self.__add_doc(self.__users_db_name, user)
 
-    def get_profiles(self):
-        return self.__get_all_database_docs(self.__profiles_db_name)
+    def get_users(self):
+        return self.__get_all_database_docs(self.__users_db_name)
 
-    def get_profile(self, profile_name):
-        return self.__find_document_by_name(self.__profiles_db_name, profile_name)
+    def get_user(self, user_name):
+        return self.__find_document_by_name(self.__users_db_name, user_name)
 
-    def update_profile(self, profile):
-        return self.__resilient_update_doc(self.__profiles_db_name, profile)
+    def update_user(self, user):
+        return self.__resilient_update_doc(self.__users_db_name, user)
 
     # SERVICES #
     def get_services(self):

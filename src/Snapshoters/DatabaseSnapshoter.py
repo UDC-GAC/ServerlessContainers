@@ -19,7 +19,7 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed"]
+PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"]
 PERSIST_CONFIG_SERVICES = [
     {"name": "guardian",
      "parameters": [

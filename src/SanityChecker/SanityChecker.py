@@ -43,7 +43,7 @@ def check_unstable_configuration():
 
         rules = db_handler.get_rules()
         for rule in rules:
-            if rule["generates"] == "requests":
+            if "generates" in rule and rule["generates"] == "requests" and rule["active"]:
                 event_count = int(rule["events_to_remove"])
                 event_window_time_to_trigger = window_timelapse * (event_count + 1)
                 # Leave a slight buffer time to account for window times skewness
@@ -60,6 +60,8 @@ def check_unstable_configuration():
 
 def fix_container_cpu_mapping(container, cpu_used_cores, cpu_used_shares, max_cpu_limit):
     if cpu_used_shares > max_cpu_limit:
+        # TODO FIX container has, somehow, more shares than the maximum
+        MyUtils.log_error("container {0} has, somehow, more shares than the maximum".format(container["name"]), debug)
         return False
     rescaler_ip = container["host_rescaler_ip"]
     rescaler_port = container["host_rescaler_port"]
@@ -118,7 +120,7 @@ def check_core_mapping():
             host_info = host_info_cache[container["host"]]
 
             max_cpu_limit = database_resources["cpu"]["max"]
-            current_cpu_limit = get_current_resource_value(database_resources, real_resources, "cpu")
+            current_cpu_limit = get_current_resource_value(container, real_resources, "cpu")
             cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
 
             success, actual_used_cores, actual_used_shares = \

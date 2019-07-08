@@ -17,8 +17,8 @@ from src.NodeRescaler.node_resource_manager import set_node_net
 
 urllib3.disable_warnings()
 
-LXD_CRT = '/home/jonatan/lxd.crt'
-LXD_KEY = '/home/jonatan/lxd.key'
+LXD_CRT = '/root/production/lxd.crt'
+LXD_KEY = '/root/production/lxd.key'
 LXD_ENDPOINT = 'https://localhost:8443'
 
 DICT_CPU_LABEL = "cpu"

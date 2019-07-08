@@ -6,6 +6,8 @@ from flask import Response
 from flask import abort
 from flask import jsonify
 from flask import request
+import argparse
+import os
 
 
 import src.StateDatabase.couchdb as couchDB
@@ -15,11 +17,16 @@ app = Flask(__name__)
 
 MAX_TRIES = 10
 
+COUCHDB_URL = os.getenv('COUCHDB_URL')
+if not COUCHDB_URL:
+    COUCHDB_URL = "couchdb"
+
 
 def get_db():
+    global COUCHDB_URL
     """Opens a new database connection if there is none yet for the current application context."""
     if not hasattr(g, 'db_handler'):
-        g.db_handler = couchDB.CouchDBServer()
+        g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
     return g.db_handler
 
 
@@ -28,6 +35,42 @@ def retrieve_service(service_name):
         return get_db().get_service(service_name)
     except ValueError:
         return abort(404)
+
+@app.route("/user/", methods=['GET'])
+def get_users():
+    return jsonify(get_db().get_users())
+
+@app.route("/user/<user_name>", methods=['GET'])
+def get_user(user_name):
+    return jsonify(get_db().get_user(user_name))
+
+@app.route("/user/<user_name>/energy/max", methods=['PUT'])
+def set_user_energy_max(user_name):
+    user = get_db().get_user(user_name)
+    try:
+        bogus = user["energy"]["max"]
+    except KeyError:
+        abort(404)
+
+    value = int(request.json["value"])
+    if value < 0:
+        return abort(400)
+
+    put_done = False
+    tries = 0
+    while not put_done:
+        tries += 1
+        user["energy"]["max"] = value
+        get_db().update_user(user)
+
+        time.sleep(2)
+        user = get_db().get_user(user_name)
+        put_done = user["energy"]["max"] == value
+
+        if tries >= MAX_TRIES:
+            return abort(400, {"message": "MAX_TRIES updating database document"})
+
+    return jsonify(201)
 
 
 @app.route("/service/", methods=['GET'])
@@ -52,6 +95,7 @@ def set_service_information(service_name):
             service["config"][key] = data[key]
         get_db().update_service(service)
 
+        time.sleep(2)
         put_done = True
         service = retrieve_service(service_name)
         for key in data:
@@ -74,6 +118,7 @@ def set_service_value(service_name, key):
         service["config"][key] = value
         get_db().update_service(service)
 
+        time.sleep(2)
         service = retrieve_service(service_name)
         put_done = service["config"][key] == value
 
@@ -110,6 +155,8 @@ def activate_rule(rule_name):
         rule["active"] = True
         get_db().update_rule(rule)
         rule = retrieve_rule(rule_name)
+
+        time.sleep(2)
         put_done = rule["active"]
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
@@ -125,6 +172,8 @@ def deactivate_rule(rule_name):
         rule = retrieve_rule(rule_name)
         rule["active"] = False
         get_db().update_rule(rule)
+
+        time.sleep(2)
         rule = retrieve_rule(rule_name)
         put_done = not rule["active"]
         if tries >= MAX_TRIES:
@@ -188,6 +237,7 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
         new_structure["resources"] = {resource: {parameter: value}}
         get_db().update_structure(new_structure)
 
+        time.sleep(2)
         structure = retrieve_structure(structure_name)
         put_done = structure["resources"][resource][parameter] == value
 
@@ -206,6 +256,7 @@ def set_structure_to_guarded_state(structure_name, state):
         new_structure = MyUtils.copy_structure_base(structure)
         new_structure["guard"] = state
         get_db().update_structure(new_structure)
+
         time.sleep(2)
         structure = retrieve_structure(structure_name)
         put_done = structure["guard"] == state
@@ -328,6 +379,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
         structure_limits["resources"][resource]["boundary"] = value
         get_db().update_limit(structure_limits)
 
+        time.sleep(2)
         structure = retrieve_structure(structure_name)
         structure_limits = get_db().get_limits(structure)
 
@@ -350,6 +402,7 @@ def set_structure_guard_policy(structure_name, policy):
             new_structure["guard_policy"] = policy
             get_db().update_structure(new_structure)
 
+            time.sleep(2)
             structure = retrieve_structure(structure_name)
             put_done = structure["guard_policy"] == policy
 
@@ -377,4 +430,11 @@ def heartbeat():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Ochestrator REST service to autmatically change configuration on the CouchDb rescaling database')
+    parser.add_argument('--database_url_string', type=str, default="couchdb",
+                        help="The hostname that hosts the rescaling couchDB")
+    args = parser.parse_args()
+    if args.database_url_string:
+        COUCHDB_URL = args.database_url_string
+
     app.run(host='0.0.0.0', port=5000)

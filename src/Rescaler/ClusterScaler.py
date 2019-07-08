@@ -139,15 +139,25 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
         # Finally, if unsuccessful, use as many cores as neccessary
         if needed_shares > 0:
             for core in host_cpu_list:
-                if core_usage_map[core]["free"] > 0:
-                    core_usage_map[core][structure_name] += core_usage_map[core]["free"]
-                    needed_shares -= core_usage_map[core]["free"]
-                    core_usage_map[core]["free"] = 0
-                    used_cores.append(core)
+                # If this core has free shares
+                if core_usage_map[core]["free"] > 0 and needed_shares > 0:
+                    # If it has more free shares than needed
+                    if core_usage_map[core]["free"] >= needed_shares:
+                        core_usage_map[core]["free"] -= needed_shares
+                        core_usage_map[core][structure_name] += needed_shares
+                        needed_shares = 0
+                        used_cores.append(core)
+                        break
+                    else:
+                    # Otherwise empty the node and continue
+                        core_usage_map[core][structure_name] += core_usage_map[core]["free"]
+                        needed_shares -= core_usage_map[core]["free"]
+                        core_usage_map[core]["free"] = 0
+                        used_cores.append(core)
 
         if needed_shares > 0:
             raise ValueError("Error in setting cpu, couldn't get the resources needed")
-            # FIXME couldn't do rescale up properly as shares to free remain
+            # FIXME couldn't do rescale up properly as shares to get remain
 
     elif amount < 0:
         # Rescale down so free all shares and claim new one to see how many cores can be freed
@@ -264,7 +274,11 @@ def apply_request(request, real_resources, database_resources):
     current_resource_limit = get_current_resource_value(database_resources, real_resources, resource)
 
     # Check that the memory limit is valid, not lower than min or higher than max
-    check_invalid_resource_value(database_resources, amount, current_resource_limit, resource)
+    try:
+        check_invalid_resource_value(database_resources, amount, current_resource_limit, resource)
+    except ValueError as e:
+        MyUtils.log_error("Error with container {0}".format(request["structure"]), debug)
+        raise e
 
     if amount > 0:
         # If the request is for scale up, check that the host has enough free resources before proceeding
@@ -301,7 +315,7 @@ def process_request(request, real_resources, database_resources):
         try:
             # Apply changes through a REST call
             set_container_resources(structure_name, rescaler_ip, rescaler_port, new_resources,
-                                                        rescaler_http_session)
+                                    rescaler_http_session)
 
         except Exception as e:
             MyUtils.log_error(str(e) + " " + str(traceback.format_exc()), debug)
@@ -375,30 +389,34 @@ def generate_requests(new_requests, app_label):
         app_label, str(rescaled_containers), MyUtils.get_time_now_string()), debug)
 
 
-def single_container_rescale(request, app_containers):
+def single_container_rescale(request, app_containers, resource_usage_cache):
     amount, resource = request["amount"], request["resource"]
     scalable_containers = list()
     resource_shares = abs(amount)
-    for container in app_containers:
-        metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
-        usages = bdwatchdog_handler.get_structure_timeseries({"host": container["name"]}, 10, 20,
-                                                             metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
 
+    # Look for containers that can be rescaled
+    for container in app_containers:
+        usages = resource_usage_cache[container["name"]]
         container["resources"][resource]["usage"] = usages[resource]
         current_value = container["resources"][resource]["current"]
 
+        # Rescale down
         if amount < 0:
             # Check that the container has enough free resource shares
             # available to be released and that it would be able
             # to be rescaled without dropping under the minimum value
             if current_value < resource_shares:
                 # Container doesn't have enough resources to free
-                pass
+                MyUtils.log_error("Container doesn't have enough resources to free", debug)
             elif current_value + amount < container["resources"][resource]["min"]:
                 # Container can't free that amount without dropping under the minimum
-                pass
+                MyUtils.log_error(
+                    "Container {0} can't free that amount without dropping under the minimum".format(container["name"]),
+                    debug)
             else:
                 scalable_containers.append(container)
+
+        # Rescale up
         else:
             # Check that the container has enough free resource shares available in the host and that it would be able
             # to be rescaled without exceeded the maximum value
@@ -406,10 +424,10 @@ def single_container_rescale(request, app_containers):
 
             if host_info_cache[container_host]["resources"][resource]["free"] < resource_shares:
                 # Container's host doesn't have enough free resources
-                pass
+                MyUtils.log_error("Container's host doesn't have enough free resources", debug)
             elif current_value + amount > container["resources"][resource]["max"]:
                 # Container can't get that amount without exceeding the maximum
-                pass
+                MyUtils.log_error("Container can't get that amount without exceeding the maximum", debug)
             else:
                 scalable_containers.append(container)
 
@@ -419,19 +437,11 @@ def single_container_rescale(request, app_containers):
 
         for container in scalable_containers[1:]:
             if amount < 0:
+                # If scaling down, look for containers with usages far from the limit (underuse)
                 best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
             else:
+                # If scaling upwards, look for containers with usages close to the limit (bottleneck)
                 best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
-            # if "for_energy" in request and request["for_energy"]:
-            #     if amount < 0:
-            #         best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
-            #     else:
-            #         best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
-            # else:
-            #     if amount < 0:
-            #         best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
-            #     else:
-            #         best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
 
         # Generate the new request
         new_request = dict(
@@ -464,45 +474,50 @@ def rescale_application(request, structure):
         if container["host"] not in host_info_cache:
             host_info_cache[container["host"]] = db_handler.get_structure(container["host"])
 
-    # First try to fill the request by scaling just one container
-    # success, container_to_rescale = single_container_rescale(request, app_containers)
-
-    # If unsuccessful, try to do it by multiple, smaller, rescaling operations
-    # if not success:
-
     total_amount = request["amount"]
 
     if total_amount == 0:
         MyUtils.log_info("Empty request at".format(MyUtils.get_time_now_string()), debug)
         return
 
-
     # TODO re-think the policy to set the number of splits
     requests = list()
     remaining_amount = total_amount
-    split_amount = 15 * (total_amount / abs(total_amount))
+    split_amount = 45 * (total_amount / abs(total_amount))
     request["amount"] = split_amount
+
+    # Create smaller requests of 'split_amount' size
     while abs(remaining_amount) > 0 and abs(remaining_amount) > abs(split_amount):
         requests.append(dict(request))
         remaining_amount -= split_amount
 
+    # If some reamining amout is left, create the last request
     if abs(remaining_amount) > 0:
         request["amount"] = remaining_amount
         requests.append(dict(request))
-    ###
+
+    # Get the request usage for all the containers and cache it
+    resource_usage_cache = dict()
+    for container in app_containers:
+        amount, resource = request["amount"], request["resource"]
+        metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
+        resource_usage_cache[container["name"]] = bdwatchdog_handler.get_structure_timeseries(
+            {"host": container["name"]}, 10, 20,
+            metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
 
     success, iterations = True, 0
     generated_requests = dict()
-    # TODO Try to optimize as this is quite slow
+
     while success and len(requests) > 0:
         request = requests.pop(0)
-        success, container_to_rescale, generated_request = single_container_rescale(request, app_containers)
+        success, container_to_rescale, generated_request = \
+            single_container_rescale(request, app_containers, resource_usage_cache)
         if success:
             # If rescaling was successful, update the container's resources as they have been rescaled
             for c in app_containers:
                 container_name = c["name"]
                 if container_name == container_to_rescale["name"]:
-
+                    # Initialize
                     if container_name not in generated_requests:
                         generated_requests[container_name] = list()
 
@@ -516,7 +531,9 @@ def rescale_application(request, structure):
 
         iterations += 1
 
+    # Collapse all the requests to generate just 1 per container
     for c in generated_requests:
+        # Copy the first request as the base request
         final_request = dict(generated_requests[c][0])
         final_request["amount"] = 0
         for request in generated_requests[c][0:]:

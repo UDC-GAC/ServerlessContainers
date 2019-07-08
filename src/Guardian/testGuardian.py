@@ -9,7 +9,7 @@ from src.MyUtils.MyUtils import generate_event_name
 from unittest import TestCase
 from src.Guardian import Guardian
 from src.StateDatabase.couchdb import CouchDBServer
-from src.StateDatabase.initializers.limits import base_limits
+from src.StateDatabase.initializers.example.limits import base_limits
 from src.StateDatabase.initializers.rules import mem_exceeded_upper, mem_dropped_lower, MemRescaleUp, MemRescaleDown, \
     cpu_exceeded_upper, cpu_dropped_lower, energy_dropped_lower, energy_exceeded_upper, CpuRescaleUp, CpuRescaleDown, \
     EnergyRescaleDown, EnergyRescaleUp
@@ -76,7 +76,7 @@ class GuardianTest(TestCase):
             all_events.append({"timestamp": now})
             all_events.append({"timestamp": ago})
 
-        valid, invalid = self.guardian.filter_old_events(all_events, timeout)
+        valid, invalid = self.guardian.sort_events(all_events, timeout)
 
         TestCase.assertEqual(self, first=5, second=len(invalid))
         TestCase.assertEqual(self, first=5, second=len(valid))
@@ -233,11 +233,11 @@ class GuardianTest(TestCase):
         }
 
         TestCase.assertEqual(self, first="300,200,140,22.57,70,50",
-                             second=self.guardian.get_resource_str_summary("cpu", resources_dict, limits_dict,
-                                                                           usages_dict))
+                             second=self.guardian.get_resource_summary("cpu", resources_dict, limits_dict,
+                                                                       usages_dict))
         TestCase.assertEqual(self, first="8192,2048,8000,2341.97,7000,256",
-                             second=self.guardian.get_resource_str_summary("mem", resources_dict, limits_dict,
-                                                                           usages_dict))
+                             second=self.guardian.get_resource_summary("mem", resources_dict, limits_dict,
+                                                                       usages_dict))
 
     def test_container_energy_str(self):
         resources_dict = dict(
@@ -252,32 +252,32 @@ class GuardianTest(TestCase):
 
         # Correct cases
         TestCase.assertEqual(self, first=70,
-                             second=self.guardian.adjust_if_invalid_amount(70, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(70, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=100,
-                             second=self.guardian.adjust_if_invalid_amount(100, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(100, structure_resources, structure_limits))
 
         # Over the max
         TestCase.assertEqual(self, first=200,
-                             second=self.guardian.adjust_if_invalid_amount(250, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(250, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=200,
-                             second=self.guardian.adjust_if_invalid_amount(260, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(260, structure_resources, structure_limits))
 
         # Correct cases
         TestCase.assertEqual(self, first=-10,
-                             second=self.guardian.adjust_if_invalid_amount(-10, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(-10, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=-50,
-                             second=self.guardian.adjust_if_invalid_amount(-50, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(-50, structure_resources, structure_limits))
 
         # Under the minimum
         TestCase.assertEqual(self, first=-50,
-                             second=self.guardian.adjust_if_invalid_amount(-60, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(-60, structure_resources, structure_limits))
         TestCase.assertEqual(self, first=-50,
-                             second=self.guardian.adjust_if_invalid_amount(-100, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(-100, structure_resources, structure_limits))
 
         structure_resources = {"max": 40, "min": 5, "current": 20}
         structure_limits = {"upper": 15, "lower": 10}
         TestCase.assertEqual(self, first=10,
-                             second=self.guardian.adjust_if_invalid_amount(10, structure_resources, structure_limits))
+                             second=self.guardian.adjust_amount(10, structure_resources, structure_limits))
 
     def test_get_amount_from_percentage_reduction(self):
         resource = "mem"

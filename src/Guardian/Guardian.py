@@ -8,7 +8,7 @@ import logging
 from json_logic import jsonLogic
 
 import src.MyUtils.MyUtils as MyUtils
-import src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
 BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
@@ -30,7 +30,8 @@ translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "
 # RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
-                         "EVENT_TIMEOUT": 40, "DEBUG": True, "STRUCTURE_GUARDED": "container"}
+                         "EVENT_TIMEOUT": 40, "DEBUG": True, "STRUCTURE_GUARDED": "container",
+                         "CPU_SHARES_PER_WATT": 8}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -46,21 +47,25 @@ class Guardian:
 
     def __init__(self):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
-        self.couchdb_handler = couchDB.CouchDBServer()
+        self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.guardable_resources = ['cpu', 'mem', 'energy']
         self.debug = True
 
-    def check_unset_values(self, value, label):
+    @staticmethod
+    def check_unset_values(value, label, resource):
         if value == NOT_AVAILABLE_STRING:
-            raise ValueError("value for '{0}' is not set or is not available.".format(label))
+            raise ValueError(
+                "value for '{0}' in resource '{1}' is not set or is not available.".format(label, resource))
 
-    def check_invalid_values(self, value1, label1, value2, label2, resource="n/a"):
+    @staticmethod
+    def check_invalid_values(value1, label1, value2, label2, resource="n/a"):
         if value1 > value2:
             raise ValueError("in resources: {0} value for '{1}': {2} is greater than value for '{3}': {4}".format(
                 resource, label1, str(value1), label2, str(value2)))
 
-    def try_get_value(self, d, key):
+    @staticmethod
+    def try_get_value(d, key):
         """
         Parameters:
             d : dict -> A dictionary with strings as keys
@@ -74,7 +79,16 @@ class Guardian:
         except (KeyError, ValueError):
             return NOT_AVAILABLE_STRING
 
-    def filter_old_events(self, structure_events, event_timeout):
+    @staticmethod
+    def is_application(structure):
+        return structure["subtype"] == "application"
+
+    @staticmethod
+    def is_container(structure):
+        return structure["subtype"] == "container"
+
+    @staticmethod
+    def sort_events(structure_events, event_timeout):
         """
         Parameters:
             structure_events : list -> A list of the events triggered in the past for a specific structure
@@ -92,7 +106,8 @@ class Guardian:
                 valid.append(event)
         return valid, invalid
 
-    def reduce_structure_events(self, structure_events):
+    @staticmethod
+    def reduce_structure_events(structure_events):
         """
         Parameters:
             structure_events : list ->
@@ -110,7 +125,7 @@ class Guardian:
                 events_reduced["action"][resource]["events"]["scale"][key] += value
         return events_reduced["action"]
 
-    def get_resource_str_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
+    def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
         """
         Parameters:
             resource_label : string -> the name of the resource to access the dictionaries
@@ -141,12 +156,13 @@ class Guardian:
 
         return ",".join(strings)
 
-    def adjust_if_invalid_amount(self, amount, structure_resources, structure_limits):
+    @staticmethod
+    def adjust_amount(amount, structure_resources, structure_limits):
         """
         Parameters:
-            amount : integer -> a number representing the amount to reduce or increase from the current value
-            structure_resources : dict ->
-            structure_limits : dict ->
+            * **amount** : *integer* -> a number representing the amount to reduce or increase from the current value
+            * **structure_resources** : *dict* -> asdf
+            * **structure_limits** : *dict* -> asdf
 
         Returns:
             The amount adjusted (trimmed) in case it would exceed any limit
@@ -165,7 +181,8 @@ class Guardian:
 
         return amount
 
-    def get_amount_from_percentage_reduction(self, structure, usages, resource, percentage_reduction):
+    @staticmethod
+    def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
         current_resource_limit = structure["resources"][resource]["current"]
         current_resource_usage = usages[translator_dict[resource]]
         difference = current_resource_limit - current_resource_usage
@@ -174,13 +191,13 @@ class Guardian:
         amount = int(-1 * (percentage_reduction * difference) / 100)
         return amount
 
-    def get_amount_from_fit_reduction(self, current_resource_limit, boundary, current_resource_usage):
+    @staticmethod
+    def get_amount_from_fit_reduction(current_resource_limit, boundary, current_resource_usage):
         """
         Parameters:
-            structure : dict ->
-            usages : dict ->
-            resource : string ->
-            limits : dict ->
+            current_resource_limit : integer ->
+            boundary : integer ->
+            current_resource_usage : integer ->
 
         Returns:
             The amount to be reduced from the fit to usage policy.
@@ -195,7 +212,9 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
-    def get_amount_from_proportional_energy_rescaling(self, structure, resource):
+    @staticmethod
+    def get_amount_from_proportional_energy_rescaling(structure, resource):
+        global CPU_SHARES_PER_WATT
         max_resource_limit = structure["resources"][resource]["max"]
         current_resource_limit = structure["resources"][resource]["usage"]
         difference = max_resource_limit - current_resource_limit
@@ -216,8 +235,8 @@ class Guardian:
             string.append(str(self.try_get_value(energy_dict, field)))
         return ",".join(string)
 
-    def adjust_container_state(self, resources, limits):
-        for resource in ["cpu", "mem"]:
+    def adjust_container_state(self, resources, limits, resources_to_adjust):
+        for resource in resources_to_adjust:
             errors = True
             while errors:
                 try:
@@ -234,13 +253,13 @@ class Guardian:
         data = {"res": resources, "lim": limits}
         values_tuples = [("max", "res"), ("current", "res"), ("upper", "lim"), ("lower", "lim"), ("min", "res")]
         values = dict()
-        for value, type in values_tuples:
-            values[value] = self.try_get_value(data[type][resource], value)
+        for value, vtype in values_tuples:
+            values[value] = self.try_get_value(data[vtype][resource], value)
         values["boundary"] = data["lim"][resource]["boundary"]
 
         # Check values are set and valid, except for current as it may have not been persisted yet
         for value in values:
-            self.check_unset_values(values[value], value)
+            self.check_unset_values(values[value], value, resource)
 
         # Check if the first value is greater than the second
         # check the full chain "max > upper > current > lower > min"
@@ -263,6 +282,19 @@ class Guardian:
                     "value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
                         str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
+    @staticmethod
+    def rule_triggers_event(rule, data, resources):
+        return rule["active"] and \
+               resources[rule["resource"]]["guard"] and \
+               rule["generates"] == "events" and \
+               jsonLogic(rule["rule"], data)
+
+    # def rule_triggers_event(rule, data, resources):
+    #     return rule["active"] and \
+    #            resources[rule["resource"]]["guard"] and \
+    #            rule["generates"] == "events" and \
+    #            jsonLogic(rule["rule"], data[rule["resource"]])
+
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
         events = []
         data = dict()
@@ -281,21 +313,11 @@ class Guardian:
         for rule in rules:
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
-                if rule["active"] and \
-                        resources[rule["resource"]]["guard"] and \
-                        rule["generates"] == "events" and \
-                        jsonLogic(rule["rule"], data[rule["resource"]]):
-
+                if self.rule_triggers_event(rule, data, resources):
                     event_name = MyUtils.generate_event_name(rule["action"]["events"], rule["resource"])
-                    if event_name:
-                        events.append(dict(
-                            name=event_name,
-                            resource=rule["resource"],
-                            type="event",
-                            structure=structure_name,
-                            action=rule["action"],
-                            timestamp=int(time.time()))
-                        )
+                    event = self.generate_event(event_name, structure_name, rule["resource"], rule["action"])
+                    events.append(event)
+
             except KeyError as e:
                 MyUtils.log_warning(
                     "rule: {0} is missing a parameter {1} {2}".format(rule["name"],
@@ -303,14 +325,28 @@ class Guardian:
 
         return events
 
-    # TO BE TESTED
-    def is_application(self, structure):
-        return structure["subtype"] == "application"
+    @staticmethod
+    def generate_event(event_name, structure_name, resource, action):
+        event = dict(
+            name=event_name,
+            resource=resource,
+            type="event",
+            structure=structure_name,
+            action=action,
+            timestamp=int(time.time()))
+        return event
 
-    def is_container(self, structure):
-        return structure["subtype"] == "container"
+    @staticmethod
+    def generate_request(structure_name, amount, resource, action):
+        request = dict(
+            type="request",
+            resource=resource,
+            amount=int(amount),
+            structure=structure_name,
+            action=action,
+            timestamp=int(time.time()))
+        return request
 
-    # NOT TESTED
     def match_rules_and_events(self, structure, rules, events, limits, usages):
         generated_requests = list()
         events_to_remove = dict()
@@ -320,8 +356,6 @@ class Guardian:
                 if rule["active"] and rule["generates"] == "requests" and resource_label in events and jsonLogic(
                         rule["rule"], events[resource_label]):
 
-                    # Match, generate request
-
                     # If rescaling a container, check that the current resource value exists, otherwise there
                     # is nothing to rescale
                     if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
@@ -330,71 +364,57 @@ class Guardian:
                                 structure["name"], resource_label), self.debug)
                         continue
 
-                    if "rescale_by" in rule.keys():
-                        try:
-                            if rule["rescale_by"] == "amount":
-                                amount = rule["amount"]
+                    # If no policy is set for scaling, default to "fixed amount"
+                    if "rescale_by" not in rule.keys():
+                        rule["rescale_by"] = "amount"
+                        MyUtils.log_warning(
+                            "No rescale_by policy is set in rule : '{0}', falling back to default amount".format(
+                                rule["name"]), self.debug)
 
-                            elif rule["rescale_by"] == "percentage_reduction":
-                                amount = self.get_amount_from_percentage_reduction(
-                                    structure, usages, resource_label, int(rule["percentage_reduction"]))
-
-                            elif rule["rescale_by"] == "fit_to_usage":
-                                current_resource_limit = structure["resources"][resource_label]["current"]
-                                boundary = limits[resource_label]["boundary"]
-                                usage = usages[translator_dict[resource_label]]
-                                amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
-
-                            elif rule["rescale_by"] == "proportional" and rule["resource"] == "energy":
-                                amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
-
-                            else:
-                                amount = rule["amount"]
-                        except KeyError:
-                            # Error because current value may not be available and it is
-                            # required for methods like percentage reduction
-                            MyUtils.log_warning(
-                                "error in trying to compute rescaling amount for rule '{0}' : {1}".format(
-                                    rule["name"], str(traceback.format_exc())), self.debug)
-                            amount = rule["amount"]
+                    # Get the amount to be applied from the policy set
+                    if rule["rescale_by"] == "amount":
+                        amount = rule["amount"]
+                    elif rule["rescale_by"] == "percentage_reduction":
+                        amount = self.get_amount_from_percentage_reduction(
+                            structure, usages, resource_label, int(rule["percentage_reduction"]))
+                    elif rule["rescale_by"] == "fit_to_usage":
+                        current_resource_limit = structure["resources"][resource_label]["current"]
+                        boundary = limits[resource_label]["boundary"]
+                        usage = usages[translator_dict[resource_label]]
+                        amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                    elif rule["rescale_by"] == "proportional" and rule["resource"] == "energy":
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     else:
                         amount = rule["amount"]
-                        MyUtils.log_warning(
-                            "No rescale_by policy is set in rule : '{0}', falling back to default amount: {1}".format(
-                                rule["name"], str(amount)), self.debug)
 
                     # If the resource is susceptible to check, ensure that it does not surpass any limit
                     if resource_label not in NON_ADJUSTABLE_RESOURCES:
                         structure_resources = structure["resources"][resource_label]
                         structure_limits = limits[resource_label]
-                        amount = self.adjust_if_invalid_amount(amount, structure_resources, structure_limits)
+                        amount = self.adjust_amount(amount, structure_resources, structure_limits)
 
                     # Create the Request
-                    request = dict(
-                        type="request",
-                        resource=resource_label,
-                        amount=int(amount),
-                        structure=structure["name"],
-                        action=MyUtils.generate_request_name(amount, resource_label),
-                        timestamp=int(time.time()))
+                    action = MyUtils.generate_request_name(amount, resource_label)
+                    request = self.generate_request(structure["name"], amount, resource_label, action)
 
-                    # TODO fix if necessary as energy is not a 'real' resource but an abstraction
                     # For the moment, energy rescaling is uniquely mapped to cpu rescaling
                     if resource_label == "energy":
                         request["resource"] = "cpu"
                         request["for_energy"] = True
 
+                    # If scaling a container, add its host information as it will be needed
                     if self.is_container(structure):
                         request["host"] = structure["host"]
                         request["host_rescaler_ip"] = structure["host_rescaler_ip"]
                         request["host_rescaler_port"] = structure["host_rescaler_port"]
 
+                    # Append the generated request
                     generated_requests.append(request)
 
+                    # Remove the events that triggered the request
                     event_name = MyUtils.generate_event_name(events[resource_label]["events"], resource_label)
                     if event_name not in events_to_remove:
                         events_to_remove[event_name] = 0
-
                     events_to_remove[event_name] += rule["events_to_remove"]
 
             except KeyError as e:
@@ -404,16 +424,15 @@ class Guardian:
 
         return generated_requests, events_to_remove
 
-    # CAN'T OR DON'T HAVE TO BE TESTED
-    # Their logic is simple and the used functions inside them are tested
-    def print_debug_info(self, container, usages, limits, triggered_events, triggered_requests):
+    def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
         resources = container["resources"]
 
         container_name_str = "@" + container["name"]
         container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
+        # TODO check if the resource is unguarded and if that is the case, do not print anything or just a cpu(unguarded)
         resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
-            self.get_resource_str_summary("cpu", resources, limits, usages),
-            self.get_resource_str_summary("mem", resources, limits, usages),
+            self.get_resource_summary("cpu", resources, limits, usages),
+            self.get_resource_summary("mem", resources, limits, usages),
             self.get_container_energy_str(resources))
 
         ev, req = list(), list()
@@ -440,7 +459,7 @@ class Guardian:
         all_events = self.couchdb_handler.get_events(structure)
 
         # Filter the events according to timestamp
-        filtered_events, old_events = self.filter_old_events(all_events, event_timeout)
+        filtered_events, old_events = self.sort_events(all_events, event_timeout)
 
         if old_events:
             # Remote database operation
@@ -469,7 +488,7 @@ class Guardian:
 
         # DEBUG AND INFO OUTPUT
         if self.debug:
-            self.print_debug_info(structure, usages, limits, triggered_events, triggered_requests)
+            self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
     def serverless(self, config, structure, rules):
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
@@ -511,7 +530,11 @@ class Guardian:
                 MyUtils.log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
-            limits["resources"] = self.adjust_container_state(resources, limits_resources)
+            # FIX
+            # resources_to_adjust = ["cpu", "mem"]
+            resources_to_adjust = []
+            limits["resources"] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
+            # FIX
 
             # Remote database operation
             self.couchdb_handler.update_limit(limits)
@@ -534,13 +557,8 @@ class Guardian:
                 current_value = structure["resources"][resource]["current"]
                 if fixed_value != current_value:
                     amount = fixed_value - current_value
-                    request = dict(
-                        type="request",
-                        resource=resource,
-                        amount=int(amount),
-                        structure=structure["name"],
-                        action=MyUtils.generate_request_name(amount, resource),
-                        timestamp=int(time.time()))
+                    action = MyUtils.generate_request_name(amount, resource)
+                    request = self.generate_request(structure["name"], amount, resource, action)
 
                     if self.is_container(structure):
                         request["host"] = structure["host"]
@@ -557,7 +575,7 @@ class Guardian:
 
         # DEBUG AND INFO OUTPUT
         if self.debug:
-            self.print_debug_info(structure, {}, {}, [], triggered_requests)
+            self.print_structure_info(structure, {}, {}, [], triggered_requests)
 
     def fixed_resource_amount(self, structure):
         try:
@@ -589,6 +607,7 @@ class Guardian:
                     self.serverless(config, structure, rules)
 
     def guard(self, ):
+        global CPU_SHARES_PER_WATT
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
         while True:
 
@@ -604,6 +623,7 @@ class Guardian:
             window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
             structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
             thread = None
+            CPU_SHARES_PER_WATT = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "CPU_SHARES_PER_WATT")
 
             # Remote database operation
             structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)

@@ -21,7 +21,7 @@ translate_map = {
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True}
 MAX_FAIL_NUM = 5
 debug = True
 
@@ -153,24 +153,50 @@ def persist_applications(container_resources_dict):
 def get_container_resources_dict():
     # Remote database operation
     containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+    container_list_names = [c["name"] for c in containers]
     if not containers:
         return
 
-    # Retrieve each container resources, persist them and store them to generate host info
-    container_resources_dict = dict()
+    # Get all the different hosts of the containers
+    diff_hosts = dict()
+    for container in containers:
+        container_host = container["host"]
+        if container_host not in diff_hosts:
+            diff_hosts[container_host] = dict()
+            diff_hosts[container_host]["host_rescaler_ip"] = container["host_rescaler_ip"]
+            diff_hosts[container_host]["host_rescaler_port"] = container["host_rescaler_port"]
 
+    # For each host, retrieve its containers and persist the ones we look for
+    container_resources_dict = dict()
+    for hostname in diff_hosts:
+        host = diff_hosts[hostname]
+        host_containers = MyUtils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"],
+                                                      rescaler_http_session, debug)
+        for container_name in host_containers:
+            if container_name in container_list_names:
+                container_resources_dict[container_name] = host_containers[container_name]
+
+    container_resources_dictV2 = dict()
     for container in containers:
         container_name = container["name"]
+        container_resources_dictV2[container_name] = container
+        container_resources_dictV2[container_name]["resources"] = container_resources_dict[container_name]
 
-        # Remote operation
-        resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
-        if not resources:
-            MyUtils.log_error("Couldn't get container's {0} resources".format(container_name), debug)
-            continue
+    # Retrieve each container resources, persist them and store them to generate host info
+    # container_resources_dict = dict()
 
-        container_resources_dict[container_name] = container
-        container_resources_dict[container_name]["resources"] = resources
-    return container_resources_dict
+    # for container in containers:
+    #     container_name = container["name"]
+    #
+    #     # Remote operation
+    #     resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
+    #     if not resources:
+    #         MyUtils.log_error("Couldn't get container's {0} resources".format(container_name), debug)
+    #         continue
+    #
+    #     container_resources_dict[container_name] = container
+    #     container_resources_dict[container_name]["resources"] = resources
+    return container_resources_dictV2
 
 
 def persist_thread():
@@ -182,7 +208,13 @@ def persist_thread():
     # persist_applications(container_resources_dict)
 
     # FULLY THREADED, more requests but faster due to parallelism
+
+    ###
     persist_containers()
+    # if persist_applications_structures:
+    #    container_resources_dict = get_container_resources_dict()
+    #    persist_applications(container_resources_dict)
+    ###
     container_resources_dict = get_container_resources_dict()
     persist_applications(container_resources_dict)
 
@@ -195,6 +227,7 @@ def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
     global debug
+    global persist_applications_structures
     while True:
         # Get service info
         # Remote database operation
@@ -208,6 +241,7 @@ def persist():
         config = service["config"]
         polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        persist_applications_structures = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "PERSIST_APPS")
 
         thread = Thread(target=persist_thread, args=())
         thread.start()

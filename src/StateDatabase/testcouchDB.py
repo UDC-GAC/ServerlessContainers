@@ -3,9 +3,9 @@ from unittest import TestCase
 
 from src.StateDatabase.couchdb import CouchDBServer
 from src.Guardian.Guardian import Guardian
-from src.StateDatabase.initializers.limits import base_limits
+from src.StateDatabase.initializers.example.limits import base_limits
 from src.StateDatabase.initializers.rules import cpu_exceeded_upper, CpuRescaleUp
-from src.StateDatabase.initializers.structures import base_container
+from src.StateDatabase.initializers.example.structures import base_container
 
 
 class DocumentTest(TestCase):

@@ -159,8 +159,8 @@ def get_node_mem(container_name):
         return op
 
     mem_limit_converted = int(mem_limit) / 1048576  # Convert to MB
-    if mem_limit_converted > 65536:
-        # more than 64G?, probably not medium-limit so set to -1 ('unlimited')
+    if mem_limit_converted > 262144:
+        # more than 256G?, probably not medium-limit so set to -1 ('unlimited')
         mem_limit_converted = -1
         final_dict["unit"] = "unlimited"
     else:
