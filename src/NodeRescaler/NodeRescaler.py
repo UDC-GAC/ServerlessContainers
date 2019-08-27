@@ -21,7 +21,7 @@ def get_containers_resources():
         container_name = request.args.get('name')
 
     if container_name is not None:
-        return jsonify(node_resource_manager.get_node_resources(container_name))
+        return jsonify(node_resource_manager.get_node_resources_by_name(container_name))
     else:
         return jsonify(node_resource_manager.get_all_nodes())
 
@@ -34,7 +34,7 @@ def set_container_resources(container_name):
             # TODO Improve the failure detection, filter out which set process failed and report it
             return Response(json.dumps(applied_config), status=500, mimetype='application/json')
         else:
-            applied_config = node_resource_manager.get_node_resources(container_name)
+            applied_config = node_resource_manager.get_node_resources_by_name(container_name)
             if applied_config is not None:
                 return Response(json.dumps(applied_config), status=201, mimetype='application/json')
             else:
@@ -46,7 +46,7 @@ def set_container_resources(container_name):
 @app.route("/container/<container_name>", methods=['GET'])
 def get_container_resources(container_name):
     if container_name != "":
-        data = node_resource_manager.get_node_resources(container_name)
+        data = node_resource_manager.get_node_resources_by_name(container_name)
         if data is not None:
             return jsonify(data)
         else:

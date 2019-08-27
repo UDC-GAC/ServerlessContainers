@@ -61,12 +61,13 @@ def update_container_current_values(container_name, resources):
     MyUtils.update_structure(new_structure, db_handler, debug, max_tries=3)
 
 
-def thread_persist_container(container):
+def thread_persist_container(container, container_resources_dict):
     container_name = container["name"]
 
     # Try to get the container resources, if unavailable, continue with others
     # Remote operation
-    resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
+    # resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
+    resources = container_resources_dict[container_name]["resources"]
     if not resources:
         MyUtils.log_error("Couldn't get container's {0} resources".format(container_name), debug)
         return
@@ -78,7 +79,7 @@ def thread_persist_container(container):
     # generate_timeseries(container_name, resources)
 
 
-def persist_containers():
+def persist_containers(container_resources_dict):
     # Try to get the containers, if unavailable, return
     # Remote database operation
     containers = MyUtils.get_structures(db_handler, debug, subtype="container")
@@ -86,17 +87,14 @@ def persist_containers():
         return
 
     # Retrieve each container resources, persist them and store them to generate host info
-    container_resources_dict = dict()
-
-    # UNTHREADED, allows cacheable container information
-    # for container in containers:
-    #    thread_persist_container(container, container_resources_dict)
-    # return container_resources_dict
-
-    # THREADED, doesn't allow cacheable container information
     threads = []
     for container in containers:
-        process = Thread(target=thread_persist_container, args=(container,))
+        # Check that the document has been properly initialized, otherwise it might be overwritten with just
+        # the "current" value without possibility of correcting it
+        if "cpu" not in container["resources"] or "max" not in container["resources"]["cpu"]:
+            continue
+
+        process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
         process.start()
         threads.append(process)
 
@@ -150,10 +148,32 @@ def persist_applications(container_resources_dict):
         MyUtils.update_structure(app, db_handler, debug)
 
 
+def fill_container_dict(diff_hosts, containers):
+    def host_info_request(h, d):
+        host_containers = MyUtils.get_host_containers(
+            h["host_rescaler_ip"], h["host_rescaler_port"], rescaler_http_session, debug)
+        for container_name in host_containers:
+            if container_name in container_list_names:
+                d[container_name] = host_containers[container_name]
+
+    container_list_names = [c["name"] for c in containers]
+    container_info = dict()
+    threads = list()
+    for hostname in diff_hosts:
+        host = diff_hosts[hostname]
+        t = Thread(target=host_info_request, args=(host, container_info,))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    return container_info
+
+
 def get_container_resources_dict():
     # Remote database operation
     containers = MyUtils.get_structures(db_handler, debug, subtype="container")
-    container_list_names = [c["name"] for c in containers]
     if not containers:
         return
 
@@ -167,14 +187,9 @@ def get_container_resources_dict():
             diff_hosts[container_host]["host_rescaler_port"] = container["host_rescaler_port"]
 
     # For each host, retrieve its containers and persist the ones we look for
-    container_resources_dict = dict()
-    for hostname in diff_hosts:
-        host = diff_hosts[hostname]
-        host_containers = MyUtils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"],
-                                                      rescaler_http_session, debug)
-        for container_name in host_containers:
-            if container_name in container_list_names:
-                container_resources_dict[container_name] = host_containers[container_name]
+    #time0 = time.time()
+    container_resources_dict = fill_container_dict(diff_hosts, containers)
+    #time1 = time.time()
 
     container_resources_dictV2 = dict()
     for container in containers:
@@ -182,52 +197,33 @@ def get_container_resources_dict():
         container_resources_dictV2[container_name] = container
         container_resources_dictV2[container_name]["resources"] = container_resources_dict[container_name]
 
-    # Retrieve each container resources, persist them and store them to generate host info
-    # container_resources_dict = dict()
+    #p0 = time1 - time0
+    #MyUtils.log_info("It took {0} seconds to get containers from hosts (LXD)".format(str("%.2f" % p0)), debug)
 
-    # for container in containers:
-    #     container_name = container["name"]
-    #
-    #     # Remote operation
-    #     resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
-    #     if not resources:
-    #         MyUtils.log_error("Couldn't get container's {0} resources".format(container_name), debug)
-    #         continue
-    #
-    #     container_resources_dict[container_name] = container
-    #     container_resources_dict[container_name]["resources"] = resources
     return container_resources_dictV2
 
 
 def persist_thread():
-    # Process and measure time
-    epoch_start = time.time()
-
-    # UNTHREDAED for cacheable container information
-    # container_resources_dict = persist_containers()
-    # persist_applications(container_resources_dict)
-
-    # FULLY THREADED, more requests but faster due to parallelism
-
-    ###
-    persist_containers()
-    # if persist_applications_structures:
-    #    container_resources_dict = get_container_resources_dict()
-    #    persist_applications(container_resources_dict)
-    ###
+    t0 = time.time()
     container_resources_dict = get_container_resources_dict()
+    #t1 = time.time()
     persist_applications(container_resources_dict)
+    #t2 = time.time()
+    persist_containers(container_resources_dict)
+    t3 = time.time()
 
-    epoch_end = time.time()
-    processing_time = epoch_end - epoch_start
-    MyUtils.log_info("It took {0} seconds to snapshot structures".format(str("%.2f" % processing_time)), debug)
+    p0 = t3 - t0
+    #p1 = t2 - t1
+    #p2 = t3 - t2
+    #MyUtils.log_info("It took {0} seconds to get container info".format(str("%.2f" % p0)), debug)
+    #MyUtils.log_info("It took {0} seconds to snapshot application".format(str("%.2f" % p1)), debug)
+    MyUtils.log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % p0)), debug)
 
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
     global debug
-    global persist_applications_structures
     while True:
         # Get service info
         # Remote database operation
@@ -239,9 +235,9 @@ def persist():
 
         # CONFIG
         config = service["config"]
+
         polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
-        persist_applications_structures = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "PERSIST_APPS")
 
         thread = Thread(target=persist_thread, args=())
         thread.start()

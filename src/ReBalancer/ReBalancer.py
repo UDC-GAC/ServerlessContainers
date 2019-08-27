@@ -23,6 +23,7 @@ SERVICE_NAME = "rebalancer"
 
 SHARE_SHUFFLING_AMOUNT = 25
 
+
 class ReBalancer:
     """ ReBalancer class that implements all the logic for this service"""
 
@@ -52,7 +53,8 @@ class ReBalancer:
             # Remote database operation
             usages = self.opentsdb_handler.get_structure_timeseries({"host": container["name"]}, window_difference,
                                                                     window_delay,
-                                                                    BDWATCHDOG_CONTAINER_METRICS, GUARDIAN_CONTAINER_METRICS)
+                                                                    BDWATCHDOG_CONTAINER_METRICS,
+                                                                    GUARDIAN_CONTAINER_METRICS)
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
@@ -67,7 +69,7 @@ class ReBalancer:
 
             return None
 
-    def rebalance_containers(self, config, containers):
+    def rebalance_containers(self, config, containers, app_name):
         # Get the usages
         containers_with_resource_usages = list()
         for container in containers:
@@ -81,11 +83,11 @@ class ReBalancer:
         containers = containers_with_resource_usages
 
         # Filter the containers according to usage and rules
-        containers_to_steal=list()
-        containers_to_give=list()
+        containers_to_steal = list()
+        containers_to_give = list()
         for container in containers:
-            data = {"cpu":{"structure":{"cpu":{
-                "usage":container["resources"]["cpu"]["usage"],
+            data = {"cpu": {"structure": {"cpu": {
+                "usage": container["resources"]["cpu"]["usage"],
                 "min": container["resources"]["cpu"]["min"],
                 "max": container["resources"]["cpu"]["max"],
                 "current": container["resources"]["cpu"]["current"]}}}}
@@ -101,7 +103,7 @@ class ReBalancer:
                 containers_to_give.append(container)
 
         if not containers_to_give:
-            MyUtils.log_info("No containers in need of rebalancing", self.debug)
+            MyUtils.log_info("No containers in need of rebalancing for {0}".format(app_name), self.debug)
             return
         else:
             # Order the containers from min to max
@@ -144,7 +146,7 @@ class ReBalancer:
                     amount_stolen = 0
 
                 if amount_to_give > 0:
-                    scaling_mounts[container["name"]]+= amount_to_give
+                    scaling_mounts[container["name"]] += amount_to_give
 
         # Generate the rescaling requests
         for container in containers_to_give:
@@ -175,24 +177,32 @@ class ReBalancer:
                 self.couchdb_handler.add_request(request)
 
     def app_can_be_rebalanced(self, application):
-        data = {"energy": {"structure": {"energy": {
-            "usage": application["resources"]["energy"]["usage"],
-            "max": application["resources"]["energy"]["max"]}}},
-                "cpu": {"structure": {"cpu": {
-            "usage": application["resources"]["cpu"]["usage"],
-            "min": application["resources"]["cpu"]["min"],
-            "current": application["resources"]["cpu"]["current"]}}}}
+        data = {"energy":
+                    {"structure":
+                         {"energy":
+                              {"usage": application["resources"]["energy"]["usage"],
+                               "max": application["resources"]["energy"]["max"]}}
+                     },
+                "cpu":
+                    {"structure":
+                         {"cpu":
+                              {"usage": application["resources"]["cpu"]["usage"],
+                               "min": application["resources"]["cpu"]["min"],
+                               "current": application["resources"]["cpu"]["current"]}}
+                     }
+                }
 
-        # Application is underusing energy
+        # Application is underusing energy, let the Guardian deal with it
         rule_low_usage = self.couchdb_handler.get_rule("energy_exceeded_upper")
-        if (jsonLogic(rule_low_usage["rule"], data)):
+        if jsonLogic(rule_low_usage["rule"], data):
             return False
 
-        # Application is overusing energy
+        # Application is overusing energy, let the Guardian deal with it
         rule_high_usage = self.couchdb_handler.get_rule("energy_dropped_lower")
-        if (jsonLogic(rule_high_usage["rule"], data)):
+        if jsonLogic(rule_high_usage["rule"], data):
             return False
 
+        # The application is in the middle area of using, check if container are balanced
         return True
 
     def rebalance(self, ):
@@ -215,14 +225,22 @@ class ReBalancer:
             structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="container")
             if structures:
                 # Check if rebalancing of containers is needed
-                application = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="application")[0]
-                if self.app_can_be_rebalanced(application):
-                    MyUtils.log_info("Going to rebalance now", self.debug)
-                    # Rebalance
-                    thread = Thread(target=self.rebalance_containers, args=(config, structures,))
-                    thread.start()
-                else:
-                    MyUtils.log_info("Not rebalancing now", self.debug)
+                applications = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="application")
+                for app in applications:
+                    if self.app_can_be_rebalanced(app):
+                        app_containers = list()
+                        app_containers_names = app["containers"]
+                        for container in structures:
+                            if container["name"] in app_containers_names:
+                                app_containers.append(container)
+
+                        MyUtils.log_info("Going to rebalance {0} now".format(app["name"]), self.debug)
+                        # Rebalance
+                        # TODO FIX only pass the application's structures, not all of them
+                        thread = Thread(target=self.rebalance_containers, args=(config, app_containers, app["name"]))
+                        thread.start()
+                    else:
+                        MyUtils.log_info("Not rebalancing now", self.debug)
 
             MyUtils.log_info(
                 "Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)

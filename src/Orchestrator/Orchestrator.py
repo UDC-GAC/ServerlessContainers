@@ -252,14 +252,19 @@ def set_structure_to_guarded_state(structure_name, state):
     tries = 0
     while not put_done:
         tries += 1
+        ###
         structure = retrieve_structure(structure_name)
-        new_structure = MyUtils.copy_structure_base(structure)
-        new_structure["guard"] = state
-        get_db().update_structure(new_structure)
+        if structure["guard"] == state:
+            put_done = True
+        else:
+            new_structure = MyUtils.copy_structure_base(structure)
+            new_structure["guard"] = state
+            get_db().update_structure(new_structure)
 
-        time.sleep(2)
-        structure = retrieve_structure(structure_name)
-        put_done = structure["guard"] == state
+            time.sleep(2)
+            structure = retrieve_structure(structure_name)
+            put_done = structure["guard"] == state
+        ###
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)

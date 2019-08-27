@@ -5,6 +5,8 @@ from threading import Thread
 import time
 import traceback
 import logging
+
+import requests
 from json_logic import jsonLogic
 
 import src.MyUtils.MyUtils as MyUtils
@@ -239,6 +241,7 @@ class Guardian:
         for resource in resources_to_adjust:
             errors = True
             while errors:
+                # todo here the service may enter on an infinite loop
                 try:
                     self.check_invalid_container_state(resources, limits, resource)
                     errors = False
@@ -246,7 +249,8 @@ class Guardian:
                     # Correct the chain current > upper > lower, including boundary between current and upper
                     boundary = limits[resource]["boundary"]
                     limits[resource]["upper"] = resources[resource]["current"] - boundary
-                    limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
+                    limits[resource]["lower"] = limits[resource]["upper"] - boundary
+                    # limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
         return limits
 
     def check_invalid_container_state(self, resources, limits, resource):
@@ -267,7 +271,8 @@ class Guardian:
             self.check_invalid_values(values["current"], "current", values["max"], "max")
         self.check_invalid_values(values["upper"], "upper", values["current"], "current", resource=resource)
         self.check_invalid_values(values["lower"], "lower", values["upper"], "upper", resource=resource)
-        self.check_invalid_values(values["min"], "min", values["lower"], "lower", resource=resource)
+        # TODO FIX This may cause the program to enter on an infinite loop due to the lower boundary dropping under the minimum
+        # self.check_invalid_values(values["min"], "min", values["lower"], "lower", resource=resource)
 
         # Check that there is a boundary between values, like the current and upper, so
         # that the limit can be surpassed
@@ -288,12 +293,6 @@ class Guardian:
                resources[rule["resource"]]["guard"] and \
                rule["generates"] == "events" and \
                jsonLogic(rule["rule"], data)
-
-    # def rule_triggers_event(rule, data, resources):
-    #     return rule["active"] and \
-    #            resources[rule["resource"]]["guard"] and \
-    #            rule["generates"] == "events" and \
-    #            jsonLogic(rule["rule"], data[rule["resource"]])
 
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
         events = []
@@ -387,29 +386,38 @@ class Guardian:
                     else:
                         amount = rule["amount"]
 
+                    # Special case for amount being between 0 and 1 or between -1 and 0
+                    # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
+                    # due to a float rounding error
+                    if int(amount) == 0 and amount < 0:
+                        amount = -1
+                    elif int(amount) == 0 and amount > 0:
+                        amount = 1
+
                     # If the resource is susceptible to check, ensure that it does not surpass any limit
                     if resource_label not in NON_ADJUSTABLE_RESOURCES:
                         structure_resources = structure["resources"][resource_label]
                         structure_limits = limits[resource_label]
                         amount = self.adjust_amount(amount, structure_resources, structure_limits)
 
-                    # Create the Request
-                    action = MyUtils.generate_request_name(amount, resource_label)
-                    request = self.generate_request(structure["name"], amount, resource_label, action)
+                    # If the remaining amount is non-zero, create the Request
+                    if amount != 0:
+                        action = MyUtils.generate_request_name(amount, resource_label)
+                        request = self.generate_request(structure["name"], amount, resource_label, action)
 
-                    # For the moment, energy rescaling is uniquely mapped to cpu rescaling
-                    if resource_label == "energy":
-                        request["resource"] = "cpu"
-                        request["for_energy"] = True
+                        # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+                        if resource_label == "energy":
+                            request["resource"] = "cpu"
+                            request["for_energy"] = True
 
-                    # If scaling a container, add its host information as it will be needed
-                    if self.is_container(structure):
-                        request["host"] = structure["host"]
-                        request["host_rescaler_ip"] = structure["host_rescaler_ip"]
-                        request["host_rescaler_port"] = structure["host_rescaler_port"]
+                        # If scaling a container, add its host information as it will be needed
+                        if self.is_container(structure):
+                            request["host"] = structure["host"]
+                            request["host_rescaler_ip"] = structure["host_rescaler_ip"]
+                            request["host_rescaler_port"] = structure["host_rescaler_port"]
 
-                    # Append the generated request
-                    generated_requests.append(request)
+                        # Append the generated request
+                        generated_requests.append(request)
 
                     # Remove the events that triggered the request
                     event_name = MyUtils.generate_event_name(events[resource_label]["events"], resource_label)
@@ -453,7 +461,8 @@ class Guardian:
                                                         structure["resources"])
 
         # Remote database operation
-        self.couchdb_handler.add_events(triggered_events)
+        if triggered_events:
+            self.couchdb_handler.add_events(triggered_events)
 
         # Remote database operation
         all_events = self.couchdb_handler.get_events(structure)
@@ -494,6 +503,8 @@ class Guardian:
         window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
         window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
 
+        structure_subtype = structure["subtype"]
+
         try:
             # Check if structure is guarded
             if "guard" not in structure or not structure["guard"]:
@@ -501,9 +512,9 @@ class Guardian:
 
             # Check if structure is being monitored, otherwise, ignore
             try:
-                metrics_to_retrieve = BDWATCHDOG_METRICS[structure["subtype"]]
-                metrics_to_generate = GUARDIAN_METRICS[structure["subtype"]]
-                tag = TAGS[structure["subtype"]]
+                metrics_to_retrieve = BDWATCHDOG_METRICS[structure_subtype]
+                metrics_to_generate = GUARDIAN_METRICS[structure_subtype]
+                tag = TAGS[structure_subtype]
             except KeyError:
                 # Default is container
                 metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
@@ -530,14 +541,14 @@ class Guardian:
                 MyUtils.log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
-            # FIX
-            # resources_to_adjust = ["cpu", "mem"]
-            resources_to_adjust = []
-            limits["resources"] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
-            # FIX
+            # TODO FIX This only applies to containers, currently not used for applications
+            if structure_subtype == "container":
+                resources_to_adjust = ["cpu", "mem"]
+                # resources_to_adjust = []
+                limits["resources"] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
 
-            # Remote database operation
-            self.couchdb_handler.update_limit(limits)
+                # Remote database operation
+                self.couchdb_handler.update_limit(limits)
 
             self.process_serverless_structure(config, structure, usages, limits_resources, rules)
 
@@ -594,17 +605,25 @@ class Guardian:
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
+        threads = []
         for structure in structures:
             if "guard_policy" not in structure:
                 # Default option will be serverless
-                self.serverless(config, structure, rules)
+                thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                thread.start()
+                threads.append(thread)
+                # self.serverless(config, structure, rules)
             else:
                 if structure["guard_policy"] == "serverless":
-                    self.serverless(config, structure, rules)
+                    thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                    thread.start()
+                    threads.append(thread)
                 elif structure["guard_policy"] == "fixed":
                     self.fixed_resource_amount(structure)
                 else:
                     self.serverless(config, structure, rules)
+        for process in threads:
+            process.join()
 
     def guard(self, ):
         global CPU_SHARES_PER_WATT

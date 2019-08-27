@@ -1,0 +1,9 @@
+{
+  "cpu": {
+    "cpu_allowance_limit": "600",
+    "cpu_num": "0,1,2,3,4,5"
+  },
+  "mem": {
+    "mem_limit": "46080"
+  }
+}

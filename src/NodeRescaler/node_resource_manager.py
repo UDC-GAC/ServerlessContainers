@@ -23,7 +23,7 @@ def write_cgroup_file_value(file_path, value):
     try:
         if os.path.isfile(file_path) and os.access(file_path, os.W_OK):
             with open(file_path, 'w') as file_handler:
-            #with open(file_path, 'r+') as file_handler:
+                # with open(file_path, 'r+') as file_handler:
                 file_handler.write(str(value))
             return {"success": True, "data": value}
         else:
@@ -184,9 +184,8 @@ def set_node_mem(container_name, mem_resource):
             value_megabytes_integer = value
             value_megabytes = str(value) + 'M'
 
-
         # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
-        swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.memsw.limit_in_bytes"])
+        # swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.memsw.limit_in_bytes"])
         memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
 
         # Get the current memory limit in megabytes, that should be equal to the swap space
@@ -195,18 +194,18 @@ def set_node_mem(container_name, mem_resource):
         if current_mem_value < value_megabytes_integer:
             # If we are to lower the amount, first memory, then swap
             mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
-            swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+            # swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
         else:
             # If we are to increase the amount, first swap, then memory
-            swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+            # swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
             mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
 
         if not mem_op["success"]:
             # Something happened with memory limit
             return False, "Memory error {0}".format(mem_op)
-        if not swap_op["success"]:
-            # Something happened with swap limit
-            return False, "Memory error {0}".format(swap_op)
+        # if not swap_op["success"]:
+        # Something happened with swap limit
+        #    return False, "Memory error {0}".format(swap_op)
         # Nothing bad happened
         return True, {MEM_LIMIT_LABEL: value}
     else:
@@ -354,11 +353,12 @@ def get_device_major_minor(device_path):
 
 
 def get_node_disks(container_name, devices):
+    SKIP_DISKS = ["bdev", "development", "production", "root", "not-found"]
     retrieved_disks = list()
     limits_read, limits_write = get_node_disk_limits(container_name)
     for device in devices.keys():
         # TODO FIX, ignored devices should be obtained from a file
-        if device == "bdev" or device == "development" or device == "production" or device == "root":
+        if device in SKIP_DISKS:
             continue
         device_mountpoint = devices[device]["source"]
         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
@@ -368,7 +368,7 @@ def get_node_disks(container_name, devices):
         except TypeError as e:
             # None was returned
             continue
-            #return False, {"error": str(e)}
+            # return False, {"error": str(e)}
 
         major_minor_str = major + ":" + minor
 

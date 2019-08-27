@@ -80,15 +80,15 @@ class CouchDBServer:
             return json.loads(r.text)["ok"]
 
     def __get_all_database_docs(self, database):
+        # TODO Implement pagination
         docs = list()
-        r = self.session.get(self.server + "/" + database + "/_all_docs", timeout=self.__DATABASE_TIMEOUT)
+        r = self.session.get(self.server + "/" + database + "/_all_docs?include_docs=true", timeout=self.__DATABASE_TIMEOUT)
         if r.status_code != 200:
             r.raise_for_status()
         else:
             rows = json.loads(r.text)["rows"]
             for row in rows:
-                req_doc = self.session.get("/".join([self.server, database, row["id"]]))
-                docs.append(dict(req_doc.json()))
+                docs.append(row["doc"])
             return docs
 
     # PRIVATE CRUD METHODS #
@@ -157,7 +157,8 @@ class CouchDBServer:
             return True
 
     def __find_documents_by_matches(self, database, selectors):
-        query = {"selector": {}}
+        # TODO Implement pagination
+        query = {"selector": {}, "limit": 50}
 
         for key in selectors:
             query["selector"][key] = selectors[key]
@@ -252,6 +253,9 @@ class CouchDBServer:
 
     def delete_request(self, request):
         self.__delete_doc(self.__requests_db_name, request["_id"], request["_rev"])
+
+    def delete_requests(self, requests):
+        self.__delete_bulk_docs(self.__requests_db_name, requests)
 
     # RULES #
     def add_rule(self, rule):

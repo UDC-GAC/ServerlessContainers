@@ -20,6 +20,7 @@ urllib3.disable_warnings()
 LXD_CRT = '/root/production/lxd.crt'
 LXD_KEY = '/root/production/lxd.key'
 LXD_ENDPOINT = 'https://localhost:8443'
+client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
 
 DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
@@ -50,7 +51,7 @@ def get_node_networks(container):
 
 
 def set_node_resources(node_name, resources):
-    client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
+    #client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
     if resources is None:
         # No resources to set
         return False, {}
@@ -97,10 +98,15 @@ def set_node_resources(node_name, resources):
             return False, {}
 
 
-def get_node_resources(node_name):
-    client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
+def get_node_resources_by_name(container_name):
+    container = client.containers.get(container_name)
+    return get_node_resources(container)
+
+def get_node_resources(container):
+    #client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
     try:
-        container = client.containers.get(node_name)
+        #container = client.containers.get(node_name)
+        node_name = container.name
         if container.status == "Running":
             node_dict = dict()
 
@@ -135,11 +141,11 @@ def get_node_resources(node_name):
 
 
 def get_all_nodes():
-    client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
+    #client = Client(endpoint=LXD_ENDPOINT, cert=(LXD_CRT, LXD_KEY), verify=False)
     containers = client.containers.all()
     containers_dict = dict()
     # client.authenticate('bogus')
     for c in containers:
         if c.status == "Running":
-            containers_dict[c.name] = get_node_resources(c.name)
+            containers_dict[c.name] = get_node_resources(c)
     return containers_dict

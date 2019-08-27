@@ -1,6 +1,8 @@
 # /usr/bin/python
 from __future__ import print_function
 
+from threading import Thread
+
 import requests
 import json
 import time
@@ -98,6 +100,65 @@ def get_configs():
     return docs
 
 
+# TODO These methods could be better implemented through function passing
+def persist_limits():
+    t0 = time.time()
+    docs = list()
+    try:
+        docs += get_limits()
+    except (requests.exceptions.HTTPError, KeyError, ValueError):
+        # An error might have been thrown because database was recently updated or created
+        MyUtils.log_warning("Couldn't retrieve limits info.", debug)
+    t1 = time.time()
+    MyUtils.log_info("It took {0} seconds to get the limits".format(str("%.2f" % (t1 - t0))), debug)
+    send_data(docs, "limits")
+
+
+def persist_structures():
+    t0 = time.time()
+    docs = list()
+    try:
+        docs += get_structures()
+    except (requests.exceptions.HTTPError, KeyError, ValueError):
+        # An error might have been thrown because database was recently updated or created
+        MyUtils.log_warning("Couldn't retrieve structure info.", debug)
+    t1 = time.time()
+    MyUtils.log_info("It took {0} seconds to get the structures".format(str("%.2f" % (t1 - t0))), debug)
+    send_data(docs, "structures")
+
+
+def persist_config():
+    t0 = time.time()
+    docs = list()
+    try:
+        docs += get_configs()
+    except (requests.exceptions.HTTPError, KeyError, ValueError):
+        # An error might have been thrown because database was recently updated or created
+        MyUtils.log_warning("Couldn't retrieve config info.", debug)
+    t1 = time.time()
+    MyUtils.log_info("It took {0} seconds to get the config documents".format(str("%.2f" % (t1 - t0))), debug)
+    send_data(docs, "config")
+
+
+def send_data(docs, doc_type):
+    if docs:
+        # Remote database operation
+        t0 = time.time()
+        success, info = opentsdb_handler.send_json_documents(docs)
+        if not success:
+            MyUtils.log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])),
+                              debug)
+        else:
+            MyUtils.log_info(
+                "Post was done at: {0} with {1} documents".format(time.strftime("%D %H:%M:%S", time.localtime()),
+                                                                  str(len(docs))), debug)
+            t1 = time.time()
+            #MyUtils.log_info("It took {0} seconds to send all the {1} documents".format(
+            #    str("%.2f" % (t1 - t0)), doc_type), debug)
+    else:
+        MyUtils.log_warning("Couldn't retrieve any info.", debug)
+
+
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
     fail_count = 0
@@ -117,47 +178,21 @@ def persist():
         polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
-        # Get the data
-        docs = list()
-        try:
-            docs += get_limits()
-        except (requests.exceptions.HTTPError, KeyError, ValueError):
-            # An error might have been thrown because database was recently updated or created
-            MyUtils.log_warning("Couldn't retrieve limits info.", debug)
+        threads = list()
+        t = Thread(target=persist_limits, args=())
+        t.start()
+        threads.append(t)
+        t = Thread(target=persist_structures, args=())
+        t.start()
+        threads.append(t)
+        t = Thread(target=persist_config, args=())
+        t.start()
+        threads.append(t)
 
-        try:
-            docs += get_structures()
-        except (requests.exceptions.HTTPError, KeyError, ValueError):
-            # An error might have been thrown because database was recently updated or created
-            MyUtils.log_warning("Couldn't retrieve structure info.", debug)
+        for t in threads:
+            t.join()
 
-        try:
-            docs += get_configs()
-        except (requests.exceptions.HTTPError, KeyError, ValueError):
-            # An error might have been thrown because database was recently updated or created
-            MyUtils.log_warning("Couldn't retrieve config info.", debug)
-
-        # Send the data
-        if docs != list():
-            # Remote database operation
-            success, info = opentsdb_handler.send_json_documents(docs)
-            if not success:
-                MyUtils.log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])),
-                                  debug)
-                fail_count += 1
-            else:
-                MyUtils.log_info(
-                    "Post was done at: {0} with {1} documents".format(time.strftime("%D %H:%M:%S", time.localtime()),
-                                                                      str(len(docs))), debug)
-                fail_count = 0
-        else:
-            MyUtils.log_warning("Couldn't retrieve any info.", debug)
-
-        # If too many errors, abort
-        if fail_count >= MAX_FAIL_NUM:
-            MyUtils.log_error("TSDB SENDER failed for {0} times, exiting.".format(str(fail_count)), debug)
-            exit(1)
-
+        MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)
 
 

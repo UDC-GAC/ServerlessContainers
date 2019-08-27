@@ -20,7 +20,7 @@ def resilient_beat(db_handler, service_name, max_tries=10):
         service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
         service["heartbeat"] = time.time()
         db_handler.update_service(service)
-    except requests.HTTPError as e:
+    except (requests.exceptions.HTTPError, ValueError) as e:
         if max_tries > 0:
             time.sleep((1000 + random.randint(1, 200)) / 1000)
             resilient_beat(db_handler, service_name, max_tries - 1)
@@ -181,8 +181,8 @@ def get_resource(structure, resource):
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
-        print("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
-              + time.strftime("%D %H:%M:%S", time.localtime()))
+        log_info("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
+              + time.strftime("%D %H:%M:%S", time.localtime()), debug)
     except requests.exceptions.HTTPError:
         log_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
 
@@ -198,14 +198,16 @@ def get_structures(db_handler, debug, subtype="application"):
 
 # TESTED
 def generate_request_name(amount, resource):
-    if not amount:
-        raise ValueError()
+    if amount == 0:
+        raise ValueError("Amount is zero")
+    elif amount is None:
+        raise ValueError("Amount is missing")
     if int(amount) < 0:
         return resource.title() + "RescaleDown"
     elif int(amount) > 0:
         return resource.title() + "RescaleUp"
     else:
-        raise ValueError()
+        raise ValueError("Invalid amount")
 
 
 # TESTED
