@@ -31,8 +31,8 @@ before_install:
 
 
 script:
-   - export PYTHONPATH=. && nosetests --with-coverage
-#  - export PYTHONPATH=. && nosetests --exclude=StateDatabase --with-coverage
+#  - export PYTHONPATH=. && nosetests --with-coverage
+   - export PYTHONPATH=. && nosetests --exclude=Guardian --with-coverage
 #  - python3.6 -m unittest Guardian/testGuardian.py
 #  - python3.6 -m unittest MyUtils/testMyUtils.py
 #  - python3.6 -m unittest StateDatabase/testcouchDB.py
