@@ -3,17 +3,16 @@ import unittest
 import time
 
 import src.StateDatabase
+from test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower, \
+    CpuRescaleUp, energy_exceeded_upper, CpuRescaleDown, MemRescaleUp, MemRescaleDown, EnergyRescaleUp, \
+    EnergyRescaleDown, energy_dropped_lower
+from test.documents.services import guardian_service as guardian
 from src.Guardian.Guardian import CPU_SHARES_PER_WATT, NOT_AVAILABLE_STRING
 from src.MyUtils import MyUtils
 from src.MyUtils.MyUtils import generate_event_name
 from unittest import TestCase
 from src.Guardian import Guardian
 from src.StateDatabase.couchdb import CouchDBServer
-from src.StateDatabase.initializers.example.limits import base_limits
-from src.StateDatabase.initializers.rules import mem_exceeded_upper, mem_dropped_lower, MemRescaleUp, MemRescaleDown, \
-    cpu_exceeded_upper, cpu_dropped_lower, energy_dropped_lower, energy_exceeded_upper, CpuRescaleUp, CpuRescaleDown, \
-    EnergyRescaleDown, EnergyRescaleUp
-from src.StateDatabase.initializers.services import guardian_service
 from src.StateDatabase.opentsdb import OpenTSDBServer
 
 
@@ -33,10 +32,10 @@ class GuardianTest(TestCase):
     def test_check_unset_values(self):
         # An error should be thrown
         with self.assertRaises(ValueError):
-            self.guardian.check_unset_values(NOT_AVAILABLE_STRING, NOT_AVAILABLE_STRING)
+            self.guardian.check_unset_values(NOT_AVAILABLE_STRING, "min", "cpu")
 
             # Nothing should happen
-            self.guardian.check_unset_values(1, NOT_AVAILABLE_STRING)
+            self.guardian.check_unset_values(1, "min", "cpu")
 
     def test_try_get_value(self):
         TestCase.assertEqual(self, first=1, second=self.guardian.try_get_value({"KEY": 1}, "KEY"))
@@ -109,26 +108,26 @@ class GuardianTest(TestCase):
 
         # State should be valid
         resources, limits = get_valid_state()
-        TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
+        TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
 
         # Make resources and limits invalid because invalid boundary
         for resource in ["cpu", "mem"]:
             resources, limits = get_valid_state()
             # Upper too close to current
             limits[resource]["upper"] = resources[resource]["current"] - int(limits[resource]["boundary"] / 2)
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
 
             # Upper too far away to current
             limits[resource]["upper"] = resources[resource]["current"] - limits[resource]["boundary"] * 2
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
 
             # Lower too close to upper
             limits[resource]["lower"] = limits[resource]["upper"] - int(limits[resource]["boundary"] / 2)
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
 
             # Lower too far away to upper
             limits[resource]["lower"] = limits[resource]["upper"] - limits[resource]["boundary"] * 2
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits))
+            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
 
     def test_invalid_container_state(self):
         def get_valid_state():
@@ -183,11 +182,12 @@ class GuardianTest(TestCase):
                 self.guardian.check_invalid_container_state(resources, limits, resource)
 
             # Invalid because lower < min
-            resources, limits = get_valid_state()
-            resources[resource]["min"], limits[resource]["lower"] = \
-                limits[resource]["lower"], resources[resource]["min"]
-            with self.assertRaises(ValueError):
-                self.guardian.check_invalid_container_state(resources, limits, resource)
+            # TODO Test deactivated, see TODO in tested function
+            # resources, limits = get_valid_state()
+            # resources[resource]["min"], limits[resource]["lower"] = \
+            #     limits[resource]["lower"], resources[resource]["min"]
+            # with self.assertRaises(ValueError):
+            #     self.guardian.check_invalid_container_state(resources, limits, resource)
 
         # Make resources and limits invalid because invalid boundary
         for resource in ["cpu", "mem"]:
@@ -485,7 +485,7 @@ class GuardianServelerssIntegrationTest(TestCase):
         self.guardian.opentsdb_handler = self.opentsdb
 
     def test_serverless(self):
-        guardian_service = src.StateDatabase.initializers.services.guardian_service
+        guardian_service = guardian
         testing_node_name = "testingNode{0}".format(str(random.randint(0, 10)))
         structure = {"guard": True, "guard_policy": "serverless", "host": "c14-13", "host_rescaler_ip": "c14-13",
                      "host_rescaler_port": "8000",
