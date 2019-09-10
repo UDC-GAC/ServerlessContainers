@@ -1,4 +1,26 @@
-# /usr/bin/python
+# Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
+
+
 from __future__ import print_function
 
 from threading import Thread
@@ -6,7 +28,6 @@ import time
 import traceback
 import logging
 
-import requests
 from json_logic import jsonLogic
 
 import src.MyUtils.MyUtils as MyUtils
@@ -272,7 +293,8 @@ class Guardian:
             self.check_invalid_values(values["current"], "current", values["max"], "max")
         self.check_invalid_values(values["upper"], "upper", values["current"], "current", resource=resource)
         self.check_invalid_values(values["lower"], "lower", values["upper"], "upper", resource=resource)
-        # TODO FIX This may cause the program to enter on an infinite loop due to the lower boundary dropping under the minimum
+        # TODO FIX This may cause the program to enter on an infinite loop due to the lower
+        # boundary dropping under the minimum
         # self.check_invalid_values(values["min"], "min", values["lower"], "lower", resource=resource)
 
         # Check that there is a boundary between values, like the current and upper, so
@@ -440,7 +462,8 @@ class Guardian:
 
         container_name_str = "@" + container["name"]
         container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
-        # TODO check if the resource is unguarded and if that is the case, do not print anything or just a cpu(unguarded)
+        # TODO check if the resource is unguarded and if that is the case, do not print anything or
+        # just a cpu(unguarded)
         resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
             self.get_resource_summary("cpu", resources, limits, usages),
             self.get_resource_summary("mem", resources, limits, usages),

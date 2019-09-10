@@ -1,6 +1,25 @@
-# /usr/bin/python
-import src.StateDatabase.couchdb as couchDB
-import src.StateDatabase.utils as couchdb_utils
+# Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
+
 
 rebalancer = dict(
     name="rebalancer",
@@ -88,21 +107,3 @@ energy_manager = dict(
         DEBUG=True
     )
 )
-
-if __name__ == "__main__":
-    initializer_utils = couchdb_utils.CouchDBUtils()
-    handler = couchDB.CouchDBServer()
-    database = "services"
-    initializer_utils.remove_db(database)
-    initializer_utils.create_db(database)
-
-    if handler.database_exists("services"):
-        print("Adding 'services' document")
-        handler.add_service(scaler)
-        handler.add_service(guardian)
-        handler.add_service(rebalancer)
-        handler.add_service(database_snapshoter)
-        handler.add_service(structures_snapshoter)
-        handler.add_service(refeeder)
-        handler.add_service(sanity_checker)
-        handler.add_service(energy_manager)

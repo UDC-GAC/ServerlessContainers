@@ -1,6 +1,25 @@
-# /usr/bin/python
-import src.StateDatabase.couchdb as couchDB
-import src.StateDatabase.utils as couchdb_utils
+# Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
+
 
 containers = ["node0", "node1", "node2", "node3",
               "node4", "node5", "node6", "node7",
@@ -24,30 +43,3 @@ base_limits = dict(
     )
 )
 
-if __name__ == "__main__":
-
-    initializer_utils = couchdb_utils.CouchDBUtils()
-    handler = couchDB.CouchDBServer()
-    database = "limits"
-    initializer_utils.remove_db(database)
-    initializer_utils.create_db(database)
-
-    if handler.database_exists("limits"):
-        print("Adding 'limits' documents")
-        for c in containers:
-            limits = dict(base_limits)
-            limits["name"] = c
-            handler.add_limit(limits)
-
-        limits = dict(
-            type='limit',
-            name='app1',
-            resources=dict(
-                cpu=dict(upper=9600, lower=150, boundary=50),
-                mem=dict(upper=700280, lower=2000, boundary=4000),
-                disk=dict(upper=100, lower=10, boundary=20),
-                net=dict(upper=100, lower=10, boundary=20),
-                energy=dict(upper=50, lower=5, boundary=5)
-            )
-        )
-        handler.add_limit(limits)

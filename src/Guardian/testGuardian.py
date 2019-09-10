@@ -1,8 +1,30 @@
+# Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
+
+
 import random
 import unittest
 import time
 
-import src.StateDatabase
 from test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower, \
     CpuRescaleUp, energy_exceeded_upper, CpuRescaleDown, MemRescaleUp, MemRescaleDown, EnergyRescaleUp, \
     EnergyRescaleDown, energy_dropped_lower
@@ -108,26 +130,31 @@ class GuardianTest(TestCase):
 
         # State should be valid
         resources, limits = get_valid_state()
-        TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
+        TestCase.assertEqual(self, first=limits,
+                             second=self.guardian.adjust_container_state(resources, limits, ["cpu", "mem"]))
 
         # Make resources and limits invalid because invalid boundary
         for resource in ["cpu", "mem"]:
             resources, limits = get_valid_state()
             # Upper too close to current
             limits[resource]["upper"] = resources[resource]["current"] - int(limits[resource]["boundary"] / 2)
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
+            TestCase.assertEqual(self, first=limits,
+                                 second=self.guardian.adjust_container_state(resources, limits, ["cpu", "mem"]))
 
             # Upper too far away to current
             limits[resource]["upper"] = resources[resource]["current"] - limits[resource]["boundary"] * 2
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
+            TestCase.assertEqual(self, first=limits,
+                                 second=self.guardian.adjust_container_state(resources, limits, ["cpu", "mem"]))
 
             # Lower too close to upper
             limits[resource]["lower"] = limits[resource]["upper"] - int(limits[resource]["boundary"] / 2)
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
+            TestCase.assertEqual(self, first=limits,
+                                 second=self.guardian.adjust_container_state(resources, limits, ["cpu", "mem"]))
 
             # Lower too far away to upper
             limits[resource]["lower"] = limits[resource]["upper"] - limits[resource]["boundary"] * 2
-            TestCase.assertEqual(self, first=limits, second=self.guardian.adjust_container_state(resources, limits, ["cpu","mem"]))
+            TestCase.assertEqual(self, first=limits,
+                                 second=self.guardian.adjust_container_state(resources, limits, ["cpu", "mem"]))
 
     def test_invalid_container_state(self):
         def get_valid_state():
