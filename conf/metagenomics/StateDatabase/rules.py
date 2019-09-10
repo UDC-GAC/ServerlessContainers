@@ -82,18 +82,18 @@ EnergyRescaleDown = dict(
                 1]},
             {">=": [
                 {"var": "events.scale.down"},
-                3]}
+                4]}
         ]}),
     generates="requests",
-    events_to_remove=3,
+    events_to_remove=4,
     action={"requests": ["CpuRescaleDown"]},
-    amount=-20,
+    amount=0,
     rescale_by="proportional",
     active=True
 )
 
 # This rule is activated when the energy used is below the maximum allowed AND
-# the CPU usage is above 90% of the CPU limit (i.e., The structure is getting close to a CPU bottleneck)
+# the CPU usage is above 70% of the CPU limit (i.e., The structure is getting close to a CPU bottleneck)
 # If the structure has a high CPU limit and low energy usage it may be because either it requires internal
 # CPU Rebalance or plainly, it is idle.
 energy_dropped_lower = dict(
@@ -112,7 +112,7 @@ energy_dropped_lower = dict(
                     {"var": "cpu.structure.cpu.usage"},
                     {"var": "cpu.structure.cpu.current"}]
                 },
-                0.9
+                0.7
             ]}
         ]}),
     generates="events", action={"events": {"scale": {"up": 1}}},
@@ -127,15 +127,15 @@ EnergyRescaleUp = dict(
         {"and": [
             {">=": [
                 {"var": "events.scale.up"},
-                3]},
+                4]},
             {"<=": [
                 {"var": "events.scale.down"},
                 1]}
         ]}),
     generates="requests",
-    events_to_remove=3,
+    events_to_remove=4,
     action={"requests": ["CpuRescaleUp"]},
-    amount=20,
+    amount=0,
     rescale_by="proportional",
     active=True
 )

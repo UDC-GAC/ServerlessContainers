@@ -1,0 +1,20 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host0",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    }
+  ]
+}

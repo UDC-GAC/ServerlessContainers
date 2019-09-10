@@ -132,7 +132,7 @@ class CouchDBServer:
 
         return output_dict
 
-    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=1000, max_tries=10):
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=500, max_tries=10):
         r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
@@ -140,11 +140,16 @@ class CouchDBServer:
                 # update revision and retry after slightly random wait
                 if 0 <= previous_tries < max_tries:
                     time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
-                    new_doc = self.__find_documents_by_matches(database, {"_id": doc["_id"]})[0]
-                    doc["_rev"] = new_doc["_rev"]
-                    doc = self.__merge(doc, new_doc)
-                    return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                    matches = self.__find_documents_by_matches(database, {"_id": doc["_id"]})
+                    if len(matches) > 0:
+                        new_doc = matches[0]
+                        doc["_rev"] = new_doc["_rev"]
+                        doc = self.__merge(doc, new_doc)
+                        return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
                                                        max_tries=max_tries)
+                    else:
+                        return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                                                           max_tries=max_tries)
                 else:
                     r.raise_for_status()
             elif r.status_code == 404:

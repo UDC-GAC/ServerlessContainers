@@ -1,0 +1,33 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host4"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 500
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 500
+      }
+    }
+  ]
+}

@@ -1,8 +1,0 @@
-{
-  "DEBUG": true,
-  "EVENT_TIMEOUT": 130,
-  "STRUCTURE_GUARDED": "application",
-  "WINDOW_DELAY": 10,
-  "WINDOW_TIMELAPSE": 30,
-  "CPU_SHARES_PER_WATT": 8
-}

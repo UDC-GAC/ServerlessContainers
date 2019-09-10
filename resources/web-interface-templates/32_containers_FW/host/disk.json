@@ -1,0 +1,125 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host28",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host29",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host30",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host31",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host32",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host33",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host34",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host35",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    }
+  ]
+}

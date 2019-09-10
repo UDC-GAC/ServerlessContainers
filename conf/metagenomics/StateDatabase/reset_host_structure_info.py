@@ -120,6 +120,52 @@ if __name__ == "__main__":
                 "12": {"comp5": 100, "free": 0},
                 "13": {"comp5": 100, "free": 0},
 
+                "14": {"comp6": 100, "free": 0},
+                "15": {"comp6": 100, "free": 0},
+                "16": {"comp6": 100, "free": 0},
+                "17": {"comp6": 100, "free": 0},
+                "18": {"comp6": 100, "free": 0},
+                "19": {"comp6": 100, "free": 0},
+                "20": {"comp6": 100, "free": 0},
+
+                "21": {"comp7": 100, "free": 0},
+                "22": {"comp7": 100, "free": 0},
+                "23": {"comp7": 100, "free": 0},
+                "24": {"comp7": 100, "free": 0},
+                "25": {"comp7": 100, "free": 0},
+                "26": {"comp7": 100, "free": 0},
+                "27": {"comp7": 100, "free": 0}
+            },
+            "max": 2800,
+            "free": 0
+        }
+    }
+    handler.update_structure(host6)
+
+    host7 = handler.get_structure("host7")
+    host7["resources"] = {
+        "mem": {
+            "max": 737280,
+            "free": 0
+        },
+        "cpu": {
+            "core_usage_mapping": {
+                "0": {"comp8": 100, "free": 0},
+                "1": {"comp8": 100, "free": 0},
+                "2": {"comp8": 100, "free": 0},
+                "3": {"comp8": 100, "free": 0},
+                "4": {"comp8": 100, "free": 0},
+                "5": {"comp8": 100, "free": 0},
+                "6": {"comp8": 100, "free": 0},
+
+                "7": {"comp9": 100, "free": 0},
+                "8": {"comp9": 100, "free": 0},
+                "9": {"comp9": 100, "free": 0},
+                "10": {"comp9": 100, "free": 0},
+                "11": {"comp9": 100, "free": 0},
+                "12": {"comp9": 100, "free": 0},
+                "13": {"comp9": 100, "free": 0},
+
                 "14": {"aux0": 100, "free": 0},
                 "15": {"aux0": 100, "free": 0},
                 "16": {"aux0": 100, "free": 0},
@@ -140,7 +186,7 @@ if __name__ == "__main__":
             "free": 0
         }
     }
-    handler.update_structure(host6)
+    handler.update_structure(host7)
 
 
 

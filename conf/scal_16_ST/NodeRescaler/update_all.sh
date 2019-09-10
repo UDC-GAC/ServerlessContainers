@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CONF_FOLDER=development/AutomaticRescaler/conf/scal_16_ST/NodeRescaler/
+CONF_FOLDER=development/ServerlessContainers/conf/scal_16_ST/NodeRescaler/
 
 curl -X PUT -H "Content-Type: application/json" -d @$HOME/$CONF_FOLDER/kafka0.json http://host23:8000/container/kafka0
 curl -X PUT -H "Content-Type: application/json" -d @$HOME/$CONF_FOLDER/hibench0.json http://host23:8000/container/hibench0

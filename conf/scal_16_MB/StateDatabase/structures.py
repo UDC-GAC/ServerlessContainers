@@ -31,7 +31,6 @@ base_host = dict(
     )
 )
 
-
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
@@ -39,11 +38,11 @@ if __name__ == "__main__":
     initializer_utils.remove_db(database)
     initializer_utils.create_db(database)
 
-    containers = [("node0","host11"), ("node1","host11"), ("node2","host11"), ("node3","host11"),
-                  ("node4", "host12"), ("node5", "host12"), ("node6", "host12"), ("node7", "host12"),
-                  ("node8", "host13"), ("node9", "host13"), ("node10", "host13"), ("node11", "host13"),
-                  ("node12", "host14"), ("node13", "host14"), ("node14", "host14"), ("node15", "host14")]
-    hosts = ["host11","host12","host13","host14"]
+    containers = [("node0", "host12"), ("node1", "host12"), ("node2", "host12"), ("node3", "host12"),
+                  ("node4", "host13"), ("node5", "host13"), ("node6", "host13"), ("node7", "host13"),
+                  ("node8", "host14"), ("node9", "host14"), ("node10", "host14"), ("node11", "host14"),
+                  ("node12", "host15"), ("node13", "host15"), ("node14", "host15"), ("node15", "host15")]
+    hosts = ["host12", "host13", "host14", "host15"]
 
     # CREATE STRUCTURES
     if handler.database_exists("structures"):

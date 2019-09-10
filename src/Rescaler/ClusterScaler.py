@@ -14,7 +14,8 @@ import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.opentsdb as bdwatchdog
 from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 60, "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True,
+                         "ACTIVE": True}
 SERVICE_NAME = "scaler"
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
@@ -50,6 +51,23 @@ def fix_container_cpu_mapping(container, cpu_used_cores, cpu_used_shares, max_cp
         return True
     except (Exception, RuntimeError, ValueError, requests.HTTPError):
         return False
+
+
+def check_host_mapping(host_info_cache, containers):
+    for c in containers:
+        try:
+            c_name = c["name"]
+            host = host_info_cache[c["host"]]
+            map = host["resources"]["cpu"]["core_usage_mapping"]
+            c_shares = 0
+            for core in map:
+                if c_name in core:
+                    c_shares += core[c_name]
+            if c_shares > c["resources"]["cpu"]["max"]:
+                MyUtils.log_error("[SIC] container {0} has, somehow, more shares than the maximum".format(c_name),
+                                  debug)
+        except KeyError:
+            continue
 
 
 def check_container_cpu_mapping(container, host_info, cpu_used_cores, cpu_used_shares):
@@ -126,7 +144,7 @@ def check_core_mapping(containers):
 
 
 def filter_requests(request_timeout):
-    #TODO FIX Could use a bulk delete to speed up as the filtering phase could be slow on environments where
+    # TODO FIX Could use a bulk delete to speed up as the filtering phase could be slow on environments where
     # a lot of requests beging to pile up between epochs
 
     fresh_requests, purged_requests, final_requests = list(), list(), list()
@@ -140,7 +158,7 @@ def filter_requests(request_timeout):
         if request["timestamp"] < time.time() - request_timeout:
             purged_requests.append(request)
             # Remote database operation
-            #db_handler.delete_request(request)
+            # db_handler.delete_request(request)
             purged_counter += 1
         else:
             fresh_requests.append(request)
@@ -181,6 +199,18 @@ def filter_requests(request_timeout):
     MyUtils.log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter),
                      debug)
     return final_requests
+
+
+def sort_requests(new_requests):
+    container_reqs, app_reqs = list(), list()
+    for r in new_requests:
+        if r["structure_type"] == "container":
+            container_reqs.append(r)
+        elif r["structure_type"] == "application":
+            app_reqs.append(r)
+        else:
+            pass
+    return container_reqs, app_reqs
 
 
 # Tranlsate something like '2-4,7' to [2,3,7]
@@ -552,6 +582,7 @@ def single_container_rescale(request, app_containers, resource_usage_cache):
                 best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
 
         # Generate the new request
+        # TODO This should use Guardians method to generate requests
         new_request = dict(
             type="request",
             resource=resource,
@@ -561,7 +592,9 @@ def single_container_rescale(request, app_containers, resource_usage_cache):
             host_rescaler_port=best_fit_container["host_rescaler_port"],
             structure=best_fit_container["name"],
             action=MyUtils.generate_request_name(amount, resource),
-            timestamp=int(time.time()))
+            timestamp=int(time.time()),
+            structure_type="container"
+        )
 
         return True, best_fit_container, new_request
     else:
@@ -752,72 +785,66 @@ def scale():
         polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         request_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "REQUEST_TIMEOUT")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        CHECK_CORE_MAP = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "CHECK_CORE_MAP")
+        SERVICE_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "ACTIVE")
 
-        t0 = time.time()
-        # Get the container structures and their resource information as such data is going to be needed
-        containers = MyUtils.get_structures(db_handler, debug, subtype="container")
-        try:
-            container_info_cache = get_container_resources_dict()  # Reset the cache
-        except (Exception, RuntimeError) as e:
-            MyUtils.log_info("Error getting host document, skipping this time", debug)
-            MyUtils.log_error(str(e), debug)
-            time.sleep(polling_frequency)
-            continue
+        if SERVICE_IS_ACTIVATED:
+            t0 = time.time()
+            # Get the container structures and their resource information as such data is going to be needed
+            containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+            try:
+                container_info_cache = get_container_resources_dict()  # Reset the cache
+            except (Exception, RuntimeError) as e:
+                MyUtils.log_info("Error getting host document, skipping this time", debug)
+                MyUtils.log_error(str(e), debug)
+                time.sleep(polling_frequency)
+                continue
 
-        # Fill the host information cache
-        MyUtils.log_info("Getting host and container info at {0}".format(MyUtils.get_time_now_string()), debug)
-        host_info_cache = dict()  # Reset the cache
-        try:
-            fill_host_info_cache(containers)
-        except (Exception, RuntimeError) as e:
-            MyUtils.log_info("Error getting host document, skipping this time", debug)
-            MyUtils.log_error(str(e), debug)
-            time.sleep(polling_frequency)
-            continue
+            # Fill the host information cache
+            MyUtils.log_info("Getting host and container info at {0}".format(MyUtils.get_time_now_string()), debug)
+            host_info_cache = dict()  # Reset the cache
+            try:
+                fill_host_info_cache(containers)
+            except (Exception, RuntimeError) as e:
+                MyUtils.log_info("Error getting host document, skipping this time", debug)
+                MyUtils.log_error(str(e), debug)
+                time.sleep(polling_frequency)
+                continue
 
-        # Do the core mapping check-up
-        MyUtils.log_info("Doing core mapping check at {0}".format(MyUtils.get_time_now_string()), debug)
-        check_core_mapping(containers)
+            # Do the core mapping check-up
+            if CHECK_CORE_MAP:
+                MyUtils.log_info("Doing core mapping check at {0}".format(MyUtils.get_time_now_string()), debug)
+                check_host_mapping(host_info_cache, containers)
+                check_core_mapping(containers)
+            else:
+                MyUtils.log_info("Core map check has been disabled", debug)
 
-        # Get the requests
-        new_requests = filter_requests(request_timeout)
-        if new_requests:
-            MyUtils.log_info("Processing requests at {0}".format(MyUtils.get_time_now_string()), debug)
-            scale_structures(new_requests)
+            # Get the requests
+            new_requests = filter_requests(request_timeout)
+            container_reqs, app_reqs = sort_requests(new_requests)
+
+            # Process first the application requests, as they generate container ones
+            if app_reqs:
+                MyUtils.log_info("Processing applications requests at {0}".format(MyUtils.get_time_now_string()), debug)
+                scale_structures(app_reqs)
+            else:
+                MyUtils.log_info("No applications requests at {0}".format(MyUtils.get_time_now_string()), debug)
+
+            # Then process container ones
+            if container_reqs:
+                MyUtils.log_info("Processing container requests at {0}".format(MyUtils.get_time_now_string()), debug)
+                scale_structures(container_reqs)
+            else:
+                MyUtils.log_info("No container requests at {0}".format(MyUtils.get_time_now_string()), debug)
+
+            t1 = time.time()
+            MyUtils.log_info("It took {0} seconds to process epoch".format(str("%.2f" % (t1 - t0))), debug)
+            MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
+
         else:
-            MyUtils.log_info("No requests at {0}".format(MyUtils.get_time_now_string()), debug)
+            MyUtils.log_info("Scaler service is not activated", debug)
 
-        # In case requests were generated from apps, check again
-        #TODO FIX only containers should be scaled on this second round, see for a better way of knowing this
-        new_requests = filter_requests(request_timeout)
-        container_requests = list()
-        for request in new_requests:
-            if "host" in request:
-                container_requests.append(request)
-        if container_requests:
-            scale_structures(container_requests)
-
-        t1 = time.time()
-        MyUtils.log_info("It took {0} seconds to process epoch".format(str("%.2f" % (t1 - t0))), debug)
-        MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)
-
-
-        ## THREADED
-        # # Get the requests
-        # new_requests = filter_requests(request_timeout)
-        # thread = None
-        # if new_requests:
-        #     thread = Thread(target=scale_structures, args=(new_requests,))
-        #     thread.start()
-        # else:
-        #     MyUtils.log_info("No requests at {0}".format(MyUtils.get_time_now_string()), debug)
-        #
-        # MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
-        # time.sleep(polling_frequency)
-        #
-        # if thread and thread.isAlive():
-        #     thread.join()
 
 
 def main():

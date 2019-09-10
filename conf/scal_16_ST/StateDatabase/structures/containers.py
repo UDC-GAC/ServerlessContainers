@@ -9,7 +9,7 @@ base_container = dict(
     name="base_container",
     guard=False,
     resources=dict(
-        cpu=dict(max=700, min=100, guard=True),
+        cpu=dict(max=600, min=100, guard=True),
         mem=dict(max=46080, min=1024, guard=False),
         disk=dict(max=100, min=20, guard=False),
         net=dict(max=200, min=100, guard=False),

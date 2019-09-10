@@ -84,9 +84,9 @@ class CheckAliveBase:
                 print("")
 
     def report(self):
-        db = couchDB.CouchDBServer(couchdb_url="couchdb-{0}".format(self.__INFRASTRUCTURE_NAME__))
+        db = couchDB.CouchDBServer(couchdb_url="couchdb".format(self.__INFRASTRUCTURE_NAME__))
 
-        orchestrator_hostname = "orchestrator-{0}".format(self.__INFRASTRUCTURE_NAME__)
+        orchestrator_hostname = "orchestrator".format(self.__INFRASTRUCTURE_NAME__)
         self.__REST_SERVICES__.append((orchestrator_hostname, orchestrator_hostname, "5000"))
 
         while True:

@@ -1,7 +1,6 @@
 # /usr/bin/python
 from __future__ import print_function
 
-from threading import Thread
 import time
 import traceback
 import logging
@@ -17,11 +16,10 @@ GUARDIAN_CONTAINER_METRICS = {
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 30,
                          "WINDOW_DELAY": 10,
+                         "SHARE_SHUFFLING_AMOUNT": 50,
                          "DEBUG": True}
 
 SERVICE_NAME = "rebalancer"
-
-SHARE_SHUFFLING_AMOUNT = 25
 
 
 class ReBalancer:
@@ -49,9 +47,9 @@ class ReBalancer:
         window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
 
         try:
-
             # Remote database operation
-            usages = self.opentsdb_handler.get_structure_timeseries({"host": container["name"]}, window_difference,
+            usages = self.opentsdb_handler.get_structure_timeseries({"host": container["name"]},
+                                                                    window_difference,
                                                                     window_delay,
                                                                     BDWATCHDOG_CONTAINER_METRICS,
                                                                     GUARDIAN_CONTAINER_METRICS)
@@ -69,7 +67,7 @@ class ReBalancer:
 
             return None
 
-    def rebalance_containers(self, config, containers, app_name):
+    def fill_containers_with_usage_info(self, containers, config):
         # Get the usages
         containers_with_resource_usages = list()
         for container in containers:
@@ -80,117 +78,122 @@ class ReBalancer:
                     # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
                     container["resources"][keys[1]][keys[2]] = usages[usage_metric]
                 containers_with_resource_usages.append(container)
-        containers = containers_with_resource_usages
+        return containers_with_resource_usages
 
-        # Filter the containers according to usage and rules
-        containers_to_steal = list()
-        containers_to_give = list()
+    def rebalance_containers_by_pair_swapping(self, containers, app_name):
+        # Filter the containers between donors and receivers, according to usage and rules
+        donors = list()
+        receivers = list()
         for container in containers:
-            data = {"cpu": {"structure": {"cpu": {
-                "usage": container["resources"]["cpu"]["usage"],
-                "min": container["resources"]["cpu"]["min"],
-                "max": container["resources"]["cpu"]["max"],
-                "current": container["resources"]["cpu"]["current"]}}}}
+            try:
+                data = {"cpu": {"structure": {"cpu": {
+                    "usage": container["resources"]["cpu"]["usage"],
+                    "min": container["resources"]["cpu"]["min"],
+                    "max": container["resources"]["cpu"]["max"],
+                    "current": container["resources"]["cpu"]["current"]}}}}
+            except KeyError:
+                continue
 
-            # containers that have low resource usage
+            # containers that have low resource usage (donors)
             rule_low_usage = self.couchdb_handler.get_rule("cpu_usage_low")
-            if (jsonLogic(rule_low_usage["rule"], data)):
-                containers_to_steal.append(container)
+            if jsonLogic(rule_low_usage["rule"], data):
+                donors.append(container)
 
-            # containers that have a bottleneck
+            # containers that have a bottleneck (receivers)
             rule_high_usage = self.couchdb_handler.get_rule("cpu_usage_high")
-            if (jsonLogic(rule_high_usage["rule"], data)):
-                containers_to_give.append(container)
+            if jsonLogic(rule_high_usage["rule"], data):
+                receivers.append(container)
 
-        if not containers_to_give:
+        if not receivers:
             MyUtils.log_info("No containers in need of rebalancing for {0}".format(app_name), self.debug)
             return
         else:
-            # Order the containers from min to max
-            ordenerd_containers = sorted(containers_to_give, key=lambda c: c["resources"]["cpu"]["current"])
-            containers_to_give = ordenerd_containers
+            # Order the containers from lower to upper current CPU limit
+            containers_to_give = sorted(receivers, key=lambda c: c["resources"]["cpu"]["current"])
 
-        MyUtils.log_info("Nodes to steal from {0}".format(str([c["name"] for c in containers_to_steal])), self.debug)
-        MyUtils.log_info("Nodes to give to {0}".format(str([c["name"] for c in containers_to_give])), self.debug)
+        # MyUtils.log_info("Nodes to steal from {0}".format(str([c["name"] for c in containers_to_steal])), self.debug)
+        # MyUtils.log_info("Nodes to give to {0}".format(str([c["name"] for c in containers_to_give])), self.debug)
 
-        # Steal resources uniformely from the low-usage containers
-        amount_stolen = 0
-        for container in containers_to_steal:
+        # Steal resources from the low-usage containers
+        shuffling_tuples = list()
+        for container in donors:
             # Ensure that this request will be successfully processed, otherwise we are 'giving' away
             # extra resources
+
+            stolen_amount = 0.7 * \
+                            (container["resources"]["cpu"]["current"] - max(container["resources"]["cpu"]["min"],
+                                                                            container["resources"]["cpu"]["usage"]))
+            shuffling_tuples.append((container, stolen_amount))
+        shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
+
+        # Give the resources to the bottlenecked containers
+        for receiver in containers_to_give:
+
+            if shuffling_tuples:
+                donor, amount_to_scale = shuffling_tuples.pop(0)
+            else:
+                MyUtils.log_info("No more donors, container {0} left out".format(receiver["name"]), self.debug)
+                continue
+
+            scalable_amount = receiver["resources"]["cpu"]["max"] - receiver["resources"]["cpu"]["current"]
+            # If this container can't be scaled anymore, skip
+            if scalable_amount == 0:
+                continue
+
+            # Trim the amount to scale if needed
+            if amount_to_scale > scalable_amount:
+                amount_to_scale = scalable_amount
+
+            # Create the pair of scaling requests
+            # TODO This should use Guardians method to generate requests
             request = dict(
                 type="request",
                 resource="cpu",
-                amount=int(-SHARE_SHUFFLING_AMOUNT),
-                structure=container["name"],
-                action="CpuRescaleDown",
-                timestamp=int(time.time())
+                amount=int(amount_to_scale),
+                structure=receiver["name"],
+                action="CpuRescaleUp",
+                timestamp=int(time.time()),
+                structure_type="container",
+                host=receiver["host"],
+                host_rescaler_ip=receiver["host_rescaler_ip"],
+                host_rescaler_port=receiver["host_rescaler_port"]
             )
-            request["host"] = container["host"]
-            request["host_rescaler_ip"] = container["host_rescaler_ip"]
-            request["host_rescaler_port"] = container["host_rescaler_port"]
             self.couchdb_handler.add_request(request)
-            amount_stolen += SHARE_SHUFFLING_AMOUNT
+            # TODO This should use Guardians method to generate requests
+            request = dict(
+                type="request",
+                resource="cpu",
+                amount=int(-amount_to_scale),
+                structure=donor["name"],
+                action="CpuRescaleDown",
+                timestamp=int(time.time()),
+                structure_type="container",
+                host=donor["host"],
+                host_rescaler_ip=donor["host_rescaler_ip"],
+                host_rescaler_port=donor["host_rescaler_port"]
+            )
+            self.couchdb_handler.add_request(request)
 
-        # Give the resources uniformely to the bottlenecked containers
-        scaling_mounts = dict()
-        for container in containers_to_give:
-            scaling_mounts[container["name"]] = 0
-        while amount_stolen > 0:
-            for container in containers_to_give:
-                if amount_stolen >= SHARE_SHUFFLING_AMOUNT:
-                    amount_to_give = SHARE_SHUFFLING_AMOUNT
-                    amount_stolen -= SHARE_SHUFFLING_AMOUNT
-                else:
-                    amount_to_give = amount_stolen
-                    amount_stolen = 0
-
-                if amount_to_give > 0:
-                    scaling_mounts[container["name"]] += amount_to_give
-
-        # Generate the rescaling requests
-        for container in containers_to_give:
-            if container["name"] in scaling_mounts:
-                amount_to_scale = scaling_mounts[container["name"]]
-                scalable_amount = container["resources"]["cpu"]["max"] - container["resources"]["cpu"]["current"]
-
-                # If this container can't be scaled anymore, skip
-                if scalable_amount == 0 or amount_to_scale == 0:
-                    continue
-
-                # Trim the amount to scale if needed
-                if amount_to_scale > scalable_amount:
-                    amount_to_scale = scalable_amount
-                    remaining_amount = amount_to_scale - scalable_amount
-
-                request = dict(
-                    type="request",
-                    resource="cpu",
-                    amount=int(amount_to_scale),
-                    structure=container["name"],
-                    action="CpuRescaleUp",
-                    timestamp=int(time.time())
-                )
-                request["host"] = container["host"]
-                request["host_rescaler_ip"] = container["host_rescaler_ip"]
-                request["host_rescaler_port"] = container["host_rescaler_port"]
-                self.couchdb_handler.add_request(request)
+            MyUtils.log_info(
+                "Resource swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]),
+                self.debug)
 
     def app_can_be_rebalanced(self, application):
-        data = {"energy":
+        try:
+            data = {"energy":
                     {"structure":
                          {"energy":
                               {"usage": application["resources"]["energy"]["usage"],
-                               "max": application["resources"]["energy"]["max"]}}
-                     },
+                               "max": application["resources"]["energy"]["max"]}}},
                 "cpu":
                     {"structure":
                          {"cpu":
                               {"usage": application["resources"]["cpu"]["usage"],
                                "min": application["resources"]["cpu"]["min"],
-                               "current": application["resources"]["cpu"]["current"]}}
-                     }
+                               "current": application["resources"]["cpu"]["current"]}}}
                 }
+        except KeyError:
+            return False
 
         # Application is underusing energy, let the Guardian deal with it
         rule_low_usage = self.couchdb_handler.get_rule("energy_exceeded_upper")
@@ -206,6 +209,7 @@ class ReBalancer:
         return True
 
     def rebalance(self, ):
+        global SHARE_SHUFFLING_AMOUNT
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
         while True:
 
@@ -219,43 +223,39 @@ class ReBalancer:
             config = service["config"]
             self.debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
             window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-            thread = None
+            SHARE_SHUFFLING_AMOUNT = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "SHARE_SHUFFLING_AMOUNT")
 
-            # Remote database operation
-            structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-            if structures:
-                # Check if rebalancing of containers is needed
-                applications = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-                for app in applications:
-                    if self.app_can_be_rebalanced(app):
-                        app_containers = list()
-                        app_containers_names = app["containers"]
-                        for container in structures:
-                            if container["name"] in app_containers_names:
-                                app_containers.append(container)
+            # Get the applications and filter out the ones that do not need any rebalancing
+            applications = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="application")
+            rebalanceable_apps = list()
+            for app in applications:
+                if self.app_can_be_rebalanced(app):
+                    rebalanceable_apps.append(app)
 
-                        MyUtils.log_info("Going to rebalance {0} now".format(app["name"]), self.debug)
-                        # Rebalance
-                        # TODO FIX only pass the application's structures, not all of them
-                        thread = Thread(target=self.rebalance_containers, args=(config, app_containers, app["name"]))
-                        thread.start()
-                    else:
-                        MyUtils.log_info("Not rebalancing now", self.debug)
+            # Get the containers and applications
+            containers = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+
+            # Sort them according to each application they belong
+            app_containers = dict()
+            for app in rebalanceable_apps:
+                app_name = app["name"]
+                app_containers_names = app["containers"]
+                app_containers[app_name] = list()
+                for container in containers:
+                    if container["name"] in app_containers_names:
+                        app_containers[app_name].append(container)
+                # Get the container usages
+                app_containers[app_name] = self.fill_containers_with_usage_info(app_containers[app_name], config)
+
+            # Rebalance applications
+            for app in rebalanceable_apps:
+                app_name = app["name"]
+                MyUtils.log_info("Going to rebalance {0} now".format(app_name), self.debug)
+                self.rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
 
             MyUtils.log_info(
                 "Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)
             time.sleep(window_difference)
-
-            if thread and thread.isAlive():
-                delay_start = time.time()
-                MyUtils.log_warning(
-                    "Previous thread didn't finish before next poll is due, with window time of " +
-                    "{0} seconds, at {1}".format(str(window_difference), MyUtils.get_time_now_string()), self.debug)
-                MyUtils.log_warning("Going to wait until thread finishes before proceeding", self.debug)
-                thread.join()
-                delay_end = time.time()
-                MyUtils.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)),
-                                    self.debug)
 
 
 def main():

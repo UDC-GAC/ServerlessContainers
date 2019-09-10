@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CONF_FOLDER=development/AutomaticRescaler/conf/metagenomics/NodeRescaler/
+CONF_FOLDER=development/ServerlessContainers/conf/metagenomics/NodeRescaler/
 
 curl -X PUT -H "Content-Type: application/json" -d @$HOME/$CONF_FOLDER/pre0.json http://host4:8000/container/pre0
 curl -X PUT -H "Content-Type: application/json" -d @$HOME/$CONF_FOLDER/pre1.json http://host4:8000/container/pre1

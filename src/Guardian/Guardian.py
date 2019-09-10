@@ -33,7 +33,8 @@ translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
                          "EVENT_TIMEOUT": 40, "DEBUG": True, "STRUCTURE_GUARDED": "container",
-                         "CPU_SHARES_PER_WATT": 8}
+                         "CPU_SHARES_PER_WATT": 8,
+                         "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -336,14 +337,16 @@ class Guardian:
         return event
 
     @staticmethod
-    def generate_request(structure_name, amount, resource, action):
+    def generate_request(structure, amount, resource, action):
         request = dict(
             type="request",
             resource=resource,
             amount=int(amount),
-            structure=structure_name,
+            structure=structure["name"],
             action=action,
-            timestamp=int(time.time()))
+            timestamp=int(time.time()),
+            structure_type=structure["subtype"]
+        )
         return request
 
     def match_rules_and_events(self, structure, rules, events, limits, usages):
@@ -403,7 +406,7 @@ class Guardian:
                     # If the remaining amount is non-zero, create the Request
                     if amount != 0:
                         action = MyUtils.generate_request_name(amount, resource_label)
-                        request = self.generate_request(structure["name"], amount, resource_label, action)
+                        request = self.generate_request(structure, amount, resource_label, action)
 
                         # For the moment, energy rescaling is uniquely mapped to cpu rescaling
                         if resource_label == "energy":
@@ -557,50 +560,6 @@ class Guardian:
                 "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
                 self.debug)
 
-    def process_fixed_resources_structure(self, resources, structure):
-        triggered_requests = list()
-        for resource in resources:
-            if not resources[resource]["guard"]:
-                continue
-
-            if "fixed" in structure["resources"][resource] and "current" in structure["resources"][resource]:
-                fixed_value = structure["resources"][resource]["fixed"]
-                current_value = structure["resources"][resource]["current"]
-                if fixed_value != current_value:
-                    amount = fixed_value - current_value
-                    action = MyUtils.generate_request_name(amount, resource)
-                    request = self.generate_request(structure["name"], amount, resource, action)
-
-                    if self.is_container(structure):
-                        request["host"] = structure["host"]
-                        request["host_rescaler_ip"] = structure["host_rescaler_ip"]
-                        request["host_rescaler_port"] = structure["host_rescaler_port"]
-
-                    # Remote database operation
-                    self.couchdb_handler.add_request(request)
-                    triggered_requests.append(request)
-            else:
-                MyUtils.log_warning(
-                    "structure: {0} has no 'current' or 'fixed' value for resource: {1}".format(
-                        structure["name"], resource), self.debug)
-
-        # DEBUG AND INFO OUTPUT
-        if self.debug:
-            self.print_structure_info(structure, {}, {}, [], triggered_requests)
-
-    def fixed_resource_amount(self, structure):
-        try:
-            # Check if structure is guarded
-            if "guard" not in structure or not structure["guard"]:
-                return
-
-            self.process_fixed_resources_structure(structure["resources"], structure)
-
-        except Exception as e:
-            MyUtils.log_error(
-                "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
-                self.debug)
-
     def guard_structures(self, config, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
@@ -618,8 +577,6 @@ class Guardian:
                     thread = Thread(target=self.serverless, args=(config, structure, rules,))
                     thread.start()
                     threads.append(thread)
-                elif structure["guard_policy"] == "fixed":
-                    self.fixed_resource_amount(structure)
                 else:
                     self.serverless(config, structure, rules)
         for process in threads:
@@ -643,13 +600,17 @@ class Guardian:
             structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "STRUCTURE_GUARDED")
             thread = None
             CPU_SHARES_PER_WATT = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "CPU_SHARES_PER_WATT")
+            GUARDIAN_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "ACTIVE")
 
-            # Remote database operation
-            structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
-            if structures:
-                thread = Thread(target=self.guard_structures, args=(config, structures,))
-                thread.start()
-
+            if GUARDIAN_IS_ACTIVATED:
+                # Remote database operation
+                structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+                if structures:
+                    thread = Thread(target=self.guard_structures, args=(config, structures,))
+                    thread.start()
+            else:
+                MyUtils.log_info(
+                    "Guardian is not activated", self.debug)
             MyUtils.log_info(
                 "Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)
             time.sleep(window_difference)

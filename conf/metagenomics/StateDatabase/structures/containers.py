@@ -19,10 +19,9 @@ base_container = dict(
 
 
 def add_containers(handler):
-    containers = [  # ("master0", "host4"), ("master1", "host4"),
-        ("pre0", "host4"), ("pre1", "host4"), ("pre2", "host4"), ("pre3", "host4"),
+    containers = [("pre0", "host4"), ("pre1", "host4"), ("pre2", "host4"), ("pre3", "host4"),
         ("comp0", "host5"), ("comp1", "host5"), ("comp2", "host5"), ("comp3", "host5"),
-        ("comp4", "host6"), ("comp5", "host6"), ("comp6", "host6"), ("comp8", "host6"),
+        ("comp4", "host6"), ("comp5", "host6"), ("comp6", "host6"), ("comp7", "host6"),
         ("comp8", "host7"), ("comp9", "host7"), ("aux0", "host7"), ("aux1", "host7")]
 
     # CREATE STRUCTURES

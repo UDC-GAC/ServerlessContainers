@@ -2,7 +2,6 @@
 import src.StateDatabase.couchdb as couchDB
 import src.StateDatabase.utils as couchdb_utils
 
-
 rebalancer = dict(
     name="rebalancer",
     type="service",
@@ -23,6 +22,7 @@ guardian = dict(
         WINDOW_TIMELAPSE=10,
         WINDOW_DELAY=10,
         EVENT_TIMEOUT=100,
+        CPU_SHARES_PER_WATT=6,
         DEBUG=True
     )
 )
@@ -79,7 +79,6 @@ sanity_checker = dict(
     )
 )
 
-
 energy_manager = dict(
     name="energy_manager",
     type="service",
@@ -89,7 +88,6 @@ energy_manager = dict(
         DEBUG=True
     )
 )
-
 
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()

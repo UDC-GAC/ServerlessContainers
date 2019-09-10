@@ -21,7 +21,7 @@ translate_map = {
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True, "ACTIVE": True}
 MAX_FAIL_NUM = 5
 debug = True
 
@@ -239,12 +239,18 @@ def persist():
         polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
-        thread = Thread(target=persist_thread, args=())
-        thread.start()
-        MyUtils.log_info("Structures snapshoted at {0}".format(MyUtils.get_time_now_string()), debug)
+        SERVICE_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "ACTIVE")
+        thread = None
+        if SERVICE_IS_ACTIVATED:
+            thread = Thread(target=persist_thread, args=())
+            thread.start()
+            MyUtils.log_info("Structures snapshoted at {0}".format(MyUtils.get_time_now_string()), debug)
+        else:
+            MyUtils.log_info("Structure snapshoter is not activated", debug)
+
         time.sleep(polling_frequency)
 
-        if thread.isAlive():
+        if thread and thread.isAlive():
             delay_start = time.time()
             MyUtils.log_warning(
                 "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}".format(

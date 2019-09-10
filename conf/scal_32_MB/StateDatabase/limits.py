@@ -16,7 +16,7 @@ base_limits = dict(
     type='limit',
     name="base_container",
     resources=dict(
-        cpu=dict(upper=500, lower=400, boundary=50),
+        cpu=dict(upper=500, lower=400, boundary=125),
         mem=dict(upper=44000, lower=40000, boundary=3072),
         disk=dict(upper=100, lower=20, boundary=10),
         net=dict(upper=100, lower=20, boundary=10),

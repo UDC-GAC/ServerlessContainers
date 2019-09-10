@@ -1,0 +1,229 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=aux0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=aux1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=pre0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=pre1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=pre2"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=pre3"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp2"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp3"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp4"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp6"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp7"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp8"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.cpu.energy",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=comp9"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    }
+  ]
+}

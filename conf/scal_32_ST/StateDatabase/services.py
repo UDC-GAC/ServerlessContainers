@@ -11,8 +11,9 @@ guardian = dict(
         STRUCTURE_GUARDED="container",
         WINDOW_TIMELAPSE=10,
         WINDOW_DELAY=10,
-        EVENT_TIMEOUT=100,
-        DEBUG=True
+        EVENT_TIMEOUT=60,
+        DEBUG=True,
+        ACTIVE=True
     )
 )
 
@@ -23,7 +24,8 @@ scaler = dict(
     config=dict(
         DEBUG=True,
         POLLING_FREQUENCY=7,
-        REQUEST_TIMEOUT=50
+        REQUEST_TIMEOUT=20,
+        CHECK_CORE_MAP=True
     )
 )
 

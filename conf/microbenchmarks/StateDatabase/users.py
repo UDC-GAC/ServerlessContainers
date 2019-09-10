@@ -17,7 +17,7 @@ if __name__ == "__main__":
             type='user',
             name="user0",
             energy=dict(
-                max=300,
+                max=1000,
                 used=0
             ),
             clusters=["app1"]

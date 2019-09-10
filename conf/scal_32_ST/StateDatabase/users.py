@@ -20,7 +20,7 @@ if __name__ == "__main__":
                 max=300,
                 used=0
             ),
-            clusters=["app1"]
+            clusters=["fixwindow_user0"]
         )
         handler.add_user(user0)
 
