@@ -7,7 +7,7 @@ rebalancer = dict(
     type="service",
     heartbeat="",
     config=dict(
-        WINDOW_TIMELAPSE=10,
+        WINDOW_TIMELAPSE=40,
         WINDOW_DELAY=10,
         DEBUG=True
     )
@@ -21,8 +21,8 @@ guardian = dict(
         STRUCTURE_GUARDED="container",
         WINDOW_TIMELAPSE=10,
         WINDOW_DELAY=10,
-        EVENT_TIMEOUT=100,
-        CPU_SHARES_PER_WATT=6,
+        EVENT_TIMEOUT=70,
+        CPU_SHARES_PER_WATT=8,
         DEBUG=True
     )
 )
@@ -53,7 +53,7 @@ structures_snapshoter = dict(
     type="service",
     heartbeat="",
     config=dict(
-        POLLING_FREQUENCY=5,
+        POLLING_FREQUENCY=7,
         PERSIST_APPS=False
     )
 )

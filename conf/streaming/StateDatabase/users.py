@@ -16,9 +16,14 @@ if __name__ == "__main__":
         user0 = dict(
             type='user',
             name="user0",
+            energy_policy="static",
             energy=dict(
                 max=300,
                 used=0
+            ),
+            cpu=dict(
+                current=0,
+                usage=0
             ),
             clusters=["kafkas_user0", "hibenches_user0", "spark_user0"]
         )
@@ -27,9 +32,14 @@ if __name__ == "__main__":
         user1 = dict(
             type='user',
             name="user1",
+            energy_policy="static",
             energy=dict(
                 max=300,
                 used=0
+            ),
+            cpu=dict(
+                current=0,
+                usage=0
             ),
             clusters=["kafkas_user1", "hibenches_user1", "spark_user1"]
         )

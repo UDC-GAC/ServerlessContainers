@@ -22,9 +22,10 @@ def add_multiple_services_as_applications(handler):
                 mem=dict(max=92160, min=8192, guard=False),
                 disk=dict(max=200, min=100, guard=False),
                 net=dict(max=200, min=100, guard=False),
-                energy=dict(max=120, min=0, shares=10, guard=True)
+                energy=dict(max=120, min=0, shares=24, guard=True)
             ),
-            containers=["kafka0", "kafka1"]
+            containers=["kafka0", "kafka1"],
+            rebalance=True
         )
         handler.add_structure(kafkas_user0)
 
@@ -39,9 +40,10 @@ def add_multiple_services_as_applications(handler):
                 mem=dict(max=92160, min=8192, guard=False),
                 disk=dict(max=200, min=100, guard=False),
                 net=dict(max=200, min=100, guard=False),
-                energy=dict(max=120, min=0, shares=10, guard=True)
+                energy=dict(max=120, min=0, shares=24, guard=True)
             ),
-            containers=["kafka2", "kafka3"]
+            containers=["kafka2", "kafka3"],
+            rebalance=True
         )
         handler.add_structure(kafkas_user1)
 
@@ -56,9 +58,10 @@ def add_multiple_services_as_applications(handler):
                 mem=dict(max=46080, min=4096, guard=False),
                 disk=dict(max=100, min=20, guard=False),
                 net=dict(max=100, min=50, guard=False),
-                energy=dict(max=120, min=0, shares=10, guard=True)
+                energy=dict(max=120, min=0, shares=24, guard=True)
             ),
-            containers=["hibench0"]
+            containers=["hibench0"],
+            rebalance=True
         )
         handler.add_structure(hibenches_user0)
 
@@ -73,9 +76,10 @@ def add_multiple_services_as_applications(handler):
                 mem=dict(max=46080, min=4096, guard=False),
                 disk=dict(max=100, min=20, guard=False),
                 net=dict(max=100, min=50, guard=False),
-                energy=dict(max=120, min=0, shares=10, guard=True)
+                energy=dict(max=120, min=0, shares=24, guard=True)
             ),
-            containers=["hibench1"]
+            containers=["hibench1"],
+            rebalance=True
         )
         handler.add_structure(hibenches_user1)
 
@@ -90,9 +94,10 @@ def add_multiple_services_as_applications(handler):
                 mem=dict(max=230400, min=20480, guard=False),
                 disk=dict(max=500, min=100, guard=False),
                 net=dict(max=500, min=100, guard=False),
-                energy=dict(max=120, min=0, shares=10, guard=True)
+                energy=dict(max=120, min=0, shares=52, guard=True)
             ),
-            containers=["slave0", "slave1", "slave2", "slave3", "slave4"]
+            containers=["slave0","slave2","slave3","slave5","slave9"],
+            rebalance=True
         )
         handler.add_structure(spark_user0)
 
@@ -107,9 +112,10 @@ def add_multiple_services_as_applications(handler):
                 mem=dict(max=230400, min=20480, guard=False),
                 disk=dict(max=500, min=100, guard=False),
                 net=dict(max=500, min=100, guard=False),
-                energy=dict(max=120, min=0, shares=10, guard=True)
+                energy=dict(max=120, min=0, shares=52, guard=True)
             ),
-            containers=["slave5", "slave6", "slave7", "slave8", "slave9"]
+            containers=["slave1","slave4","slave6","slave7","slave8"],
+            rebalance=True
         )
         handler.add_structure(spark_user1)
 

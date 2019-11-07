@@ -82,10 +82,10 @@ EnergyRescaleDown = dict(
                 1]},
             {">=": [
                 {"var": "events.scale.down"},
-                4]}
+                5]}
         ]}),
     generates="requests",
-    events_to_remove=4,
+    events_to_remove=5,
     action={"requests": ["CpuRescaleDown"]},
     amount=0,
     rescale_by="proportional",
@@ -127,13 +127,13 @@ EnergyRescaleUp = dict(
         {"and": [
             {">=": [
                 {"var": "events.scale.up"},
-                4]},
+                5]},
             {"<=": [
                 {"var": "events.scale.down"},
                 1]}
         ]}),
     generates="requests",
-    events_to_remove=4,
+    events_to_remove=5,
     action={"requests": ["CpuRescaleUp"]},
     amount=0,
     rescale_by="proportional",

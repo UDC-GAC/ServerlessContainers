@@ -15,7 +15,7 @@ cpu_usage_low = dict(
                     {"var": "cpu.structure.cpu.current"},
                     {"var": "cpu.structure.cpu.min"}]
                 },
-                50
+                25
             ]},
             {"<": [
                 {"/": [
@@ -42,7 +42,7 @@ cpu_usage_high = dict(
                     {"var": "cpu.structure.cpu.max"},
                     {"var": "cpu.structure.cpu.current"}]
                 },
-                50
+                25
             ]},
             {">": [
                 {"/": [
@@ -82,10 +82,10 @@ EnergyRescaleDown = dict(
                 1]},
             {">=": [
                 {"var": "events.scale.down"},
-                3]}
+                4]}
         ]}),
     generates="requests",
-    events_to_remove=3,
+    events_to_remove=4,
     action={"requests": ["CpuRescaleDown"]},
     amount=0,
     rescale_by="proportional",
@@ -127,13 +127,13 @@ EnergyRescaleUp = dict(
         {"and": [
             {">=": [
                 {"var": "events.scale.up"},
-                3]},
+                4]},
             {"<=": [
                 {"var": "events.scale.down"},
                 1]}
         ]}),
     generates="requests",
-    events_to_remove=3,
+    events_to_remove=4,
     action={"requests": ["CpuRescaleUp"]},
     amount=0,
     rescale_by="proportional",

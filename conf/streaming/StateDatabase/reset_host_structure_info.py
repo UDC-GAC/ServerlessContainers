@@ -4,8 +4,8 @@ import src.StateDatabase.couchdb as couchDB
 if __name__ == "__main__":
     handler = couchDB.CouchDBServer()
 
-    host8 = handler.get_structure("host8")
-    host8["resources"] = {
+    host24 = handler.get_structure("host24")
+    host24["resources"] = {
         "mem": {
             "max": 737280,
             "free": 0
@@ -26,28 +26,28 @@ if __name__ == "__main__":
                 "10": {"hibench0": 100, "free": 0},
                 "11": {"hibench0": 100, "free": 0},
 
-                "12": {"hibench1": 100, "free": 0},
-                "13": {"hibench1": 100, "free": 0},
-                "14": {"hibench1": 100, "free": 0},
-                "15": {"hibench1": 100, "free": 0},
-                "16": {"hibench1": 100, "free": 0},
-                "17": {"hibench1": 100, "free": 0},
+                "12": {"slave0": 100, "free": 0},
+                "13": {"slave0": 100, "free": 0},
+                "14": {"slave0": 100, "free": 0},
+                "15": {"slave0": 100, "free": 0},
+                "16": {"slave0": 100, "free": 0},
+                "17": {"slave0": 100, "free": 0},
 
-                "18": {"slave9": 100, "free": 0},
-                "19": {"slave9": 100, "free": 0},
-                "20": {"slave9": 100, "free": 0},
-                "21": {"slave9": 100, "free": 0},
-                "22": {"slave9": 100, "free": 0},
-                "23": {"slave9": 100, "free": 0}
+                "18": {"slave1": 100, "free": 0},
+                "19": {"slave1": 100, "free": 0},
+                "20": {"slave1": 100, "free": 0},
+                "21": {"slave1": 100, "free": 0},
+                "22": {"slave1": 100, "free": 0},
+                "23": {"slave1": 100, "free": 0}
             },
             "max": 2400,
             "free": 0
         }
     }
-    handler.update_structure(host8)
+    handler.update_structure(host24)
 
-    host9 = handler.get_structure("host9")
-    host9["resources"] = {
+    host25 = handler.get_structure("host25")
+    host25["resources"] = {
         "mem": {
             "max": 737280,
             "free": 0
@@ -61,35 +61,35 @@ if __name__ == "__main__":
                 "4": {"kafka1": 100, "free": 0},
                 "5": {"kafka1": 100, "free": 0},
 
-                "6": {"slave0": 100, "free": 0},
-                "7": {"slave0": 100, "free": 0},
-                "8": {"slave0": 100, "free": 0},
-                "9": {"slave0": 100, "free": 0},
-                "10": {"slave0": 100, "free": 0},
-                "11": {"slave0": 100, "free": 0},
+                "6": {"slave2": 100, "free": 0},
+                "7": {"slave2": 100, "free": 0},
+                "8": {"slave2": 100, "free": 0},
+                "9": {"slave2": 100, "free": 0},
+                "10": {"slave2": 100, "free": 0},
+                "11": {"slave2": 100, "free": 0},
 
-                "12": {"slave1": 100, "free": 0},
-                "13": {"slave1": 100, "free": 0},
-                "14": {"slave1": 100, "free": 0},
-                "15": {"slave1": 100, "free": 0},
-                "16": {"slave1": 100, "free": 0},
-                "17": {"slave1": 100, "free": 0},
+                "12": {"slave3": 100, "free": 0},
+                "13": {"slave3": 100, "free": 0},
+                "14": {"slave3": 100, "free": 0},
+                "15": {"slave3": 100, "free": 0},
+                "16": {"slave3": 100, "free": 0},
+                "17": {"slave3": 100, "free": 0},
 
-                "18": {"slave2": 100, "free": 0},
-                "19": {"slave2": 100, "free": 0},
-                "20": {"slave2": 100, "free": 0},
-                "21": {"slave2": 100, "free": 0},
-                "22": {"slave2": 100, "free": 0},
-                "23": {"slave2": 100, "free": 0}
+                "18": {"slave4": 100, "free": 0},
+                "19": {"slave4": 100, "free": 0},
+                "20": {"slave4": 100, "free": 0},
+                "21": {"slave4": 100, "free": 0},
+                "22": {"slave4": 100, "free": 0},
+                "23": {"slave4": 100, "free": 0}
             },
             "max": 2400,
             "free": 0
         }
     }
-    handler.update_structure(host9)
+    handler.update_structure(host25)
 
-    host10 = handler.get_structure("host10")
-    host10["resources"] = {
+    host26 = handler.get_structure("host26")
+    host26["resources"] = {
         "mem": {
             "max": 737280,
             "free": 0
@@ -103,35 +103,35 @@ if __name__ == "__main__":
                 "4": {"kafka2": 100, "free": 0},
                 "5": {"kafka2": 100, "free": 0},
 
-                "6": {"slave3": 100, "free": 0},
-                "7": {"slave3": 100, "free": 0},
-                "8": {"slave3": 100, "free": 0},
-                "9": {"slave3": 100, "free": 0},
-                "10": {"slave3": 100, "free": 0},
-                "11": {"slave3": 100, "free": 0},
+                "6": {"hibench1": 100, "free": 0},
+                "7": {"hibench1": 100, "free": 0},
+                "8": {"hibench1": 100, "free": 0},
+                "9": {"hibench1": 100, "free": 0},
+                "10": {"hibench1": 100, "free": 0},
+                "11": {"hibench1": 100, "free": 0},
 
-                "12": {"slave4": 100, "free": 0},
-                "13": {"slave4": 100, "free": 0},
-                "14": {"slave4": 100, "free": 0},
-                "15": {"slave4": 100, "free": 0},
-                "16": {"slave4": 100, "free": 0},
-                "17": {"slave4": 100, "free": 0},
+                "12": {"slave5": 100, "free": 0},
+                "13": {"slave5": 100, "free": 0},
+                "14": {"slave5": 100, "free": 0},
+                "15": {"slave5": 100, "free": 0},
+                "16": {"slave5": 100, "free": 0},
+                "17": {"slave5": 100, "free": 0},
 
-                "18": {"slave5": 100, "free": 0},
-                "19": {"slave5": 100, "free": 0},
-                "20": {"slave5": 100, "free": 0},
-                "21": {"slave5": 100, "free": 0},
-                "22": {"slave5": 100, "free": 0},
-                "23": {"slave5": 100, "free": 0}
+                "18": {"slave6": 100, "free": 0},
+                "19": {"slave6": 100, "free": 0},
+                "20": {"slave6": 100, "free": 0},
+                "21": {"slave6": 100, "free": 0},
+                "22": {"slave6": 100, "free": 0},
+                "23": {"slave6": 100, "free": 0}
             },
             "max": 2400,
             "free": 0
         }
     }
-    handler.update_structure(host10)
+    handler.update_structure(host26)
 
-    host11 = handler.get_structure("host11")
-    host11["resources"] = {
+    host27 = handler.get_structure("host27")
+    host27["resources"] = {
         "mem": {
             "max": 737280,
             "free": 0
@@ -145,31 +145,31 @@ if __name__ == "__main__":
                 "4": {"kafka3": 100, "free": 0},
                 "5": {"kafka3": 100, "free": 0},
 
-                "6": {"slave6": 100, "free": 0},
-                "7": {"slave6": 100, "free": 0},
-                "8": {"slave6": 100, "free": 0},
-                "9": {"slave6": 100, "free": 0},
-                "10": {"slave6": 100, "free": 0},
-                "11": {"slave6": 100, "free": 0},
+                "6": {"slave7": 100, "free": 0},
+                "7": {"slave7": 100, "free": 0},
+                "8": {"slave7": 100, "free": 0},
+                "9": {"slave7": 100, "free": 0},
+                "10": {"slave7": 100, "free": 0},
+                "11": {"slave7": 100, "free": 0},
 
-                "12": {"slave7": 100, "free": 0},
-                "13": {"slave7": 100, "free": 0},
-                "14": {"slave7": 100, "free": 0},
-                "15": {"slave7": 100, "free": 0},
-                "16": {"slave7": 100, "free": 0},
-                "17": {"slave7": 100, "free": 0},
+                "12": {"slave8": 100, "free": 0},
+                "13": {"slave8": 100, "free": 0},
+                "14": {"slave8": 100, "free": 0},
+                "15": {"slave8": 100, "free": 0},
+                "16": {"slave8": 100, "free": 0},
+                "17": {"slave8": 100, "free": 0},
 
-                "18": {"slave8": 100, "free": 0},
-                "19": {"slave8": 100, "free": 0},
-                "20": {"slave8": 100, "free": 0},
-                "21": {"slave8": 100, "free": 0},
-                "22": {"slave8": 100, "free": 0},
-                "23": {"slave8": 100, "free": 0}
+                "18": {"slave9": 100, "free": 0},
+                "19": {"slave9": 100, "free": 0},
+                "20": {"slave9": 100, "free": 0},
+                "21": {"slave9": 100, "free": 0},
+                "22": {"slave9": 100, "free": 0},
+                "23": {"slave9": 100, "free": 0}
             },
             "max": 2400,
             "free": 0
         }
     }
-    handler.update_structure(host11)
+    handler.update_structure(host27)
 
 

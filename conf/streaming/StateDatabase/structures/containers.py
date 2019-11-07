@@ -9,7 +9,7 @@ base_container = dict(
     name="base_container",
     guard=False,
     resources=dict(
-        cpu=dict(max=700, min=100, guard=False),
+        cpu=dict(max=600, min=100, guard=False),
         mem=dict(max=46080, min=1024, guard=False),
         disk=dict(max=100, min=20, guard=False),
         net=dict(max=200, min=100, guard=False),
@@ -19,11 +19,11 @@ base_container = dict(
 
 
 def add_containers(handler):
-    containers = [("master0", "host7"), ("master1", "host7"),
-                  ("hibench0", "host7"), ("hibench1", "host7"),("slave9", "host7"),("kafka0", "host7"),
-                  ("kafka1", "host8"), ("slave0", "host8"), ("slave1", "host8"), ("slave2", "host8"),
-                  ("kafka2", "host9"), ("slave3", "host9"), ("slave4", "host9"), ("slave5", "host9"),
-                  ("kafka3", "host10"), ("slave6", "host10"), ("slave7", "host10"), ("slave8", "host10")]
+    containers = [#("master0", "host24"), ("master1", "host24"),
+                  ("kafka0", "host24"), ("hibench0", "host24"), ("slave0", "host24"),("slave1", "host24"),
+                  ("kafka1", "host25"), ("slave2", "host25"), ("slave3", "host25"), ("slave4", "host25"),
+                  ("kafka2", "host26"), ("hibench1", "host26"), ("slave5", "host26"), ("slave6", "host26"),
+                  ("kafka3", "host27"), ("slave7", "host27"), ("slave8", "host27"), ("slave9", "host27")]
 
     # CREATE STRUCTURES
     if handler.database_exists("structures"):

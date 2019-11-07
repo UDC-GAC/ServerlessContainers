@@ -104,8 +104,6 @@ def get_host_containers(container_host_ip, container_host_port, rescaler_http_se
         return None
 
 
-
-
 # CAN'T TEST
 def get_container_resources(container, rescaler_http_session, debug):
     container_name = container["name"]
@@ -204,9 +202,18 @@ def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
         log_info("Structure : " + structure["subtype"] + " -> " + structure["name"] + " updated at time: "
-              + time.strftime("%D %H:%M:%S", time.localtime()), debug)
+                 + time.strftime("%D %H:%M:%S", time.localtime()), debug)
     except requests.exceptions.HTTPError:
         log_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
+
+
+def update_user(user, db_handler, debug, max_tries=10):
+    try:
+        db_handler.update_user(user, max_tries=max_tries)
+        log_info("User : " + user["name"] + " updated at time: " + time.strftime("%D %H:%M:%S", time.localtime()),
+                 debug)
+    except requests.exceptions.HTTPError:
+        log_error("Error updating user " + user["name"] + " " + traceback.format_exc(), debug)
 
 
 # CAN'T TEST

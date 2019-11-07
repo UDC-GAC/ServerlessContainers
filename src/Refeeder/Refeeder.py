@@ -32,6 +32,7 @@ import logging
 import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.couchdb as couchDB
 import src.StateDatabase.opentsdb as OpenTSDB
+from src.ReBalancer.Utils import get_user_apps
 
 bdwatchdog = OpenTSDB.OpenTSDBServer()
 NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
@@ -111,6 +112,32 @@ def refeed_applications(applications):
         MyUtils.update_structure(application, db_handler, debug)
 
 
+def refeed_user_used_energy(applications, users, db_handler, debug):
+    for user in users:
+        total_user = {"cpu": 0, "energy": 0}
+        total_user_current_cpu = 0
+        user_apps = get_user_apps(applications, user)
+        for app in user_apps:
+            for resource in ["energy", "cpu"]:
+                if "usage" in app["resources"][resource] and app["resources"][resource]["usage"]:
+                    total_user[resource] += app["resources"][resource]["usage"]
+                else:
+                    MyUtils.log_error("Application {0} of user {1} has no used {2} field or value".format(
+                        app["name"], user["name"], resource), debug)
+
+            if "current" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
+                total_user_current_cpu += app["resources"][resource]["current"]
+            else:
+                MyUtils.log_error("Application {0} of user {1} has no current cpu field or value".format(
+                    app["name"], user["name"]), debug)
+
+        user["energy"]["used"] = total_user["energy"]
+        user["cpu"]["usage"] = total_user["cpu"]
+        user["cpu"]["current"] = total_user_current_cpu
+        db_handler.update_user(user)
+        MyUtils.log_info("Updated energy consumed by user {0}".format(user["name"]), debug)
+
+
 def refeed_thread():
     # Process and measure time
     epoch_start = time.time()
@@ -118,6 +145,10 @@ def refeed_thread():
     applications = MyUtils.get_structures(db_handler, debug, subtype="application")
     if applications:
         refeed_applications(applications)
+
+    users = db_handler.get_users()
+    if users:
+        refeed_user_used_energy(applications, users, db_handler, debug)
 
     epoch_end = time.time()
     processing_time = epoch_end - epoch_start

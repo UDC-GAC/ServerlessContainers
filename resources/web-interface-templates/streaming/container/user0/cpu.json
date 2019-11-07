@@ -1,0 +1,222 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=hibench0"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=hibench0"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=hibench0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },
+    {
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=kafka0"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=kafka0"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=kafka0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=kafka1"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=kafka1"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=kafka1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave0"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave0"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=slave0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave2"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave2"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=slave2"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave3"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave3"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=slave3"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave5"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave5"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=slave5"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave9"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=slave9"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=slave9"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    }
+  ]
+}

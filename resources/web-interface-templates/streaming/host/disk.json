@@ -1,0 +1,65 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host24",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host25",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host26",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "sys.disk.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=host27",
+            "disk=sd*"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 100
+      }
+    }
+  ]
+}

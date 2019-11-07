@@ -12,7 +12,7 @@ base_host = dict(
 
 
 def add_hosts(handler):
-    hosts = ["host7", "host8", "host9", "host10"]
+    hosts = ["host24", "host25", "host26", "host27"]
 
     # CREATE STRUCTURES
     if handler.database_exists("structures"):

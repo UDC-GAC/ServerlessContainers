@@ -297,7 +297,7 @@ class CouchDBServer:
     def update_rule(self, rule):
         return self.__resilient_update_doc(self.__rules_db_name, rule)
 
-    # PROFILES #
+    # USERS #
     def add_user(self, user):
         return self.__add_doc(self.__users_db_name, user)
 
@@ -307,8 +307,8 @@ class CouchDBServer:
     def get_user(self, user_name):
         return self.__find_document_by_name(self.__users_db_name, user_name)
 
-    def update_user(self, user):
-        return self.__resilient_update_doc(self.__users_db_name, user)
+    def update_user(self, user, max_tries=10):
+        return self.__resilient_update_doc(self.__users_db_name, user, max_tries=max_tries)
 
     # SERVICES #
     def get_services(self):

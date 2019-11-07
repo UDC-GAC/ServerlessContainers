@@ -137,13 +137,16 @@ def set_service_value(service_name, key):
     put_done = False
     tries = 0
     value = request.json["value"]
-    #TODO This should do properly, with a map of values per service that should be integer, string or boolean
+    # TODO This should do properly, with a map of values per service that should be integer, string or boolean
     if value == "true" or value == "false":
         value = value == "true"
     elif value == "container" or value == "application":
         pass
     else:
-        value = int(value)
+        if 0 < value < 1:
+            value = float(value)
+        else:
+            value = int(value)
 
     while not put_done:
         tries += 1

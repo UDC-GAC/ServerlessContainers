@@ -6,20 +6,20 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "structure=aux_user0"
+            "structure=hibenches_user0"
           ]
         },
         {
           "metric": "structure.cpu.usage",
           "aggregator": "zimsum",
           "tags": [
-            "structure=aux_user0"
+            "structure=hibenches_user0"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 1600
+        "ymax": 700
       }
     },
     {
@@ -28,27 +28,20 @@
           "metric": "structure.energy.max",
           "aggregator": "zimsum",
           "tags": [
-            "structure=aux_user0"
-          ]
-        },
-        {
-          "metric": "structure.energy.min",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=aux_user0"
+            "structure=hibenches_user0"
           ]
         },
         {
           "metric": "structure.energy.usage",
           "aggregator": "zimsum",
           "tags": [
-            "structure=aux_user0"
+            "structure=hibenches_user0"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 200
+        "ymax": 150
       }
     },{
       "metrics": [
@@ -56,20 +49,20 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "structure=pre_user0"
+            "structure=kafkas_user0"
           ]
         },
         {
           "metric": "structure.cpu.usage",
           "aggregator": "zimsum",
           "tags": [
-            "structure=pre_user0"
+            "structure=kafkas_user0"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 3500
+        "ymax": 1400
       }
     },{
       "metrics": [
@@ -77,27 +70,20 @@
           "metric": "structure.energy.max",
           "aggregator": "zimsum",
           "tags": [
-            "structure=pre_user0"
-          ]
-        },
-        {
-          "metric": "structure.energy.min",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=pre_user0"
+            "structure=kafkas_user0"
           ]
         },
         {
           "metric": "structure.energy.usage",
           "aggregator": "zimsum",
           "tags": [
-            "structure=pre_user0"
+            "structure=kafkas_user0"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 300
+        "ymax": 150
       }
     },{
       "metrics": [
@@ -105,20 +91,20 @@
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
-            "structure=comp_user0"
+            "structure=spark_user0"
           ]
         },
         {
           "metric": "structure.cpu.usage",
           "aggregator": "zimsum",
           "tags": [
-            "structure=comp_user0"
+            "structure=spark_user0"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 8000
+        "ymax": 3300
       }
     },{
       "metrics": [
@@ -126,27 +112,20 @@
           "metric": "structure.energy.max",
           "aggregator": "zimsum",
           "tags": [
-            "structure=comp_user0"
-          ]
-        },
-        {
-          "metric": "structure.energy.min",
-          "aggregator": "zimsum",
-          "tags": [
-            "structure=comp_user0"
+            "structure=spark_user0"
           ]
         },
         {
           "metric": "structure.energy.usage",
           "aggregator": "zimsum",
           "tags": [
-            "structure=comp_user0"
+            "structure=spark_user0"
           ]
         }
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 600
+        "ymax": 500
       }
     }
   ]

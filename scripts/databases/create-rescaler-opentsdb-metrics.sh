@@ -55,3 +55,8 @@
     ./build/tsdb mkmetric conf.scaler.polling_frequency
 
 
+# USER
+    ./build/tsdb mkmetric user.energy.used
+    ./build/tsdb mkmetric user.energy.max
+    ./build/tsdb mkmetric user.cpu.current
+    ./build/tsdb mkmetric user.cpu.usage

@@ -600,7 +600,7 @@ def single_container_rescale(request, app_containers, resource_usage_cache):
                 # If scaling down, look for containers with usages far from the limit (underuse)
                 best_fit_container = highest_current_to_usage_margin(container, best_fit_container, resource)
             else:
-                # If scaling down, look for containers with usages close to the limit (bottleneck)
+                # If scaling up, look for containers with usages close to the limit (bottleneck)
                 best_fit_container = lowest_current_to_usage_margin(container, best_fit_container, resource)
 
         # Generate the new request

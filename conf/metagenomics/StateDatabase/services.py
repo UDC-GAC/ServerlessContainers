@@ -78,15 +78,15 @@ sanity_checker = dict(
     )
 )
 
-energy_manager = dict(
-    name="energy_manager",
-    type="service",
-    heartbeat="",
-    config=dict(
-        POLLING_FREQUENCY=10,
-        DEBUG=True
-    )
-)
+# energy_manager = dict(
+#     name="energy_manager",
+#     type="service",
+#     heartbeat="",
+#     config=dict(
+#         POLLING_FREQUENCY=10,
+#         DEBUG=True
+#     )
+# )
 
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
@@ -104,4 +104,3 @@ if __name__ == "__main__":
         handler.add_service(structures_snapshoter)
         handler.add_service(refeeder)
         handler.add_service(sanity_checker)
-        handler.add_service(energy_manager)

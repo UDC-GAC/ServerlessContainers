@@ -86,6 +86,30 @@ def translate_structure_doc_to_timeseries(doc):
         raise
 
 
+def get_users():
+    docs = list()
+    # Remote database operation
+    for user in db_handler.get_users():
+        timestamp = int(time.time())
+        timeseries = dict(metric="user.energy.used", value=user["energy"]["used"],
+                          timestamp=timestamp,
+                          tags={"user": user["name"]})
+        docs.append(timeseries)
+        timeseries = dict(metric="user.energy.max", value=user["energy"]["max"],
+                          timestamp=timestamp,
+                          tags={"user": user["name"]})
+        docs.append(timeseries)
+        timeseries = dict(metric="user.cpu.usage", value=user["cpu"]["usage"],
+                          timestamp=timestamp,
+                          tags={"user": user["name"]})
+        docs.append(timeseries)
+        timeseries = dict(metric="user.cpu.current", value=user["cpu"]["current"],
+                          timestamp=timestamp,
+                          tags={"user": user["name"]})
+        docs.append(timeseries)
+    return docs
+
+
 def get_limits():
     docs = list()
     # Remote database operation
@@ -123,17 +147,30 @@ def get_configs():
 
 
 # TODO These methods could be better implemented through function passing
+def persist_users():
+    t0 = time.time()
+    docs = list()
+    try:
+        docs += get_users()
+    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
+        # An error might have been thrown because database was recently updated or created
+        MyUtils.log_warning("Couldn't retrieve user info, error {0}.".format(str(e)), debug)
+    t1 = time.time()
+    MyUtils.log_info("It took {0} seconds to get the user".format(str("%.2f" % (t1 - t0))), debug)
+    send_data(docs)
+
+
 def persist_limits():
     t0 = time.time()
     docs = list()
     try:
         docs += get_limits()
-    except (requests.exceptions.HTTPError, KeyError, ValueError):
+    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve limits info.", debug)
+        MyUtils.log_warning("Couldn't retrieve limits info, error {0}.".format(str(e)), debug)
     t1 = time.time()
     MyUtils.log_info("It took {0} seconds to get the limits".format(str("%.2f" % (t1 - t0))), debug)
-    send_data(docs, "limits")
+    send_data(docs)
 
 
 def persist_structures():
@@ -141,12 +178,12 @@ def persist_structures():
     docs = list()
     try:
         docs += get_structures()
-    except (requests.exceptions.HTTPError, KeyError, ValueError):
+    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve structure info.", debug)
+        MyUtils.log_warning("Couldn't retrieve structure info, error {0}.".format(str(e)), debug)
     t1 = time.time()
     MyUtils.log_info("It took {0} seconds to get the structures".format(str("%.2f" % (t1 - t0))), debug)
-    send_data(docs, "structures")
+    send_data(docs)
 
 
 def persist_config():
@@ -159,13 +196,12 @@ def persist_config():
         MyUtils.log_warning("Couldn't retrieve config info.", debug)
     t1 = time.time()
     MyUtils.log_info("It took {0} seconds to get the config documents".format(str("%.2f" % (t1 - t0))), debug)
-    send_data(docs, "config")
+    send_data(docs)
 
 
-def send_data(docs, doc_type):
+def send_data(docs):
     if docs:
         # Remote database operation
-        t0 = time.time()
         success, info = opentsdb_handler.send_json_documents(docs)
         if not success:
             MyUtils.log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])),
@@ -174,9 +210,6 @@ def send_data(docs, doc_type):
             MyUtils.log_info(
                 "Post was done at: {0} with {1} documents".format(time.strftime("%D %H:%M:%S", time.localtime()),
                                                                   str(len(docs))), debug)
-            t1 = time.time()
-            #MyUtils.log_info("It took {0} seconds to send all the {1} documents".format(
-            #    str("%.2f" % (t1 - t0)), doc_type), debug)
     else:
         MyUtils.log_warning("Couldn't retrieve any info.", debug)
 
@@ -186,7 +219,6 @@ def persist():
     fail_count = 0
     global debug
     while True:
-
         # Get service info
         # Remote database operation
         service = MyUtils.get_service(db_handler, SERVICE_NAME)
@@ -200,19 +232,30 @@ def persist():
         polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
         debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
-        threads = list()
-        t = Thread(target=persist_limits, args=())
-        t.start()
-        threads.append(t)
-        t = Thread(target=persist_structures, args=())
-        t.start()
-        threads.append(t)
-        t = Thread(target=persist_config, args=())
-        t.start()
-        threads.append(t)
+        # THREADED
+        # threads = list()
+        # t = Thread(target=persist_limits, args=())
+        # t.start()
+        # threads.append(t)
+        # t = Thread(target=persist_structures, args=())
+        # t.start()
+        # threads.append(t)
+        # t = Thread(target=persist_config, args=())
+        # t.start()
+        # threads.append(t)
+        # t = Thread(target=persist_users, args=())
+        # t.start()
+        # threads.append(t)
+        # for t in threads:
+        #    t.join()
+        # THREADED
 
-        for t in threads:
-            t.join()
+        # UNTHREADED
+        persist_limits()
+        persist_structures()
+        persist_config()
+        persist_users()
+        # UNTHREADED
 
         MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)

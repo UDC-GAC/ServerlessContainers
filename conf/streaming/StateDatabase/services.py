@@ -8,9 +8,12 @@ rebalancer = dict(
     type="service",
     heartbeat="",
     config=dict(
-        WINDOW_TIMELAPSE=10,
-        WINDOW_DELAY=10,
-        DEBUG=True
+        WINDOW_TIMELAPSE=30,
+        WINDOW_DELAY=30,
+        DEBUG=True,
+        REBALANCE_USERS=True,
+        ENERGY_STOLEN_PERCENTAGE=0.40,
+        ENERGY_DIFF_PERCENTAGE=0.40
     )
 )
 
@@ -80,15 +83,15 @@ sanity_checker = dict(
 )
 
 
-energy_manager = dict(
-    name="energy_manager",
-    type="service",
-    heartbeat="",
-    config=dict(
-        POLLING_FREQUENCY=10,
-        DEBUG=True
-    )
-)
+# energy_manager = dict(
+#     name="energy_manager",
+#     type="service",
+#     heartbeat="",
+#     config=dict(
+#         POLLING_FREQUENCY=10,
+#         DEBUG=True
+#     )
+# )
 
 
 if __name__ == "__main__":
@@ -107,4 +110,3 @@ if __name__ == "__main__":
         handler.add_service(structures_snapshoter)
         handler.add_service(refeeder)
         handler.add_service(sanity_checker)
-        handler.add_service(energy_manager)
