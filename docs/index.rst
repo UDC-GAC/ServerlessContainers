@@ -7,10 +7,13 @@ Welcome to ServerlessContainers's documentation!
 ================================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
-
+Guardian
+===================
+.. automodule:: src.Guardian.Guardian
+   :members:
 
 Indices and tables
 ==================
