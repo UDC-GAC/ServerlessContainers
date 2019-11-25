@@ -114,6 +114,10 @@ def refeed_applications(applications):
 
 def refeed_user_used_energy(applications, users, db_handler, debug):
     for user in users:
+        if "cpu" not in user:
+            user["cpu"] = {}
+        if "energy" not in user:
+            user["energy"] = {}
         total_user = {"cpu": 0, "energy": 0}
         total_user_current_cpu = 0
         user_apps = get_user_apps(applications, user)

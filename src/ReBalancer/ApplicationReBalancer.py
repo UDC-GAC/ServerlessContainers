@@ -121,7 +121,7 @@ class ApplicationRebalancer:
                 balancing_policy = "static"
                 MyUtils.log_info(
                     "Energy balancing policy unset for user {0}, defaulting to 'static'".format(user["name"]),
-                                                                                                self.__debug)
+                    self.__debug)
             else:
                 balancing_policy = user["energy_policy"]
 
