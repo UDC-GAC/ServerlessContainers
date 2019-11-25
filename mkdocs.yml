@@ -1,0 +1,7 @@
+site_name: Serverless Containers documentation
+nav:
+    - Home: index.md
+    - About: about.md
+
+theme: readthedocs
+
