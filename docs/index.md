@@ -1,8 +1,10 @@
 # Serverless Containers documentation
 
+![Logo](img/logo8.png){: style="height:150px;width:100px;"}
+
 The Serverless Containers framewowork has been developed at Univerisade da Coruña, in Spain, as part of a PhD thesis from the candidate [Jonatan Enes](http://jonatanenes.com/).
 
-This framework is able to dynamically scale the container's resources (e.g., CPU, Memory, disk and network) in order to adapt them to the real usage, at any moment and in real-time.
+This framework is able to **dynamically scale the container's resources (_e.g., CPU, Memory, disk and network_) in order to adapt them to the real usage**, at any moment and in real-time.
 
 In this page all the documentation is presented for the several microservices that compose the framework.
 
@@ -10,21 +12,13 @@ In this page all the documentation is presented for the several microservices th
 * In order to see data from real experiments where this tool was used, you can visit [this demo](http://bdwatchdog.dec.udc.es/TimeseriesViewer_DEMO/).
 * For the source code you can visit its [GitHub](https://github.com/JonatanEnes/ServerlessContainers).
 
-## Architecture and microservices
-
-![Architecture](img/architecture_diagram.png)
-
-![ActiveServices](img/active_services.png)
-
-![PassiveServices](img/passive_services.png)
-
-![AbstractDiagram](img/abstract_diagram.png)
-
 ## Documentation layout
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
-   
+The documentation has been structured as following:
+
+1. [Architecture](architecture.md): Where the architecture and design used is briefly described so as to better understand the role of each of the microservices
+
+2. [Usage](usage.md): In this section it is described how to deploy the services as well as the framework overall. Some guidelines are also provided.
+
+3. [Source Code](code/src/index.html): This 
 

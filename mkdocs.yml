@@ -1,7 +1,11 @@
 site_name: Serverless Containers documentation
 nav:
     - Home: index.md
+    - Architecture: architecture.md
+    - Usage: usage.md
     - About: about.md
 
 theme: readthedocs
 
+markdown_extensions:
+  - attr_list

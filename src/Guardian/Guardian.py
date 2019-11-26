@@ -34,6 +34,8 @@ import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
+GUARDABLE_RESOURCES = ['cpu', 'mem', 'energy']
+
 BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
 BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage', 'structure.energy.usage']
 GUARDIAN_CONTAINER_METRICS = {
@@ -59,44 +61,76 @@ CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
-MAX_PERCENTAGE_REDUCTION_ALLOWED = 50
-MAX_ALLOWED_DIFFERENCE_CURRENT_TO_UPPER = 1
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
 CPU_SHARES_PER_WATT = 5  # 7  # How many cpu shares to rescale per watt
 
 
 class Guardian:
-    """ Guardian class that implements all the logic for this service"""
+    """
+    Guardian class that implements the logic for this microservice. The Guardian takes care of matching the resource
+    time series with a subset of rules to generate Events and then, matches the event against another subset of rules
+    to generate scaling Requests.
+
+    For more information you can visit: https://serverlesscontainers.readthedocs.io/en/latest/#architecture-and-microservices
+    """
 
     def __init__(self):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.guardable_resources = ['cpu', 'mem', 'energy']
+        self.guardable_resources = GUARDABLE_RESOURCES
         self.debug = True
 
     @staticmethod
     def check_unset_values(value, label, resource):
+        """Check if a value has the N/A value and, if that is the case, raise an informative exception
+
+        Args:
+            value (integer): The value to be inspected
+            label (string): Resource label name (e.g., upper limit), used for the exception string creation
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns: None
+
+        Raises: Exception if value is N/A
+        """
         if value == NOT_AVAILABLE_STRING:
             raise ValueError(
                 "value for '{0}' in resource '{1}' is not set or is not available.".format(label, resource))
 
     @staticmethod
     def check_invalid_values(value1, label1, value2, label2, resource="n/a"):
+        """ Check that two values have properly values set with the policy value1 < value2, otherwise raise ValueError
+
+        Args:
+            value1 (integer): First value
+            label1 (string): First resource label name (e.g., upper limit), used for the exception string creation
+            value2 (integer): Second value
+            label2 (string): Second resource label name (e.g., lower limit), used for the exception string creation
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns: None
+
+        Raises: ValueError if value1 > value2
+        """
         if value1 > value2:
             raise ValueError("in resources: {0} value for '{1}': {2} is greater than value for '{3}': {4}".format(
                 resource, label1, str(value1), label2, str(value2)))
 
     @staticmethod
     def try_get_value(d, key):
-        """
-        Parameters:
-            d : dict -> A dictionary with strings as keys
-            key : string -> A string used as key for a dictionary of integers
+        """Get the value stored in the dictionary or return a N/A string value if:
+
+        * it is not in it
+        * it is not an valid integer
+
+        Args:
+            d (dict): A dictionary storing values
+            key (string): A string key
 
         Returns:
-            The value stored in the dictionary or a specific value if it is not in it or if it is not an valid integer
+            (integer/string) int-mapped value stored in dict
         """
         try:
             return int(d[key])
@@ -113,14 +147,19 @@ class Guardian:
 
     @staticmethod
     def sort_events(structure_events, event_timeout):
-        """
-        Parameters:
-            structure_events : list -> A list of the events triggered in the past for a specific structure
-            event_timeout : integer -> A timeout in seconds
+        """Sorts the events according to a simple policy regarding the time window of _[now - timeout <----> now]_:
 
-        Returns:
-            A tuple of lists of events that either fall in the time window between
-            (now - timeout) and (now), the valid events, or outside of it, the invalid ones.
+        * The event is **inside** the TW -> valid event
+        * The event is **outside** the TW -> invalid event
+
+        The now time reference is taken inseide this function
+
+        Args:
+            structure_events (list): A list of the events triggered in the past for a specific structure
+            event_timeout (integer): A timeout in seconds
+
+        Returns (tuple[list,list]): A tuple of lists of events, first the valid and then the invalid.
+
         """
         valid, invalid = list(), list()
         for event in structure_events:
@@ -132,12 +171,16 @@ class Guardian:
 
     @staticmethod
     def reduce_structure_events(structure_events):
-        """
-        Parameters:
-            structure_events : list ->
+        """Reduces a list of events that have been generated for a single Structure into one single event. Considering
+        that each event is a dictionary with an integer value for either a 'down' or 'up' event, all of the dictionaries
+        can be reduced to one that can have two values for either 'up' and 'down' events, considering that the Structure
+        resource may have a high hysteresis.
 
-        Returns:
-            A dictionary with the added up events in a signle dictionary
+        Args:
+            structure_events (list): A list of events for a single Structure
+
+        Returns (dict): A dictionary with the added up events in a signle dictionary
+
         """
         events_reduced = {"action": {}}
         for event in structure_events:
@@ -150,15 +193,17 @@ class Guardian:
         return events_reduced["action"]
 
     def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
-        """
-        Parameters:
-            resource_label : string -> the name of the resource to access the dictionaries
-            resources_dict : dict -> a dictionary with the metrics (e.g., max, min) of the resources
-            limits_dict : dict -> a dictionary with the limits (e.g., lower, upper) of the resources
-            usages_dict : dict -> a dictionary with the usages of the resources
+        """Produces a string to summarize the current state of a resource with all of its information and
+        the following format: _[max, current, upper limit, usage, lower limit, min]_
 
-        Returns:
-            A string that summarizes the state of a resource in terms of its metrics
+        Args:
+            resource_label (string): The resource name label, used to create the string and to access the dictionaries
+            resources_dict (dict): a dictionary with the metrics (e.g., max, min) of the resources
+            limits_dict (dict): a dictionary with the limits (e.g., lower, upper) of the resources
+            usages_dict (dict): a dictionary with the usages of the resources
+
+        Returns: A string
+
         """
         metrics = resources_dict[resource_label]
         limits = limits_dict[resource_label]
@@ -182,49 +227,46 @@ class Guardian:
 
     @staticmethod
     def adjust_amount(amount, structure_resources, structure_limits):
-        """
-        Parameters:
-            * **amount** : *integer* -> a number representing the amount to reduce or increase from the current value
-            * **structure_resources** : *dict* -> asdf
-            * **structure_limits** : *dict* -> asdf
+        """Pre-check and, if needed, adjust the scaled amount with the policy:
+
+        * If lower limit < min value -> Amount to reduce too large, adjust it so that the lower limit is set to the
+        minimum
+        * If new applied value > max value -> Amount to increase too large, adjust it so that the current value is set
+        to the maximum
+
+        Args:
+            amount (integer): A number representing the amount to reduce or increase from the current value
+            structure_resources (dict): Dictionary with the structure resource control values (min,current,max)
+            structure_limits (dict): Dictionary with the structure resource limit values (lower,upper)
 
         Returns:
-            The amount adjusted (trimmed) in case it would exceed any limit
+            (integer) The amount adjusted (trimmed) in case it would exceed any limit
         """
         expected_value = structure_resources["current"] + amount
         lower_limit = structure_limits["lower"] + amount
-        max_limit = structure_resources["max"]
-        min_limit = structure_resources["min"]
+        min_limit, max_limit = structure_resources["min"], structure_resources["max"]
 
         if lower_limit < min_limit:
-            # The amount to reduce is too big, adjust it so that the lower limit is set to the minimum
             amount += (min_limit - lower_limit)
         elif expected_value > max_limit:
-            # The amount to increase is too big, adjust it so that the current limit is set to the maximum
             amount -= (expected_value - max_limit)
 
         return amount
 
     @staticmethod
-    def get_amount_from_percentage_reduction(structure, usages, resource, percentage_reduction):
-        current_resource_limit = structure["resources"][resource]["current"]
-        current_resource_usage = usages[translator_dict[resource]]
-        difference = current_resource_limit - current_resource_usage
-        if percentage_reduction > MAX_PERCENTAGE_REDUCTION_ALLOWED:
-            percentage_reduction = MAX_PERCENTAGE_REDUCTION_ALLOWED
-        amount = int(-1 * (percentage_reduction * difference) / 100)
-        return amount
-
-    @staticmethod
     def get_amount_from_fit_reduction(current_resource_limit, boundary, current_resource_usage):
-        """
-        Parameters:
-            current_resource_limit : integer ->
-            boundary : integer ->
-            current_resource_usage : integer ->
+        """Get an amount that will be reduced from the current resource limit using a policy of *fit to the usage*.
+        With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
+        to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
+        find a scale down amount that makes the usage value stay between the _now new_ lower and upper limits.
 
-        Returns:
-            The amount to be reduced from the fit to usage policy.
+        Args:
+            current_resource_limit (integer): The current applied limit for this resource
+            boundary (integer): The boundary used between limits
+            current_resource_usage (integer): The usage value for this resource
+
+        Returns: The amount to be reduced using the fit to usage policy.
+
         """
         upper_to_lower_window = boundary
         current_to_upper_window = boundary
@@ -238,20 +280,37 @@ class Guardian:
 
     @staticmethod
     def get_amount_from_proportional_energy_rescaling(structure, resource):
-        global CPU_SHARES_PER_WATT
+        """Get an amount that will be reduced from the current resource limit using a policy of *proportional
+        energy-based CPU scaling*.
+        With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+        get closer to a limit.
+
+        *THIS FUNCTIONS IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            resource (string): The resource name, used for indexing puroposes
+
+        Returns: The amount to be reduced using the fit to usage policy.
+
+        """
         max_resource_limit = structure["resources"][resource]["max"]
         current_resource_limit = structure["resources"][resource]["usage"]
         difference = max_resource_limit - current_resource_limit
-        energy_aplification = CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
-        return int(difference * energy_aplification)
+        energy_amplification = difference * CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
+        return int(energy_amplification)
 
     def get_container_energy_str(self, resources_dict):
-        """
-        Parameters:
-            resources_dict : dict -> A dictionary with all the resources' information
+        """Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
+        Memory.
 
-        Returns:
-            A string that summarizes the state of the enery resource
+        *THIS FUNCTIONS IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            resources_dict (dict): A dictionary with all the resources' information, including energy
+
+        Returns (string): A string that summarizes the state of the energy resource
+
         """
         energy_dict = resources_dict["energy"]
         string = list()
@@ -263,7 +322,7 @@ class Guardian:
         for resource in resources_to_adjust:
             errors = True
             while errors:
-                # todo here the service may enter on an infinite loop
+                # TODO here the service may enter on an infinite loop
                 try:
                     self.check_invalid_container_state(resources, limits, resource)
                     errors = False
@@ -398,9 +457,6 @@ class Guardian:
                     # Get the amount to be applied from the policy set
                     if rule["rescale_by"] == "amount":
                         amount = rule["amount"]
-                    elif rule["rescale_by"] == "percentage_reduction":
-                        amount = self.get_amount_from_percentage_reduction(
-                            structure, usages, resource_label, int(rule["percentage_reduction"]))
                     elif rule["rescale_by"] == "fit_to_usage":
                         current_resource_limit = structure["resources"][resource_label]["current"]
                         boundary = limits[resource_label]["boundary"]

@@ -30,7 +30,9 @@ from flask import jsonify
 from flask import request
 from werkzeug.serving import WSGIRequestHandler
 
-import src.NodeRescaler.lxd_node_resource_manager as node_resource_manager
+from src.NodeRescaler.lxd_node_resource_manager import LXDContainerManager
+
+node_resource_manager = None
 
 app = Flask(__name__)
 
@@ -83,5 +85,6 @@ def heartbeat():
 
 
 if __name__ == "__main__":
+    node_resource_manager = LXDContainerManager()
     WSGIRequestHandler.protocol_version = "HTTP/1.1"
     app.run(host='0.0.0.0', port=8000)
