@@ -1,6 +1,6 @@
 # Serverless Containers documentation
 
-![Logo](img/logo8.png){: style="height:150px;width:100px;"}
+![Logo](img/logo.png){: style="height:150px;width:100px;"} 
 
 The Serverless Containers framewowork has been developed at Univerisade da Coruña, in Spain, as part of a PhD thesis from the candidate [Jonatan Enes](http://jonatanenes.com/).
 

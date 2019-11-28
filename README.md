@@ -6,4 +6,4 @@ limits through an REST API. More specifically, LXD containers are used.
 
 
 For more information on this project's features you can visit this 
-[webpage](http://bdwatchdog.dec.udc.es/autoscaling/index.html)
+[webpage](http://bdwatchdog.dec.udc.es/serverless/index.html)

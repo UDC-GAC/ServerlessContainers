@@ -1,1 +1,1 @@
-pdoc3 --html --force ../src -o code
+pdoc3 --html --template-dir code/templates/ --force ../src -o code 
