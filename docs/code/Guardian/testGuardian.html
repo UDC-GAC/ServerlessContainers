@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.7.2" />
-<title>src.Guardian.testGuardian API documentation</title>
+<title>Guardian.testGuardian API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
@@ -17,7 +17,7 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>src.Guardian.testGuardian</code></h1>
+<h1 class="title">Module <code>Guardian.testGuardian</code></h1>
 </header>
 <section id="section-intro">
 <details class="source">
@@ -714,7 +714,7 @@ if __name__ == &#39;__main__&#39;:
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="src.Guardian.testGuardian.GuardianServelerssIntegrationTest"><code class="flex name class">
+<dt id="Guardian.testGuardian.GuardianServelerssIntegrationTest"><code class="flex name class">
 <span>class <span class="ident">GuardianServelerssIntegrationTest</span></span>
 <span>(</span><span>methodName='runTest')</span>
 </code></dt>
@@ -955,7 +955,7 @@ not have a method with the specified name.</p></section>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="src.Guardian.testGuardian.GuardianServelerssIntegrationTest.setUp"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianServelerssIntegrationTest.setUp"><code class="name flex">
 <span>def <span class="ident">setUp</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -988,7 +988,7 @@ not have a method with the specified name.</p></section>
     self.guardian.opentsdb_handler = self.opentsdb</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianServelerssIntegrationTest.tearDown"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianServelerssIntegrationTest.tearDown"><code class="name flex">
 <span>def <span class="ident">tearDown</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1008,7 +1008,7 @@ not have a method with the specified name.</p></section>
     self.opentsdb.close_connection()</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianServelerssIntegrationTest.test_serverless"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianServelerssIntegrationTest.test_serverless"><code class="name flex">
 <span>def <span class="ident">test_serverless</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1183,7 +1183,7 @@ not have a method with the specified name.</p></section>
 </dd>
 </dl>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest"><code class="flex name class">
+<dt id="Guardian.testGuardian.GuardianTest"><code class="flex name class">
 <span>class <span class="ident">GuardianTest</span></span>
 <span>(</span><span>methodName='runTest')</span>
 </code></dt>
@@ -1663,7 +1663,7 @@ not have a method with the specified name.</p></section>
 </ul>
 <h3>Methods</h3>
 <dl>
-<dt id="src.Guardian.testGuardian.GuardianTest.setUp"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.setUp"><code class="name flex">
 <span>def <span class="ident">setUp</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1676,7 +1676,7 @@ not have a method with the specified name.</p></section>
     self.guardian = Guardian.Guardian()</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_adjust_if_invalid_amount"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_adjust_if_invalid_amount"><code class="name flex">
 <span>def <span class="ident">test_adjust_if_invalid_amount</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1719,7 +1719,7 @@ not have a method with the specified name.</p></section>
                          second=self.guardian.adjust_amount(10, structure_resources, structure_limits))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_check_invalid_values"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_check_invalid_values"><code class="name flex">
 <span>def <span class="ident">test_check_invalid_values</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1738,7 +1738,7 @@ not have a method with the specified name.</p></section>
     TestCase.assertEqual(self, first=None, second=self.guardian.check_invalid_values(10, &#34;label1&#34;, 20, &#34;label2&#34;))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_check_unset_values"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_check_unset_values"><code class="name flex">
 <span>def <span class="ident">test_check_unset_values</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1756,7 +1756,7 @@ not have a method with the specified name.</p></section>
         self.guardian.check_unset_values(1, &#34;min&#34;, &#34;cpu&#34;)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_container_energy_str"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_container_energy_str"><code class="name flex">
 <span>def <span class="ident">test_container_energy_str</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1773,7 +1773,7 @@ not have a method with the specified name.</p></section>
     TestCase.assertEqual(self, first=&#34;50,20,0&#34;, second=self.guardian.get_container_energy_str(resources_dict))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_correct_container_state"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_correct_container_state"><code class="name flex">
 <span>def <span class="ident">test_correct_container_state</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1825,7 +1825,7 @@ not have a method with the specified name.</p></section>
                              second=self.guardian.adjust_container_state(resources, limits, [&#34;cpu&#34;, &#34;mem&#34;]))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_filter_old_events"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_filter_old_events"><code class="name flex">
 <span>def <span class="ident">test_filter_old_events</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1850,7 +1850,7 @@ not have a method with the specified name.</p></section>
     TestCase.assertEqual(self, first=5, second=len(valid))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_generate_event_name"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_generate_event_name"><code class="name flex">
 <span>def <span class="ident">test_generate_event_name</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1883,7 +1883,7 @@ not have a method with the specified name.</p></section>
         generate_event_name(scale_invalid2, &#34;cpu&#34;)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction"><code class="name flex">
 <span>def <span class="ident">test_get_amount_from_fit_reduction</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1908,7 +1908,7 @@ not have a method with the specified name.</p></section>
                          second=-550)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction"><code class="name flex">
 <span>def <span class="ident">test_get_amount_from_percentage_reduction</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1935,7 +1935,7 @@ not have a method with the specified name.</p></section>
                          second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 70))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling"><code class="name flex">
 <span>def <span class="ident">test_get_amount_from_proportional_energy_rescaling</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1960,7 +1960,7 @@ not have a method with the specified name.</p></section>
     check()</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_get_container_resources_str"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_get_container_resources_str"><code class="name flex">
 <span>def <span class="ident">test_get_container_resources_str</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -1998,7 +1998,7 @@ not have a method with the specified name.</p></section>
                                                                    usages_dict))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_invalid_container_state"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_invalid_container_state"><code class="name flex">
 <span>def <span class="ident">test_invalid_container_state</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -2080,7 +2080,7 @@ not have a method with the specified name.</p></section>
             self.guardian.check_invalid_container_state(resources, limits, resource)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_match_rules_and_events"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_match_rules_and_events"><code class="name flex">
 <span>def <span class="ident">test_match_rules_and_events</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -2165,7 +2165,7 @@ not have a method with the specified name.</p></section>
         TestCase.assertEqual(self, first=expected_events_to_remove, second=events_to_remove)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_match_usages_and_limits"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_match_usages_and_limits"><code class="name flex">
 <span>def <span class="ident">test_match_usages_and_limits</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -2222,7 +2222,7 @@ not have a method with the specified name.</p></section>
         assert_event_equals(mem_dropped_lower, event)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_reduce_structure_events"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_reduce_structure_events"><code class="name flex">
 <span>def <span class="ident">test_reduce_structure_events</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -2244,7 +2244,7 @@ not have a method with the specified name.</p></section>
     TestCase.assertEqual(self, first=expected_output, second=self.guardian.reduce_structure_events(input_events))</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_try_get_value"><code class="name flex">
+<dt id="Guardian.testGuardian.GuardianTest.test_try_get_value"><code class="name flex">
 <span>def <span class="ident">test_try_get_value</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -2265,7 +2265,7 @@ not have a method with the specified name.</p></section>
 </section>
 </article>
 <nav id="sidebar">
-<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/long_logo1.png" style="height:100px;"/>
+<a href="/code/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/logo_serverless.png" style="height:100px;"/></a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -2273,39 +2273,39 @@ not have a method with the specified name.</p></section>
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="src.Guardian" href="index.html">src.Guardian</a></code></li>
+<li><code><a title="Guardian" href="index.html">Guardian</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="src.Guardian.testGuardian.GuardianServelerssIntegrationTest" href="#src.Guardian.testGuardian.GuardianServelerssIntegrationTest">GuardianServelerssIntegrationTest</a></code></h4>
+<h4><code><a title="Guardian.testGuardian.GuardianServelerssIntegrationTest" href="#Guardian.testGuardian.GuardianServelerssIntegrationTest">GuardianServelerssIntegrationTest</a></code></h4>
 <ul class="">
-<li><code><a title="src.Guardian.testGuardian.GuardianServelerssIntegrationTest.setUp" href="#src.Guardian.testGuardian.GuardianServelerssIntegrationTest.setUp">setUp</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianServelerssIntegrationTest.tearDown" href="#src.Guardian.testGuardian.GuardianServelerssIntegrationTest.tearDown">tearDown</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianServelerssIntegrationTest.test_serverless" href="#src.Guardian.testGuardian.GuardianServelerssIntegrationTest.test_serverless">test_serverless</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianServelerssIntegrationTest.setUp" href="#Guardian.testGuardian.GuardianServelerssIntegrationTest.setUp">setUp</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianServelerssIntegrationTest.tearDown" href="#Guardian.testGuardian.GuardianServelerssIntegrationTest.tearDown">tearDown</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianServelerssIntegrationTest.test_serverless" href="#Guardian.testGuardian.GuardianServelerssIntegrationTest.test_serverless">test_serverless</a></code></li>
 </ul>
 </li>
 <li>
-<h4><code><a title="src.Guardian.testGuardian.GuardianTest" href="#src.Guardian.testGuardian.GuardianTest">GuardianTest</a></code></h4>
+<h4><code><a title="Guardian.testGuardian.GuardianTest" href="#Guardian.testGuardian.GuardianTest">GuardianTest</a></code></h4>
 <ul class="">
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.setUp" href="#src.Guardian.testGuardian.GuardianTest.setUp">setUp</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_adjust_if_invalid_amount" href="#src.Guardian.testGuardian.GuardianTest.test_adjust_if_invalid_amount">test_adjust_if_invalid_amount</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_check_invalid_values" href="#src.Guardian.testGuardian.GuardianTest.test_check_invalid_values">test_check_invalid_values</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_check_unset_values" href="#src.Guardian.testGuardian.GuardianTest.test_check_unset_values">test_check_unset_values</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_container_energy_str" href="#src.Guardian.testGuardian.GuardianTest.test_container_energy_str">test_container_energy_str</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_correct_container_state" href="#src.Guardian.testGuardian.GuardianTest.test_correct_container_state">test_correct_container_state</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_filter_old_events" href="#src.Guardian.testGuardian.GuardianTest.test_filter_old_events">test_filter_old_events</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_generate_event_name" href="#src.Guardian.testGuardian.GuardianTest.test_generate_event_name">test_generate_event_name</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction" href="#src.Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction">test_get_amount_from_fit_reduction</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction" href="#src.Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction">test_get_amount_from_percentage_reduction</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling" href="#src.Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling">test_get_amount_from_proportional_energy_rescaling</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_container_resources_str" href="#src.Guardian.testGuardian.GuardianTest.test_get_container_resources_str">test_get_container_resources_str</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_invalid_container_state" href="#src.Guardian.testGuardian.GuardianTest.test_invalid_container_state">test_invalid_container_state</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_match_rules_and_events" href="#src.Guardian.testGuardian.GuardianTest.test_match_rules_and_events">test_match_rules_and_events</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_match_usages_and_limits" href="#src.Guardian.testGuardian.GuardianTest.test_match_usages_and_limits">test_match_usages_and_limits</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_reduce_structure_events" href="#src.Guardian.testGuardian.GuardianTest.test_reduce_structure_events">test_reduce_structure_events</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_try_get_value" href="#src.Guardian.testGuardian.GuardianTest.test_try_get_value">test_try_get_value</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.setUp" href="#Guardian.testGuardian.GuardianTest.setUp">setUp</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_adjust_if_invalid_amount" href="#Guardian.testGuardian.GuardianTest.test_adjust_if_invalid_amount">test_adjust_if_invalid_amount</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_check_invalid_values" href="#Guardian.testGuardian.GuardianTest.test_check_invalid_values">test_check_invalid_values</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_check_unset_values" href="#Guardian.testGuardian.GuardianTest.test_check_unset_values">test_check_unset_values</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_container_energy_str" href="#Guardian.testGuardian.GuardianTest.test_container_energy_str">test_container_energy_str</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_correct_container_state" href="#Guardian.testGuardian.GuardianTest.test_correct_container_state">test_correct_container_state</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_filter_old_events" href="#Guardian.testGuardian.GuardianTest.test_filter_old_events">test_filter_old_events</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_generate_event_name" href="#Guardian.testGuardian.GuardianTest.test_generate_event_name">test_generate_event_name</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction" href="#Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction">test_get_amount_from_fit_reduction</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction" href="#Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction">test_get_amount_from_percentage_reduction</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling" href="#Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling">test_get_amount_from_proportional_energy_rescaling</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_get_container_resources_str" href="#Guardian.testGuardian.GuardianTest.test_get_container_resources_str">test_get_container_resources_str</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_invalid_container_state" href="#Guardian.testGuardian.GuardianTest.test_invalid_container_state">test_invalid_container_state</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_match_rules_and_events" href="#Guardian.testGuardian.GuardianTest.test_match_rules_and_events">test_match_rules_and_events</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_match_usages_and_limits" href="#Guardian.testGuardian.GuardianTest.test_match_usages_and_limits">test_match_usages_and_limits</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_reduce_structure_events" href="#Guardian.testGuardian.GuardianTest.test_reduce_structure_events">test_reduce_structure_events</a></code></li>
+<li><code><a title="Guardian.testGuardian.GuardianTest.test_try_get_value" href="#Guardian.testGuardian.GuardianTest.test_try_get_value">test_try_get_value</a></code></li>
 </ul>
 </li>
 </ul>
