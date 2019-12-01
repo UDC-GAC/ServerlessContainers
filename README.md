@@ -56,3 +56,6 @@ Roberto R. Expósito and Juan Touriño.
 
 For more information on this project you can visit its 
 [webpage](http://bdwatchdog.dec.udc.es/serverless/index.html).
+
+For precise documentation, please check out this 
+[webpage](https://serverlesscontainers.readthedocs.io/en/latest/).

@@ -2,7 +2,7 @@
 
 ![Logo](img/logo.png){: style="height:150px;width:100px;"} 
 
-The **Serverless Containers** framework has been developed at Univerisade da Coruña, in Spain, as part of a PhD thesis from the candidate [Jonatan Enes](http://jonatanenes.com/).
+The **Serverless Containers** framework has been developed at Universidade da Coruña (Spain), as part of a PhD thesis from the candidate [Jonatan Enes](http://jonatanenes.com/).
 
 This framework is able to **dynamically scale the container's resources (_e.g., CPU, Memory, disk and network_) in order to adapt them to the real usage**, at any moment and in real-time.
 
