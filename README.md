@@ -42,7 +42,7 @@ an energy cap and have it enforced overall.
 
 This scenario has been developed with the integration of Serverless Containers 
 along with the [BDWatchdog](https://github.com/JonatanEnes/BDWatchdog)
-and [PowerAPI](https://github.com/powerapi-ng/powerapi-scala) frameworks.
+and [PowerAPI](https://github.com/powerapi-ng/powerapi) frameworks.
 This work was carried out as a joint effort with the [Spirals](https://team.inria.fr/spirals/) 
 research group (University of Lille 1 and Inria).
 
@@ -54,5 +54,5 @@ Serverless Containers has been developed in the Computer Architecture
 Group at the University of A Coruña by Jonatan Enes (jonatan.enes@udc.es), 
 Roberto R. Expósito and Juan Touriño.
 
-For more information on this project's you can visit its 
+For more information on this project you can visit its 
 [webpage](http://bdwatchdog.dec.udc.es/serverless/index.html).
