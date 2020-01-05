@@ -1,0 +1,1318 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.7.2" />
+<title>src.StateDatabase.couchdb API documentation</title>
+<meta name="description" content="" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{font-weight:bold}#index h4 + ul{margin-bottom:.6em}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>src.StateDatabase.couchdb</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+
+import random
+import time
+import requests
+import json
+
+
+class CouchDBServer:
+    post_doc_headers = {&#39;content-type&#39;: &#39;application/json&#39;}
+    __COUCHDB_URL = &#34;couchdb&#34;
+    __COUCHDB_PORT = 5984
+    __structures_db_name = &#34;structures&#34;
+    __services_db_name = &#34;services&#34;
+    __limits_db_name = &#34;limits&#34;
+    __rules_db_name = &#34;rules&#34;
+    __events_db_name = &#34;events&#34;
+    __requests_db_name = &#34;requests&#34;
+    __users_db_name = &#34;users&#34;
+    __MAX_UPDATE_TRIES = 10
+    __DATABASE_TIMEOUT = 10
+
+    def __init__(self,  couchdb_url=None, couchdbdb_port=None):
+        if not couchdb_url:
+            couchdb_url = self.__COUCHDB_URL
+        if not couchdbdb_port:
+            couchdbdb_port = self.__COUCHDB_PORT
+        else:
+            try:
+                couchdbdb_port = int(couchdbdb_port)
+            except ValueError:
+                couchdbdb_port = self.__COUCHDB_PORT
+
+        self.server = &#34;http://{0}:{1}&#34;.format(couchdb_url, str(couchdbdb_port))
+        self.session = requests.Session()
+
+    def close_connection(self):
+        self.session.close()
+
+    def set_database_name(self, database_type, database_name):
+        if database_type == &#34;structures&#34;:
+            self.__structures_db_name = database_name
+        elif database_type == &#34;services&#34;:
+            self.__services_db_name = database_name
+        elif database_type == &#34;limits&#34;:
+            self.__limits_db_name = database_name
+        elif database_type == &#34;rules&#34;:
+            self.__rules_db_name = database_name
+        elif database_type == &#34;events&#34;:
+            self.__events_db_name = database_name
+        elif database_type == &#34;requests&#34;:
+            self.__requests_db_name = database_name
+        elif database_type == &#34;profiles&#34;:
+            self.__profiles_db_name = database_name
+        else:
+            pass
+
+    def database_exists(self, database):
+        r = self.session.head(self.server + &#34;/&#34; + database)
+        return r.status_code == 200
+
+    def create_database(self, database):
+        r = self.session.put(self.server + &#34;/&#34; + database)
+        if r.status_code != 201:
+            r.raise_for_status()
+        else:
+            return True
+
+    def remove_database(self, database):
+        r = self.session.delete(self.server + &#34;/&#34; + database)
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            return True
+
+    def compact_database(self, database):
+        r = self.session.post(self.server + &#34;/&#34; + database + &#34;/_compact&#34;, headers=self.post_doc_headers)
+        if r.status_code != 202:
+            r.raise_for_status()
+        else:
+            return json.loads(r.text)[&#34;ok&#34;]
+
+    def __get_all_database_docs(self, database):
+        # TODO Implement pagination
+        docs = list()
+        r = self.session.get(self.server + &#34;/&#34; + database + &#34;/_all_docs?include_docs=true&#34;, timeout=self.__DATABASE_TIMEOUT)
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            rows = json.loads(r.text)[&#34;rows&#34;]
+            for row in rows:
+                docs.append(row[&#34;doc&#34;])
+            return docs
+
+    # PRIVATE CRUD METHODS #
+
+    def __delete_doc(self, database, docid, rev):
+        r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(docid), str(rev)))
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __add_doc(self, database, doc):
+        r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __add_bulk_docs(self, database, docs):
+        docs_data = {&#34;docs&#34;: docs}
+        r = self.session.post(self.server + &#34;/&#34; + database + &#34;/_bulk_docs&#34;, data=json.dumps(docs_data),
+                              headers=self.post_doc_headers)
+        if r.status_code != 201:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __delete_bulk_docs(self, database, docs):
+        for doc in docs:
+            doc[&#34;_deleted&#34;] = True
+        self.__add_bulk_docs(database, docs)
+
+    def __merge(self, input_dict, output_dict):
+        for key, value in input_dict.items():
+            if isinstance(value, dict):
+                # get node or create one
+                node = output_dict.setdefault(key, {})
+                self.__merge(value, node)
+            else:
+                output_dict[key] = value
+
+        return output_dict
+
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=500, max_tries=10):
+        r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        if r.status_code != 200 and r.status_code != 201:
+            if r.status_code == 409:
+                # Conflict error, document may have been updated (e.g., heartbeat of services),
+                # update revision and retry after slightly random wait
+                if 0 &lt;= previous_tries &lt; max_tries:
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
+                    matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
+                    if len(matches) &gt; 0:
+                        new_doc = matches[0]
+                        doc[&#34;_rev&#34;] = new_doc[&#34;_rev&#34;]
+                        doc = self.__merge(doc, new_doc)
+                        return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                                                       max_tries=max_tries)
+                    else:
+                        return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                                                           max_tries=max_tries)
+                else:
+                    r.raise_for_status()
+            elif r.status_code == 404:
+                # Database may have been reinitialized (deleted and recreated), wait and retry again
+                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                return self.__resilient_update_doc(database, doc, previous_tries + 1)
+            else:
+                r.raise_for_status()
+        else:
+            return True
+
+    def __find_documents_by_matches(self, database, selectors):
+        # TODO Implement pagination
+        query = {&#34;selector&#34;: {}, &#34;limit&#34;: 50}
+
+        for key in selectors:
+            query[&#34;selector&#34;][key] = selectors[key]
+
+        req_docs = self.session.post(self.server + &#34;/&#34; + database + &#34;/_find&#34;, data=json.dumps(query),
+                                     headers={&#39;Content-Type&#39;: &#39;application/json&#39;})
+        if req_docs.status_code != 200:
+            req_docs.raise_for_status()
+        else:
+            return req_docs.json()[&#34;docs&#34;]
+
+    def __find_document_by_name(self, database, doc_name):
+        docs = self.__find_documents_by_matches(database, {&#34;name&#34;: doc_name})
+        if not docs:
+            raise ValueError(&#34;Document with name {0} not found in database {1}&#34;.format(doc_name, database))
+        else:
+            # Return the first one as it should only be one
+            return dict(docs[0])
+
+    # STRUCTURES #
+    def add_structure(self, structure):
+        return self.__add_doc(self.__structures_db_name, structure)
+
+    def get_structure(self, structure_name):
+        return self.__find_document_by_name(self.__structures_db_name, structure_name)
+
+    def get_structures(self, subtype=None):
+        if subtype is None:
+            return self.__get_all_database_docs(self.__structures_db_name)
+        else:
+            return self.__find_documents_by_matches(self.__structures_db_name, {&#34;subtype&#34;: subtype})
+
+    def delete_structure(self, structure):
+        self.__delete_doc(self.__structures_db_name, structure[&#34;_id&#34;], structure[&#34;_rev&#34;])
+
+    def update_structure(self, structure, max_tries=10):
+        return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
+
+    # EVENTS #
+    def add_event(self, event):
+        self.__add_doc(self.__events_db_name, event)
+
+    def add_events(self, events):
+        self.__add_bulk_docs(self.__events_db_name, events)
+
+    def get_events(self, structure):
+        return self.__find_documents_by_matches(self.__events_db_name, {&#34;structure&#34;: structure[&#34;name&#34;]})
+
+    def delete_num_events_by_structure(self, structure, event_name, event_num):
+        events = self.__find_documents_by_matches(self.__events_db_name,
+                                                  {&#34;structure&#34;: structure[&#34;name&#34;], &#34;name&#34;: event_name})
+        event_num = min(len(events), event_num)
+        events_to_delete = events[0:event_num]
+        self.__delete_bulk_docs(self.__events_db_name, events_to_delete)
+
+    def delete_event(self, event):
+        self.__delete_doc(self.__events_db_name, event[&#34;_id&#34;], event[&#34;_rev&#34;])
+
+    def delete_events(self, events):
+        self.__delete_bulk_docs(self.__events_db_name, events)
+
+    # LIMITS #
+    def add_limit(self, limit):
+        return self.__add_doc(self.__limits_db_name, limit)
+
+    def get_all_limits(self):
+        return self.__get_all_database_docs(self.__limits_db_name)
+
+    def get_limits(self, structure):
+        # Return just the first item, as it should only be one &#39;limits&#39; document, otherwise raise error
+        limits = self.__find_documents_by_matches(self.__limits_db_name, {&#34;name&#34;: structure[&#34;name&#34;]})
+        if not limits:
+            raise ValueError(&#34;Structure with name {0} has no limits&#34;.format(structure[&#34;name&#34;]))
+        else:
+            return limits[0]
+
+    def update_limit(self, limit):
+        return self.__resilient_update_doc(self.__limits_db_name, limit)
+
+    # REQUESTS #
+    def get_requests(self, structure=None):
+        if structure is None:
+            return self.__get_all_database_docs(self.__requests_db_name)
+        else:
+            return self.__find_documents_by_matches(self.__requests_db_name, {&#34;structure&#34;: structure[&#34;name&#34;]})
+
+    def add_request(self, req):
+        self.__add_doc(self.__requests_db_name, req)
+
+    def add_requests(self, reqs):
+        self.__add_bulk_docs(self.__requests_db_name, reqs)
+
+    def delete_request(self, request):
+        self.__delete_doc(self.__requests_db_name, request[&#34;_id&#34;], request[&#34;_rev&#34;])
+
+    def delete_requests(self, requests):
+        self.__delete_bulk_docs(self.__requests_db_name, requests)
+
+    # RULES #
+    def add_rule(self, rule):
+        return self.__add_doc(self.__rules_db_name, rule)
+
+    def get_rule(self, rule_name):
+        return self.__find_document_by_name(self.__rules_db_name, rule_name)
+
+    def get_rules(self):
+        return self.__get_all_database_docs(self.__rules_db_name)
+
+    def update_rule(self, rule):
+        return self.__resilient_update_doc(self.__rules_db_name, rule)
+
+    # USERS #
+    def add_user(self, user):
+        return self.__add_doc(self.__users_db_name, user)
+
+    def get_users(self):
+        return self.__get_all_database_docs(self.__users_db_name)
+
+    def get_user(self, user_name):
+        return self.__find_document_by_name(self.__users_db_name, user_name)
+
+    def update_user(self, user, max_tries=10):
+        return self.__resilient_update_doc(self.__users_db_name, user, max_tries=max_tries)
+
+    # SERVICES #
+    def get_services(self):
+        return self.__get_all_database_docs(self.__services_db_name)
+
+    def get_service(self, service_name):
+        return self.__find_document_by_name(self.__services_db_name, service_name)
+
+    def add_service(self, service):
+        return self.__add_doc(self.__services_db_name, service)
+
+    def update_service(self, service):
+        return self.__resilient_update_doc(self.__services_db_name, service)
+
+    def delete_service(self, service):
+        return self.__delete_doc(self.__services_db_name, service[&#34;_id&#34;], service[&#34;_rev&#34;])</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="src.StateDatabase.couchdb.CouchDBServer"><code class="flex name class">
+<span>class <span class="ident">CouchDBServer</span></span>
+<span>(</span><span>couchdb_url=None, couchdbdb_port=None)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class CouchDBServer:
+    post_doc_headers = {&#39;content-type&#39;: &#39;application/json&#39;}
+    __COUCHDB_URL = &#34;couchdb&#34;
+    __COUCHDB_PORT = 5984
+    __structures_db_name = &#34;structures&#34;
+    __services_db_name = &#34;services&#34;
+    __limits_db_name = &#34;limits&#34;
+    __rules_db_name = &#34;rules&#34;
+    __events_db_name = &#34;events&#34;
+    __requests_db_name = &#34;requests&#34;
+    __users_db_name = &#34;users&#34;
+    __MAX_UPDATE_TRIES = 10
+    __DATABASE_TIMEOUT = 10
+
+    def __init__(self,  couchdb_url=None, couchdbdb_port=None):
+        if not couchdb_url:
+            couchdb_url = self.__COUCHDB_URL
+        if not couchdbdb_port:
+            couchdbdb_port = self.__COUCHDB_PORT
+        else:
+            try:
+                couchdbdb_port = int(couchdbdb_port)
+            except ValueError:
+                couchdbdb_port = self.__COUCHDB_PORT
+
+        self.server = &#34;http://{0}:{1}&#34;.format(couchdb_url, str(couchdbdb_port))
+        self.session = requests.Session()
+
+    def close_connection(self):
+        self.session.close()
+
+    def set_database_name(self, database_type, database_name):
+        if database_type == &#34;structures&#34;:
+            self.__structures_db_name = database_name
+        elif database_type == &#34;services&#34;:
+            self.__services_db_name = database_name
+        elif database_type == &#34;limits&#34;:
+            self.__limits_db_name = database_name
+        elif database_type == &#34;rules&#34;:
+            self.__rules_db_name = database_name
+        elif database_type == &#34;events&#34;:
+            self.__events_db_name = database_name
+        elif database_type == &#34;requests&#34;:
+            self.__requests_db_name = database_name
+        elif database_type == &#34;profiles&#34;:
+            self.__profiles_db_name = database_name
+        else:
+            pass
+
+    def database_exists(self, database):
+        r = self.session.head(self.server + &#34;/&#34; + database)
+        return r.status_code == 200
+
+    def create_database(self, database):
+        r = self.session.put(self.server + &#34;/&#34; + database)
+        if r.status_code != 201:
+            r.raise_for_status()
+        else:
+            return True
+
+    def remove_database(self, database):
+        r = self.session.delete(self.server + &#34;/&#34; + database)
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            return True
+
+    def compact_database(self, database):
+        r = self.session.post(self.server + &#34;/&#34; + database + &#34;/_compact&#34;, headers=self.post_doc_headers)
+        if r.status_code != 202:
+            r.raise_for_status()
+        else:
+            return json.loads(r.text)[&#34;ok&#34;]
+
+    def __get_all_database_docs(self, database):
+        # TODO Implement pagination
+        docs = list()
+        r = self.session.get(self.server + &#34;/&#34; + database + &#34;/_all_docs?include_docs=true&#34;, timeout=self.__DATABASE_TIMEOUT)
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            rows = json.loads(r.text)[&#34;rows&#34;]
+            for row in rows:
+                docs.append(row[&#34;doc&#34;])
+            return docs
+
+    # PRIVATE CRUD METHODS #
+
+    def __delete_doc(self, database, docid, rev):
+        r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(docid), str(rev)))
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __add_doc(self, database, doc):
+        r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        if r.status_code != 200:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __add_bulk_docs(self, database, docs):
+        docs_data = {&#34;docs&#34;: docs}
+        r = self.session.post(self.server + &#34;/&#34; + database + &#34;/_bulk_docs&#34;, data=json.dumps(docs_data),
+                              headers=self.post_doc_headers)
+        if r.status_code != 201:
+            r.raise_for_status()
+        else:
+            return True
+
+    def __delete_bulk_docs(self, database, docs):
+        for doc in docs:
+            doc[&#34;_deleted&#34;] = True
+        self.__add_bulk_docs(database, docs)
+
+    def __merge(self, input_dict, output_dict):
+        for key, value in input_dict.items():
+            if isinstance(value, dict):
+                # get node or create one
+                node = output_dict.setdefault(key, {})
+                self.__merge(value, node)
+            else:
+                output_dict[key] = value
+
+        return output_dict
+
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=500, max_tries=10):
+        r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        if r.status_code != 200 and r.status_code != 201:
+            if r.status_code == 409:
+                # Conflict error, document may have been updated (e.g., heartbeat of services),
+                # update revision and retry after slightly random wait
+                if 0 &lt;= previous_tries &lt; max_tries:
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
+                    matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
+                    if len(matches) &gt; 0:
+                        new_doc = matches[0]
+                        doc[&#34;_rev&#34;] = new_doc[&#34;_rev&#34;]
+                        doc = self.__merge(doc, new_doc)
+                        return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                                                       max_tries=max_tries)
+                    else:
+                        return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
+                                                           max_tries=max_tries)
+                else:
+                    r.raise_for_status()
+            elif r.status_code == 404:
+                # Database may have been reinitialized (deleted and recreated), wait and retry again
+                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                return self.__resilient_update_doc(database, doc, previous_tries + 1)
+            else:
+                r.raise_for_status()
+        else:
+            return True
+
+    def __find_documents_by_matches(self, database, selectors):
+        # TODO Implement pagination
+        query = {&#34;selector&#34;: {}, &#34;limit&#34;: 50}
+
+        for key in selectors:
+            query[&#34;selector&#34;][key] = selectors[key]
+
+        req_docs = self.session.post(self.server + &#34;/&#34; + database + &#34;/_find&#34;, data=json.dumps(query),
+                                     headers={&#39;Content-Type&#39;: &#39;application/json&#39;})
+        if req_docs.status_code != 200:
+            req_docs.raise_for_status()
+        else:
+            return req_docs.json()[&#34;docs&#34;]
+
+    def __find_document_by_name(self, database, doc_name):
+        docs = self.__find_documents_by_matches(database, {&#34;name&#34;: doc_name})
+        if not docs:
+            raise ValueError(&#34;Document with name {0} not found in database {1}&#34;.format(doc_name, database))
+        else:
+            # Return the first one as it should only be one
+            return dict(docs[0])
+
+    # STRUCTURES #
+    def add_structure(self, structure):
+        return self.__add_doc(self.__structures_db_name, structure)
+
+    def get_structure(self, structure_name):
+        return self.__find_document_by_name(self.__structures_db_name, structure_name)
+
+    def get_structures(self, subtype=None):
+        if subtype is None:
+            return self.__get_all_database_docs(self.__structures_db_name)
+        else:
+            return self.__find_documents_by_matches(self.__structures_db_name, {&#34;subtype&#34;: subtype})
+
+    def delete_structure(self, structure):
+        self.__delete_doc(self.__structures_db_name, structure[&#34;_id&#34;], structure[&#34;_rev&#34;])
+
+    def update_structure(self, structure, max_tries=10):
+        return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
+
+    # EVENTS #
+    def add_event(self, event):
+        self.__add_doc(self.__events_db_name, event)
+
+    def add_events(self, events):
+        self.__add_bulk_docs(self.__events_db_name, events)
+
+    def get_events(self, structure):
+        return self.__find_documents_by_matches(self.__events_db_name, {&#34;structure&#34;: structure[&#34;name&#34;]})
+
+    def delete_num_events_by_structure(self, structure, event_name, event_num):
+        events = self.__find_documents_by_matches(self.__events_db_name,
+                                                  {&#34;structure&#34;: structure[&#34;name&#34;], &#34;name&#34;: event_name})
+        event_num = min(len(events), event_num)
+        events_to_delete = events[0:event_num]
+        self.__delete_bulk_docs(self.__events_db_name, events_to_delete)
+
+    def delete_event(self, event):
+        self.__delete_doc(self.__events_db_name, event[&#34;_id&#34;], event[&#34;_rev&#34;])
+
+    def delete_events(self, events):
+        self.__delete_bulk_docs(self.__events_db_name, events)
+
+    # LIMITS #
+    def add_limit(self, limit):
+        return self.__add_doc(self.__limits_db_name, limit)
+
+    def get_all_limits(self):
+        return self.__get_all_database_docs(self.__limits_db_name)
+
+    def get_limits(self, structure):
+        # Return just the first item, as it should only be one &#39;limits&#39; document, otherwise raise error
+        limits = self.__find_documents_by_matches(self.__limits_db_name, {&#34;name&#34;: structure[&#34;name&#34;]})
+        if not limits:
+            raise ValueError(&#34;Structure with name {0} has no limits&#34;.format(structure[&#34;name&#34;]))
+        else:
+            return limits[0]
+
+    def update_limit(self, limit):
+        return self.__resilient_update_doc(self.__limits_db_name, limit)
+
+    # REQUESTS #
+    def get_requests(self, structure=None):
+        if structure is None:
+            return self.__get_all_database_docs(self.__requests_db_name)
+        else:
+            return self.__find_documents_by_matches(self.__requests_db_name, {&#34;structure&#34;: structure[&#34;name&#34;]})
+
+    def add_request(self, req):
+        self.__add_doc(self.__requests_db_name, req)
+
+    def add_requests(self, reqs):
+        self.__add_bulk_docs(self.__requests_db_name, reqs)
+
+    def delete_request(self, request):
+        self.__delete_doc(self.__requests_db_name, request[&#34;_id&#34;], request[&#34;_rev&#34;])
+
+    def delete_requests(self, requests):
+        self.__delete_bulk_docs(self.__requests_db_name, requests)
+
+    # RULES #
+    def add_rule(self, rule):
+        return self.__add_doc(self.__rules_db_name, rule)
+
+    def get_rule(self, rule_name):
+        return self.__find_document_by_name(self.__rules_db_name, rule_name)
+
+    def get_rules(self):
+        return self.__get_all_database_docs(self.__rules_db_name)
+
+    def update_rule(self, rule):
+        return self.__resilient_update_doc(self.__rules_db_name, rule)
+
+    # USERS #
+    def add_user(self, user):
+        return self.__add_doc(self.__users_db_name, user)
+
+    def get_users(self):
+        return self.__get_all_database_docs(self.__users_db_name)
+
+    def get_user(self, user_name):
+        return self.__find_document_by_name(self.__users_db_name, user_name)
+
+    def update_user(self, user, max_tries=10):
+        return self.__resilient_update_doc(self.__users_db_name, user, max_tries=max_tries)
+
+    # SERVICES #
+    def get_services(self):
+        return self.__get_all_database_docs(self.__services_db_name)
+
+    def get_service(self, service_name):
+        return self.__find_document_by_name(self.__services_db_name, service_name)
+
+    def add_service(self, service):
+        return self.__add_doc(self.__services_db_name, service)
+
+    def update_service(self, service):
+        return self.__resilient_update_doc(self.__services_db_name, service)
+
+    def delete_service(self, service):
+        return self.__delete_doc(self.__services_db_name, service[&#34;_id&#34;], service[&#34;_rev&#34;])</code></pre>
+</details>
+<h3>Class variables</h3>
+<dl>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.post_doc_headers"><code class="name">var <span class="ident">post_doc_headers</span></code></dt>
+<dd>
+<section class="desc"><p>dict() -&gt; new empty dictionary
+dict(mapping) -&gt; new dictionary initialized from a mapping object's
+(key, value) pairs
+dict(iterable) -&gt; new dictionary initialized as if via:
+d = {}
+for k, v in iterable:
+d[k] = v
+dict(**kwargs) -&gt; new dictionary initialized with the name=value pairs
+in the keyword argument list.
+For example:
+dict(one=1, two=2)</p></section>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_event"><code class="name flex">
+<span>def <span class="ident">add_event</span></span>(<span>self, event)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_event(self, event):
+    self.__add_doc(self.__events_db_name, event)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_events"><code class="name flex">
+<span>def <span class="ident">add_events</span></span>(<span>self, events)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_events(self, events):
+    self.__add_bulk_docs(self.__events_db_name, events)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_limit"><code class="name flex">
+<span>def <span class="ident">add_limit</span></span>(<span>self, limit)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_limit(self, limit):
+    return self.__add_doc(self.__limits_db_name, limit)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_request"><code class="name flex">
+<span>def <span class="ident">add_request</span></span>(<span>self, req)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_request(self, req):
+    self.__add_doc(self.__requests_db_name, req)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_requests"><code class="name flex">
+<span>def <span class="ident">add_requests</span></span>(<span>self, reqs)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_requests(self, reqs):
+    self.__add_bulk_docs(self.__requests_db_name, reqs)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_rule"><code class="name flex">
+<span>def <span class="ident">add_rule</span></span>(<span>self, rule)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_rule(self, rule):
+    return self.__add_doc(self.__rules_db_name, rule)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_service"><code class="name flex">
+<span>def <span class="ident">add_service</span></span>(<span>self, service)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_service(self, service):
+    return self.__add_doc(self.__services_db_name, service)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_structure"><code class="name flex">
+<span>def <span class="ident">add_structure</span></span>(<span>self, structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_structure(self, structure):
+    return self.__add_doc(self.__structures_db_name, structure)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.add_user"><code class="name flex">
+<span>def <span class="ident">add_user</span></span>(<span>self, user)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def add_user(self, user):
+    return self.__add_doc(self.__users_db_name, user)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.close_connection"><code class="name flex">
+<span>def <span class="ident">close_connection</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def close_connection(self):
+    self.session.close()</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.compact_database"><code class="name flex">
+<span>def <span class="ident">compact_database</span></span>(<span>self, database)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def compact_database(self, database):
+    r = self.session.post(self.server + &#34;/&#34; + database + &#34;/_compact&#34;, headers=self.post_doc_headers)
+    if r.status_code != 202:
+        r.raise_for_status()
+    else:
+        return json.loads(r.text)[&#34;ok&#34;]</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.create_database"><code class="name flex">
+<span>def <span class="ident">create_database</span></span>(<span>self, database)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def create_database(self, database):
+    r = self.session.put(self.server + &#34;/&#34; + database)
+    if r.status_code != 201:
+        r.raise_for_status()
+    else:
+        return True</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.database_exists"><code class="name flex">
+<span>def <span class="ident">database_exists</span></span>(<span>self, database)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def database_exists(self, database):
+    r = self.session.head(self.server + &#34;/&#34; + database)
+    return r.status_code == 200</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_event"><code class="name flex">
+<span>def <span class="ident">delete_event</span></span>(<span>self, event)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_event(self, event):
+    self.__delete_doc(self.__events_db_name, event[&#34;_id&#34;], event[&#34;_rev&#34;])</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_events"><code class="name flex">
+<span>def <span class="ident">delete_events</span></span>(<span>self, events)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_events(self, events):
+    self.__delete_bulk_docs(self.__events_db_name, events)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_num_events_by_structure"><code class="name flex">
+<span>def <span class="ident">delete_num_events_by_structure</span></span>(<span>self, structure, event_name, event_num)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_num_events_by_structure(self, structure, event_name, event_num):
+    events = self.__find_documents_by_matches(self.__events_db_name,
+                                              {&#34;structure&#34;: structure[&#34;name&#34;], &#34;name&#34;: event_name})
+    event_num = min(len(events), event_num)
+    events_to_delete = events[0:event_num]
+    self.__delete_bulk_docs(self.__events_db_name, events_to_delete)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_request"><code class="name flex">
+<span>def <span class="ident">delete_request</span></span>(<span>self, request)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_request(self, request):
+    self.__delete_doc(self.__requests_db_name, request[&#34;_id&#34;], request[&#34;_rev&#34;])</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_requests"><code class="name flex">
+<span>def <span class="ident">delete_requests</span></span>(<span>self, requests)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_requests(self, requests):
+    self.__delete_bulk_docs(self.__requests_db_name, requests)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_service"><code class="name flex">
+<span>def <span class="ident">delete_service</span></span>(<span>self, service)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_service(self, service):
+    return self.__delete_doc(self.__services_db_name, service[&#34;_id&#34;], service[&#34;_rev&#34;])</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.delete_structure"><code class="name flex">
+<span>def <span class="ident">delete_structure</span></span>(<span>self, structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def delete_structure(self, structure):
+    self.__delete_doc(self.__structures_db_name, structure[&#34;_id&#34;], structure[&#34;_rev&#34;])</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_all_limits"><code class="name flex">
+<span>def <span class="ident">get_all_limits</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_all_limits(self):
+    return self.__get_all_database_docs(self.__limits_db_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_events"><code class="name flex">
+<span>def <span class="ident">get_events</span></span>(<span>self, structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_events(self, structure):
+    return self.__find_documents_by_matches(self.__events_db_name, {&#34;structure&#34;: structure[&#34;name&#34;]})</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_limits"><code class="name flex">
+<span>def <span class="ident">get_limits</span></span>(<span>self, structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_limits(self, structure):
+    # Return just the first item, as it should only be one &#39;limits&#39; document, otherwise raise error
+    limits = self.__find_documents_by_matches(self.__limits_db_name, {&#34;name&#34;: structure[&#34;name&#34;]})
+    if not limits:
+        raise ValueError(&#34;Structure with name {0} has no limits&#34;.format(structure[&#34;name&#34;]))
+    else:
+        return limits[0]</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_requests"><code class="name flex">
+<span>def <span class="ident">get_requests</span></span>(<span>self, structure=None)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_requests(self, structure=None):
+    if structure is None:
+        return self.__get_all_database_docs(self.__requests_db_name)
+    else:
+        return self.__find_documents_by_matches(self.__requests_db_name, {&#34;structure&#34;: structure[&#34;name&#34;]})</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_rule"><code class="name flex">
+<span>def <span class="ident">get_rule</span></span>(<span>self, rule_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_rule(self, rule_name):
+    return self.__find_document_by_name(self.__rules_db_name, rule_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_rules"><code class="name flex">
+<span>def <span class="ident">get_rules</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_rules(self):
+    return self.__get_all_database_docs(self.__rules_db_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_service"><code class="name flex">
+<span>def <span class="ident">get_service</span></span>(<span>self, service_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_service(self, service_name):
+    return self.__find_document_by_name(self.__services_db_name, service_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_services"><code class="name flex">
+<span>def <span class="ident">get_services</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_services(self):
+    return self.__get_all_database_docs(self.__services_db_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_structure"><code class="name flex">
+<span>def <span class="ident">get_structure</span></span>(<span>self, structure_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_structure(self, structure_name):
+    return self.__find_document_by_name(self.__structures_db_name, structure_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_structures"><code class="name flex">
+<span>def <span class="ident">get_structures</span></span>(<span>self, subtype=None)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_structures(self, subtype=None):
+    if subtype is None:
+        return self.__get_all_database_docs(self.__structures_db_name)
+    else:
+        return self.__find_documents_by_matches(self.__structures_db_name, {&#34;subtype&#34;: subtype})</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_user"><code class="name flex">
+<span>def <span class="ident">get_user</span></span>(<span>self, user_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_user(self, user_name):
+    return self.__find_document_by_name(self.__users_db_name, user_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.get_users"><code class="name flex">
+<span>def <span class="ident">get_users</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_users(self):
+    return self.__get_all_database_docs(self.__users_db_name)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.remove_database"><code class="name flex">
+<span>def <span class="ident">remove_database</span></span>(<span>self, database)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def remove_database(self, database):
+    r = self.session.delete(self.server + &#34;/&#34; + database)
+    if r.status_code != 200:
+        r.raise_for_status()
+    else:
+        return True</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.set_database_name"><code class="name flex">
+<span>def <span class="ident">set_database_name</span></span>(<span>self, database_type, database_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_database_name(self, database_type, database_name):
+    if database_type == &#34;structures&#34;:
+        self.__structures_db_name = database_name
+    elif database_type == &#34;services&#34;:
+        self.__services_db_name = database_name
+    elif database_type == &#34;limits&#34;:
+        self.__limits_db_name = database_name
+    elif database_type == &#34;rules&#34;:
+        self.__rules_db_name = database_name
+    elif database_type == &#34;events&#34;:
+        self.__events_db_name = database_name
+    elif database_type == &#34;requests&#34;:
+        self.__requests_db_name = database_name
+    elif database_type == &#34;profiles&#34;:
+        self.__profiles_db_name = database_name
+    else:
+        pass</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.update_limit"><code class="name flex">
+<span>def <span class="ident">update_limit</span></span>(<span>self, limit)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def update_limit(self, limit):
+    return self.__resilient_update_doc(self.__limits_db_name, limit)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.update_rule"><code class="name flex">
+<span>def <span class="ident">update_rule</span></span>(<span>self, rule)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def update_rule(self, rule):
+    return self.__resilient_update_doc(self.__rules_db_name, rule)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.update_service"><code class="name flex">
+<span>def <span class="ident">update_service</span></span>(<span>self, service)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def update_service(self, service):
+    return self.__resilient_update_doc(self.__services_db_name, service)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.update_structure"><code class="name flex">
+<span>def <span class="ident">update_structure</span></span>(<span>self, structure, max_tries=10)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def update_structure(self, structure, max_tries=10):
+    return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)</code></pre>
+</details>
+</dd>
+<dt id="src.StateDatabase.couchdb.CouchDBServer.update_user"><code class="name flex">
+<span>def <span class="ident">update_user</span></span>(<span>self, user, max_tries=10)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def update_user(self, user, max_tries=10):
+    return self.__resilient_update_doc(self.__users_db_name, user, max_tries=max_tries)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<a href="/"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="src.StateDatabase" href="index.html">src.StateDatabase</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="src.StateDatabase.couchdb.CouchDBServer" href="#src.StateDatabase.couchdb.CouchDBServer">CouchDBServer</a></code></h4>
+<ul class="">
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_event" href="#src.StateDatabase.couchdb.CouchDBServer.add_event">add_event</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_events" href="#src.StateDatabase.couchdb.CouchDBServer.add_events">add_events</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_limit" href="#src.StateDatabase.couchdb.CouchDBServer.add_limit">add_limit</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_request" href="#src.StateDatabase.couchdb.CouchDBServer.add_request">add_request</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_requests" href="#src.StateDatabase.couchdb.CouchDBServer.add_requests">add_requests</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_rule" href="#src.StateDatabase.couchdb.CouchDBServer.add_rule">add_rule</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_service" href="#src.StateDatabase.couchdb.CouchDBServer.add_service">add_service</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_structure" href="#src.StateDatabase.couchdb.CouchDBServer.add_structure">add_structure</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.add_user" href="#src.StateDatabase.couchdb.CouchDBServer.add_user">add_user</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.close_connection" href="#src.StateDatabase.couchdb.CouchDBServer.close_connection">close_connection</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.compact_database" href="#src.StateDatabase.couchdb.CouchDBServer.compact_database">compact_database</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.create_database" href="#src.StateDatabase.couchdb.CouchDBServer.create_database">create_database</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.database_exists" href="#src.StateDatabase.couchdb.CouchDBServer.database_exists">database_exists</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_event" href="#src.StateDatabase.couchdb.CouchDBServer.delete_event">delete_event</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_events" href="#src.StateDatabase.couchdb.CouchDBServer.delete_events">delete_events</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_num_events_by_structure" href="#src.StateDatabase.couchdb.CouchDBServer.delete_num_events_by_structure">delete_num_events_by_structure</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_request" href="#src.StateDatabase.couchdb.CouchDBServer.delete_request">delete_request</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_requests" href="#src.StateDatabase.couchdb.CouchDBServer.delete_requests">delete_requests</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_service" href="#src.StateDatabase.couchdb.CouchDBServer.delete_service">delete_service</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.delete_structure" href="#src.StateDatabase.couchdb.CouchDBServer.delete_structure">delete_structure</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_all_limits" href="#src.StateDatabase.couchdb.CouchDBServer.get_all_limits">get_all_limits</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_events" href="#src.StateDatabase.couchdb.CouchDBServer.get_events">get_events</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_limits" href="#src.StateDatabase.couchdb.CouchDBServer.get_limits">get_limits</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_requests" href="#src.StateDatabase.couchdb.CouchDBServer.get_requests">get_requests</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_rule" href="#src.StateDatabase.couchdb.CouchDBServer.get_rule">get_rule</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_rules" href="#src.StateDatabase.couchdb.CouchDBServer.get_rules">get_rules</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_service" href="#src.StateDatabase.couchdb.CouchDBServer.get_service">get_service</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_services" href="#src.StateDatabase.couchdb.CouchDBServer.get_services">get_services</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_structure" href="#src.StateDatabase.couchdb.CouchDBServer.get_structure">get_structure</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_structures" href="#src.StateDatabase.couchdb.CouchDBServer.get_structures">get_structures</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_user" href="#src.StateDatabase.couchdb.CouchDBServer.get_user">get_user</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.get_users" href="#src.StateDatabase.couchdb.CouchDBServer.get_users">get_users</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.post_doc_headers" href="#src.StateDatabase.couchdb.CouchDBServer.post_doc_headers">post_doc_headers</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.remove_database" href="#src.StateDatabase.couchdb.CouchDBServer.remove_database">remove_database</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.set_database_name" href="#src.StateDatabase.couchdb.CouchDBServer.set_database_name">set_database_name</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.update_limit" href="#src.StateDatabase.couchdb.CouchDBServer.update_limit">update_limit</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.update_rule" href="#src.StateDatabase.couchdb.CouchDBServer.update_rule">update_rule</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.update_service" href="#src.StateDatabase.couchdb.CouchDBServer.update_service">update_service</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.update_structure" href="#src.StateDatabase.couchdb.CouchDBServer.update_structure">update_structure</a></code></li>
+<li><code><a title="src.StateDatabase.couchdb.CouchDBServer.update_user" href="#src.StateDatabase.couchdb.CouchDBServer.update_user">update_user</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.7.2</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>

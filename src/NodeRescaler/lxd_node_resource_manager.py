@@ -58,16 +58,14 @@ class LXDContainerManager:
         # TODO Deal with error if key does not exist
         self.client = Client(endpoint=self.LXD_ENDPOINT, cert=(self.LXD_CRT, self.LXD_KEY), verify=False)
 
-    @staticmethod
-    def get_node_disks(container):
+    def get_node_disks(self, container):
         devices = container.devices
         if not devices:
             return True, []
         else:
             return cgroups_get_node_disks(container.name, devices)
 
-    @staticmethod
-    def get_node_networks(container):
+    def get_node_networks(self, container):
         networks = container.state().network
         if not networks:
             return True, []
@@ -131,8 +129,7 @@ class LXDContainerManager:
         container = self.client.containers.get(container_name)
         return self.get_node_resources(container)
 
-    @staticmethod
-    def get_node_resources(container):
+    def get_node_resources(self, container):
         try:
             node_name = container.name
             if container.status == "Running":
@@ -144,7 +141,7 @@ class LXDContainerManager:
                 mem_success, mem_resources = get_node_mem(node_name)
                 node_dict[DICT_MEM_LABEL] = mem_resources
 
-                disk_success, disk_resources = get_node_disks(container)  # LXD Dependent
+                disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
                 if type(disk_resources) == list and len(disk_resources) > 0:
                     node_dict[DICT_DISK_LABEL] = disk_resources[0]
                 elif disk_resources:
@@ -153,7 +150,7 @@ class LXDContainerManager:
                     node_dict[DICT_DISK_LABEL] = []
                 # TODO support multiple disks
 
-                net_success, net_resources = get_node_networks(container)  # LXD Dependent
+                net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
                 if net_resources:
                     node_dict[DICT_NET_LABEL] = net_resources[0]
                 else:

@@ -20,5 +20,5 @@ The documentation has been structured as following:
 
 2. [Usage](usage.md): In this section it is described how to deploy the services as well as the framework overall. Some guidelines are also provided.
 
-3. [Source Code](code/index.html): If you are interested on the low-level code and code documentation. 
+3. [Source Code](code/src/index.html): If you are interested on the low-level code and code documentation. 
 

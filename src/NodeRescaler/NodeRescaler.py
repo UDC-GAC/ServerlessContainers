@@ -37,8 +37,17 @@ node_resource_manager = None
 app = Flask(__name__)
 
 
+def initialize_LXD():
+    global node_resource_manager
+    if not node_resource_manager:
+        node_resource_manager = LXDContainerManager()
+    else:
+        pass
+
+
 @app.route("/container/", methods=['GET'])
 def get_containers_resources():
+    initialize_LXD()
     try:
         container_name = request.form['name']
     except KeyError:

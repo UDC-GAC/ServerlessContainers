@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.7.2" />
-<title>Guardian.Guardian API documentation</title>
+<title>src.Guardian.Guardian API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
 <link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
@@ -17,7 +17,7 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>Guardian.Guardian</code></h1>
+<h1 class="title">Module <code>src.Guardian.Guardian</code></h1>
 </header>
 <section id="section-intro">
 <details class="source">
@@ -751,7 +751,7 @@ if __name__ == &#34;__main__&#34;:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="Guardian.Guardian.main"><code class="name flex">
+<dt id="src.Guardian.Guardian.main"><code class="name flex">
 <span>def <span class="ident">main</span></span>(<span>)</span>
 </code></dt>
 <dd>
@@ -773,7 +773,7 @@ if __name__ == &#34;__main__&#34;:
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
-<dt id="Guardian.Guardian.Guardian"><code class="flex name class">
+<dt id="src.Guardian.Guardian.Guardian"><code class="flex name class">
 <span>class <span class="ident">Guardian</span></span>
 </code></dt>
 <dd>
@@ -1426,7 +1426,7 @@ to generate scaling Requests.</p>
 </details>
 <h3>Static methods</h3>
 <dl>
-<dt id="Guardian.Guardian.Guardian.adjust_amount"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.adjust_amount"><code class="name flex">
 <span>def <span class="ident">adjust_amount</span></span>(<span>amount, structure_resources, structure_limits)</span>
 </code></dt>
 <dd>
@@ -1481,7 +1481,7 @@ def adjust_amount(amount, structure_resources, structure_limits):
     return amount</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.check_invalid_values"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.check_invalid_values"><code class="name flex">
 <span>def <span class="ident">check_invalid_values</span></span>(<span>value1, label1, value2, label2, resource='n/a')</span>
 </code></dt>
 <dd>
@@ -1527,7 +1527,7 @@ def check_invalid_values(value1, label1, value2, label2, resource=&#34;n/a&#34;)
             resource, label1, str(value1), label2, str(value2)))</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.check_unset_values"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.check_unset_values"><code class="name flex">
 <span>def <span class="ident">check_unset_values</span></span>(<span>value, label, resource)</span>
 </code></dt>
 <dd>
@@ -1567,7 +1567,7 @@ def check_unset_values(value, label, resource):
             &#34;value for &#39;{0}&#39; in resource &#39;{1}&#39; is not set or is not available.&#34;.format(label, resource))</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.generate_event"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.generate_event"><code class="name flex">
 <span>def <span class="ident">generate_event</span></span>(<span>event_name, structure_name, resource, action)</span>
 </code></dt>
 <dd>
@@ -1588,7 +1588,7 @@ def generate_event(event_name, structure_name, resource, action):
     return event</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.generate_request"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.generate_request"><code class="name flex">
 <span>def <span class="ident">generate_request</span></span>(<span>structure, amount, resource, action)</span>
 </code></dt>
 <dd>
@@ -1611,7 +1611,7 @@ def generate_request(structure, amount, resource, action):
     return request</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.get_amount_from_fit_reduction"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.get_amount_from_fit_reduction"><code class="name flex">
 <span>def <span class="ident">get_amount_from_fit_reduction</span></span>(<span>current_resource_limit, boundary, current_resource_usage)</span>
 </code></dt>
 <dd>
@@ -1659,7 +1659,7 @@ def get_amount_from_fit_reduction(current_resource_limit, boundary, current_reso
     return -1 * (current_resource_limit - desired_applied_resource_limit)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling"><code class="name flex">
 <span>def <span class="ident">get_amount_from_proportional_energy_rescaling</span></span>(<span>structure, resource)</span>
 </code></dt>
 <dd>
@@ -1703,7 +1703,7 @@ def get_amount_from_proportional_energy_rescaling(structure, resource):
     return int(energy_amplification)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.is_application"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.is_application"><code class="name flex">
 <span>def <span class="ident">is_application</span></span>(<span>structure)</span>
 </code></dt>
 <dd>
@@ -1717,7 +1717,7 @@ def is_application(structure):
     return structure[&#34;subtype&#34;] == &#34;application&#34;</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.is_container"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.is_container"><code class="name flex">
 <span>def <span class="ident">is_container</span></span>(<span>structure)</span>
 </code></dt>
 <dd>
@@ -1731,7 +1731,7 @@ def is_container(structure):
     return structure[&#34;subtype&#34;] == &#34;container&#34;</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.reduce_structure_events"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.reduce_structure_events"><code class="name flex">
 <span>def <span class="ident">reduce_structure_events</span></span>(<span>structure_events)</span>
 </code></dt>
 <dd>
@@ -1773,7 +1773,7 @@ def reduce_structure_events(structure_events):
     return events_reduced[&#34;action&#34;]</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.rule_triggers_event"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.rule_triggers_event"><code class="name flex">
 <span>def <span class="ident">rule_triggers_event</span></span>(<span>rule, data, resources)</span>
 </code></dt>
 <dd>
@@ -1790,7 +1790,7 @@ def rule_triggers_event(rule, data, resources):
            jsonLogic(rule[&#34;rule&#34;], data)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.sort_events"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.sort_events"><code class="name flex">
 <span>def <span class="ident">sort_events</span></span>(<span>structure_events, event_timeout)</span>
 </code></dt>
 <dd>
@@ -1837,7 +1837,7 @@ def sort_events(structure_events, event_timeout):
     return valid, invalid</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.try_get_value"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.try_get_value"><code class="name flex">
 <span>def <span class="ident">try_get_value</span></span>(<span>d, key)</span>
 </code></dt>
 <dd>
@@ -1882,7 +1882,7 @@ def try_get_value(d, key):
 </dl>
 <h3>Methods</h3>
 <dl>
-<dt id="Guardian.Guardian.Guardian.adjust_container_state"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.adjust_container_state"><code class="name flex">
 <span>def <span class="ident">adjust_container_state</span></span>(<span>self, resources, limits, resources_to_adjust)</span>
 </code></dt>
 <dd>
@@ -1908,7 +1908,7 @@ def try_get_value(d, key):
     return limits</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.check_invalid_container_state"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.check_invalid_container_state"><code class="name flex">
 <span>def <span class="ident">check_invalid_container_state</span></span>(<span>self, resources, limits, resource)</span>
 </code></dt>
 <dd>
@@ -1953,7 +1953,7 @@ def try_get_value(d, key):
                     str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.get_container_energy_str"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.get_container_energy_str"><code class="name flex">
 <span>def <span class="ident">get_container_energy_str</span></span>(<span>self, resources_dict)</span>
 </code></dt>
 <dd>
@@ -1989,7 +1989,7 @@ Memory.</p>
     return &#34;,&#34;.join(string)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.get_resource_summary"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.get_resource_summary"><code class="name flex">
 <span>def <span class="ident">get_resource_summary</span></span>(<span>self, resource_label, resources_dict, limits_dict, usages_dict)</span>
 </code></dt>
 <dd>
@@ -2046,7 +2046,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
     return &#34;,&#34;.join(strings)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.guard"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.guard"><code class="name flex">
 <span>def <span class="ident">guard</span></span>(<span>self)</span>
 </code></dt>
 <dd>
@@ -2100,7 +2100,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
                                 self.debug)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.guard_structures"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.guard_structures"><code class="name flex">
 <span>def <span class="ident">guard_structures</span></span>(<span>self, config, structures)</span>
 </code></dt>
 <dd>
@@ -2132,7 +2132,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
         process.join()</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.match_rules_and_events"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.match_rules_and_events"><code class="name flex">
 <span>def <span class="ident">match_rules_and_events</span></span>(<span>self, structure, rules, events, limits, usages)</span>
 </code></dt>
 <dd>
@@ -2225,7 +2225,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
     return generated_requests, events_to_remove</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.match_usages_and_limits"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.match_usages_and_limits"><code class="name flex">
 <span>def <span class="ident">match_usages_and_limits</span></span>(<span>self, structure_name, rules, usages, limits, resources)</span>
 </code></dt>
 <dd>
@@ -2265,7 +2265,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
     return events</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.print_structure_info"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.print_structure_info"><code class="name flex">
 <span>def <span class="ident">print_structure_info</span></span>(<span>self, container, usages, limits, triggered_events, triggered_requests)</span>
 </code></dt>
 <dd>
@@ -2297,7 +2297,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
         self.debug)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.process_serverless_structure"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.process_serverless_structure"><code class="name flex">
 <span>def <span class="ident">process_serverless_structure</span></span>(<span>self, config, structure, usages, limits, rules)</span>
 </code></dt>
 <dd>
@@ -2353,7 +2353,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
         self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)</code></pre>
 </details>
 </dd>
-<dt id="Guardian.Guardian.Guardian.serverless"><code class="name flex">
+<dt id="src.Guardian.Guardian.Guardian.serverless"><code class="name flex">
 <span>def <span class="ident">serverless</span></span>(<span>self, config, structure, rules)</span>
 </code></dt>
 <dd>
@@ -2427,7 +2427,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 </section>
 </article>
 <nav id="sidebar">
-<a href="/code/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/logo_serverless.png" style="height:100px;"/></a>
+<a href="/"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -2435,43 +2435,43 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 <ul id="index">
 <li><h3>Super-module</h3>
 <ul>
-<li><code><a title="Guardian" href="index.html">Guardian</a></code></li>
+<li><code><a title="src.Guardian" href="index.html">src.Guardian</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="Guardian.Guardian.main" href="#Guardian.Guardian.main">main</a></code></li>
+<li><code><a title="src.Guardian.Guardian.main" href="#src.Guardian.Guardian.main">main</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
-<h4><code><a title="Guardian.Guardian.Guardian" href="#Guardian.Guardian.Guardian">Guardian</a></code></h4>
+<h4><code><a title="src.Guardian.Guardian.Guardian" href="#src.Guardian.Guardian.Guardian">Guardian</a></code></h4>
 <ul class="">
-<li><code><a title="Guardian.Guardian.Guardian.adjust_amount" href="#Guardian.Guardian.Guardian.adjust_amount">adjust_amount</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.adjust_container_state" href="#Guardian.Guardian.Guardian.adjust_container_state">adjust_container_state</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.check_invalid_container_state" href="#Guardian.Guardian.Guardian.check_invalid_container_state">check_invalid_container_state</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.check_invalid_values" href="#Guardian.Guardian.Guardian.check_invalid_values">check_invalid_values</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.check_unset_values" href="#Guardian.Guardian.Guardian.check_unset_values">check_unset_values</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.generate_event" href="#Guardian.Guardian.Guardian.generate_event">generate_event</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.generate_request" href="#Guardian.Guardian.Guardian.generate_request">generate_request</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.get_amount_from_fit_reduction" href="#Guardian.Guardian.Guardian.get_amount_from_fit_reduction">get_amount_from_fit_reduction</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling" href="#Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling">get_amount_from_proportional_energy_rescaling</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.get_container_energy_str" href="#Guardian.Guardian.Guardian.get_container_energy_str">get_container_energy_str</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.get_resource_summary" href="#Guardian.Guardian.Guardian.get_resource_summary">get_resource_summary</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.guard" href="#Guardian.Guardian.Guardian.guard">guard</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.guard_structures" href="#Guardian.Guardian.Guardian.guard_structures">guard_structures</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.is_application" href="#Guardian.Guardian.Guardian.is_application">is_application</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.is_container" href="#Guardian.Guardian.Guardian.is_container">is_container</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.match_rules_and_events" href="#Guardian.Guardian.Guardian.match_rules_and_events">match_rules_and_events</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.match_usages_and_limits" href="#Guardian.Guardian.Guardian.match_usages_and_limits">match_usages_and_limits</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.print_structure_info" href="#Guardian.Guardian.Guardian.print_structure_info">print_structure_info</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.process_serverless_structure" href="#Guardian.Guardian.Guardian.process_serverless_structure">process_serverless_structure</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.reduce_structure_events" href="#Guardian.Guardian.Guardian.reduce_structure_events">reduce_structure_events</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.rule_triggers_event" href="#Guardian.Guardian.Guardian.rule_triggers_event">rule_triggers_event</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.serverless" href="#Guardian.Guardian.Guardian.serverless">serverless</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.sort_events" href="#Guardian.Guardian.Guardian.sort_events">sort_events</a></code></li>
-<li><code><a title="Guardian.Guardian.Guardian.try_get_value" href="#Guardian.Guardian.Guardian.try_get_value">try_get_value</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.adjust_amount" href="#src.Guardian.Guardian.Guardian.adjust_amount">adjust_amount</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.adjust_container_state" href="#src.Guardian.Guardian.Guardian.adjust_container_state">adjust_container_state</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.check_invalid_container_state" href="#src.Guardian.Guardian.Guardian.check_invalid_container_state">check_invalid_container_state</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.check_invalid_values" href="#src.Guardian.Guardian.Guardian.check_invalid_values">check_invalid_values</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.check_unset_values" href="#src.Guardian.Guardian.Guardian.check_unset_values">check_unset_values</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.generate_event" href="#src.Guardian.Guardian.Guardian.generate_event">generate_event</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.generate_request" href="#src.Guardian.Guardian.Guardian.generate_request">generate_request</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_amount_from_fit_reduction" href="#src.Guardian.Guardian.Guardian.get_amount_from_fit_reduction">get_amount_from_fit_reduction</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling" href="#src.Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling">get_amount_from_proportional_energy_rescaling</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_container_energy_str" href="#src.Guardian.Guardian.Guardian.get_container_energy_str">get_container_energy_str</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_resource_summary" href="#src.Guardian.Guardian.Guardian.get_resource_summary">get_resource_summary</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.guard" href="#src.Guardian.Guardian.Guardian.guard">guard</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.guard_structures" href="#src.Guardian.Guardian.Guardian.guard_structures">guard_structures</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.is_application" href="#src.Guardian.Guardian.Guardian.is_application">is_application</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.is_container" href="#src.Guardian.Guardian.Guardian.is_container">is_container</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.match_rules_and_events" href="#src.Guardian.Guardian.Guardian.match_rules_and_events">match_rules_and_events</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.match_usages_and_limits" href="#src.Guardian.Guardian.Guardian.match_usages_and_limits">match_usages_and_limits</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.print_structure_info" href="#src.Guardian.Guardian.Guardian.print_structure_info">print_structure_info</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.process_serverless_structure" href="#src.Guardian.Guardian.Guardian.process_serverless_structure">process_serverless_structure</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.reduce_structure_events" href="#src.Guardian.Guardian.Guardian.reduce_structure_events">reduce_structure_events</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.rule_triggers_event" href="#src.Guardian.Guardian.Guardian.rule_triggers_event">rule_triggers_event</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.serverless" href="#src.Guardian.Guardian.Guardian.serverless">serverless</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.sort_events" href="#src.Guardian.Guardian.Guardian.sort_events">sort_events</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.try_get_value" href="#src.Guardian.Guardian.Guardian.try_get_value">try_get_value</a></code></li>
 </ul>
 </li>
 </ul>
