@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.7.2" />
+<title>src.ReBalancer.ContainerReBalancer API documentation</title>
+<meta name="description" content="" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{font-weight:bold}#index h4 + ul{margin-bottom:.6em}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<link rel="icon" href="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/icon_serverless.png">
+<style>
+.footer_image {
+max-width: 25%;
+float: left;
+padding: 1%;
+}
+</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>src.ReBalancer.ContainerReBalancer</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+import time
+import traceback
+
+import requests
+from json_logic import jsonLogic
+
+from src.MyUtils import MyUtils
+from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced
+from src.StateDatabase import opentsdb
+from src.StateDatabase import couchdb
+
+BDWATCHDOG_CONTAINER_METRICS = [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;]
+GUARDIAN_CONTAINER_METRICS = {
+    &#39;structure.cpu.usage&#39;: [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;]}
+
+
+class ContainerRebalancer:
+    def __init__(self):
+        self.__opentsdb_handler = opentsdb.OpenTSDBServer()
+        self.__couchdb_handler = couchdb.CouchDBServer()
+        self.__NO_METRIC_DATA_DEFAULT_VALUE = self.__opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.__debug = True
+        self.__config = {}
+
+    # @staticmethod
+    # def __generate_request(structure_name, amount, resource, action):
+    #     request = dict(
+    #         type=&#34;request&#34;,
+    #         resource=resource,
+    #         amount=int(amount),
+    #         structure=structure_name,
+    #         action=action,
+    #         timestamp=int(time.time()))
+    #     return request
+
+    def __get_container_usages(self, container):
+        window_difference = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+
+        try:
+            # Remote database operation
+            usages = self.__opentsdb_handler.get_structure_timeseries({&#34;host&#34;: container[&#34;name&#34;]},
+                                                                      window_difference,
+                                                                      window_delay,
+                                                                      BDWATCHDOG_CONTAINER_METRICS,
+                                                                      GUARDIAN_CONTAINER_METRICS)
+
+            # Skip this structure if all the usage metrics are unavailable
+            if all([usages[metric] == self.__NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+                MyUtils.log_warning(&#34;container: {0} has no usage data&#34;.format(container[&#34;name&#34;]), self.__debug)
+                return None
+
+            return usages
+        except Exception as e:
+            MyUtils.log_error(
+                &#34;error with structure: {0} {1} {2}&#34;.format(container[&#34;name&#34;], str(e), str(traceback.format_exc())),
+                self.__debug)
+
+            return None
+
+    def __fill_containers_with_usage_info(self, containers):
+        # Get the usages
+        containers_with_resource_usages = list()
+        for container in containers:
+            usages = self.__get_container_usages(container)
+            if usages:
+                for usage_metric in usages:
+                    keys = usage_metric.split(&#34;.&#34;)
+                    # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
+                    container[&#34;resources&#34;][keys[1]][keys[2]] = usages[usage_metric]
+                containers_with_resource_usages.append(container)
+        return containers_with_resource_usages
+
+    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
+        # Filter the containers between donors and receivers, according to usage and rules
+        donors, receivers = list(), list()
+        for container in containers:
+            try:
+                data = {&#34;cpu&#34;: {&#34;structure&#34;: {&#34;cpu&#34;: {
+                    &#34;usage&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;],
+                    &#34;min&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
+                    &#34;max&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;],
+                    &#34;current&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]}}}}
+            except KeyError:
+                continue
+
+            # containers that have low resource usage (donors)
+            rule_low_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_low&#34;)
+            if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
+                donors.append(container)
+
+            # containers that have a bottleneck (receivers)
+            rule_high_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_high&#34;)
+            if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
+                receivers.append(container)
+
+        if not receivers:
+            MyUtils.log_info(&#34;No containers in need of rebalancing for {0}&#34;.format(app_name), self.__debug)
+            return
+        else:
+            # Order the containers from lower to upper current CPU limit
+            containers_to_give = sorted(receivers, key=lambda c: c[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;])
+
+        # MyUtils.log_info(&#34;Nodes to steal from {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_steal])), self.debug)
+        # MyUtils.log_info(&#34;Nodes to give to {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_give])), self.debug)
+
+        # Steal resources from the low-usage containers
+        shuffling_tuples = list()
+        for container in donors:
+            # Ensure that this request will be successfully processed, otherwise we are &#39;giving&#39; away
+            # extra resources
+
+            stolen_amount = 0.7 * \
+                            (container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;] - max(container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
+                                                                            container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]))
+            shuffling_tuples.append((container, stolen_amount))
+        shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
+
+        # Give the resources to the bottlenecked containers
+        for receiver in containers_to_give:
+
+            if shuffling_tuples:
+                donor, amount_to_scale = shuffling_tuples.pop(0)
+            else:
+                MyUtils.log_info(&#34;No more donors, container {0} left out&#34;.format(receiver[&#34;name&#34;]), self.__debug)
+                continue
+
+            scalable_amount = receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;] - receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
+            # If this container can&#39;t be scaled anymore, skip
+            if scalable_amount == 0:
+                continue
+
+            # Trim the amount to scale if needed
+            if amount_to_scale &gt; scalable_amount:
+                amount_to_scale = scalable_amount
+
+            # Create the pair of scaling requests
+            # TODO This should use Guardians method to generate requests
+            request = dict(
+                type=&#34;request&#34;,
+                resource=&#34;cpu&#34;,
+                amount=int(amount_to_scale),
+                structure=receiver[&#34;name&#34;],
+                action=&#34;CpuRescaleUp&#34;,
+                timestamp=int(time.time()),
+                structure_type=&#34;container&#34;,
+                host=receiver[&#34;host&#34;],
+                host_rescaler_ip=receiver[&#34;host_rescaler_ip&#34;],
+                host_rescaler_port=receiver[&#34;host_rescaler_port&#34;]
+            )
+            self.__couchdb_handler.add_request(request)
+            # TODO This should use Guardians method to generate requests
+            request = dict(
+                type=&#34;request&#34;,
+                resource=&#34;cpu&#34;,
+                amount=int(-amount_to_scale),
+                structure=donor[&#34;name&#34;],
+                action=&#34;CpuRescaleDown&#34;,
+                timestamp=int(time.time()),
+                structure_type=&#34;container&#34;,
+                host=donor[&#34;host&#34;],
+                host_rescaler_ip=donor[&#34;host_rescaler_ip&#34;],
+                host_rescaler_port=donor[&#34;host_rescaler_port&#34;]
+            )
+            self.__couchdb_handler.add_request(request)
+
+            MyUtils.log_info(
+                &#34;Resource swap between {0}(donor) and {1}(receiver)&#34;.format(donor[&#34;name&#34;], receiver[&#34;name&#34;]),
+                self.__debug)
+
+    def __app_containers_can_be_rebalanced(self, application):
+        return app_can_be_rebalanced(application, &#34;container&#34;, self.__couchdb_handler)
+
+    def rebalance_containers(self, config):
+        self.__config = config
+        self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+
+        MyUtils.log_info(&#34;_______________&#34;, self.__debug)
+        MyUtils.log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
+
+        # Get the containers and applications
+        try:
+            applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
+            containers = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
+        except requests.exceptions.HTTPError as e:
+            MyUtils.log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
+            MyUtils.log_error(str(e), self.__debug)
+            return
+
+        # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
+        rebalanceable_apps = list()
+        for app in applications:
+            # TODO Improve this management
+            if &#34;rebalance&#34; not in app or app[&#34;rebalance&#34;] == True:
+                pass
+            else:
+                continue
+            if len(app[&#34;containers&#34;]) &lt;= 1:
+                continue
+
+            if self.__app_containers_can_be_rebalanced(app):
+                rebalanceable_apps.append(app)
+
+        # Sort them according to each application they belong
+        app_containers = dict()
+        for app in rebalanceable_apps:
+            app_name = app[&#34;name&#34;]
+            app_containers[app_name] = list()
+            app_containers_names = app[&#34;containers&#34;]
+            for container in containers:
+                if container[&#34;name&#34;] in app_containers_names:
+                    app_containers[app_name].append(container)
+            # Get the container usages
+            app_containers[app_name] = self.__fill_containers_with_usage_info(app_containers[app_name])
+
+        # Rebalance applications
+        for app in rebalanceable_apps:
+            app_name = app[&#34;name&#34;]
+            MyUtils.log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
+            self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
+
+        MyUtils.log_info(&#34;_______________&#34;, self.__debug)</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="src.ReBalancer.ContainerReBalancer.ContainerRebalancer"><code class="flex name class">
+<span>class <span class="ident">ContainerRebalancer</span></span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ContainerRebalancer:
+    def __init__(self):
+        self.__opentsdb_handler = opentsdb.OpenTSDBServer()
+        self.__couchdb_handler = couchdb.CouchDBServer()
+        self.__NO_METRIC_DATA_DEFAULT_VALUE = self.__opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.__debug = True
+        self.__config = {}
+
+    # @staticmethod
+    # def __generate_request(structure_name, amount, resource, action):
+    #     request = dict(
+    #         type=&#34;request&#34;,
+    #         resource=resource,
+    #         amount=int(amount),
+    #         structure=structure_name,
+    #         action=action,
+    #         timestamp=int(time.time()))
+    #     return request
+
+    def __get_container_usages(self, container):
+        window_difference = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+
+        try:
+            # Remote database operation
+            usages = self.__opentsdb_handler.get_structure_timeseries({&#34;host&#34;: container[&#34;name&#34;]},
+                                                                      window_difference,
+                                                                      window_delay,
+                                                                      BDWATCHDOG_CONTAINER_METRICS,
+                                                                      GUARDIAN_CONTAINER_METRICS)
+
+            # Skip this structure if all the usage metrics are unavailable
+            if all([usages[metric] == self.__NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+                MyUtils.log_warning(&#34;container: {0} has no usage data&#34;.format(container[&#34;name&#34;]), self.__debug)
+                return None
+
+            return usages
+        except Exception as e:
+            MyUtils.log_error(
+                &#34;error with structure: {0} {1} {2}&#34;.format(container[&#34;name&#34;], str(e), str(traceback.format_exc())),
+                self.__debug)
+
+            return None
+
+    def __fill_containers_with_usage_info(self, containers):
+        # Get the usages
+        containers_with_resource_usages = list()
+        for container in containers:
+            usages = self.__get_container_usages(container)
+            if usages:
+                for usage_metric in usages:
+                    keys = usage_metric.split(&#34;.&#34;)
+                    # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
+                    container[&#34;resources&#34;][keys[1]][keys[2]] = usages[usage_metric]
+                containers_with_resource_usages.append(container)
+        return containers_with_resource_usages
+
+    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
+        # Filter the containers between donors and receivers, according to usage and rules
+        donors, receivers = list(), list()
+        for container in containers:
+            try:
+                data = {&#34;cpu&#34;: {&#34;structure&#34;: {&#34;cpu&#34;: {
+                    &#34;usage&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;],
+                    &#34;min&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
+                    &#34;max&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;],
+                    &#34;current&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]}}}}
+            except KeyError:
+                continue
+
+            # containers that have low resource usage (donors)
+            rule_low_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_low&#34;)
+            if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
+                donors.append(container)
+
+            # containers that have a bottleneck (receivers)
+            rule_high_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_high&#34;)
+            if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
+                receivers.append(container)
+
+        if not receivers:
+            MyUtils.log_info(&#34;No containers in need of rebalancing for {0}&#34;.format(app_name), self.__debug)
+            return
+        else:
+            # Order the containers from lower to upper current CPU limit
+            containers_to_give = sorted(receivers, key=lambda c: c[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;])
+
+        # MyUtils.log_info(&#34;Nodes to steal from {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_steal])), self.debug)
+        # MyUtils.log_info(&#34;Nodes to give to {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_give])), self.debug)
+
+        # Steal resources from the low-usage containers
+        shuffling_tuples = list()
+        for container in donors:
+            # Ensure that this request will be successfully processed, otherwise we are &#39;giving&#39; away
+            # extra resources
+
+            stolen_amount = 0.7 * \
+                            (container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;] - max(container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
+                                                                            container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]))
+            shuffling_tuples.append((container, stolen_amount))
+        shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
+
+        # Give the resources to the bottlenecked containers
+        for receiver in containers_to_give:
+
+            if shuffling_tuples:
+                donor, amount_to_scale = shuffling_tuples.pop(0)
+            else:
+                MyUtils.log_info(&#34;No more donors, container {0} left out&#34;.format(receiver[&#34;name&#34;]), self.__debug)
+                continue
+
+            scalable_amount = receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;] - receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
+            # If this container can&#39;t be scaled anymore, skip
+            if scalable_amount == 0:
+                continue
+
+            # Trim the amount to scale if needed
+            if amount_to_scale &gt; scalable_amount:
+                amount_to_scale = scalable_amount
+
+            # Create the pair of scaling requests
+            # TODO This should use Guardians method to generate requests
+            request = dict(
+                type=&#34;request&#34;,
+                resource=&#34;cpu&#34;,
+                amount=int(amount_to_scale),
+                structure=receiver[&#34;name&#34;],
+                action=&#34;CpuRescaleUp&#34;,
+                timestamp=int(time.time()),
+                structure_type=&#34;container&#34;,
+                host=receiver[&#34;host&#34;],
+                host_rescaler_ip=receiver[&#34;host_rescaler_ip&#34;],
+                host_rescaler_port=receiver[&#34;host_rescaler_port&#34;]
+            )
+            self.__couchdb_handler.add_request(request)
+            # TODO This should use Guardians method to generate requests
+            request = dict(
+                type=&#34;request&#34;,
+                resource=&#34;cpu&#34;,
+                amount=int(-amount_to_scale),
+                structure=donor[&#34;name&#34;],
+                action=&#34;CpuRescaleDown&#34;,
+                timestamp=int(time.time()),
+                structure_type=&#34;container&#34;,
+                host=donor[&#34;host&#34;],
+                host_rescaler_ip=donor[&#34;host_rescaler_ip&#34;],
+                host_rescaler_port=donor[&#34;host_rescaler_port&#34;]
+            )
+            self.__couchdb_handler.add_request(request)
+
+            MyUtils.log_info(
+                &#34;Resource swap between {0}(donor) and {1}(receiver)&#34;.format(donor[&#34;name&#34;], receiver[&#34;name&#34;]),
+                self.__debug)
+
+    def __app_containers_can_be_rebalanced(self, application):
+        return app_can_be_rebalanced(application, &#34;container&#34;, self.__couchdb_handler)
+
+    def rebalance_containers(self, config):
+        self.__config = config
+        self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+
+        MyUtils.log_info(&#34;_______________&#34;, self.__debug)
+        MyUtils.log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
+
+        # Get the containers and applications
+        try:
+            applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
+            containers = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
+        except requests.exceptions.HTTPError as e:
+            MyUtils.log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
+            MyUtils.log_error(str(e), self.__debug)
+            return
+
+        # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
+        rebalanceable_apps = list()
+        for app in applications:
+            # TODO Improve this management
+            if &#34;rebalance&#34; not in app or app[&#34;rebalance&#34;] == True:
+                pass
+            else:
+                continue
+            if len(app[&#34;containers&#34;]) &lt;= 1:
+                continue
+
+            if self.__app_containers_can_be_rebalanced(app):
+                rebalanceable_apps.append(app)
+
+        # Sort them according to each application they belong
+        app_containers = dict()
+        for app in rebalanceable_apps:
+            app_name = app[&#34;name&#34;]
+            app_containers[app_name] = list()
+            app_containers_names = app[&#34;containers&#34;]
+            for container in containers:
+                if container[&#34;name&#34;] in app_containers_names:
+                    app_containers[app_name].append(container)
+            # Get the container usages
+            app_containers[app_name] = self.__fill_containers_with_usage_info(app_containers[app_name])
+
+        # Rebalance applications
+        for app in rebalanceable_apps:
+            app_name = app[&#34;name&#34;]
+            MyUtils.log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
+            self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
+
+        MyUtils.log_info(&#34;_______________&#34;, self.__debug)</code></pre>
+</details>
+<h3>Methods</h3>
+<dl>
+<dt id="src.ReBalancer.ContainerReBalancer.ContainerRebalancer.rebalance_containers"><code class="name flex">
+<span>def <span class="ident">rebalance_containers</span></span>(<span>self, config)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def rebalance_containers(self, config):
+    self.__config = config
+    self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+
+    MyUtils.log_info(&#34;_______________&#34;, self.__debug)
+    MyUtils.log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
+
+    # Get the containers and applications
+    try:
+        applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
+        containers = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
+    except requests.exceptions.HTTPError as e:
+        MyUtils.log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
+        MyUtils.log_error(str(e), self.__debug)
+        return
+
+    # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
+    rebalanceable_apps = list()
+    for app in applications:
+        # TODO Improve this management
+        if &#34;rebalance&#34; not in app or app[&#34;rebalance&#34;] == True:
+            pass
+        else:
+            continue
+        if len(app[&#34;containers&#34;]) &lt;= 1:
+            continue
+
+        if self.__app_containers_can_be_rebalanced(app):
+            rebalanceable_apps.append(app)
+
+    # Sort them according to each application they belong
+    app_containers = dict()
+    for app in rebalanceable_apps:
+        app_name = app[&#34;name&#34;]
+        app_containers[app_name] = list()
+        app_containers_names = app[&#34;containers&#34;]
+        for container in containers:
+            if container[&#34;name&#34;] in app_containers_names:
+                app_containers[app_name].append(container)
+        # Get the container usages
+        app_containers[app_name] = self.__fill_containers_with_usage_info(app_containers[app_name])
+
+    # Rebalance applications
+    for app in rebalanceable_apps:
+        app_name = app[&#34;name&#34;]
+        MyUtils.log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
+        self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
+
+    MyUtils.log_info(&#34;_______________&#34;, self.__debug)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<a href="/"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="src.ReBalancer" href="index.html">src.ReBalancer</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="src.ReBalancer.ContainerReBalancer.ContainerRebalancer" href="#src.ReBalancer.ContainerReBalancer.ContainerRebalancer">ContainerRebalancer</a></code></h4>
+<ul class="">
+<li><code><a title="src.ReBalancer.ContainerReBalancer.ContainerRebalancer.rebalance_containers" href="#src.ReBalancer.ContainerReBalancer.ContainerRebalancer.rebalance_containers">rebalance_containers</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<!--Grid row-->
+<div class="row">
+<div class="footer_image">
+<a href="http://gac.udc.es/english/">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/logotipoingles.png"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<a href="http://www.mineco.gob.es">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/mineco.jpg"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/feder.jpg"
+class="img-fluid" alt="">
+<a href="http://www.mineco.gob.es">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<a href="http://www.udc.es/index.html?language=en">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/03_Simbolo_logo_cor.png"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+</div>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.7.2</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>

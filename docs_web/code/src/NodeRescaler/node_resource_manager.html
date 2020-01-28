@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.7.2" />
+<title>src.NodeRescaler.node_resource_manager API documentation</title>
+<meta name="description" content="" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{font-weight:bold}#index h4 + ul{margin-bottom:.6em}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<link rel="icon" href="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/icon_serverless.png">
+<style>
+.footer_image {
+max-width: 25%;
+float: left;
+padding: 1%;
+}
+</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>src.NodeRescaler.node_resource_manager</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+
+import os
+import subprocess
+
+CGROUP_PATH = &#34;/sys/fs/cgroup&#34;
+
+
+def read_cgroup_file_value(file_path):
+    # Read only 1 line for these files as they are &#39;virtual&#39; files
+    try:
+        if os.path.isfile(file_path) and os.access(file_path, os.R_OK):
+            with open(file_path, &#39;r&#39;) as file_handler:
+                value = file_handler.readline().rstrip(&#34;\n&#34;)
+            return {&#34;success&#34;: True, &#34;data&#34;: value}
+        else:
+            return {&#34;success&#34;: False, &#34;error&#34;: &#34;Couldn&#39;t access file: {0}&#34;.format(file_path)}
+    except IOError as e:
+        return {&#34;success&#34;: False, &#34;error&#34;: str(e)}
+
+
+def write_cgroup_file_value(file_path, value):
+    # Write only 1 line for these files as they are &#39;virtual&#39; files
+    try:
+        if os.path.isfile(file_path) and os.access(file_path, os.W_OK):
+            with open(file_path, &#39;w&#39;) as file_handler:
+                # with open(file_path, &#39;r+&#39;) as file_handler:
+                file_handler.write(str(value))
+            return {&#34;success&#34;: True, &#34;data&#34;: value}
+        else:
+            return {&#34;success&#34;: False, &#34;error&#34;: &#34;Couldn&#39;t access file: {0}&#34;.format(file_path)}
+    except IOError as e:
+        return {&#34;success&#34;: False, &#34;error&#34;: str(e)}
+
+
+# CPU #
+CPU_LIMIT_CPUS_LABEL = &#34;cpu_num&#34;
+CPU_LIMIT_ALLOWANCE_LABEL = &#34;cpu_allowance_limit&#34;
+CPU_EFFECTIVE_CPUS_LABEL = &#34;effective_num_cpus&#34;
+CPU_EFFECTIVE_LIMIT = &#34;effective_cpu_limit&#34;
+TICKS_PER_CPU_PERCENTAGE = 1000
+MAX_TICKS_PER_CPU = 100000
+
+
+def get_node_cpus(container_name):
+    # Get info from cgroups cpuacct subsystem
+    cpu_accounting_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuacct&#34;, &#34;lxc&#34;, container_name, &#34;cpu.cfs_quota_us&#34;])
+    op = read_cgroup_file_value(cpu_accounting_path)
+    if op[&#34;success&#34;]:
+        cpu_limit = int(op[&#34;data&#34;])
+        if cpu_limit != -1:
+            # A limit is set, else leave it untouchedset_node_mem
+            cpu_limit = int(op[&#34;data&#34;]) / TICKS_PER_CPU_PERCENTAGE
+    else:
+        return False, op
+
+    # Get info from cgroups cpuset subsystem
+    cpus_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuset&#34;, &#34;lxc&#34;, container_name, &#34;cpuset.cpus&#34;])
+    op = read_cgroup_file_value(cpus_path)
+    if op[&#34;success&#34;]:
+        cpus = op[&#34;data&#34;]
+    else:
+        return False, op
+
+    # Get the number of effective, active cores for the container
+    # 5-7 equals to 3 cores active
+    # 0,1,2,4 equals to 4 cores active
+    # 0-3,6 equals to 5 cores active
+    effective_cpus = 0
+    parts = cpus.split(&#34;,&#34;)
+    for part in parts:
+        ranges = part.split(&#34;-&#34;)
+        if len(ranges) == 1:
+            effective_cpus += 1  # No range so only 1 core
+        else:
+            effective_cpus += (int(ranges[1]) - int(ranges[0])) + 1
+
+        # Get the effective limit of the container, if allowance is set, then it
+    # is medium-limit by number of cpus available otherwise it is the number of
+    # cores multiplied per 100 for percentage
+    if cpu_limit == -1:
+        effective_limit = effective_cpus * 100
+    else:
+        effective_limit = min(cpu_limit, effective_cpus * 100)
+    # cpu_limit = str(cpu_limit)
+
+    final_dict = dict()
+    final_dict[CPU_LIMIT_CPUS_LABEL] = cpus
+    final_dict[CPU_EFFECTIVE_CPUS_LABEL] = effective_cpus
+    final_dict[CPU_EFFECTIVE_LIMIT] = effective_limit
+    final_dict[CPU_LIMIT_ALLOWANCE_LABEL] = cpu_limit
+
+    return True, final_dict
+
+
+def set_node_cpus(container_name, cpu_resource):
+    applied_changes = dict()
+
+    if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
+        cpu_accounting_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuacct&#34;, &#34;lxc&#34;, container_name, &#34;cpu.cfs_quota_us&#34;])
+        cpu_quota_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuacct&#34;, &#34;lxc&#34;, container_name, &#34;cpu.cfs_period_us&#34;])
+
+        try:
+            if cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL] == &#34;-1&#34;:
+                cpu_limit = -1
+            else:
+                cpu_limit = int(cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL])
+        except ValueError as e:
+            return False, {&#34;error&#34;: str(e)}
+
+        if cpu_limit == 0:
+            quota = -1  # Set to max
+        else:
+            quota = TICKS_PER_CPU_PERCENTAGE * cpu_limit  # Every 1000 period ticks count as 1% of CPU
+
+        # Write the number of ticks per second
+        op = write_cgroup_file_value(cpu_quota_path, str(MAX_TICKS_PER_CPU))
+        if not op[&#34;success&#34;]:
+            # Something happened
+            return False, op
+
+        # Write the quota for this container in ticks
+        op = write_cgroup_file_value(cpu_accounting_path, str(quota))
+        if not op[&#34;success&#34;]:
+            # Something happened
+            return False, op
+
+        # This change was applied successfully
+        applied_changes[CPU_LIMIT_ALLOWANCE_LABEL] = str(quota / TICKS_PER_CPU_PERCENTAGE)
+
+    if CPU_LIMIT_CPUS_LABEL in cpu_resource:
+        # container.config[&#34;limits.cpu&#34;] = cpu_resource[CPU_LIMIT_CPUS_LABEL]
+        cpu_cpuset_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuset&#34;, &#34;lxc&#34;, container_name, &#34;cpuset.cpus&#34;])
+
+        op = write_cgroup_file_value(cpu_cpuset_path, str(cpu_resource[CPU_LIMIT_CPUS_LABEL]))
+        if not op[&#34;success&#34;]:
+            # Something happened
+            return False, op
+
+        # This change was applied successfully
+        applied_changes[CPU_LIMIT_CPUS_LABEL] = str(cpu_resource[CPU_LIMIT_CPUS_LABEL])
+
+    # Nothing bad happened
+    return True, applied_changes
+
+
+# MEM #
+MEM_LIMIT_LABEL = &#34;mem_limit&#34;
+LOWER_LIMIT_MEGABYTES = 64
+
+
+def get_node_mem(container_name):
+    final_dict = dict()
+    memory_limit_path = &#34;/&#34;.join([CGROUP_PATH, &#34;memory&#34;, &#34;lxc&#34;, container_name, &#34;memory.limit_in_bytes&#34;])
+
+    op = read_cgroup_file_value(memory_limit_path)
+    if op[&#34;success&#34;]:
+        mem_limit = op[&#34;data&#34;]
+    else:
+        return op
+
+    mem_limit_converted = int(mem_limit) / 1048576  # Convert to MB
+    if mem_limit_converted &gt; 262144:
+        # more than 256G?, probably not medium-limit so set to -1 (&#39;unlimited&#39;)
+        mem_limit_converted = -1
+        final_dict[&#34;unit&#34;] = &#34;unlimited&#34;
+    else:
+        final_dict[&#34;unit&#34;] = &#34;M&#34;
+
+    final_dict[MEM_LIMIT_LABEL] = mem_limit_converted
+    return True, final_dict
+
+
+def set_node_mem(container_name, mem_resource):
+    # Assume an integer for megabytes, add the M and set to cgroups
+    if MEM_LIMIT_LABEL in mem_resource:
+        value = int(mem_resource[MEM_LIMIT_LABEL])
+        value_megabytes_integer = 0
+        if value is -1:
+            value_megabytes = str(value)
+        elif value &lt; LOWER_LIMIT_MEGABYTES:
+            # Don&#39;t allow values lower than an amount like 64 MB as it will probably block the container
+            return False, {&#34;error&#34;: &#34;Memory limit is too low, less than {0} MB&#34;.format(str(LOWER_LIMIT_MEGABYTES))}
+        else:
+            value_megabytes_integer = value
+            value_megabytes = str(value) + &#39;M&#39;
+
+        # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
+        # swap_limit_path = &#34;/&#34;.join([CGROUP_PATH, &#34;memory&#34;, &#34;lxc&#34;, container_name, &#34;memory.memsw.limit_in_bytes&#34;])
+        memory_limit_path = &#34;/&#34;.join([CGROUP_PATH, &#34;memory&#34;, &#34;lxc&#34;, container_name, &#34;memory.limit_in_bytes&#34;])
+
+        # Get the current memory limit in megabytes, that should be equal to the swap space
+        success, current_mem_value = get_node_mem(container_name)
+        current_mem_value = current_mem_value[MEM_LIMIT_LABEL]
+        if current_mem_value &lt; value_megabytes_integer:
+            # If we are to lower the amount, first memory, then swap
+            mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+            # swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+        else:
+            # If we are to increase the amount, first swap, then memory
+            # swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+            mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+
+        if not mem_op[&#34;success&#34;]:
+            # Something happened with memory limit
+            return False, &#34;Memory error {0}&#34;.format(mem_op)
+        # if not swap_op[&#34;success&#34;]:
+        # Something happened with swap limit
+        #    return False, &#34;Memory error {0}&#34;.format(swap_op)
+        # Nothing bad happened
+        return True, {MEM_LIMIT_LABEL: value}
+    else:
+        return True, {}
+
+
+# DISK #
+DISK_READ_LIMIT_LABEL = &#34;disk_read_limit&#34;
+DISK_WRITE_LIMIT_LABEL = &#34;disk_write_limit&#34;
+
+
+def get_system_mounted_filesystems():
+    df = subprocess.Popen([&#34;df&#34;, &#34;--output=source,target&#34;], stdout=subprocess.PIPE)
+    trim = subprocess.Popen([&#34;tr&#34;, &#34;-s&#34;, &#34;[:blank:]&#34;, &#34;,&#34;], stdin=df.stdout, stdout=subprocess.PIPE)
+    lines = trim.communicate()[0].decode(&#39;utf-8&#39;).strip().split(&#39;\n&#39;)
+    return lines
+
+
+def get_device_path_from_mounted_filesystem(path):
+    filesystems = get_system_mounted_filesystems()
+    for fs in filesystems:
+        parts = fs.split(&#34;,&#34;)
+        if parts[1] == path.rstrip(&#34;/&#34;):
+            return parts[0]
+    return &#34;not-found&#34;
+
+
+def get_device_major_minor_from_volumes(device_path):
+    dmsetup = subprocess.Popen(
+        [&#34;dmsetup&#34;, &#34;info&#34;, &#34;-c&#34;, &#34;-o&#34;, &#34;major,minor&#34;, &#34;--separator=,&#34;, &#34;--noheadings&#34;, device_path],
+        stdout=subprocess.PIPE)
+    result = dmsetup.communicate()[0]
+    if dmsetup.returncode == 0:
+        # TODO check that this still works for volumes
+        return result.decode(&#39;utf-8&#39;).strip().split(&#34;,&#34;)
+    else:
+        return None
+
+
+def get_device_major_minor_raw_device(device_path):
+    stat = subprocess.Popen(
+        [&#34;stat&#34;, &#34;-c&#34;, &#34;%t,%T&#34;, device_path],
+        stdout=subprocess.PIPE)
+
+    out, err = stat.communicate()
+    if stat.returncode == 0:
+        both = out.decode(&#39;utf-8&#39;).split(&#34;,&#34;)
+        major_hex, minor_hex = both[0], both[1]
+        return str(int(major_hex, 16)), str(int(minor_hex, 16))
+    else:
+        return None
+
+
+def get_node_disk_limits(container_name):
+    blkio_path = &#34;/&#34;.join([CGROUP_PATH, &#34;blkio&#34;, &#34;lxc&#34;, container_name])
+    devices_read_limit_path = blkio_path + &#34;/blkio.throttle.read_bps_device&#34;
+    devices_write_limit_path = blkio_path + &#34;/blkio.throttle.write_bps_device&#34;
+    devices_read_limits = dict()
+    devices_write_limits = dict()
+
+    if os.path.isfile(devices_read_limit_path) and os.access(devices_read_limit_path, os.R_OK):
+        devices_read_limit_file = open(devices_read_limit_path, &#39;r&#39;)
+        for line in devices_read_limit_file:
+            parts = line.rstrip(&#34;\n&#34;).split()
+            major_minor = parts[0]
+            limit = parts[1]
+            devices_read_limits[major_minor] = limit
+        devices_read_limit_file.close()
+
+    if os.path.isfile(devices_write_limit_path) and os.access(devices_write_limit_path, os.R_OK):
+        devices_write_limit_file = open(devices_write_limit_path, &#39;r&#39;)
+        for line in devices_write_limit_file:
+            parts = line.rstrip(&#34;\n&#34;).split()
+            major_minor = parts[0]
+            limit = parts[1]
+            devices_write_limits[major_minor] = limit
+        devices_write_limit_file.close()
+
+    return devices_read_limits, devices_write_limits
+
+
+def set_node_disk(container_name, disk_resource):
+    major = disk_resource[&#34;major&#34;]
+    minor = disk_resource[&#34;minor&#34;]
+
+    if DISK_WRITE_LIMIT_LABEL in disk_resource:
+        limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+        try:
+            # TODO FIX the path issue
+            # set_bandwidth_script_path = &#34;/&#34;.join([os.getcwd(), &#34;NodeRescaler&#34;])
+            set_bandwidth_script_path = &#34;/&#34;.join([os.getcwd()])
+            set_disk_bandwidth = subprocess.Popen(
+                [&#34;/bin/bash&#34;, &#34;{0}/set_bandwidth.sh&#34;.format(set_bandwidth_script_path), container_name,
+                 &#34;{0}:{1}&#34;.format(major, minor),
+                 limit_write], stderr=subprocess.PIPE)
+            out, err = set_disk_bandwidth.communicate()
+            if set_disk_bandwidth.returncode == 0:
+                pass
+            else:
+                return False, {&#34;error&#34;: &#34;exit code of set_disk_bandwidth was: {0} with error message: {1}&#34;.format(str(
+                    set_disk_bandwidth.returncode), str(err))}
+        except subprocess.CalledProcessError as e:
+            return False, {&#34;error&#34;: str(e)}
+
+    # blkio_path = &#34;/&#34;.join([CGROUP_PATH, &#34;blkio&#34;, &#34;lxc&#34;, container_name])
+    # if DISK_READ_LIMIT_LABEL in disk_resource:
+    #     limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
+    #     devices_read_limit_path = blkio_path + &#34;/blkio.throttle.read_bps_device&#34;
+    #
+    #     op = write_cgroup_file_value(devices_read_limit_path, str(major + &#34;:&#34; + minor + &#34; &#34; + limit_read))
+    #     if not op[&#34;success&#34;]:
+    #         # Something happened
+    #         return False, op
+    #
+    # if DISK_WRITE_LIMIT_LABEL in disk_resource:
+    #     limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+    #     devices_write_limit_path = blkio_path + &#34;/blkio.throttle.write_bps_device&#34;
+    #
+    #     op = write_cgroup_file_value(devices_write_limit_path, str(major + &#34;:&#34; + minor + &#34; &#34; + limit_write))
+    #     if not op[&#34;success&#34;]:
+    #         # Something happened
+    #         return False, op
+
+    # Nothing bad happened
+    return True, disk_resource
+
+
+def get_device_major_minor(device_path):
+    # Try next for partitions or devices
+    major_minor = get_device_major_minor_raw_device(device_path)
+    if major_minor and major_minor != (&#34;0&#34;, &#34;0&#34;):
+        # TODO FIX this or find a solution, partitions can&#39;t be limited, only devices
+        if device_path.startswith(&#34;/dev/sd&#34;):
+            device_path = device_path[0:8]
+            major_minor = get_device_major_minor_raw_device(device_path)
+            if major_minor and major_minor != (&#34;0&#34;, &#34;0&#34;):
+                return major_minor[0], major_minor[1]
+
+    # Try first for volume devices
+    major_minor = get_device_major_minor_from_volumes(device_path)
+    if major_minor:
+        return major_minor[0], major_minor[1]
+
+    return None
+
+
+def get_node_disks(container_name, devices):
+    SKIP_DISKS = [&#34;bdev&#34;, &#34;development&#34;, &#34;production&#34;, &#34;root&#34;, &#34;not-found&#34;]
+    retrieved_disks = list()
+    limits_read, limits_write = get_node_disk_limits(container_name)
+    for device in devices.keys():
+        # TODO FIX, ignored devices should be obtained from a file
+        if device in SKIP_DISKS:
+            continue
+        device_mountpoint = devices[device][&#34;source&#34;]
+        device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
+
+        try:
+            major, minor = get_device_major_minor(device_path)
+        except TypeError as e:
+            # None was returned
+            continue
+            # return False, {&#34;error&#34;: str(e)}
+
+        major_minor_str = major + &#34;:&#34; + minor
+
+        if major_minor_str in limits_read:
+            # Convert the limits to Mbits/s
+            device_read_limit = int(limits_read[major_minor_str])
+            device_read_limit = int(device_read_limit / 1048576)
+        else:
+            device_read_limit = -1
+
+        if major_minor_str in limits_write:
+            # Convert the limits to Mbits/s
+            device_write_limit = int(limits_write[major_minor_str])
+            device_write_limit = int(device_write_limit / 1048576)
+        else:
+            device_write_limit = -1
+
+        disk_dict = dict()
+        disk_dict[&#34;mountpoint&#34;] = device_mountpoint
+        disk_dict[&#34;device_path&#34;] = device_path
+        disk_dict[&#34;major&#34;] = major
+        disk_dict[&#34;minor&#34;] = minor
+        disk_dict[&#34;unit&#34;] = &#34;Mbit&#34;
+        disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
+        disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
+
+        retrieved_disks.append(disk_dict)
+
+    return True, retrieved_disks
+
+
+# NET #
+NET_UNIT_NAME_LABEL = &#34;unit&#34;
+NET_DEVICE_HOST_NAME_LABEL = &#34;device_name_in_host&#34;
+NET_DEVICE_NAME_LABEL = &#34;device_name_in_container&#34;
+NET_LIMIT_LABEL = &#34;net_limit&#34;
+
+
+def get_interface_limit(interface_name):
+    tc = subprocess.Popen([&#34;tc&#34;, &#34;-d&#34;, &#34;qdisc&#34;, &#34;show&#34;, &#34;dev&#34;, interface_name], stdout=subprocess.PIPE)
+    # TODO make sure to add the decode line everywhere necessary (where communicate is used)
+    lines = tc.communicate()[0].decode(&#39;utf-8&#39;).strip().split(&#34;,&#34;)
+    parts = list()
+    for line in lines:
+        parts = line.rstrip(&#34;\n&#34;).split()  # Just 1 line should be available
+        break
+    if len(parts) &gt; 6:
+        if parts[7].endswith(&#34;Mbit&#34;):
+            return int(parts[7].strip(&#34;Mbit&#34;))
+        elif parts[7].endswith(&#34;Kbit&#34;):
+            return int(parts[7].strip(&#34;Kbit&#34;)) / 1024
+
+    else:
+        return -1
+
+
+def unset_interface_limit(interface_name):
+    try:
+        tc = subprocess.Popen([&#34;tc&#34;, &#34;qdisc&#34;, &#34;del&#34;, &#34;dev&#34;, interface_name, &#34;root&#34;], stderr=subprocess.PIPE)
+        tc.wait()
+        if tc.returncode == 0:
+            return True
+        else:
+            return False, {&#34;error&#34;: &#34;exit code of tc was: {0}&#34;.format(str(tc.returncode))}
+    except subprocess.CalledProcessError as e:
+        return False, {&#34;error&#34;: &#34;error trying to execute command: {0}&#34;.format(str(e))}
+
+
+# tc qdisc add dev veth6UQ01E root tbf rate 100Mbit burst 1000kb latency 100ms
+def set_interface_limit(interface_name, net):
+    try:
+        net_limit = str(net[NET_LIMIT_LABEL]) + &#34;Mbit&#34;
+        tc = subprocess.Popen(
+            [&#34;tc&#34;, &#34;qdisc&#34;, &#34;add&#34;, &#34;dev&#34;, interface_name, &#34;root&#34;, &#34;tbf&#34;, &#34;rate&#34;, net_limit, &#34;burst&#34;,
+             &#34;1000kb&#34;, &#34;latency&#34;, &#34;100ms&#34;], stderr=subprocess.PIPE)
+        # tc.wait()
+        out, err = tc.communicate()
+        if tc.returncode == 0:
+            return True, net
+        else:
+            return False, {&#34;error&#34;: &#34;exit code of tc was: {0} with error: {1}&#34;.format(str(tc.returncode), str(err))}
+    except subprocess.CalledProcessError as e:
+        return False, {&#34;error&#34;: str(e)}
+
+
+def set_node_net(net):
+    if NET_LIMIT_LABEL in net:
+
+        if NET_DEVICE_HOST_NAME_LABEL in net:
+            # host network interface available (e.g., vethWMPX65)
+            interface_in_host = net[NET_DEVICE_HOST_NAME_LABEL]
+        else:
+            # If no host interface name is available, it is not possible to do anything
+            return False, {&#34;error&#34;: &#34;No host network interface name was provided&#34;}
+
+        if net[NET_LIMIT_LABEL] != -1 and net[NET_LIMIT_LABEL] != &#34;&#34;:
+            # Unset old limit and set new
+            unset_interface_limit(interface_in_host)
+            return set_interface_limit(interface_in_host, net)
+        else:
+            # Unset the limit, if it was not set before trying to unset it will give an error so skip it
+            unset_interface_limit(interface_in_host)
+            # Nothing bad happened
+            return True, net
+
+    else:
+        # No limit to set, leave untouched
+        # Nothing bad happened
+        return True, net
+
+
+def get_node_networks(networks):
+    retrieved_nets = list()
+    for net in networks:
+        interface_host_name = net[&#34;host_interface&#34;]
+
+        net_dict = dict()
+        net_dict[NET_DEVICE_NAME_LABEL] = net[&#34;container_interface&#34;]
+        net_dict[NET_DEVICE_HOST_NAME_LABEL] = interface_host_name
+        net_dict[NET_LIMIT_LABEL] = get_interface_limit(interface_host_name)
+        if net_dict[NET_LIMIT_LABEL] == -1:
+            net_dict[NET_UNIT_NAME_LABEL] = &#34;unlimited&#34;
+        else:
+            net_dict[NET_UNIT_NAME_LABEL] = &#34;Mbit&#34;
+
+        retrieved_nets.append(net_dict)
+
+    return True, retrieved_nets</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="src.NodeRescaler.node_resource_manager.get_device_major_minor"><code class="name flex">
+<span>def <span class="ident">get_device_major_minor</span></span>(<span>device_path)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_device_major_minor(device_path):
+    # Try next for partitions or devices
+    major_minor = get_device_major_minor_raw_device(device_path)
+    if major_minor and major_minor != (&#34;0&#34;, &#34;0&#34;):
+        # TODO FIX this or find a solution, partitions can&#39;t be limited, only devices
+        if device_path.startswith(&#34;/dev/sd&#34;):
+            device_path = device_path[0:8]
+            major_minor = get_device_major_minor_raw_device(device_path)
+            if major_minor and major_minor != (&#34;0&#34;, &#34;0&#34;):
+                return major_minor[0], major_minor[1]
+
+    # Try first for volume devices
+    major_minor = get_device_major_minor_from_volumes(device_path)
+    if major_minor:
+        return major_minor[0], major_minor[1]
+
+    return None</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_device_major_minor_from_volumes"><code class="name flex">
+<span>def <span class="ident">get_device_major_minor_from_volumes</span></span>(<span>device_path)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_device_major_minor_from_volumes(device_path):
+    dmsetup = subprocess.Popen(
+        [&#34;dmsetup&#34;, &#34;info&#34;, &#34;-c&#34;, &#34;-o&#34;, &#34;major,minor&#34;, &#34;--separator=,&#34;, &#34;--noheadings&#34;, device_path],
+        stdout=subprocess.PIPE)
+    result = dmsetup.communicate()[0]
+    if dmsetup.returncode == 0:
+        # TODO check that this still works for volumes
+        return result.decode(&#39;utf-8&#39;).strip().split(&#34;,&#34;)
+    else:
+        return None</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_device_major_minor_raw_device"><code class="name flex">
+<span>def <span class="ident">get_device_major_minor_raw_device</span></span>(<span>device_path)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_device_major_minor_raw_device(device_path):
+    stat = subprocess.Popen(
+        [&#34;stat&#34;, &#34;-c&#34;, &#34;%t,%T&#34;, device_path],
+        stdout=subprocess.PIPE)
+
+    out, err = stat.communicate()
+    if stat.returncode == 0:
+        both = out.decode(&#39;utf-8&#39;).split(&#34;,&#34;)
+        major_hex, minor_hex = both[0], both[1]
+        return str(int(major_hex, 16)), str(int(minor_hex, 16))
+    else:
+        return None</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_device_path_from_mounted_filesystem"><code class="name flex">
+<span>def <span class="ident">get_device_path_from_mounted_filesystem</span></span>(<span>path)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_device_path_from_mounted_filesystem(path):
+    filesystems = get_system_mounted_filesystems()
+    for fs in filesystems:
+        parts = fs.split(&#34;,&#34;)
+        if parts[1] == path.rstrip(&#34;/&#34;):
+            return parts[0]
+    return &#34;not-found&#34;</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_interface_limit"><code class="name flex">
+<span>def <span class="ident">get_interface_limit</span></span>(<span>interface_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_interface_limit(interface_name):
+    tc = subprocess.Popen([&#34;tc&#34;, &#34;-d&#34;, &#34;qdisc&#34;, &#34;show&#34;, &#34;dev&#34;, interface_name], stdout=subprocess.PIPE)
+    # TODO make sure to add the decode line everywhere necessary (where communicate is used)
+    lines = tc.communicate()[0].decode(&#39;utf-8&#39;).strip().split(&#34;,&#34;)
+    parts = list()
+    for line in lines:
+        parts = line.rstrip(&#34;\n&#34;).split()  # Just 1 line should be available
+        break
+    if len(parts) &gt; 6:
+        if parts[7].endswith(&#34;Mbit&#34;):
+            return int(parts[7].strip(&#34;Mbit&#34;))
+        elif parts[7].endswith(&#34;Kbit&#34;):
+            return int(parts[7].strip(&#34;Kbit&#34;)) / 1024
+
+    else:
+        return -1</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_node_cpus"><code class="name flex">
+<span>def <span class="ident">get_node_cpus</span></span>(<span>container_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_node_cpus(container_name):
+    # Get info from cgroups cpuacct subsystem
+    cpu_accounting_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuacct&#34;, &#34;lxc&#34;, container_name, &#34;cpu.cfs_quota_us&#34;])
+    op = read_cgroup_file_value(cpu_accounting_path)
+    if op[&#34;success&#34;]:
+        cpu_limit = int(op[&#34;data&#34;])
+        if cpu_limit != -1:
+            # A limit is set, else leave it untouchedset_node_mem
+            cpu_limit = int(op[&#34;data&#34;]) / TICKS_PER_CPU_PERCENTAGE
+    else:
+        return False, op
+
+    # Get info from cgroups cpuset subsystem
+    cpus_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuset&#34;, &#34;lxc&#34;, container_name, &#34;cpuset.cpus&#34;])
+    op = read_cgroup_file_value(cpus_path)
+    if op[&#34;success&#34;]:
+        cpus = op[&#34;data&#34;]
+    else:
+        return False, op
+
+    # Get the number of effective, active cores for the container
+    # 5-7 equals to 3 cores active
+    # 0,1,2,4 equals to 4 cores active
+    # 0-3,6 equals to 5 cores active
+    effective_cpus = 0
+    parts = cpus.split(&#34;,&#34;)
+    for part in parts:
+        ranges = part.split(&#34;-&#34;)
+        if len(ranges) == 1:
+            effective_cpus += 1  # No range so only 1 core
+        else:
+            effective_cpus += (int(ranges[1]) - int(ranges[0])) + 1
+
+        # Get the effective limit of the container, if allowance is set, then it
+    # is medium-limit by number of cpus available otherwise it is the number of
+    # cores multiplied per 100 for percentage
+    if cpu_limit == -1:
+        effective_limit = effective_cpus * 100
+    else:
+        effective_limit = min(cpu_limit, effective_cpus * 100)
+    # cpu_limit = str(cpu_limit)
+
+    final_dict = dict()
+    final_dict[CPU_LIMIT_CPUS_LABEL] = cpus
+    final_dict[CPU_EFFECTIVE_CPUS_LABEL] = effective_cpus
+    final_dict[CPU_EFFECTIVE_LIMIT] = effective_limit
+    final_dict[CPU_LIMIT_ALLOWANCE_LABEL] = cpu_limit
+
+    return True, final_dict</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_node_disk_limits"><code class="name flex">
+<span>def <span class="ident">get_node_disk_limits</span></span>(<span>container_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_node_disk_limits(container_name):
+    blkio_path = &#34;/&#34;.join([CGROUP_PATH, &#34;blkio&#34;, &#34;lxc&#34;, container_name])
+    devices_read_limit_path = blkio_path + &#34;/blkio.throttle.read_bps_device&#34;
+    devices_write_limit_path = blkio_path + &#34;/blkio.throttle.write_bps_device&#34;
+    devices_read_limits = dict()
+    devices_write_limits = dict()
+
+    if os.path.isfile(devices_read_limit_path) and os.access(devices_read_limit_path, os.R_OK):
+        devices_read_limit_file = open(devices_read_limit_path, &#39;r&#39;)
+        for line in devices_read_limit_file:
+            parts = line.rstrip(&#34;\n&#34;).split()
+            major_minor = parts[0]
+            limit = parts[1]
+            devices_read_limits[major_minor] = limit
+        devices_read_limit_file.close()
+
+    if os.path.isfile(devices_write_limit_path) and os.access(devices_write_limit_path, os.R_OK):
+        devices_write_limit_file = open(devices_write_limit_path, &#39;r&#39;)
+        for line in devices_write_limit_file:
+            parts = line.rstrip(&#34;\n&#34;).split()
+            major_minor = parts[0]
+            limit = parts[1]
+            devices_write_limits[major_minor] = limit
+        devices_write_limit_file.close()
+
+    return devices_read_limits, devices_write_limits</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_node_disks"><code class="name flex">
+<span>def <span class="ident">get_node_disks</span></span>(<span>container_name, devices)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_node_disks(container_name, devices):
+    SKIP_DISKS = [&#34;bdev&#34;, &#34;development&#34;, &#34;production&#34;, &#34;root&#34;, &#34;not-found&#34;]
+    retrieved_disks = list()
+    limits_read, limits_write = get_node_disk_limits(container_name)
+    for device in devices.keys():
+        # TODO FIX, ignored devices should be obtained from a file
+        if device in SKIP_DISKS:
+            continue
+        device_mountpoint = devices[device][&#34;source&#34;]
+        device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
+
+        try:
+            major, minor = get_device_major_minor(device_path)
+        except TypeError as e:
+            # None was returned
+            continue
+            # return False, {&#34;error&#34;: str(e)}
+
+        major_minor_str = major + &#34;:&#34; + minor
+
+        if major_minor_str in limits_read:
+            # Convert the limits to Mbits/s
+            device_read_limit = int(limits_read[major_minor_str])
+            device_read_limit = int(device_read_limit / 1048576)
+        else:
+            device_read_limit = -1
+
+        if major_minor_str in limits_write:
+            # Convert the limits to Mbits/s
+            device_write_limit = int(limits_write[major_minor_str])
+            device_write_limit = int(device_write_limit / 1048576)
+        else:
+            device_write_limit = -1
+
+        disk_dict = dict()
+        disk_dict[&#34;mountpoint&#34;] = device_mountpoint
+        disk_dict[&#34;device_path&#34;] = device_path
+        disk_dict[&#34;major&#34;] = major
+        disk_dict[&#34;minor&#34;] = minor
+        disk_dict[&#34;unit&#34;] = &#34;Mbit&#34;
+        disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
+        disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
+
+        retrieved_disks.append(disk_dict)
+
+    return True, retrieved_disks</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_node_mem"><code class="name flex">
+<span>def <span class="ident">get_node_mem</span></span>(<span>container_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_node_mem(container_name):
+    final_dict = dict()
+    memory_limit_path = &#34;/&#34;.join([CGROUP_PATH, &#34;memory&#34;, &#34;lxc&#34;, container_name, &#34;memory.limit_in_bytes&#34;])
+
+    op = read_cgroup_file_value(memory_limit_path)
+    if op[&#34;success&#34;]:
+        mem_limit = op[&#34;data&#34;]
+    else:
+        return op
+
+    mem_limit_converted = int(mem_limit) / 1048576  # Convert to MB
+    if mem_limit_converted &gt; 262144:
+        # more than 256G?, probably not medium-limit so set to -1 (&#39;unlimited&#39;)
+        mem_limit_converted = -1
+        final_dict[&#34;unit&#34;] = &#34;unlimited&#34;
+    else:
+        final_dict[&#34;unit&#34;] = &#34;M&#34;
+
+    final_dict[MEM_LIMIT_LABEL] = mem_limit_converted
+    return True, final_dict</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_node_networks"><code class="name flex">
+<span>def <span class="ident">get_node_networks</span></span>(<span>networks)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_node_networks(networks):
+    retrieved_nets = list()
+    for net in networks:
+        interface_host_name = net[&#34;host_interface&#34;]
+
+        net_dict = dict()
+        net_dict[NET_DEVICE_NAME_LABEL] = net[&#34;container_interface&#34;]
+        net_dict[NET_DEVICE_HOST_NAME_LABEL] = interface_host_name
+        net_dict[NET_LIMIT_LABEL] = get_interface_limit(interface_host_name)
+        if net_dict[NET_LIMIT_LABEL] == -1:
+            net_dict[NET_UNIT_NAME_LABEL] = &#34;unlimited&#34;
+        else:
+            net_dict[NET_UNIT_NAME_LABEL] = &#34;Mbit&#34;
+
+        retrieved_nets.append(net_dict)
+
+    return True, retrieved_nets</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.get_system_mounted_filesystems"><code class="name flex">
+<span>def <span class="ident">get_system_mounted_filesystems</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_system_mounted_filesystems():
+    df = subprocess.Popen([&#34;df&#34;, &#34;--output=source,target&#34;], stdout=subprocess.PIPE)
+    trim = subprocess.Popen([&#34;tr&#34;, &#34;-s&#34;, &#34;[:blank:]&#34;, &#34;,&#34;], stdin=df.stdout, stdout=subprocess.PIPE)
+    lines = trim.communicate()[0].decode(&#39;utf-8&#39;).strip().split(&#39;\n&#39;)
+    return lines</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.read_cgroup_file_value"><code class="name flex">
+<span>def <span class="ident">read_cgroup_file_value</span></span>(<span>file_path)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def read_cgroup_file_value(file_path):
+    # Read only 1 line for these files as they are &#39;virtual&#39; files
+    try:
+        if os.path.isfile(file_path) and os.access(file_path, os.R_OK):
+            with open(file_path, &#39;r&#39;) as file_handler:
+                value = file_handler.readline().rstrip(&#34;\n&#34;)
+            return {&#34;success&#34;: True, &#34;data&#34;: value}
+        else:
+            return {&#34;success&#34;: False, &#34;error&#34;: &#34;Couldn&#39;t access file: {0}&#34;.format(file_path)}
+    except IOError as e:
+        return {&#34;success&#34;: False, &#34;error&#34;: str(e)}</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.set_interface_limit"><code class="name flex">
+<span>def <span class="ident">set_interface_limit</span></span>(<span>interface_name, net)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_interface_limit(interface_name, net):
+    try:
+        net_limit = str(net[NET_LIMIT_LABEL]) + &#34;Mbit&#34;
+        tc = subprocess.Popen(
+            [&#34;tc&#34;, &#34;qdisc&#34;, &#34;add&#34;, &#34;dev&#34;, interface_name, &#34;root&#34;, &#34;tbf&#34;, &#34;rate&#34;, net_limit, &#34;burst&#34;,
+             &#34;1000kb&#34;, &#34;latency&#34;, &#34;100ms&#34;], stderr=subprocess.PIPE)
+        # tc.wait()
+        out, err = tc.communicate()
+        if tc.returncode == 0:
+            return True, net
+        else:
+            return False, {&#34;error&#34;: &#34;exit code of tc was: {0} with error: {1}&#34;.format(str(tc.returncode), str(err))}
+    except subprocess.CalledProcessError as e:
+        return False, {&#34;error&#34;: str(e)}</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.set_node_cpus"><code class="name flex">
+<span>def <span class="ident">set_node_cpus</span></span>(<span>container_name, cpu_resource)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_node_cpus(container_name, cpu_resource):
+    applied_changes = dict()
+
+    if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
+        cpu_accounting_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuacct&#34;, &#34;lxc&#34;, container_name, &#34;cpu.cfs_quota_us&#34;])
+        cpu_quota_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuacct&#34;, &#34;lxc&#34;, container_name, &#34;cpu.cfs_period_us&#34;])
+
+        try:
+            if cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL] == &#34;-1&#34;:
+                cpu_limit = -1
+            else:
+                cpu_limit = int(cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL])
+        except ValueError as e:
+            return False, {&#34;error&#34;: str(e)}
+
+        if cpu_limit == 0:
+            quota = -1  # Set to max
+        else:
+            quota = TICKS_PER_CPU_PERCENTAGE * cpu_limit  # Every 1000 period ticks count as 1% of CPU
+
+        # Write the number of ticks per second
+        op = write_cgroup_file_value(cpu_quota_path, str(MAX_TICKS_PER_CPU))
+        if not op[&#34;success&#34;]:
+            # Something happened
+            return False, op
+
+        # Write the quota for this container in ticks
+        op = write_cgroup_file_value(cpu_accounting_path, str(quota))
+        if not op[&#34;success&#34;]:
+            # Something happened
+            return False, op
+
+        # This change was applied successfully
+        applied_changes[CPU_LIMIT_ALLOWANCE_LABEL] = str(quota / TICKS_PER_CPU_PERCENTAGE)
+
+    if CPU_LIMIT_CPUS_LABEL in cpu_resource:
+        # container.config[&#34;limits.cpu&#34;] = cpu_resource[CPU_LIMIT_CPUS_LABEL]
+        cpu_cpuset_path = &#34;/&#34;.join([CGROUP_PATH, &#34;cpuset&#34;, &#34;lxc&#34;, container_name, &#34;cpuset.cpus&#34;])
+
+        op = write_cgroup_file_value(cpu_cpuset_path, str(cpu_resource[CPU_LIMIT_CPUS_LABEL]))
+        if not op[&#34;success&#34;]:
+            # Something happened
+            return False, op
+
+        # This change was applied successfully
+        applied_changes[CPU_LIMIT_CPUS_LABEL] = str(cpu_resource[CPU_LIMIT_CPUS_LABEL])
+
+    # Nothing bad happened
+    return True, applied_changes</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.set_node_disk"><code class="name flex">
+<span>def <span class="ident">set_node_disk</span></span>(<span>container_name, disk_resource)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_node_disk(container_name, disk_resource):
+    major = disk_resource[&#34;major&#34;]
+    minor = disk_resource[&#34;minor&#34;]
+
+    if DISK_WRITE_LIMIT_LABEL in disk_resource:
+        limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+        try:
+            # TODO FIX the path issue
+            # set_bandwidth_script_path = &#34;/&#34;.join([os.getcwd(), &#34;NodeRescaler&#34;])
+            set_bandwidth_script_path = &#34;/&#34;.join([os.getcwd()])
+            set_disk_bandwidth = subprocess.Popen(
+                [&#34;/bin/bash&#34;, &#34;{0}/set_bandwidth.sh&#34;.format(set_bandwidth_script_path), container_name,
+                 &#34;{0}:{1}&#34;.format(major, minor),
+                 limit_write], stderr=subprocess.PIPE)
+            out, err = set_disk_bandwidth.communicate()
+            if set_disk_bandwidth.returncode == 0:
+                pass
+            else:
+                return False, {&#34;error&#34;: &#34;exit code of set_disk_bandwidth was: {0} with error message: {1}&#34;.format(str(
+                    set_disk_bandwidth.returncode), str(err))}
+        except subprocess.CalledProcessError as e:
+            return False, {&#34;error&#34;: str(e)}
+
+    # blkio_path = &#34;/&#34;.join([CGROUP_PATH, &#34;blkio&#34;, &#34;lxc&#34;, container_name])
+    # if DISK_READ_LIMIT_LABEL in disk_resource:
+    #     limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
+    #     devices_read_limit_path = blkio_path + &#34;/blkio.throttle.read_bps_device&#34;
+    #
+    #     op = write_cgroup_file_value(devices_read_limit_path, str(major + &#34;:&#34; + minor + &#34; &#34; + limit_read))
+    #     if not op[&#34;success&#34;]:
+    #         # Something happened
+    #         return False, op
+    #
+    # if DISK_WRITE_LIMIT_LABEL in disk_resource:
+    #     limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+    #     devices_write_limit_path = blkio_path + &#34;/blkio.throttle.write_bps_device&#34;
+    #
+    #     op = write_cgroup_file_value(devices_write_limit_path, str(major + &#34;:&#34; + minor + &#34; &#34; + limit_write))
+    #     if not op[&#34;success&#34;]:
+    #         # Something happened
+    #         return False, op
+
+    # Nothing bad happened
+    return True, disk_resource</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.set_node_mem"><code class="name flex">
+<span>def <span class="ident">set_node_mem</span></span>(<span>container_name, mem_resource)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_node_mem(container_name, mem_resource):
+    # Assume an integer for megabytes, add the M and set to cgroups
+    if MEM_LIMIT_LABEL in mem_resource:
+        value = int(mem_resource[MEM_LIMIT_LABEL])
+        value_megabytes_integer = 0
+        if value is -1:
+            value_megabytes = str(value)
+        elif value &lt; LOWER_LIMIT_MEGABYTES:
+            # Don&#39;t allow values lower than an amount like 64 MB as it will probably block the container
+            return False, {&#34;error&#34;: &#34;Memory limit is too low, less than {0} MB&#34;.format(str(LOWER_LIMIT_MEGABYTES))}
+        else:
+            value_megabytes_integer = value
+            value_megabytes = str(value) + &#39;M&#39;
+
+        # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
+        # swap_limit_path = &#34;/&#34;.join([CGROUP_PATH, &#34;memory&#34;, &#34;lxc&#34;, container_name, &#34;memory.memsw.limit_in_bytes&#34;])
+        memory_limit_path = &#34;/&#34;.join([CGROUP_PATH, &#34;memory&#34;, &#34;lxc&#34;, container_name, &#34;memory.limit_in_bytes&#34;])
+
+        # Get the current memory limit in megabytes, that should be equal to the swap space
+        success, current_mem_value = get_node_mem(container_name)
+        current_mem_value = current_mem_value[MEM_LIMIT_LABEL]
+        if current_mem_value &lt; value_megabytes_integer:
+            # If we are to lower the amount, first memory, then swap
+            mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+            # swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+        else:
+            # If we are to increase the amount, first swap, then memory
+            # swap_op = write_cgroup_file_value(swap_limit_path, value_megabytes)
+            mem_op = write_cgroup_file_value(memory_limit_path, value_megabytes)
+
+        if not mem_op[&#34;success&#34;]:
+            # Something happened with memory limit
+            return False, &#34;Memory error {0}&#34;.format(mem_op)
+        # if not swap_op[&#34;success&#34;]:
+        # Something happened with swap limit
+        #    return False, &#34;Memory error {0}&#34;.format(swap_op)
+        # Nothing bad happened
+        return True, {MEM_LIMIT_LABEL: value}
+    else:
+        return True, {}</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.set_node_net"><code class="name flex">
+<span>def <span class="ident">set_node_net</span></span>(<span>net)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_node_net(net):
+    if NET_LIMIT_LABEL in net:
+
+        if NET_DEVICE_HOST_NAME_LABEL in net:
+            # host network interface available (e.g., vethWMPX65)
+            interface_in_host = net[NET_DEVICE_HOST_NAME_LABEL]
+        else:
+            # If no host interface name is available, it is not possible to do anything
+            return False, {&#34;error&#34;: &#34;No host network interface name was provided&#34;}
+
+        if net[NET_LIMIT_LABEL] != -1 and net[NET_LIMIT_LABEL] != &#34;&#34;:
+            # Unset old limit and set new
+            unset_interface_limit(interface_in_host)
+            return set_interface_limit(interface_in_host, net)
+        else:
+            # Unset the limit, if it was not set before trying to unset it will give an error so skip it
+            unset_interface_limit(interface_in_host)
+            # Nothing bad happened
+            return True, net
+
+    else:
+        # No limit to set, leave untouched
+        # Nothing bad happened
+        return True, net</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.unset_interface_limit"><code class="name flex">
+<span>def <span class="ident">unset_interface_limit</span></span>(<span>interface_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def unset_interface_limit(interface_name):
+    try:
+        tc = subprocess.Popen([&#34;tc&#34;, &#34;qdisc&#34;, &#34;del&#34;, &#34;dev&#34;, interface_name, &#34;root&#34;], stderr=subprocess.PIPE)
+        tc.wait()
+        if tc.returncode == 0:
+            return True
+        else:
+            return False, {&#34;error&#34;: &#34;exit code of tc was: {0}&#34;.format(str(tc.returncode))}
+    except subprocess.CalledProcessError as e:
+        return False, {&#34;error&#34;: &#34;error trying to execute command: {0}&#34;.format(str(e))}</code></pre>
+</details>
+</dd>
+<dt id="src.NodeRescaler.node_resource_manager.write_cgroup_file_value"><code class="name flex">
+<span>def <span class="ident">write_cgroup_file_value</span></span>(<span>file_path, value)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def write_cgroup_file_value(file_path, value):
+    # Write only 1 line for these files as they are &#39;virtual&#39; files
+    try:
+        if os.path.isfile(file_path) and os.access(file_path, os.W_OK):
+            with open(file_path, &#39;w&#39;) as file_handler:
+                # with open(file_path, &#39;r+&#39;) as file_handler:
+                file_handler.write(str(value))
+            return {&#34;success&#34;: True, &#34;data&#34;: value}
+        else:
+            return {&#34;success&#34;: False, &#34;error&#34;: &#34;Couldn&#39;t access file: {0}&#34;.format(file_path)}
+    except IOError as e:
+        return {&#34;success&#34;: False, &#34;error&#34;: str(e)}</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+</section>
+</article>
+<nav id="sidebar">
+<a href="/"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="src.NodeRescaler" href="index.html">src.NodeRescaler</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_device_major_minor" href="#src.NodeRescaler.node_resource_manager.get_device_major_minor">get_device_major_minor</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_device_major_minor_from_volumes" href="#src.NodeRescaler.node_resource_manager.get_device_major_minor_from_volumes">get_device_major_minor_from_volumes</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_device_major_minor_raw_device" href="#src.NodeRescaler.node_resource_manager.get_device_major_minor_raw_device">get_device_major_minor_raw_device</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_device_path_from_mounted_filesystem" href="#src.NodeRescaler.node_resource_manager.get_device_path_from_mounted_filesystem">get_device_path_from_mounted_filesystem</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_interface_limit" href="#src.NodeRescaler.node_resource_manager.get_interface_limit">get_interface_limit</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_node_cpus" href="#src.NodeRescaler.node_resource_manager.get_node_cpus">get_node_cpus</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_node_disk_limits" href="#src.NodeRescaler.node_resource_manager.get_node_disk_limits">get_node_disk_limits</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_node_disks" href="#src.NodeRescaler.node_resource_manager.get_node_disks">get_node_disks</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_node_mem" href="#src.NodeRescaler.node_resource_manager.get_node_mem">get_node_mem</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_node_networks" href="#src.NodeRescaler.node_resource_manager.get_node_networks">get_node_networks</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.get_system_mounted_filesystems" href="#src.NodeRescaler.node_resource_manager.get_system_mounted_filesystems">get_system_mounted_filesystems</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.read_cgroup_file_value" href="#src.NodeRescaler.node_resource_manager.read_cgroup_file_value">read_cgroup_file_value</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.set_interface_limit" href="#src.NodeRescaler.node_resource_manager.set_interface_limit">set_interface_limit</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.set_node_cpus" href="#src.NodeRescaler.node_resource_manager.set_node_cpus">set_node_cpus</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.set_node_disk" href="#src.NodeRescaler.node_resource_manager.set_node_disk">set_node_disk</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.set_node_mem" href="#src.NodeRescaler.node_resource_manager.set_node_mem">set_node_mem</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.set_node_net" href="#src.NodeRescaler.node_resource_manager.set_node_net">set_node_net</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.unset_interface_limit" href="#src.NodeRescaler.node_resource_manager.unset_interface_limit">unset_interface_limit</a></code></li>
+<li><code><a title="src.NodeRescaler.node_resource_manager.write_cgroup_file_value" href="#src.NodeRescaler.node_resource_manager.write_cgroup_file_value">write_cgroup_file_value</a></code></li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<!--Grid row-->
+<div class="row">
+<div class="footer_image">
+<a href="http://gac.udc.es/english/">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/logotipoingles.png"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<a href="http://www.mineco.gob.es">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/mineco.jpg"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/feder.jpg"
+class="img-fluid" alt="">
+<a href="http://www.mineco.gob.es">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<a href="http://www.udc.es/index.html?language=en">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/03_Simbolo_logo_cor.png"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+</div>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.7.2</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>
