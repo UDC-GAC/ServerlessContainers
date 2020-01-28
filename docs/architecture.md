@@ -1,5 +1,3 @@
-# Architecture
-
 ## High-level diagram 
 
 This framework has been designed using a microservice approach in order
@@ -15,7 +13,7 @@ framework is deployed:
 
 ![architecture](img/architecture/scenario_diagram.png)
 
-* Beginning with the framework's **inputs** [1], there are two: 1) the 
+* [1] Beginning with the framework's **inputs**, there are two: 1) the 
 actions, both performed by an user or by another program through the API, 
 that control the framework's behavior; and, 2) the resource monitoring 
 time series, currently provided by an external framework 
@@ -23,12 +21,12 @@ time series, currently provided by an external framework
 that are used in the policy decision for the resource scaling 
 operations.
 
-* Continuing with this **serverlesss containers framework** [2], which 
+* [2] Continuing with this **serverlesss containers framework**, which 
 groups several microservices, some of which are placed on the controlled 
 hosts. The framework's inner workings are further specified on the 
 following sections.
 
-* And finishing with the **controlled infrastructure** [3], which usually 
+* [3] And finishing with the **controlled infrastructure**, which usually 
 consists of several hosts running each one several instances of containers. 
 Currently only the containers backed by the cgroups file system are 
 supported by design and, more specifically, Linux Containers (LXC) have 
@@ -43,8 +41,21 @@ microservices layout:
 
 ![design](img/architecture/design_diagram.png)
 
+When it comes to the microservices
+
+
+## Microservices
 
 
 ## Resource scaling policy
 
-## Implementation (microservices)
+
+## More info
+
+If what is described on this documentation webpage does not answer all of 
+your doubts regarding the technical details, or simply is not enough for
+you and you want the specifics, this framework has been published on a 
+full-length 
+[paper](https://www.sciencedirect.com/science/article/pii/S0167739X19310015) on the FGCS journal.
+If you don't have access to the journal paper, you can still access the
+preprint on this [link](http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf).

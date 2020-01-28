@@ -14,3 +14,6 @@ cd architecture
 convert
 cd ..
 
+cd use_case
+convert
+cd ..

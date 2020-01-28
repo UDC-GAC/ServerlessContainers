@@ -1,8 +1,9 @@
 site_name: Serverless Containers documentation
 nav:
     - Home: index.md
+    - Use case: use_case.md
     - Architecture: architecture.md
-    - Usage: usage.md
+    - Deployment: deployment.md
     - Source code: code/src/index.html
     - Sponsors: sponsors.md
 
