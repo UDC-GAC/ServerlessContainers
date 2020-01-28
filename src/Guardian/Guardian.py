@@ -91,9 +91,11 @@ class Guardian:
             label (string): Resource label name (e.g., upper limit), used for the exception string creation
             resource (string): Resource name (e.g., cpu), used for the exception string creation
 
-        Returns: None
+        Returns:
+            None
 
-        Raises: Exception if value is N/A
+        Raises:
+            Exception if value is N/A
         """
         if value == NOT_AVAILABLE_STRING:
             raise ValueError(
@@ -110,9 +112,11 @@ class Guardian:
             label2 (string): Second resource label name (e.g., lower limit), used for the exception string creation
             resource (string): Resource name (e.g., cpu), used for the exception string creation
 
-        Returns: None
+        Returns:
+            None
 
-        Raises: ValueError if value1 > value2
+        Raises:
+            ValueError if value1 > value2
         """
         if value1 > value2:
             raise ValueError("in resources: {0} value for '{1}': {2} is greater than value for '{3}': {4}".format(
@@ -147,18 +151,19 @@ class Guardian:
 
     @staticmethod
     def sort_events(structure_events, event_timeout):
-        """Sorts the events according to a simple policy regarding the time window of _[now - timeout <----> now]_:
+        """Sorts the events according to a simple policy regarding the _[now - timeout <----> now]_ time window (TW):
 
         * The event is **inside** the TW -> valid event
         * The event is **outside** the TW -> invalid event
 
-        The now time reference is taken inseide this function
+        The 'now' time reference is taken inside this function
 
         Args:
             structure_events (list): A list of the events triggered in the past for a specific structure
             event_timeout (integer): A timeout in seconds
 
-        Returns (tuple[list,list]): A tuple of lists of events, first the valid and then the invalid.
+        Returns:
+            (tuple[list,list]) A tuple of lists of events, first the valid and then the invalid.
 
         """
         valid, invalid = list(), list()
@@ -179,7 +184,8 @@ class Guardian:
         Args:
             structure_events (list): A list of events for a single Structure
 
-        Returns (dict): A dictionary with the added up events in a signle dictionary
+        Returns:
+            (dict) A dictionary with the added up events in a signle dictionary
 
         """
         events_reduced = {"action": {}}
@@ -202,7 +208,8 @@ class Guardian:
             limits_dict (dict): a dictionary with the limits (e.g., lower, upper) of the resources
             usages_dict (dict): a dictionary with the usages of the resources
 
-        Returns: A string
+        Returns:
+            (string) A summary string that contains all of the appropriate values for all of the resources
 
         """
         metrics = resources_dict[resource_label]
@@ -265,7 +272,8 @@ class Guardian:
             boundary (integer): The boundary used between limits
             current_resource_usage (integer): The usage value for this resource
 
-        Returns: The amount to be reduced using the fit to usage policy.
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
 
         """
         upper_to_lower_window = boundary
@@ -285,13 +293,14 @@ class Guardian:
         With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
         get closer to a limit.
 
-        *THIS FUNCTIONS IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
 
         Args:
             structure (dict): The dictionary containing all of the structure resource information
             resource (string): The resource name, used for indexing puroposes
 
-        Returns: The amount to be reduced using the fit to usage policy.
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
 
         """
         max_resource_limit = structure["resources"][resource]["max"]
@@ -304,12 +313,13 @@ class Guardian:
         """Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
         Memory.
 
-        *THIS FUNCTIONS IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
 
         Args:
             resources_dict (dict): A dictionary with all the resources' information, including energy
 
-        Returns (string): A string that summarizes the state of the energy resource
+        Returns:
+            (string) A string that summarizes the state of the energy resource
 
         """
         energy_dict = resources_dict["energy"]

@@ -3,9 +3,24 @@ nav:
     - Home: index.md
     - Architecture: architecture.md
     - Usage: usage.md
-    - About: about.md
+    - Source code: code/src/index.html
+    - Sponsors: sponsors.md
 
-theme: readthedocs
+#theme: readthedocs
+#theme: mkdocs
+
+theme:
+    name: material
+    #custom_dir: 'custom_theme/'
+    favicon: 'img/favicon.ico'
+
+
+# Repository
+repo_name: 'JonatanEnes/ServerlessContainers'
+repo_url: 'https://github.com/JonatanEnes/ServerlessContainers'
+
+# Copyright
+copyright: 'Copyright &copy; 2018 - 2020 Jonatan Enes'
 
 markdown_extensions:
   - attr_list

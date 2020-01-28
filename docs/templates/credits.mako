@@ -22,9 +22,6 @@
     <div class="footer_image">
         <img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/feder.jpg"
              class="img-fluid" alt="">
-        <a href="http://www.mineco.gob.es">
-            <div class="mask rgba-white-light"></div>
-        </a>
     </div>
 
     <div class="footer_image">
