@@ -1,10 +1,11 @@
 site_name: Serverless Containers documentation
 nav:
-    - Home: index.md
+    - Homepage (external): http://bdwatchdog.dec.udc.es/serverless/index.html
+    - Introduction: index.md
     - Use case: use_case.md
     - Architecture: architecture.md
     - Deployment: deployment.md
-    - Source code: code/src/index.html
+    - Source code (external): code/src/index.html
     - Sponsors: sponsors.md
 
 #theme: readthedocs
