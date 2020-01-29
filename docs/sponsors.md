@@ -4,10 +4,10 @@ The **Serverless Containers** framework has been developed as part of
 a PhD thesis from the candidate [Jonatan Enes](http://jonatanenes.com/).
 
 This frameworks uses another in-house made framework, 
-[BDWatchdog](https://bdwatchdog.readthedocs.io/en/latest/),
+[BDWatchdog](http://bdwatchdog.dec.udc.es/monitoring/index.html),
 for the resource monitoring requirement, and is in turn used for a 
 specific experimentation scenario for the energy control and capping of
-containers [more info](http://bdwatchdog.dec.udc.es/energy/index.html).
+containers ([more info](http://bdwatchdog.dec.udc.es/energy/index.html)).
 
 This PhD thesis is currently being carried out at Universidade da 
 Coruña (Spain), in the Computer Architecture group of the Computer 

@@ -2,9 +2,12 @@
 
 This framework, Serverless Containers, is able to **dynamically scale a container resource limit (_e.g., CPU, Memory, disk and network_) in order to adapt them to the real usage**, at any moment and in real-time.
 
-* For a brief summary of this tool you can visit its [homepage](http://bdwatchdog.dec.udc.es/serverless/index.html) website.
-* In order to see data from real experiments where this tool was used, you can visit [this demo](http://bdwatchdog.dec.udc.es/TimeseriesViewer_DEMO/).
-* For the source code you can visit its [GitHub](https://github.com/JonatanEnes/ServerlessContainers).
+* For a brief summary of this tool you can visit its 
+[homepage](http://bdwatchdog.dec.udc.es/serverless/index.html) website.
+* In order to see data from real experiments where this tool was used, 
+you can visit [this demo](http://bdwatchdog.dec.udc.es/TimeseriesViewer_DEMO/).
+* For the uncommented source code you can visit its 
+[GitHub](https://github.com/JonatanEnes/ServerlessContainers).
 
 Serverless Containers has also been the subject of a publication in 
 **Future Generation Computer Systems (FGCS)**, which is available 

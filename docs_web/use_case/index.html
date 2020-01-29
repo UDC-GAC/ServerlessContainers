@@ -77,6 +77,10 @@
     <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
     <label class="md-overlay" data-md-component="overlay" for="__drawer"></label>
     
+      <a href="#main-goal" tabindex="1" class="md-skip">
+        Skip to content
+      </a>
+    
     
       <header class="md-header" data-md-component="header">
   <nav class="md-header-nav md-grid">
@@ -210,18 +214,6 @@
 
 
   <li class="md-nav__item">
-    <a href="http://bdwatchdog.dec.udc.es/serverless/index.html" title="Homepage (external)" class="md-nav__link">
-      Homepage (external)
-    </a>
-  </li>
-
-    
-      
-      
-      
-
-
-  <li class="md-nav__item">
     <a href=".." title="Introduction" class="md-nav__link">
       Introduction
     </a>
@@ -240,9 +232,57 @@
     <input class="md-toggle md-nav__toggle" data-md-toggle="toc" type="checkbox" id="__toc">
     
     
+      <label class="md-nav__link md-nav__link--active" for="__toc">
+        Use case
+      </label>
+    
     <a href="./" title="Use case" class="md-nav__link md-nav__link--active">
       Use case
     </a>
+    
+      
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-goal" class="md-nav__link">
+    Main Goal
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling-policy" class="md-nav__link">
+    Scaling policy
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-utilization" class="md-nav__link">
+    Resource utilization
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+      
+      
+      
+      
+      
+    </ul>
+  
+</nav>
     
   </li>
 
@@ -277,8 +317,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../code/src/" title="Source code (external)" class="md-nav__link">
-      Source code (external)
+    <a href="../sponsors/" title="Sponsors" class="md-nav__link">
+      Sponsors
     </a>
   </li>
 
@@ -289,8 +329,20 @@
 
 
   <li class="md-nav__item">
-    <a href="../sponsors/" title="Sponsors" class="md-nav__link">
-      Sponsors
+    <a href="http://bdwatchdog.dec.udc.es/serverless/index.html" title="Homepage (external)" class="md-nav__link">
+      Homepage (external)
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../code/src/" title="Source code (external)" class="md-nav__link">
+      Source code (external)
     </a>
   </li>
 
@@ -301,6 +353,56 @@
                 </div>
               </div>
             
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">Table of contents</label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-goal" class="md-nav__link">
+    Main Goal
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling-policy" class="md-nav__link">
+    Scaling policy
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-utilization" class="md-nav__link">
+    Resource utilization
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+      
+      
+      
+      
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
             
           
           <div class="md-content">
@@ -347,10 +449,74 @@ highly similar to virtual machines and, thus, can be used to deploy a wide
 arrange of applications.</p>
 </li>
 </ul>
-<p>The next image shows the evolution of the CPU limit placed on a 
-container over time.</p>
+<h2 id="main-goal">Main Goal</h2>
+<p>The main goal of this framework is to adjust the resource limit, that is, 
+the amount of a resource that a container is given, so that such limit is not
+far away of the real resource usage. If such limit is way higher than the usage, we
+can talk of an <strong>underutilized</strong> resource scenario, while if the limit is close to
+the usage, there is a <strong>bottleneck</strong>.</p>
+<p>The framework makes a best-effort to keep a balance between both scenarios, as if
+the <strong>allocated</strong> amount of resource is set too close to the usage, any unexpected increase
+will face a bottleneck, while if set too high, all of the unused amount is lost considering
+that in the serverless paradigm only the <strong>used resources</strong> are billed.</p>
+<h2 id="scaling-policy">Scaling policy</h2>
+<p>In order o better see how the Serverless Containers framework achieves it goal, we can
+study an example of several scaling operations taking place on a time window.</p>
 <p><img alt="Time series" src="../img/use_case/timeseries.png" /></p>
+<p>First of all, in the image it can be appreciated that there are:</p>
+<ul>
+<li>A time series that varies (orange), this time series represents the 
+container aggregated resource usage, in this case of CPU.</li>
+<li>Three varying thresholds (dashed lines), which, from top to bottom, represent
+the allocated resource limit and the upper and lower boundaries (more on this later).</li>
+<li>Three colored areas (blue, green and ochre), which respresent the areas
+between the previously mentioned thresholds.</li>
+<li>Two vertical lines that do not vary, which represent the maximum and minimum resource limits. </li>
+</ul>
+<p>As previously stated, the framework looks for a balance when it comes to setting an appropriate
+allocated resource amount, continuously responding to the resource usage variations. Such response
+can be seen in the several scaling operations that take place, such as at seconds 70 (down), 270 (up) and 420 (down).
+In order to detect the conditions that trigger these scaling requirements, two thresholds, or boundaries, are used:</p>
+<ul>
+<li>the <strong>upper boundary</strong>, which defines a threshold that, once surpassed, signals for a need to scale up the allocated resource
+limit to avoid any future bottleneck.</li>
+<li>the <strong>lower boundary</strong>, which triggers a scale down of the allocated resource amount once the usage falls beneath the boundary.</li>
+</ul>
+<p>Thus, it is easy to see that if the thresholds are considered, the first and third scaling operations were caused 
+because the resource usage fell under the lower boundary, while the second was caused because it surpassed the upper boundary.</p>
+<h2 id="resource-utilization">Resource utilization</h2>
+<p>It is interesting to note how important it is to keep a balance that does not impose a bottleneck but also stays close
+to the real resource usage. As previously stated, the serverless paradigm differs from the Cloud IaaS paradigm in that
+the resource limits can be modified multiple times over time, instead of just defining such limit once at the startup.
+Moreover, if we consider that the user of a serverless platform typically does not specify such resource
+requirements, and in addition the billed resources are only the used ones, the task of properly scaling and setting
+limits becomes a crucial one which falls to the provider.</p>
+<p>Because of these reasons it is important to define a key ratio, the resource utilization, which can be easily obtained
+from the amount of used and the allocated resources. The next image shows the same, previously used time window but
+with the areas as the focus of the study:</p>
 <p><img alt="Areas" src="../img/use_case/integrals.png" /></p>
+<p>We can see that there are three areas:</p>
+<ul>
+<li>The used area (dots), which represents the amount of resources used by the container.</li>
+<li>The allocated area (waves), representing the changing amount of resources set apart for this container via the framework and a series of scaling operations.</li>
+<li>The reserved area (stripes), which represents the theoretical limit of resources that the container had at any moment. It is worth noting that
+this area would effectively represent the resource footprint of a virtual machine.</li>
+</ul>
+<p>With these areas it is easy to see that the ratio of utilization of this serverless framework would be higher than the one
+achieved by a virtual machine. Moreover, an ideal serverless platform, which allocates only the strictly needed resources
+at any moment, performing instantaneous scaling operation, would have a ratio of 100% (best-case scenario), while the ratio
+exposed by not performing any scaling operation, such as with the virtual machine, would be the worst-case scenario.</p>
+<h2 id="configuration">Configuration</h2>
+<p>It is worth to be mentioned that the framework is highly configurable, including but not limited to:</p>
+<ul>
+<li>the time it takes before a scaling operation is triggered </li>
+<li>the amount of resource that is increased in scaling up operations</li>
+<li>how wide are the ranges between boundaries</li>
+</ul>
+<p>Some configuration parameters play a key role in how the framework behaves, nonetheless it would be
+tiresome for the author and the reader to include all of the details on this webpage, even more considering
+that they have been extensively referenced and described on the full-length <a href="https://www.sciencedirect.com/science/article/pii/S0167739X19310015">paper</a> 
+(<a href="http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf">preprint</a> also publicly available).</p>
                 
                   
                 
