@@ -64,4 +64,7 @@ The Serverless Containers framework has been published [1] in
 Future Generation Computer Systems (FGCS) and the full-lenght paper 
 is publicly available ([link](https://www.sciencedirect.com/science/article/pii/S0167739X19310015))
 
-[1] **Jonatan Enes, Roberto R. Expósito, Juan Touriño. Real-time resource scaling platform for Big Data workloads onserverless environments. Future Generation Computer Systems, vol. 105, pages 361-379, April 2020**
+[1] **Jonatan Enes, Roberto R. Expósito, Juan Touriño. 
+Real-time resource scaling platform for Big Data workloads 
+on serverless environments. Future Generation Computer Systems, 
+vol. 105, pages 361-379, April 2020**

@@ -19,7 +19,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
-
+import os
 
 import urllib3
 import pylxd
@@ -49,14 +49,18 @@ class LXDContainerManager:
 
     def read_keys(self):
         # TODO Improve key handling
-        self.LXD_CRT = '/home/jonatan/development/lxd.crt'
-        self.LXD_KEY = '/home/jonatan/development/lxd.key'
+        self.LXD_CRT = '/${HOME}/development/lxd.crt'
+        self.LXD_KEY = '/${HOME}/development/lxd.key'
         self.LXD_ENDPOINT = 'https://localhost:8443'
 
     def __init__(self):
         self.read_keys()
         # TODO Deal with error if key does not exist
-        self.client = Client(endpoint=self.LXD_ENDPOINT, cert=(self.LXD_CRT, self.LXD_KEY), verify=False)
+        self.client = Client(
+            endpoint=os.path.expandvars(self.LXD_ENDPOINT),
+            cert=(os.path.expandvars(self.LXD_CRT),
+                  os.path.expandvars(self.LXD_KEY)),
+            verify=False)
 
     def get_node_disks(self, container):
         devices = container.devices

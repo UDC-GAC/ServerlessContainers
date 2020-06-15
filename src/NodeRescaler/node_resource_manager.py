@@ -252,7 +252,7 @@ def get_device_path_from_mounted_filesystem(path):
         parts = fs.split(",")
         if parts[1] == path.rstrip("/"):
             return parts[0]
-    return "not-found"
+    return None
 
 
 def get_device_major_minor_from_volumes(device_path):
@@ -375,7 +375,7 @@ def get_device_major_minor(device_path):
 
 
 def get_node_disks(container_name, devices):
-    SKIP_DISKS = ["bdev", "development", "production", "root", "not-found"]
+    SKIP_DISKS = ["bdev", "development", "production", "root"]
     retrieved_disks = list()
     limits_read, limits_write = get_node_disk_limits(container_name)
     for device in devices.keys():
@@ -385,12 +385,15 @@ def get_node_disks(container_name, devices):
         device_mountpoint = devices[device]["source"]
         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
 
+        if not device_path:
+            print("Disk {0} not found for container {1}".format(device, container_name))
+            continue
+
         try:
             major, minor = get_device_major_minor(device_path)
-        except TypeError as e:
+        except TypeError:
             # None was returned
             continue
-            # return False, {"error": str(e)}
 
         major_minor_str = major + ":" + minor
 

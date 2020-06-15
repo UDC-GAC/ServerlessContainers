@@ -41,7 +41,7 @@ class CouchDBServer:
     __MAX_UPDATE_TRIES = 10
     __DATABASE_TIMEOUT = 10
 
-    def __init__(self,  couchdb_url=None, couchdbdb_port=None):
+    def __init__(self, couchdb_url=None, couchdbdb_port=None):
         if not couchdb_url:
             couchdb_url = self.__COUCHDB_URL
         if not couchdbdb_port:
@@ -52,7 +52,8 @@ class CouchDBServer:
             except ValueError:
                 couchdbdb_port = self.__COUCHDB_PORT
 
-        self.server = "http://{0}:{1}".format(couchdb_url, str(couchdbdb_port))
+        # TODO admin username and password are hard-coded
+        self.server = "http://admin:admin@{0}:{1}".format(couchdb_url, str(couchdbdb_port))
         self.session = requests.Session()
 
     def close_connection(self):
@@ -104,7 +105,8 @@ class CouchDBServer:
     def __get_all_database_docs(self, database):
         # TODO Implement pagination
         docs = list()
-        r = self.session.get(self.server + "/" + database + "/_all_docs?include_docs=true", timeout=self.__DATABASE_TIMEOUT)
+        r = self.session.get(self.server + "/" + database + "/_all_docs?include_docs=true",
+                             timeout=self.__DATABASE_TIMEOUT)
         if r.status_code != 200:
             r.raise_for_status()
         else:
@@ -168,7 +170,7 @@ class CouchDBServer:
                         doc["_rev"] = new_doc["_rev"]
                         doc = self.__merge(doc, new_doc)
                         return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
-                                                       max_tries=max_tries)
+                                                           max_tries=max_tries)
                     else:
                         return self.__resilient_update_doc(database, doc, previous_tries=previous_tries + 1,
                                                            max_tries=max_tries)

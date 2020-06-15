@@ -33,7 +33,8 @@ import logging
 
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
-import src.MyUtils.MyUtils as MyUtils
+from src.MyUtils import MyUtils
+from src.MyUtils.MyUtils import MyConfig
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
@@ -44,7 +45,8 @@ MAX_FAIL_NUM = 5
 debug = True
 
 PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"]
-PERSIST_CONFIG_SERVICES = [
+PERSIST_CONFIG_SERVICES_NAMES = ["guardian", "scaler"]
+PERSIST_CONFIG_SERVICES_DOCS = [
     {"name": "guardian",
      "parameters": [
          ("WINDOW_DELAY", "conf.guardian.window_delay"),
@@ -91,22 +93,12 @@ def get_users():
     # Remote database operation
     for user in db_handler.get_users():
         timestamp = int(time.time())
-        timeseries = dict(metric="user.energy.used", value=user["energy"]["used"],
-                          timestamp=timestamp,
-                          tags={"user": user["name"]})
-        docs.append(timeseries)
-        timeseries = dict(metric="user.energy.max", value=user["energy"]["max"],
-                          timestamp=timestamp,
-                          tags={"user": user["name"]})
-        docs.append(timeseries)
-        timeseries = dict(metric="user.cpu.usage", value=user["cpu"]["usage"],
-                          timestamp=timestamp,
-                          tags={"user": user["name"]})
-        docs.append(timeseries)
-        timeseries = dict(metric="user.cpu.current", value=user["cpu"]["current"],
-                          timestamp=timestamp,
-                          tags={"user": user["name"]})
-        docs.append(timeseries)
+        for submetric in ["used", "max", "usage", "current"]:
+            timeseries = dict(metric="user.energy.{0}".format(submetric),
+                              value=user["energy"][submetric],
+                              timestamp=timestamp,
+                              tags={"user": user["name"]})
+            docs.append(timeseries)
     return docs
 
 
@@ -128,74 +120,35 @@ def get_structures():
 
 def get_configs():
     docs = list()
-    # Remote database operation
-    services = db_handler.get_services()
-    for service in PERSIST_CONFIG_SERVICES:
-        service_name = service["name"]
-        for s in services:
-            if service_name == s["name"]:
-                service_doc = s
-                break
-        for parameter in service["parameters"]:
+    services = db_handler.get_services()  # Remote database operation
+    filtered_services = [s for s in services if s["name"] in PERSIST_CONFIG_SERVICES_NAMES]
+    for service in filtered_services:
+        for parameter in PERSIST_CONFIG_SERVICES_DOCS[service["name"]]:
             database_key_name, timeseries_metric_name = parameter
-            value = service_doc["config"][database_key_name]
-            timestamp = int(time.time())
-            timeseries = dict(metric=timeseries_metric_name, value=value, timestamp=timestamp,
-                              tags={"service": service_name})
+            timeseries = dict(metric=timeseries_metric_name,
+                              value=service["config"][database_key_name],
+                              timestamp=int(time.time()),
+                              tags={"service": service["name"]})
             docs.append(timeseries)
     return docs
 
 
-# TODO These methods could be better implemented through function passing
-def persist_users():
+funct_map = {"users": get_users,
+             "limits": get_limits,
+             "structures": get_structures,
+             "configs": get_configs}
+
+
+def persist_docs(funct):
     t0 = time.time()
     docs = list()
     try:
-        docs += get_users()
+        docs += funct_map[funct]()
     except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve user info, error {0}.".format(str(e)), debug)
+        MyUtils.log_warning("Couldn't retrieve {0} info, error {1}.".format(funct, str(e)), debug)
     t1 = time.time()
-    MyUtils.log_info("It took {0} seconds to get the user".format(str("%.2f" % (t1 - t0))), debug)
-    send_data(docs)
-
-
-def persist_limits():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_limits()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve limits info, error {0}.".format(str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info("It took {0} seconds to get the limits".format(str("%.2f" % (t1 - t0))), debug)
-    send_data(docs)
-
-
-def persist_structures():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_structures()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve structure info, error {0}.".format(str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info("It took {0} seconds to get the structures".format(str("%.2f" % (t1 - t0))), debug)
-    send_data(docs)
-
-
-def persist_config():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_configs()
-    except (requests.exceptions.HTTPError, KeyError, ValueError):
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve config info.", debug)
-    t1 = time.time()
-    MyUtils.log_info("It took {0} seconds to get the config documents".format(str("%.2f" % (t1 - t0))), debug)
+    MyUtils.log_info("It took {0} seconds to get the {1} info".format(str("%.2f" % (t1 - t0)), funct), debug)
     send_data(docs)
 
 
@@ -216,46 +169,22 @@ def send_data(docs):
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
-    fail_count = 0
     global debug
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
     while True:
         # Get service info
-        # Remote database operation
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        service = MyUtils.get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        # Remote database operation
-        MyUtils.beat(db_handler, SERVICE_NAME)
+        MyUtils.beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
-        config = service["config"]
-        polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        myConfig.set_config(service["config"])
+        polling_frequency = myConfig.get_config_value("POLLING_FREQUENCY")
+        debug = myConfig.get_config_value("DEBUG")
 
-        # THREADED
-        # threads = list()
-        # t = Thread(target=persist_limits, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_structures, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_config, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_users, args=())
-        # t.start()
-        # threads.append(t)
-        # for t in threads:
-        #    t.join()
-        # THREADED
-
-        # UNTHREADED
-        persist_limits()
-        persist_structures()
-        persist_config()
-        persist_users()
-        # UNTHREADED
+        for docType in ["limits", "structures", "users", "configs"]:
+            persist_docs(docType)
 
         MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)

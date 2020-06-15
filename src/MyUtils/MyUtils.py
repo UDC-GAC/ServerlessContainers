@@ -55,6 +55,23 @@ def beat(db_handler, service_name):
     resilient_beat(db_handler, service_name, max_tries=5)
 
 
+class MyConfig:
+    DEFAULTS_CONFIG = None
+    config = None
+
+    def __init__(self, DEFAULTS_CONFIG):
+        self.DEFAULTS_CONFIG = DEFAULTS_CONFIG
+
+    def set_config(self, config):
+        self.config = config
+
+    def get_config_value(self, key):
+        try:
+            return self.config[key]
+        except KeyError:
+            return self.DEFAULTS_CONFIG[key]
+
+
 # DON'T NEED TO TEST
 def get_config_value(config, default_config, key):
     try:

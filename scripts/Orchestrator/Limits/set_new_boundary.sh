@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-curl -s -X PUT -H "Content-Type: application/json" http://orchestrator:5000/structure/$1/limits/$2/boundary  -d '{"value":"'$3'"}'
+scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+source "${scriptDir}/../set_env.sh"
+curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/structure/$1/limits/$2/boundary  -d '{"value":"'$3'"}'

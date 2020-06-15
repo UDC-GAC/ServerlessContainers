@@ -31,7 +31,8 @@ import traceback
 import logging
 
 import src.StateDatabase.couchdb as couchDB
-import src.MyUtils.MyUtils as MyUtils
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+    get_time_now_string, update_structure, get_host_containers, get_structures, copy_structure_base
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
@@ -61,26 +62,26 @@ def generate_timeseries(container_name, resources):
 
 def update_container_current_values(container_name, resources):
     if not resources:
-        MyUtils.log_error("Unable to get resource info for container {0}".format(container_name), debug)
+        log_error("Unable to get resource info for container {0}".format(container_name), debug)
 
     # Remote database operation
     database_structure = db_handler.get_structure(container_name)
-    new_structure = MyUtils.copy_structure_base(database_structure)
+    new_structure = copy_structure_base(database_structure)
     new_structure["resources"] = dict()
     for resource in RESOURCES:
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
 
         if resource not in resources or not resources[resource]:
-            MyUtils.log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name),
-                              debug)
+            log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name),
+                      debug)
             new_structure["resources"][resource]["current"] = 0
         else:
             new_structure["resources"][resource]["current"] = resources[resource][
                 translate_map[resource]["limit_label"]]
 
     # Remote database operation
-    MyUtils.update_structure(new_structure, db_handler, debug, max_tries=3)
+    update_structure(new_structure, db_handler, debug, max_tries=3)
 
 
 def thread_persist_container(container, container_resources_dict):
@@ -91,20 +92,17 @@ def thread_persist_container(container, container_resources_dict):
     # resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
     resources = container_resources_dict[container_name]["resources"]
     if not resources:
-        MyUtils.log_error("Couldn't get container's {0} resources".format(container_name), debug)
+        log_error("Couldn't get container's {0} resources".format(container_name), debug)
         return
 
     # Persist by updating the Database current value
     update_container_current_values(container_name, resources)
 
-    # Persist through time series sent to OpenTSDB
-    # generate_timeseries(container_name, resources)
-
 
 def persist_containers(container_resources_dict):
     # Try to get the containers, if unavailable, return
     # Remote database operation
-    containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+    containers = get_structures(db_handler, debug, subtype="container")
     if not containers:
         return
 
@@ -127,7 +125,7 @@ def persist_containers(container_resources_dict):
 def persist_applications(container_resources_dict):
     # Try to get the applications, if unavailable, return
     # Remote database operation
-    applications = MyUtils.get_structures(db_handler, debug, subtype="application")
+    applications = get_structures(db_handler, debug, subtype="application")
     if not applications:
         return
 
@@ -140,7 +138,7 @@ def persist_applications(container_resources_dict):
         for container_name in application_containers:
 
             if container_name not in container_resources_dict:
-                MyUtils.log_error(
+                log_error(
                     "Container info {0} is missing for app : {1}".format(container_name, app["name"])
                     + " app info will not be totally accurate", debug)
                 continue
@@ -151,28 +149,28 @@ def persist_applications(container_resources_dict):
                     container_resources = container_resources_dict[container_name]["resources"]
 
                     if resource not in container_resources or not container_resources[resource]:
-                        MyUtils.log_error(
+                        log_error(
                             "Unable to get info for resource {0} for container {1} when computing {2} resources".format(
                                 resource, container_name, app["name"]), debug)
                     else:
                         app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
                 except KeyError:
                     if "name" in container_resources_dict[container_name] and "name" in app:
-                        MyUtils.log_error(
+                        log_error(
                             "Container info {0} is missing for app : {1} and resource {2} resource,".format(
                                 container_name, app["name"], resource)
                             + " app info will not be totally accurate", debug)
                     else:
-                        MyUtils.log_error("Error with app or container info", debug)
+                        log_error("Error with app or container info", debug)
                         # TODO this error should be more self-explanatory
 
         # Remote database operation
-        MyUtils.update_structure(app, db_handler, debug)
+        update_structure(app, db_handler, debug)
 
 
 def fill_container_dict(diff_hosts, containers):
     def host_info_request(h, d):
-        host_containers = MyUtils.get_host_containers(
+        host_containers = get_host_containers(
             h["host_rescaler_ip"], h["host_rescaler_port"], rescaler_http_session, debug)
         for container_name in host_containers:
             if container_name in container_list_names:
@@ -195,7 +193,7 @@ def fill_container_dict(diff_hosts, containers):
 
 def get_container_resources_dict():
     # Remote database operation
-    containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+    containers = get_structures(db_handler, debug, subtype="container")
     if not containers:
         return
 
@@ -209,9 +207,9 @@ def get_container_resources_dict():
             diff_hosts[container_host]["host_rescaler_port"] = container["host_rescaler_port"]
 
     # For each host, retrieve its containers and persist the ones we look for
-    #time0 = time.time()
+    # time0 = time.time()
     container_resources_dict = fill_container_dict(diff_hosts, containers)
-    #time1 = time.time()
+    # time1 = time.time()
 
     container_resources_dictV2 = dict()
     for container in containers:
@@ -219,8 +217,8 @@ def get_container_resources_dict():
         container_resources_dictV2[container_name] = container
         container_resources_dictV2[container_name]["resources"] = container_resources_dict[container_name]
 
-    #p0 = time1 - time0
-    #MyUtils.log_info("It took {0} seconds to get containers from hosts (LXD)".format(str("%.2f" % p0)), debug)
+    # p0 = time1 - time0
+    # MyUtils.log_info("It took {0} seconds to get containers from hosts (LXD)".format(str("%.2f" % p0)), debug)
 
     return container_resources_dictV2
 
@@ -228,66 +226,65 @@ def get_container_resources_dict():
 def persist_thread():
     t0 = time.time()
     container_resources_dict = get_container_resources_dict()
-    #t1 = time.time()
+    # t1 = time.time()
     persist_applications(container_resources_dict)
-    #t2 = time.time()
+    # t2 = time.time()
     persist_containers(container_resources_dict)
     t3 = time.time()
 
     p0 = t3 - t0
-    #p1 = t2 - t1
-    #p2 = t3 - t2
-    #MyUtils.log_info("It took {0} seconds to get container info".format(str("%.2f" % p0)), debug)
-    #MyUtils.log_info("It took {0} seconds to snapshot application".format(str("%.2f" % p1)), debug)
-    MyUtils.log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % p0)), debug)
+    # p1 = t2 - t1
+    # p2 = t3 - t2
+    # MyUtils.log_info("It took {0} seconds to get container info".format(str("%.2f" % p0)), debug)
+    # MyUtils.log_info("It took {0} seconds to snapshot application".format(str("%.2f" % p1)), debug)
+    log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % p0)), debug)
 
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
     global debug
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+
     while True:
         # Get service info
-        # Remote database operation
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        service = get_service(db_handler, SERVICE_NAME) # Remote database operation
 
         # Heartbeat
-        # Remote database operation
-        MyUtils.beat(db_handler, SERVICE_NAME)
+        beat(db_handler, SERVICE_NAME) # Remote database operation
 
         # CONFIG
-        config = service["config"]
+        myConfig.set_config(service["config"])
+        polling_frequency = myConfig.get_config_value("POLLING_FREQUENCY")
+        debug = myConfig.get_config_value("DEBUG")
 
-        polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
-
-        SERVICE_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "ACTIVE")
+        SERVICE_IS_ACTIVATED = myConfig.get_config_value("ACTIVE")
         thread = None
         if SERVICE_IS_ACTIVATED:
             thread = Thread(target=persist_thread, args=())
             thread.start()
-            MyUtils.log_info("Structures snapshoted at {0}".format(MyUtils.get_time_now_string()), debug)
+            log_info("Structures snapshoted at {0}".format(get_time_now_string()), debug)
         else:
-            MyUtils.log_info("Structure snapshoter is not activated", debug)
+            log_info("Structure snapshoter is not activated", debug)
 
         time.sleep(polling_frequency)
 
         if thread and thread.isAlive():
             delay_start = time.time()
-            MyUtils.log_warning(
+            log_warning(
                 "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}".format(
-                    str(polling_frequency), MyUtils.get_time_now_string()), debug)
-            MyUtils.log_warning("Going to wait until thread finishes before proceeding", debug)
+                    str(polling_frequency), get_time_now_string()), debug)
+            log_warning("Going to wait until thread finishes before proceeding", debug)
             thread.join()
             delay_end = time.time()
-            MyUtils.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
+            log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
 
 
 def main():
     try:
         persist()
     except Exception as e:
-        MyUtils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

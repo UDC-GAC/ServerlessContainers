@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-curl -s -X PUT -H "Content-Type: application/json" http://orchestrator:5000/rule/$1/activate
+scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+source "${scriptDir}/../set_env.sh"
+curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/rule/$1/activate

@@ -31,23 +31,31 @@ from flask import request
 from werkzeug.serving import WSGIRequestHandler
 
 from src.NodeRescaler.lxd_node_resource_manager import LXDContainerManager
+from functools import wraps
 
 node_resource_manager = None
 
 app = Flask(__name__)
 
 
-def initialize_LXD():
-    global node_resource_manager
-    if not node_resource_manager:
-        node_resource_manager = LXDContainerManager()
-    else:
-        pass
+def initialize_LXD(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        global node_resource_manager
+        if not node_resource_manager:
+            node_resource_manager = LXDContainerManager()
+            if not node_resource_manager:
+                raise Exception("Could not instantiate LXD Manager")
+        else:
+            pass
+        return f(*args, **kwargs)
+
+    return wrap
 
 
 @app.route("/container/", methods=['GET'])
+@initialize_LXD
 def get_containers_resources():
-    initialize_LXD()
     try:
         container_name = request.form['name']
     except KeyError:
@@ -60,6 +68,7 @@ def get_containers_resources():
 
 
 @app.route("/container/<container_name>", methods=['PUT'])
+@initialize_LXD
 def set_container_resources(container_name):
     if container_name != "":
         success, applied_config = node_resource_manager.set_node_resources(container_name, request.json)
@@ -77,6 +86,7 @@ def set_container_resources(container_name):
 
 
 @app.route("/container/<container_name>", methods=['GET'])
+@initialize_LXD
 def get_container_resources(container_name):
     if container_name != "":
         data = node_resource_manager.get_node_resources_by_name(container_name)

@@ -656,7 +656,7 @@ def rescale_application(request, structure):
         requests.append(dict(request))
         remaining_amount -= split_amount
 
-    # If some reamining amout is left, create the last request
+    # If some remaining amount is left, create the last request
     if abs(remaining_amount) > 0:
         request["amount"] = remaining_amount
         requests.append(dict(request))

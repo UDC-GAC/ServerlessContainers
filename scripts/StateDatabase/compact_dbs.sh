@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-curl -X POST -H "Content-Type: application/json" http://couchdb:5984/events/_compact
-curl -X POST -H "Content-Type: application/json" http://couchdb:5984/requests/_compact
-curl -X POST -H "Content-Type: application/json" http://couchdb:5984/limits/_compact
-curl -X POST -H "Content-Type: application/json" http://couchdb:5984/services/_compact
-curl -X POST -H "Content-Type: application/json" http://couchdb:5984/rules/_compact
-curl -X POST -H "Content-Type: application/json" http://couchdb:5984/structures/_compact
+scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+source "${scriptDir}/../Orchestrator/set_env.sh"
+
+ACCESS="admin:admin"
+
+curl -X POST -H "Content-Type: application/json" http://${ACCESS}@${COUCHDB_REST_URL}/events/_compact
+curl -X POST -H "Content-Type: application/json" http://${ACCESS}@${COUCHDB_REST_URL}/requests/_compact
+curl -X POST -H "Content-Type: application/json" http://${ACCESS}@${COUCHDB_REST_URL}/limits/_compact
+curl -X POST -H "Content-Type: application/json" http://${ACCESS}@${COUCHDB_REST_URL}/services/_compact
+curl -X POST -H "Content-Type: application/json" http://${ACCESS}@${COUCHDB_REST_URL}/rules/_compact
+curl -X POST -H "Content-Type: application/json" http://${ACCESS}@${COUCHDB_REST_URL}/structures/_compact
