@@ -1,1 +1,2 @@
-mkdocs build -d docs_web
+#!/usr/bin/env bash
+mkdocs build -d website
