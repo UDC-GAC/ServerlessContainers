@@ -1,0 +1,629 @@
+
+
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      <link rel="shortcut icon" href="../img/favicon.ico">
+      <meta name="generator" content="mkdocs-1.1.2, mkdocs-material-5.3.0">
+    
+    
+      
+        <title>Use case - Serverless Containers documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.6e35a1a6.min.css">
+      
+      
+    
+    
+    
+      
+        <link href="https://fonts.gstatic.com" rel="preconnect" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback">
+        <style>body,input{font-family:"Roboto",-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif}code,kbd,pre{font-family:"Roboto Mono",SFMono-Regular,Consolas,Menlo,monospace}</style>
+      
+    
+    
+    
+    
+      
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#main-goal" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <header class="md-header" data-md-component="header">
+  <nav class="md-header-nav md-grid" aria-label="Header">
+    <a href=".." title="Serverless Containers documentation" class="md-header-nav__button md-logo" aria-label="Serverless Containers documentation">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 003-3 3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    <label class="md-header-nav__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg>
+    </label>
+    <div class="md-header-nav__title" data-md-component="header-title">
+      
+        <div class="md-header-nav__ellipsis">
+          <span class="md-header-nav__topic md-ellipsis">
+            Serverless Containers documentation
+          </span>
+          <span class="md-header-nav__topic md-ellipsis">
+            
+              Use case
+            
+          </span>
+        </div>
+      
+    </div>
+    
+      <label class="md-header-nav__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+      </label>
+      
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" data-md-state="active">
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0116 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 019.5 16 6.5 6.5 0 013 9.5 6.5 6.5 0 019.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </label>
+      <button type="reset" class="md-search__icon md-icon" aria-label="Clear" data-md-component="search-reset" tabindex="-1">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+      </button>
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header-nav__source">
+        
+<a href="https://github.com/JonatanEnes/ServerlessContainers/" title="Go to repository" class="md-source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05L244 40.45a28.87 28.87 0 00-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 01-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 000 40.81l195.61 195.6a28.86 28.86 0 0040.8 0l194.69-194.69a28.86 28.86 0 000-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JonatanEnes/ServerlessContainers
+  </div>
+</a>
+      </div>
+    
+  </nav>
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+        
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              <div class="md-sidebar md-sidebar--primary" data-md-component="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Serverless Containers documentation" class="md-nav__button md-logo" aria-label="Serverless Containers documentation">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 003-3 3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    Serverless Containers documentation
+  </label>
+  
+    <div class="md-nav__source">
+      
+<a href="https://github.com/JonatanEnes/ServerlessContainers/" title="Go to repository" class="md-source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05L244 40.45a28.87 28.87 0 00-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 01-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 000 40.81l195.61 195.6a28.86 28.86 0 0040.8 0l194.69-194.69a28.86 28.86 0 000-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JonatanEnes/ServerlessContainers
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href=".." title="Introduction" class="md-nav__link">
+      Introduction
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+  
+
+
+  <li class="md-nav__item md-nav__item--active">
+    
+    <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+    
+    
+      <label class="md-nav__link md-nav__link--active" for="__toc">
+        Use case
+        <span class="md-nav__icon md-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9h14V7H3v2m0 4h14v-2H3v2m0 4h14v-2H3v2m16 0h2v-2h-2v2m0-10v2h2V7h-2m0 6h2v-2h-2v2z"/></svg>
+        </span>
+      </label>
+    
+    <a href="./" title="Use case" class="md-nav__link md-nav__link--active">
+      Use case
+    </a>
+    
+      
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-goal" class="md-nav__link">
+    Main Goal
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling-policy" class="md-nav__link">
+    Scaling policy
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-utilization" class="md-nav__link">
+    Resource utilization
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+    
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../architecture/" title="Architecture" class="md-nav__link">
+      Architecture
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../deployment/" title="Deployment" class="md-nav__link">
+      Deployment
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../configuration/" title="Configuration" class="md-nav__link">
+      Configuration
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../usage/" title="Usage" class="md-nav__link">
+      Usage
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../sponsors/" title="Sponsors" class="md-nav__link">
+      Sponsors
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="http://bdwatchdog.dec.udc.es/serverless/index.html" title="Homepage (external)" class="md-nav__link">
+      Homepage (external)
+    </a>
+  </li>
+
+    
+      
+      
+      
+
+
+  <li class="md-nav__item">
+    <a href="../code/src/" title="Source code (external)" class="md-nav__link">
+      Source code (external)
+    </a>
+  </li>
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#main-goal" class="md-nav__link">
+    Main Goal
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scaling-policy" class="md-nav__link">
+    Scaling policy
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resource-utilization" class="md-nav__link">
+    Resource utilization
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/JonatanEnes/ServerlessContainers/edit/master/docs/use_case.md" title="Edit this page" class="md-content__button md-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
+                  </a>
+                
+                
+                  
+                
+                
+                  <h1>Use case</h1>
+                
+                <p>This framework is used to <strong>scale</strong> the <strong>resources</strong> of a <strong>container</strong>, 
+or a group of containers, both <strong>dynamically and in real time</strong>, so that the 
+limits placed on such resources evolve to be just above the usage. </p>
+<p>On the one hand, from a traditional <strong>virtual machine</strong> and <strong>Cloud</strong> 
+perspective, this approach is similar to the on-demand and pay 
+per usage resource provisioning with the main difference being that on 
+this case, the limits can be changed multiple times during execution 
+instead of being specified only once at the instantiation phase.</p>
+<p>On the other hand, this approach is also really close to the <strong>serverless</strong> 
+paradigm as the container and all of the processes running on it can not 
+trust the pool of resources exposed to them. Such resources limits can 
+vary according to their usage (e.g., if the CPU usage increases, 
+the CPU limit should also be raised via adding more cores).</p>
+<p>Combining both of these approaches, this framework comes up with a solution
+so that virtual infrastructure units, such as software containers (e.g.,
+LXC, Docker), can benefit from having a resource management that implements
+a serverless scenario. 
+Among other perks, the main benefits of this framework include:</p>
+<ul>
+<li>
+<p><strong>Higher resource efficiency</strong>, if the containers have a low resource usage, 
+they are given a smaller set of resources, if they have a higher usage, 
+ they are given a larger set over time.</p>
+</li>
+<li>
+<p><strong>Pay per 'real' usage billing policy</strong>, only the used resources are 
+considered when billing.</p>
+</li>
+<li>
+<p><strong>Flexibility of the containers</strong>, which are virtually highly similar 
+to virtual machines and, thus, can be used to deploy a wide arrange of 
+applications.</p>
+</li>
+</ul>
+<h2 id="main-goal">Main Goal</h2>
+<p>The main goal of this framework is to adjust the resource limit, that is, 
+the amount of a resource that a container is given, so that such limit is not
+far away of the real resource usage. If such limit is way higher than the usage, we
+can talk of an <strong>underutilized</strong> resource scenario, while if the limit is close to
+the usage, there is a <strong>bottleneck</strong>.</p>
+<p>The framework makes a best-effort to keep a balance between both scenarios, 
+as if the <strong>allocated</strong> amount of resource is set too close to the usage, 
+any unexpected increase will face a bottleneck, while if set too high, 
+all of the unused amount is lost considering that in the serverless 
+paradigm only the <strong>used resources</strong> are billed.</p>
+<h2 id="scaling-policy">Scaling policy</h2>
+<p>In order to better see how the Serverless Containers framework achieves 
+it goal, we can study an example of several scaling operations taking 
+place on a time window.</p>
+<p><img alt="Time series" src="../img/use_case/timeseries.png" /></p>
+<p>First of all, in the image it can be appreciated that there are:</p>
+<ul>
+<li>A time series that varies (<strong>orange</strong>), this time series represents the 
+container <strong>aggregated resource usage</strong>, in this case of CPU.</li>
+<li>Three varying thresholds (dashed lines), which, from top to bottom, 
+represent the allocated resource <strong>limit*+ and the upper and lower 
+</strong>boundaries** (more on this later).</li>
+<li>Three colored areas (blue, green and ochre), which represent the areas
+between the previously mentioned thresholds.</li>
+<li>Two vertical lines that do not vary, which represent the maximum and 
+minimum resource limits. </li>
+</ul>
+<p>As previously stated, the framework looks for a balance when it comes 
+to setting an appropriate allocated resource amount, continuously 
+responding to the resource usage variations. Such response can be seen 
+in the several scaling operations that take place, such as at seconds 
+70 (down), 270 (up) and 420 (down). In order to detect the conditions 
+that trigger these scaling requirements, two thresholds, or boundaries, 
+are used:</p>
+<ul>
+<li>the <strong>upper boundary</strong>, which defines a threshold that, once surpassed, 
+signals for a need to scale up the allocated resource limit to avoid any 
+future bottleneck.</li>
+<li>the <strong>lower boundary</strong>, which triggers a scale down of the allocated 
+resource amount once the usage falls beneath the boundary.</li>
+</ul>
+<p>Thus, it is easy to see that if the thresholds are considered, the 
+first and third scaling operations were caused because the resource 
+usage fell under the lower boundary, while the second was caused because 
+it surpassed the upper boundary.</p>
+<h2 id="resource-utilization">Resource utilization</h2>
+<p>It is interesting to note how important it is to keep a balance that 
+does not impose a bottleneck but also stays close to the real resource 
+usage. As previously stated, the serverless paradigm differs from the 
+Cloud IaaS paradigm in that the resource limits can be modified 
+multiple times over time, instead of just defining such limit once at 
+the startup. </p>
+<p>Moreover, if we consider that the user of a serverless platform 
+typically does not specify such resource requirements and that
+the billed resources are only the used ones, the task of properly 
+scaling and setting limits becomes a crucial one which falls to the provider.</p>
+<p>Because of these reasons it is important to define a key ratio, the 
+<strong>resource utilization</strong>, which can be easily obtained from the amount of 
+used and the allocated resources. The next image shows the previously 
+used time window but with areas as the focus of the study:</p>
+<p><img alt="Areas" src="../img/use_case/integrals.png" /></p>
+<p>We can see that there are three areas:</p>
+<ul>
+<li>The <strong>used area</strong> (dots), which represents the amount of resources 
+used by the container.</li>
+<li>The <strong>allocated area</strong> (waves), representing the changing amount of 
+resources set apart for this container via the framework and a series 
+of scaling operations.</li>
+<li>The <strong>reserved area</strong> (stripes), which represents the theoretical 
+limit of resources that the container had at any moment. It is worth 
+noting that this area would effectively represent the resource footprint 
+of a virtual machine.</li>
+</ul>
+<p>With these areas it is easy to see that the ratio of utilization of 
+this serverless framework would be higher than the one achieved by a 
+virtual machine. Moreover, an ideal serverless platform, which allocates 
+only the strictly needed resources at any moment, performing instantaneous 
+scaling operation, would have a ratio of 100% (best-case scenario), 
+while the ratio exposed by not performing any scaling operation, such 
+as with the virtual machine, would be the worst-case scenario.</p>
+<h2 id="configuration">Configuration</h2>
+<p>It is worth to be mentioned that the framework is highly configurable, 
+including but not limited to:</p>
+<ul>
+<li>the time it takes before a scaling operation is triggered </li>
+<li>the amount of resource that is increased in scaling up operations</li>
+<li>how wide are the ranges between boundaries</li>
+</ul>
+<p>Some configuration parameters play a key role in how the framework behaves, 
+nonetheless it would be tiresome for the reader to include all of the 
+details on this webpage, even more considering that they have been 
+extensively referenced and described on the full-length 
+<a href="https://www.sciencedirect.com/science/article/pii/S0167739X19310015">paper</a> 
+(<a href="http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf">preprint</a> 
+also publicly available).</p>
+                
+              
+              
+                
+
+
+              
+            </article>
+          </div>
+        </div>
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <div class="md-footer-nav">
+      <nav class="md-footer-nav__inner md-grid" aria-label="Footer">
+        
+          <a href=".." title="Introduction" class="md-footer-nav__link md-footer-nav__link--prev" rel="prev">
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+            </div>
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Previous
+                </span>
+                Introduction
+              </div>
+            </div>
+          </a>
+        
+        
+          <a href="../architecture/" title="Architecture" class="md-footer-nav__link md-footer-nav__link--next" rel="next">
+            <div class="md-footer-nav__title">
+              <div class="md-ellipsis">
+                <span class="md-footer-nav__direction">
+                  Next
+                </span>
+                Architecture
+              </div>
+            </div>
+            <div class="md-footer-nav__button md-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    </div>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+          <div class="md-footer-copyright__highlight">
+            Copyright &copy; 2018 - 2020 Jonatan Enes
+          </div>
+        
+        Made with
+        <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+          Material for MkDocs
+        </a>
+      </div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    
+      <script src="../assets/javascripts/vendor.d710d30a.min.js"></script>
+      <script src="../assets/javascripts/bundle.a14cc5fd.min.js"></script><script id="__lang" type="application/json">{"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents"}</script>
+      
+      <script>
+        app = initialize({
+          base: "..",
+          features: [],
+          search: Object.assign({
+            worker: "../assets/javascripts/worker/search.7a2ea5ba.min.js"
+          }, typeof search !== "undefined" && search)
+        })
+      </script>
+      
+    
+  </body>
+</html>

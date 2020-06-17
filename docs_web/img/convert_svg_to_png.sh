@@ -17,3 +17,7 @@ cd ..
 cd use_case
 convert
 cd ..
+
+cd installation
+convert
+cd ..
