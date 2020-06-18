@@ -2,7 +2,13 @@
 
 The Serverless Container framework can be deployed by cloning its GitHub 
 repo and placing and starting the proper services on the right environments.
-Such deployment can be divided into different phases, as next described:
+
+To download the project, you can use:
+```
+git clone https://github.com/UDC-GAC/ServerlessContainers
+```
+
+The actual deployment can be divided into different phases, as next described:
 
 ## Containers
 

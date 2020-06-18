@@ -46,19 +46,17 @@ debug = True
 
 PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"]
 PERSIST_CONFIG_SERVICES_NAMES = ["guardian", "scaler"]
-PERSIST_CONFIG_SERVICES_DOCS = [
-    {"name": "guardian",
-     "parameters": [
-         ("WINDOW_DELAY", "conf.guardian.window_delay"),
-         ("EVENT_TIMEOUT", "conf.guardian.event_timeout"),
-         ("WINDOW_TIMELAPSE", "conf.guardian.window_timelapse")
-     ]},
-    {"name": "scaler",
-     "parameters": [
-         ("REQUEST_TIMEOUT", "conf.scaler.request_timeout"),
-         ("POLLING_FREQUENCY", "conf.scaler.polling_frequency")
-     ]}
-]
+PERSIST_CONFIG_SERVICES_DOCS = {
+    "guardian": [
+        ("WINDOW_DELAY", "conf.guardian.window_delay"),
+        ("EVENT_TIMEOUT", "conf.guardian.event_timeout"),
+        ("WINDOW_TIMELAPSE", "conf.guardian.window_timelapse")
+    ],
+    "scaler": [
+        ("REQUEST_TIMEOUT", "conf.scaler.request_timeout"),
+        ("POLLING_FREQUENCY", "conf.scaler.polling_frequency")
+    ]
+}
 
 
 def translate_structure_doc_to_timeseries(doc):

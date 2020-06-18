@@ -36,7 +36,8 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
-RESOURCES = ["cpu", "mem"]
+RESOURCES = ["cpu"] # TODO this should be configurable
+#RESOURCES = ["cpu", "mem"]
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},

@@ -34,8 +34,16 @@ Which briefly describes the architecture and design used.
 In this section it is described how to deploy the framework overall. 
 Some guidelines are also provided.
 
-4. [Source Code (external)](code/src/index.html): 
+4. [Usage](usage.md):
+In this section a quickstart guide is provided to show how two containers
+would be supported and transitioned from a traditional resource management
+to working with a serverless environment.
+
+5. [Configuration](configuration.md):
+In this section a few, key configuration parameters are explained.
+
+6. [Source Code (external)](code/src/index.html): 
 If you are interested on the low-level code and code documentation. 
 
-5. [Sponsors](sponsors.md): 
+7. [Sponsors](sponsors.md): 
 Some comments on the backers and sponsors of this framework.

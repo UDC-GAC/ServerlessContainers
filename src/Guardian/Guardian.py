@@ -36,17 +36,20 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
-GUARDABLE_RESOURCES = ['cpu', 'mem', 'energy']
+GUARDABLE_RESOURCES = ['cpu'] # TODO This should be configurable
+#GUARDABLE_RESOURCES = ['cpu', 'mem', 'energy']
 
-BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.mem.resident', 'proc.cpu.kernel', 'proc.mem.virtual']
-BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage', 'structure.mem.usage', 'structure.energy.usage']
+BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel'] #+ ['proc.mem.resident', 'proc.mem.virtual']
+BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage'] #+ ['structure.mem.usage'] + ['structure.energy.usage']
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
-    'structure.mem.usage': ['proc.mem.resident']}
+#    'structure.mem.usage': ['proc.mem.resident']
+}
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
-    'structure.mem.usage': ['structure.mem.usage'],
-    'structure.energy.usage': ['structure.energy.usage']}
+#    'structure.mem.usage': ['structure.mem.usage'],
+#    'structure.energy.usage': ['structure.energy.usage']
+}
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
 
@@ -532,10 +535,13 @@ class Guardian:
         container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
         # TODO check if the resource is unguarded and if that is the case, do not print anything or
         # just a cpu(unguarded)
-        resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
-            self.get_resource_summary("cpu", resources, limits, usages),
-            self.get_resource_summary("mem", resources, limits, usages),
-            self.get_container_energy_str(resources))
+        # This should be adapted according the resources configured
+        # resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
+        #     self.get_resource_summary("cpu", resources, limits, usages),
+        #     self.get_resource_summary("mem", resources, limits, usages),
+        #     self.get_container_energy_str(resources))
+        resources_str = "cpu({0})".format(self.get_resource_summary("cpu", resources, limits, usages))
+
 
         ev, req = list(), list()
         for event in triggered_events:
@@ -637,7 +643,7 @@ class Guardian:
 
             # TODO FIX This only applies to containers, currently not used for applications
             if structure_subtype == "container":
-                resources_to_adjust = ["cpu", "mem"]
+                resources_to_adjust = GUARDABLE_RESOURCES #["cpu", "mem"]
                 # resources_to_adjust = []
                 limits["resources"] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
 
@@ -707,7 +713,7 @@ class Guardian:
                 "Epoch processed at {0}".format(get_time_now_string()), self.debug)
             time.sleep(window_difference)
 
-            if thread and thread.isAlive():
+            if thread and thread.is_alive():
                 delay_start = time.time()
                 log_warning(
                     "Previous thread didn't finish before next poll is due, with window time of " +
