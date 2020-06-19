@@ -34,7 +34,7 @@ To make sure that the containers are accessible to the service, you can
 open a web browser and point to the host's IP and the '8000' port and 
 '/container' path. You should see something similar to:
 
-![design](img/quickstart/ContainerScaler.png) 
+![container scaler API output](img/quickstart/ContainerScaler.png) 
 
 As you can see, also the Memory, disks and network resources are reported, 
 but they will be ignored on this guide.
@@ -102,7 +102,7 @@ which  the Orchestrator was started, the port '5000' and the path
 '/structure/cont0' (to see the cont0 structure document). You should see
 something similar to:
 
-![design](img/quickstart/OrchestratorCont0.png) 
+![orchestrator API output container 0](img/quickstart/OrchestratorCont0.png) 
 
 As you can see, the container is registered with resource limits of 50 
 and 200 for the minimum and maximum values, respectively. It can also 
@@ -184,7 +184,7 @@ a scaling down operation is performed. If after that the CPU is used again,
 even if a bottleneck occurs, a scaling up operation will be performed. Finally,
 if after increasing the resources, such resources have some degree of underutilization,
 a second scaling down operation will be performed to adjust them.
-![design](img/quickstart/cont0_Example.svg) 
+![container example](img/quickstart/cont0_Example.svg) 
 
 The behavior exposed on the image can be configured and tuned with a few,
 critical parameters, as explained on the 'Configuration' Section.

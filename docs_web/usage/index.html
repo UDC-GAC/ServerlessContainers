@@ -496,7 +496,7 @@ lxc start cont0 cont1
 <p>To make sure that the containers are accessible to the service, you can 
 open a web browser and point to the host's IP and the '8000' port and 
 '/container' path. You should see something similar to:</p>
-<p><img alt="design" src="../img/quickstart/ContainerScaler.png" /> </p>
+<p><img alt="container scaler API output" src="../img/quickstart/ContainerScaler.png" /> </p>
 <p>As you can see, also the Memory, disks and network resources are reported, 
 but they will be ignored on this guide.</p>
 <h2 id="initializing-the-containers-limit">Initializing the container's limit</h2>
@@ -551,7 +551,7 @@ Start it with:</p>
 which  the Orchestrator was started, the port '5000' and the path 
 '/structure/cont0' (to see the cont0 structure document). You should see
 something similar to:</p>
-<p><img alt="design" src="../img/quickstart/OrchestratorCont0.png" /> </p>
+<p><img alt="orchestrator API output container 0" src="../img/quickstart/OrchestratorCont0.png" /> </p>
 <p>As you can see, the container is registered with resource limits of 50 
 and 200 for the minimum and maximum values, respectively. It can also 
 be appreciated that its configuration marks it as a non-scalable container
@@ -619,7 +619,7 @@ a scaling down operation is performed. If after that the CPU is used again,
 even if a bottleneck occurs, a scaling up operation will be performed. Finally,
 if after increasing the resources, such resources have some degree of underutilization,
 a second scaling down operation will be performed to adjust them.
-<img alt="design" src="../img/quickstart/cont0_Example.svg" /> </p>
+<img alt="container example" src="../img/quickstart/cont0_Example.svg" /> </p>
 <p>The behavior exposed on the image can be configured and tuned with a few,
 critical parameters, as explained on the 'Configuration' Section.</p>
 <h2 id="returning-the-containers-to-traditional-instances">Returning the containers to traditional instances</h2>

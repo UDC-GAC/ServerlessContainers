@@ -272,13 +272,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#more-info" class="md-nav__link">
-    More info
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -422,13 +415,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#more-info" class="md-nav__link">
-    More info
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -461,7 +447,7 @@ require responsiveness, such as is the case with real-time and on-demand
 resource scaling.</p>
 <p>The next image shows a high-level diagram of the scenario on which the 
 framework is deployed:</p>
-<p><img alt="architecture" src="../img/architecture/scenario_diagram.png" /></p>
+<p><img alt="architecture" src="../img/architecture/scenario_diagram.svg" /></p>
 <ul>
 <li>
 <p>[1] Beginning with the framework's <strong>inputs</strong>, there are two: 
@@ -490,7 +476,7 @@ been used and thus have been proven to work with this framewok. </p>
 this framework uses several microservices that communicate and exchange 
 information. The following image shows a high-level diagram of the 
 microservices layout:</p>
-<p><img alt="design" src="../img/architecture/design_diagram.png" /></p>
+<p><img alt="design" src="../img/architecture/design_diagram.svg" /></p>
 <p>As it can be seen, the microservices can be separated into active and 
 passive ones, with the difference being that the passive ones focus on 
 feedback operations to keep the framework continuously updates on the
@@ -512,7 +498,7 @@ State Database to a peristent database, thus creating time series. </li>
 <li><strong>Refeeder Snapshoter</strong>: Aggregates and creates new metadata from existing
 one (e.g., allocated amount of CPU for an application composed of 3 containers)</li>
 </ul>
-<p><img alt="design" src="../img/architecture/passive_services.png" /></p>
+<p><img alt="design" src="../img/architecture/passive_services.svg" /></p>
 <h3 id="active-microservices">Active Microservices</h3>
 <p>The active microservices are the actual ones that perform the scaling
 of the resources via changing the container resource limits on the 
@@ -533,7 +519,7 @@ the matches it generates scaling requests. </li>
 <li><strong>Scaler</strong>: Polls the State Database looking for requests to be applied to the
 containers.</li>
 </ul>
-<p><img alt="design" src="../img/architecture/active_services.png" /></p>
+<p><img alt="design" src="../img/architecture/active_services.svg" /></p>
 <h2 id="othercommon-microservices-and-databases">Other/Common Microservices and Databases</h2>
 <p>Some microservices have an auxiliar role and are used both by active and 
 passive microservices.</p>
@@ -545,14 +531,6 @@ infrastructure node whose hosted containers are to be scaled. This service
 is able to read and write the crgoups file system to perform the actual 
 resource limit scalings.</li>
 </ul>
-<h2 id="more-info">More info</h2>
-<p>If what is described on this documentation webpage does not answer all of 
-your doubts regarding the technical details, or simply is not enough for
-you and you want the specifics, this framework has been published on a 
-full-length 
-<a href="https://www.sciencedirect.com/science/article/pii/S0167739X19310015">paper</a> on the FGCS journal.
-If you don't have access to the journal paper, you can still access the
-preprint on this <a href="http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf">link</a>.</p>
                 
               
               

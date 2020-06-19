@@ -11,7 +11,7 @@ resource scaling.
 The next image shows a high-level diagram of the scenario on which the 
 framework is deployed:
 
-![architecture](img/architecture/scenario_diagram.png)
+![architecture](img/architecture/scenario_diagram.svg)
 
 * [1] Beginning with the framework's **inputs**, there are two: 
 1) the actions, that control the framework's behavior, both performed 
@@ -38,7 +38,7 @@ this framework uses several microservices that communicate and exchange
 information. The following image shows a high-level diagram of the 
 microservices layout:
 
-![design](img/architecture/design_diagram.png)
+![design](img/architecture/design_diagram.svg)
 
 As it can be seen, the microservices can be separated into active and 
 passive ones, with the difference being that the passive ones focus on 
@@ -66,7 +66,7 @@ State Database to a peristent database, thus creating time series.
 one (e.g., allocated amount of CPU for an application composed of 3 containers)
 
 
-![design](img/architecture/passive_services.png)
+![design](img/architecture/passive_services.svg)
 
 
 ### Active Microservices
@@ -93,7 +93,7 @@ the matches it generates scaling requests.
 containers.
 
 
-![design](img/architecture/active_services.png)
+![design](img/architecture/active_services.svg)
 
 ## Other/Common Microservices and Databases
 
@@ -106,13 +106,3 @@ scripts to configure the framework.
 infrastructure node whose hosted containers are to be scaled. This service
 is able to read and write the crgoups file system to perform the actual 
 resource limit scalings.
-
-## More info
-
-If what is described on this documentation webpage does not answer all of 
-your doubts regarding the technical details, or simply is not enough for
-you and you want the specifics, this framework has been published on a 
-full-length 
-[paper](https://www.sciencedirect.com/science/article/pii/S0167739X19310015) on the FGCS journal.
-If you don't have access to the journal paper, you can still access the
-preprint on this [link](http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf).

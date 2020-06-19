@@ -52,7 +52,7 @@ In order to better see how the Serverless Containers framework achieves
 it goal, we can study an example of several scaling operations taking 
 place on a time window.
 
-![Time series](img/use_case/timeseries.png)
+![Time series](img/use_case/timeseries.svg)
 
 First of all, in the image it can be appreciated that there are:
 
@@ -104,7 +104,7 @@ Because of these reasons it is important to define a key ratio, the
 used and the allocated resources. The next image shows the previously 
 used time window but with areas as the focus of the study:
 
-![Areas](img/use_case/integrals.png)
+![Areas](img/use_case/integrals.svg)
 
 We can see that there are three areas:
 

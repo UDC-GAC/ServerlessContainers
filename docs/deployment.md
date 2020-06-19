@@ -54,7 +54,7 @@ also interact with the *State Database* so it is advisable that their
 latency with the latter is small. Other latencies that may be interesting
 to take into account, as well as a proposed placement, are shown in the next image.
 
-![design](img/deployment/placement.png)
+![Microservice placement](img/deployment/placement.svg)
 
 Finally, it should also be considered that some of these microservices, 
 due to their inner operations and continuous polling, can show an overhead 

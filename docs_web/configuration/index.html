@@ -48,6 +48,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#responsiveness" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -237,6 +242,8 @@
     
     <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
     
+      
+    
     
     <a href="./" title="Configuration" class="md-nav__link md-nav__link--active">
       Configuration
@@ -288,6 +295,21 @@
               </div>
             
             
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
           
           <div class="md-content">
             <article class="md-content__inner md-typeset">
@@ -301,9 +323,117 @@
                   
                 
                 
-                  <h1>Configuration</h1>
-                
-                
+                <p>The scaling processes can be configured to better adapt to the needs of the
+applications. Such configuration can be even changed dynamically if needed.</p>
+<p>The configuration can also be divided between two dimensions, being the 
+first the time dimension and the second one the resource limit dimension.
+To better approach these two dimensions, the first one is referred to as
+the Responsiveness of the framework, while the second one is referred to as
+the Benevolence.</p>
+<p><img alt="Configuration" src="../img/quickstart/configuration.svg" /> </p>
+<h1 id="responsiveness">Responsiveness</h1>
+<p>As its name implies, this configuration aspect of the framework dictates 
+how fast the changes are made when it comes to adapting the resource 
+limits to the application's real usage. The reason why we have to take 
+into account this, instead of just performing instant scaling 
+operations once the limits have been surpassed, lies behind the concept 
+of hysteresis. </p>
+<p>If we consider hysteresis as the degree of variation of the resource 
+usage patterns, we need to take into account some kind of time buffer 
+before changing the resource limits. This time buffer allows to have 
+some assurance that after a scaling operation, another one won't be 
+needed soon after.</p>
+<p>As seen on the image above, the responsiveness can be modulated 
+differently to adapt to two possible scenarios:</p>
+<ul>
+<li>A: Time to pass before performing a <strong>scaling down</strong> operation.</li>
+<li>B: Time to pass before performing a <strong>scaling up</strong> operation.</li>
+</ul>
+<p>It has to be noted the difference between the two. While on the <strong>A</strong> 
+scenario we can allow more time to pass, as the resources are in the 
+end being underutilized, so that the application is not being penalized, 
+on the <strong>B</strong> scenario the application may be close to, or suffering a 
+bottleneck, thus we may consider to shorten such times to avoid 
+execution overheads.</p>
+<p><img alt="Responsiveness Configuration" src="../img/quickstart/configuration_responsiveness.svg" /></p>
+<p>To tune the Responsiveness of the framework, the request-generating Rules 
+will have to be modified.</p>
+<h1 id="benevolence">Benevolence</h1>
+<p>In the case of Benevolence, as its name says, it modules how the 
+framework addresses the scaling operations in terms of the number 
+of resources that it takes away or that it gives. </p>
+<p>On the one hand, a 'benevolent' framework adjusts the resources leaving 
+an ample margin between the limits so that the areas are large enough 
+to accommodate any resource variations, while at the same time giving 
+a large number of resources when scaling up.</p>
+<p>On the other hand, if we want to push the serverless scenario to the 
+limit we can set narrower boundaries and more restrained scaling up
+operations. </p>
+<p>To module the behaviour between these two options, thus tuning the 
+framework to behave closer to the traditional instance or closer to
+the serverless paradign, we can use the following configuration 
+parameters:</p>
+<ul>
+<li>1) Scaling up amount. A fixed and configurable amount.</li>
+<li>2) Scaling down policy. Although several are possible, to implement
+the serverless scenario the only one usable is the 'fit to usage', which
+looks to set resource limits so that the usage falls between the upper 
+and lower boundaries.</li>
+<li>3) Boundary amount. This parameter is used combined with the scaling 
+down policy to define the final allocated resource limit.</li>
+</ul>
+<p><img alt="Benevolence Configuration" src="../img/quickstart/configuration_benevolence.svg" /></p>
+<p>To tune the Benevolence of the framework, mainly the amount parameter of 
+the down-scaling Rules will have to be adapted.</p>
+<h1 id="rule-configuration">Rule configuration</h1>
+<p>As previously stated, in order to configure the framework on the vertical
+and time dimensions, the Rule documents have to be modified.</p>
+<p>To tune the Benevolence, we have to modify the request-generating Rules
+to specify the amount of time windows desired before a scaling request
+is generated by the 'Guardian'.</p>
+<p>As seen in the next Rule document, the number of time windows where the
+usage had to surpass the upper limits before one of this kind of requests 
+is generated is 4. We can also notice that the number of the opposite 
+events (usage fell below the lower limit) must also be lower than 2. This
+is done in order to avoid hysteresis, skipping scenarios where the resource
+usage is highly volatile and constantly crossing both limits.</p>
+<pre><code>CpuRescaleUp = dict(
+    _id='CpuRescaleUp',
+    type='rule',
+    resource=&quot;cpu&quot;,
+    name='CpuRescaleUp',
+    rule=dict(
+        {&quot;and&quot;: [
+            {&quot;&gt;=&quot;: [
+                {&quot;var&quot;: &quot;events.scale.up&quot;},
+                4]},
+            {&quot;&lt;=&quot;: [
+                {&quot;var&quot;: &quot;events.scale.down&quot;},
+                2]}
+        ]}),
+    events_to_remove=4,
+    generates=&quot;requests&quot;,
+    action={&quot;requests&quot;: [&quot;CpuRescaleUp&quot;]},
+    amount=75,
+    rescale_by=&quot;amount&quot;,
+    active=True
+)
+</code></pre>
+
+<p>When it comes to Benevolence, we can also see on the previous Rule 
+document that the amount of CPU increased on a scaling up operation will
+be 75 shares.</p>
+<p>Finally, in order to configure the boundary parameter, we have to use
+the limits documents of each container. On these documents there is a 
+boundary applied for each resource, as seen next:</p>
+<pre><code>{
+    cpu: {
+        boundary: 25,
+        lower: 50,
+        upper: 75
+    }
+}
+</code></pre>
                 
               
               
