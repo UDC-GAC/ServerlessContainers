@@ -227,8 +227,8 @@
 
 
   <li class="md-nav__item">
-    <a href="usage/" title="Usage" class="md-nav__link">
-      Usage
+    <a href="quickstart/" title="Quickstart" class="md-nav__link">
+      Quickstart
     </a>
   </li>
 
@@ -304,32 +304,35 @@
                   <h1>Introduction</h1>
                 
                 <p><img alt="Logo" src="img/logo.png" style="max-width:25%; margin-left: 40%" /></p>
-<p>The Serverless Containers is able to <strong>dynamically scale a container 
-resource limit (<em>e.g., CPU, Memory, disk and network</em>) in order to 
-adapt them to the real usage</strong>, at any moment and in real-time.</p>
+<p>The Serverless Containers framework is able to <strong>dynamically scale a 
+container resource limit (<em>e.g., CPU, Memory, disk and network</em>) 
+in order to adapt them to the real usage</strong>, at any moment and in 
+real-time. This feature in the way that is implemented, creates
+a serverless environment which supports containers.</p>
 <ul>
 <li>For a brief summary of this tool you can visit its 
 <a href="http://bdwatchdog.dec.udc.es/serverless/index.html">homepage</a> website.</li>
 <li>In order to see data from real experiments where this tool was used, 
-you can visit <a href="http://bdwatchdog.dec.udc.es/TimeseriesViewer_DEMO/">this demo</a>.</li>
+you can visit <a href="http://bdwatchdog.dec.udc.es/BDWatchdog/TimeseriesViewer/demo.html">this demo</a>.</li>
 <li>For the uncommented source code you can visit its 
-<a href="https://github.com/JonatanEnes/ServerlessContainers">GitHub</a>.</li>
+<a href="https://github.com/UDC-GAC/ServerlessContainers">GitHub</a>.</li>
 </ul>
 <p>Serverless Containers has also been the subject of a publication in 
 <strong>Future Generation Computer Systems (FGCS)</strong>, which is available 
 <a href="https://www.sciencedirect.com/science/article/pii/S0167739X19310015">online</a>.
 (<a href="http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf">preprint</a>)
-In this publication the framework is thoroughly described with all technichal
-detail, and several experiment examples are also presented.</p>
+In this publication the framework is thoroughly described with all 
+technichal detail along with several experimental examples.</p>
 <p>This documentation webpage gives a more detailed description of the 
-framework but without delving into technichal details as in the 
+framework but without delving into the technichal details as in the 
 available publication. The webpage has been structured with the 
 following sections:</p>
 <ol>
 <li>
 <p><a href="use_case/">Use case</a>: 
-This section summarizes the core use case of this framework with a 
-simple example.</p>
+This section summarizes the core use case of this framework as well
+as its underlying concepts and ideas to implement it and to create 
+the serverless environment.</p>
 </li>
 <li>
 <p><a href="architecture/">Architecture</a>: 
@@ -341,22 +344,28 @@ In this section it is described how to deploy the framework overall.
 Some guidelines are also provided.</p>
 </li>
 <li>
-<p><a href="usage/">Usage</a>:
+<p><a href="quickstart/">Quickstart</a>:
 In this section a quickstart guide is provided to show how two containers
 would be supported and transitioned from a traditional resource management
-to working with a serverless environment.</p>
+to work with a serverless environment.</p>
 </li>
 <li>
 <p><a href="configuration/">Configuration</a>:
-In this section a few, key configuration parameters are explained.</p>
-</li>
-<li>
-<p><a href="code/src/">Source Code (external)</a>: 
-If you are interested on the low-level code and code documentation. </p>
+In this section a few, key configuration parameters are explained to 
+tune the framework's behaviour between the two extremes, a traditional 
+instance or an aggressive serverless environment.</p>
 </li>
 <li>
 <p><a href="sponsors/">Sponsors</a>: 
 Some comments on the backers and sponsors of this framework.</p>
+</li>
+<li>
+<p><a href="http://bdwatchdog.dec.udc.es/serverless/index.html">Homepage (external)</a>: 
+the institutional webpage of this framework. </p>
+</li>
+<li>
+<p><a href="code/src/">Source Code (external)</a>: 
+If you are interested on the code and inline code documentation. </p>
 </li>
 </ol>
                 

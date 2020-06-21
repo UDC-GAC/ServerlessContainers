@@ -4,7 +4,7 @@ nav:
     - Use case: use_case.md
     - Architecture: architecture.md
     - Deployment: deployment.md
-    - Usage: usage.md
+    - Quickstart: quickstart.md
     - Configuration: configuration.md
     - Sponsors: sponsors.md
     - Homepage (external): http://bdwatchdog.dec.udc.es/serverless/index.html

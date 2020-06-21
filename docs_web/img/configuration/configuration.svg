@@ -282,12 +282,12 @@
      id="namedview351"
      showgrid="false"
      inkscape:zoom="1.8933333"
-     inkscape:cx="507.48627"
-     inkscape:cy="175.21028"
+     inkscape:cx="398.94754"
+     inkscape:cy="173.0976"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g2708"
+     inkscape:current-layer="g947"
      showguides="true"
      inkscape:guide-bbox="true">
     <sodipodi:guide
@@ -972,30 +972,33 @@
       <g
          id="g947"
          transform="translate(-10.564714,31.684253)">
-        <rect
-           ry="9.3811064"
-           y="67.15918"
-           x="317.84406"
-           height="46.994362"
-           width="135.46268"
-           id="rect941"
-           style="opacity:1;fill:#fff6ac;fill-opacity:1;stroke:#000000;stroke-width:0.9267664;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-        <text
-           id="text935"
-           y="87.091217"
-           x="322.98737"
-           style="font-style:normal;font-weight:normal;font-size:40px;line-height:8px;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-           xml:space="preserve"><tspan
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
+        <g
+           id="g2861">
+          <rect
+             style="opacity:1;fill:#fff6ac;fill-opacity:1;stroke:#000000;stroke-width:0.9267664;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+             id="rect941"
+             width="135.46268"
+             height="46.994362"
+             x="317.84406"
+             y="67.15918"
+             ry="9.3811064" />
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-weight:normal;font-size:40px;line-height:8px;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
+             x="322.98737"
              y="87.091217"
-             x="322.98737"
-             id="tspan933"
-             sodipodi:role="line">Benevolence </tspan><tspan
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
-             id="tspan937"
-             y="103.29955"
-             x="322.98737"
-             sodipodi:role="line">Configuration</tspan></text>
+             id="text935"><tspan
+               sodipodi:role="line"
+               id="tspan933"
+               x="322.98737"
+               y="87.091217"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">Benevolence </tspan><tspan
+               sodipodi:role="line"
+               x="322.98737"
+               y="103.29955"
+               id="tspan937"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">Configuration</tspan></text>
+        </g>
         <rect
            ry="10.526571"
            y="32.416901"
@@ -1103,30 +1106,33 @@
           <g
              id="g2708"
              transform="translate(0.52816902,-19.542254)">
-            <rect
-               ry="8.7379265"
-               y="72.203262"
-               x="331.07495"
-               height="43.772373"
-               width="162.41151"
-               id="rect941-7"
-               style="opacity:1;fill:#eed2ef;fill-opacity:1;stroke:#000000;stroke-width:0.97933584;stroke-miterlimit:4;stroke-dasharray:2.93800765, 2.93800765;stroke-dashoffset:0;stroke-opacity:1" />
-            <text
-               id="text935-9"
-               y="91.471268"
-               x="336.65567"
-               style="font-style:normal;font-weight:normal;font-size:40px;line-height:8px;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-               xml:space="preserve"><tspan
-                 style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
+            <g
+               id="g2828">
+              <rect
+                 style="opacity:1;fill:#eed2ef;fill-opacity:1;stroke:#000000;stroke-width:0.97933584;stroke-miterlimit:4;stroke-dasharray:2.93800765, 2.93800765;stroke-dashoffset:0;stroke-opacity:1"
+                 id="rect941-7"
+                 width="162.41151"
+                 height="43.772373"
+                 x="331.07495"
+                 y="72.203262"
+                 ry="8.7379265" />
+              <text
+                 xml:space="preserve"
+                 style="font-style:normal;font-weight:normal;font-size:40px;line-height:8px;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
+                 x="336.65567"
                  y="91.471268"
-                 x="336.65567"
-                 id="tspan933-0"
-                 sodipodi:role="line">Responsiveness</tspan><tspan
-                 style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
-                 id="tspan937-3"
-                 y="107.6796"
-                 x="336.65567"
-                 sodipodi:role="line">Configuration</tspan></text>
+                 id="text935-9"><tspan
+                   sodipodi:role="line"
+                   id="tspan933-0"
+                   x="336.65567"
+                   y="91.471268"
+                   style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">Responsiveness</tspan><tspan
+                   sodipodi:role="line"
+                   x="336.65567"
+                   y="107.6796"
+                   id="tspan937-3"
+                   style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">Configuration</tspan></text>
+            </g>
             <rect
                ry="10.526571"
                y="24.814955"

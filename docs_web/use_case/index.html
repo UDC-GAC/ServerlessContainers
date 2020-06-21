@@ -240,13 +240,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    Configuration
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -284,8 +277,8 @@
 
 
   <li class="md-nav__item">
-    <a href="../usage/" title="Usage" class="md-nav__link">
-      Usage
+    <a href="../quickstart/" title="Quickstart" class="md-nav__link">
+      Quickstart
     </a>
   </li>
 
@@ -382,13 +375,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    Configuration
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -412,8 +398,8 @@
                   <h1>Use case</h1>
                 
                 <p>This framework is used to <strong>scale</strong> the <strong>resources</strong> of a <strong>container</strong>, 
-or a group of containers, both <strong>dynamically and in real time</strong>, so that the 
-limits placed on such resources evolve to be just above the usage. </p>
+or a group of containers, both <strong>dynamically and in real time</strong>, so that 
+the limits placed on such resources evolve to be just above the usage. </p>
 <p>On the one hand, from a traditional <strong>virtual machine</strong> and <strong>Cloud</strong> 
 perspective, this approach is similar to the on-demand and pay 
 per usage resource provisioning with the main difference being that on 
@@ -424,11 +410,11 @@ paradigm as the container and all of the processes running on it can not
 trust the pool of resources exposed to them. Such resources limits can 
 vary according to their usage (e.g., if the CPU usage increases, 
 the CPU limit should also be raised via adding more cores).</p>
-<p>Combining both of these approaches, this framework comes up with a solution
-so that virtual infrastructure units, such as software containers (e.g.,
-LXC, Docker), can benefit from having a resource management that implements
-a serverless scenario. 
-Among other perks, the main benefits of this framework include:</p>
+<p>Combining both of these approaches, this framework comes up with a 
+solution so that virtual infrastructure units, such as software 
+containers (e.g., LXC, Docker), can benefit from having a resource 
+management that implements a serverless scenario. </p>
+<p>Among other perks, the main benefits of this framework include:</p>
 <ul>
 <li>
 <p><strong>Higher resource efficiency</strong>, if the containers have a low resource usage, 
@@ -446,40 +432,44 @@ applications.</p>
 </li>
 </ul>
 <h2 id="main-goal">Main Goal</h2>
-<p>The main goal of this framework is to adjust the resource limit, that is, 
-the amount of a resource that a container is given, so that such limit is not
-far away of the real resource usage. If such limit is way higher than the usage, we
-can talk of an <strong>underutilized</strong> resource scenario, while if the limit is close to
-the usage, there is a <strong>bottleneck</strong>.</p>
-<p>The framework makes a best-effort to keep a balance between both scenarios, 
-as if the <strong>allocated</strong> amount of resource is set too close to the usage, 
-any unexpected increase will face a bottleneck, while if set too high, 
-all of the unused amount is lost considering that in the serverless 
-paradigm only the <strong>used resources</strong> are billed.</p>
+<p>The main goal of this framework is to adjust the resource limit, that 
+is, the amount of a resource that a container is given, so that such 
+limit is not far away of the real resource usage. If such limit is way 
+higher than the usage, we can talk of an <strong>underutilized</strong> resource 
+scenario, while if the limit is close to the usage, there is a 
+<strong>bottleneck</strong>.</p>
+<p>The framework makes a best-effort to keep a balance between both 
+scenarios, as if the <strong>allocated</strong> amount of resource is set too close 
+to the usage, any unexpected increase will face a bottleneck, while if 
+set too high, all of the unused amount is lost considering that in the 
+serverless paradigm only the <strong>used resources</strong> are billed.</p>
 <h2 id="scaling-policy">Scaling policy</h2>
-<p>In order to better see how the Serverless Containers framework achieves 
-it goal, we can study an example of several scaling operations taking 
-place on a time window.</p>
+<p>In order to better see how the <strong><em>Serverless Containers</em></strong> framework 
+achieves it goal, we can study an example of several scaling operations 
+taking place on a time window.</p>
 <p><img alt="Time series" src="../img/use_case/timeseries.svg" /></p>
-<p>First of all, in the image it can be appreciated that there are:</p>
+<p>First of all, in the image it can be seen that there are:</p>
 <ul>
 <li>A time series that varies (<strong>orange</strong>), this time series represents the 
 container <strong>aggregated resource usage</strong>, in this case of CPU.</li>
 <li>Three varying thresholds (dashed lines), which, from top to bottom, 
-represent the allocated resource <strong>limit*+ and the upper and lower 
-</strong>boundaries** (more on this later).</li>
+represent the allocated resource <strong>limit</strong> and the upper and lower 
+<strong>boundaries</strong> (more on this later).</li>
 <li>Three colored areas (blue, green and ochre), which represent the areas
 between the previously mentioned thresholds.</li>
-<li>Two vertical lines that do not vary, which represent the maximum and 
-minimum resource limits. </li>
+<li>Two horizontal lines that do not vary, which represent the <strong>maximum</strong> 
+and <strong>minimum resource limits</strong>. The maximum would be equivalent to the 
+initial allocated resource son a traditional instance, while the minimum 
+would represent the least amount of resources that we will grant the 
+container.</li>
 </ul>
-<p>As previously stated, the framework looks for a balance when it comes 
-to setting an appropriate allocated resource amount, continuously 
-responding to the resource usage variations. Such response can be seen 
-in the several scaling operations that take place, such as at seconds 
-70 (down), 270 (up) and 420 (down). In order to detect the conditions 
-that trigger these scaling requirements, two thresholds, or boundaries, 
-are used:</p>
+<p>As previously stated, the <strong><em>Serverless Containers</em></strong> framework looks 
+for a balance when it comes to setting an appropriate allocated resource 
+amount, continuously responding to the resource usage variations. 
+Such response can be seen in the several scaling operations that take 
+place, such as at seconds 70 (down), 270 (up) and 420 (down). 
+In order to detect the conditions that trigger these scaling 
+requirements, two thresholds, or boundaries, are used:</p>
 <ul>
 <li>the <strong>upper boundary</strong>, which defines a threshold that, once surpassed, 
 signals for a need to scale up the allocated resource limit to avoid any 
@@ -501,7 +491,8 @@ the startup. </p>
 <p>Moreover, if we consider that the user of a serverless platform 
 typically does not specify such resource requirements and that
 the billed resources are only the used ones, the task of properly 
-scaling and setting limits becomes a crucial one which falls to the provider.</p>
+scaling and setting limits becomes a crucial one which falls to 
+the provider.</p>
 <p>Because of these reasons it is important to define a key ratio, the 
 <strong>resource utilization</strong>, which can be easily obtained from the amount of 
 used and the allocated resources. The next image shows the previously 
@@ -516,31 +507,43 @@ resources set apart for this container via the framework and a series
 of scaling operations.</li>
 <li>The <strong>reserved area</strong> (stripes), which represents the theoretical 
 limit of resources that the container had at any moment. It is worth 
-noting that this area would effectively represent the resource footprint 
-of a virtual machine.</li>
+noting that this area would effectively represent the resource 
+footprint of a virtual machine whose resources are allocated and never 
+changed.</li>
 </ul>
 <p>With these areas it is easy to see that the ratio of utilization of 
 this serverless framework would be higher than the one achieved by a 
-virtual machine. Moreover, an ideal serverless platform, which allocates 
-only the strictly needed resources at any moment, performing instantaneous 
-scaling operation, would have a ratio of 100% (best-case scenario), 
-while the ratio exposed by not performing any scaling operation, such 
-as with the virtual machine, would be the worst-case scenario.</p>
-<h2 id="configuration">Configuration</h2>
-<p>It is worth to be mentioned that the framework is highly configurable, 
-including but not limited to:</p>
-<ul>
-<li>the time it takes before a scaling operation is triggered </li>
-<li>the amount of resource that is increased in scaling up operations</li>
-<li>how wide are the ranges between boundaries</li>
-</ul>
-<p>Some configuration parameters play a key role in how the framework behaves, 
-nonetheless it would be tiresome for the reader to include all of the 
-details on this webpage, even more considering that they have been 
-extensively referenced and described on the full-length 
-<a href="https://www.sciencedirect.com/science/article/pii/S0167739X19310015">paper</a> 
-(<a href="http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf">preprint</a> 
-also publicly available).</p>
+traditional instance. Moreover, an ideal serverless platform, 
+which allocates only the strictly needed resources at any moment, 
+performing instantaneous scaling operation, would have a ratio of 100% 
+(best-case scenario), while the ratio exposed by not performing any 
+scaling operation, such as with the traditional instance, would be 
+the worst-case scenario.</p>
+<!--## Configuration-->
+
+<!--It is worth to be mentioned that the framework is highly configurable, -->
+
+<!--including but not limited to:-->
+
+<!--* the time it takes before a scaling operation is triggered -->
+
+<!--* the amount of resource that is increased in scaling up operations-->
+
+<!--* how wide are the ranges between boundaries-->
+
+<!--Some configuration parameters play a key role in how the framework behaves, -->
+
+<!--nonetheless it would be tiresome for the reader to include all of the -->
+
+<!--details on this webpage, even more considering that they have been -->
+
+<!--extensively referenced and described on the full-length -->
+
+<!--[paper](https://www.sciencedirect.com/science/article/pii/S0167739X19310015) -->
+
+<!--([preprint](http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf) -->
+
+<!--also publicly available).-->
                 
               
               

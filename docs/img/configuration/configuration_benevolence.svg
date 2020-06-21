@@ -308,9 +308,9 @@
      inkscape:window-height="1029"
      id="namedview351"
      showgrid="false"
-     inkscape:zoom="1.3387888"
-     inkscape:cx="657.8827"
-     inkscape:cy="114.99414"
+     inkscape:zoom="2.6775776"
+     inkscape:cx="485.50268"
+     inkscape:cy="182.95644"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
@@ -999,49 +999,29 @@
       <g
          id="g947"
          transform="translate(-10.564714,31.684253)">
-        <rect
-           ry="9.3811064"
-           y="67.15918"
-           x="317.84406"
-           height="46.994362"
-           width="135.46268"
-           id="rect941"
-           style="opacity:1;fill:#fff6ac;fill-opacity:1;stroke:#000000;stroke-width:0.9267664;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-        <text
-           id="text935"
-           y="87.091217"
-           x="322.98737"
-           style="font-style:normal;font-weight:normal;font-size:40px;line-height:8px;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-           xml:space="preserve"><tspan
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
-             y="87.091217"
-             x="322.98737"
-             id="tspan933"
-             sodipodi:role="line">Benevolence </tspan><tspan
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
-             id="tspan937"
-             y="103.29955"
-             x="322.98737"
-             sodipodi:role="line">Configuration</tspan></text>
-        <rect
-           ry="10.526571"
-           y="32.416901"
-           x="405.96817"
-           height="25.941214"
-           width="22.366816"
-           id="rect941-0"
-           style="opacity:1;fill:#fff6ac;fill-opacity:1;stroke:#000000;stroke-width:1.49446189;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-        <text
-           xml:space="preserve"
-           style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
-           x="410.87601"
-           y="53.110836"
-           id="text7030"><tspan
-             sodipodi:role="line"
-             id="tspan7028"
-             x="410.87601"
+        <g
+           id="g2893"
+           transform="translate(19.794011,28.010393)">
+          <rect
+             style="opacity:1;fill:#fff6ac;fill-opacity:1;stroke:#000000;stroke-width:1.49446189;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+             id="rect941-0"
+             width="22.366816"
+             height="25.941214"
+             x="405.96817"
+             y="32.416901"
+             ry="10.526571" />
+          <text
+             id="text7030"
              y="53.110836"
-             style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">1</tspan></text>
+             x="410.87601"
+             style="font-style:normal;font-weight:normal;font-size:40px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
+             xml:space="preserve"><tspan
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start"
+               y="53.110836"
+               x="410.87601"
+               id="tspan7028"
+               sodipodi:role="line">1</tspan></text>
+        </g>
         <g
            id="g7260">
           <g
@@ -1087,6 +1067,34 @@
              x="521.80237"
              y="88.441315"
              style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:21.33333397px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">3</tspan></text>
+        <g
+           transform="translate(-86.062254,-80.89803)"
+           id="g2861">
+          <rect
+             style="opacity:1;fill:#fff6ac;fill-opacity:1;stroke:#000000;stroke-width:0.9267664;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+             id="rect941-9"
+             width="135.46268"
+             height="46.994362"
+             x="317.84406"
+             y="67.15918"
+             ry="9.3811064" />
+          <text
+             xml:space="preserve"
+             style="font-style:normal;font-weight:normal;font-size:40px;line-height:8px;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none"
+             x="322.98737"
+             y="87.091217"
+             id="text935-0"><tspan
+               sodipodi:role="line"
+               id="tspan933-3"
+               x="322.98737"
+               y="87.091217"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">Benevolence </tspan><tspan
+               sodipodi:role="line"
+               x="322.98737"
+               y="103.29955"
+               id="tspan937-3"
+               style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.66666603px;line-height:13.33333302px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start">Configuration</tspan></text>
+        </g>
       </g>
       <path
          style="fill:none;stroke:#ff0a0a;stroke-width:1.20000005;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#Arrow1Lend-8)"
