@@ -15,7 +15,7 @@ framework is deployed:
 
 * [1] Beginning with the framework's **inputs**, there are two: 
 1) the actions, that control the framework's behavior, both performed 
-by an user or by another program through the API; and, 
+by an user or by another metadataprogram through the API; and, 
 2) the resource monitoring time series, currently provided by an 
 external framework ([BDWatchdog](http://bdwatchdog.dec.udc.es/monitoring/index.html)), 
 that are used in the policy decision for the resource scaling operations.
@@ -50,7 +50,7 @@ change the state (the container's resource limits) accordingly as needed.
 ### Passive Microservices
 
 The passive microservices are needed to continuously keep the central 
-database (State Database) updated with all the metada that tracks the 
+database (State Database) updated with all the metadata that tracks the 
 state of the infrastructure, from the number of containers and its 
 thresholds to the allocated amounts of resources. 
 

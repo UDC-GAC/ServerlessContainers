@@ -116,7 +116,7 @@ and 200 for the minimum and maximum values, respectively. It can also
 be appreciated that its configuration marks it as a non-scalable container
 (*guard:false*), even though the CPU is marked as subjected to be scaled.
 
-The full *Orchestrator* API can be checked here (pending) and it can be 
+The full *Orchestrator* API can be checked below and it can be 
 used via scripts that perform REST calls.
 
 Using this service and the scripts, we will make sure that both of the 

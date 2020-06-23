@@ -134,20 +134,3 @@ performing instantaneous scaling operation, would have a ratio of 100%
 scaling operation, such as with the traditional instance, would be 
 the worst-case scenario.
 
-
-<!--## Configuration-->
-
-<!--It is worth to be mentioned that the framework is highly configurable, -->
-<!--including but not limited to:-->
-
-<!--* the time it takes before a scaling operation is triggered -->
-<!--* the amount of resource that is increased in scaling up operations-->
-<!--* how wide are the ranges between boundaries-->
-
-<!--Some configuration parameters play a key role in how the framework behaves, -->
-<!--nonetheless it would be tiresome for the reader to include all of the -->
-<!--details on this webpage, even more considering that they have been -->
-<!--extensively referenced and described on the full-length -->
-<!--[paper](https://www.sciencedirect.com/science/article/pii/S0167739X19310015) -->
-<!--([preprint](http://bdwatchdog.dec.udc.es/articles/serverless_containers.pdf) -->
-<!--also publicly available).-->

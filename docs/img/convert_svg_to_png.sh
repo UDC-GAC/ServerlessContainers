@@ -14,10 +14,18 @@ cd architecture
 convert
 cd ..
 
-cd use_case
+cd configuration
 convert
 cd ..
 
-cd installation
+cd deployment
+convert
+cd ..
+
+cd quickstart
+convert
+cd ..
+
+cd use_case
 convert
 cd ..

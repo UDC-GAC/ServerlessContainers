@@ -43,7 +43,7 @@ which are able to work inside containers.
 In addition, this framework has also at its core a JSON document database 
 used as a cache of the system's state, referred to as *State Database*. 
 Currently, a [**CouchDB**](https://couchdb.apache.org/) database is used. 
-The installation of a functional CoudhDB database is quite simple and 
+The installation of a functional CouchDB database is quite simple and 
 there is no need for any specific configuration to be used by this 
 frameworks. Nonetheless, because the need for a high response of the 
 database operations, the fact that the stored data does not need to be 
@@ -51,7 +51,7 @@ persisted across time and that the required storage size is relatively
 small (no more than 1 GiB for 30+ containers), it may be desirable to 
 use in-memory storage 
 
-Finally, other equirements include the Python3 runtime environment and 
+Finally, other requirements include the Python3 runtime environment and 
 other Python packages such as Flask.
 
 ## Microservices
