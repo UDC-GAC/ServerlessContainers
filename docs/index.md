@@ -1,7 +1,7 @@
 ![Logo](img/logo.png){: style="max-width:25%; margin-left: 40%"}
 
 The Serverless Containers framework is able to **dynamically scale a 
-container resource limit (_e.g., CPU, Memory, disk and network_) 
+container resource limit (_e.g., CPU, memory, disk and network_) 
 in order to adapt them to the real usage**, at any moment and in 
 real-time. This feature in the way that is implemented, creates
 a serverless environment which supports containers.
@@ -21,7 +21,7 @@ In this publication the framework is thoroughly described with all
 technichal detail along with several experimental examples.
 
 This documentation webpage gives a more detailed description of the 
-framework but without delving into the technichal details as in the 
+framework but without delving into the technical details as in the 
 available publication. The webpage has been structured with the 
 following sections:
 
@@ -56,3 +56,4 @@ the institutional webpage of this framework.
 8. [Source Code (external)](code/src/index.html): 
 If you are interested on the code and inline code documentation. 
 
+[PDF](latex/manual.pdf)

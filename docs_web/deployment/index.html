@@ -453,7 +453,8 @@
                 
                 <p>The <strong><em>Serverless Container framework</em></strong> can be deployed by cloning its 
 <a href="https://github.com/UDC-GAC/ServerlessContainers">GitHub repo</a> 
-and placing and starting the proper services on the right environments.</p>
+and placing and starting the proper services, in the correct order and 
+on the right environments.</p>
 <p>To clone the project, you can use:</p>
 <pre><code>git clone https://github.com/UDC-GAC/ServerlessContainers
 </code></pre>
@@ -462,7 +463,7 @@ and placing and starting the proper services on the right environments.</p>
 described:</p>
 <h2 id="containers">Containers</h2>
 <p><strong><em>Serverless Containers</em></strong> supports any container engine and 
-container technology that is backed by the cgroup file system. 
+container technology that is backed by the cgroups file system. 
 Specifically, for development the 
 <a href="https://linuxcontainers.org/lxd/introduction/">LXD container manager</a>, 
 which deploys <a href="https://linuxcontainers.org/">Linux Containers (LXC)</a>, 
@@ -493,7 +494,7 @@ frameworks. Nonetheless, because the need for a high response of the
 database operations, the fact that the stored data does not need to be 
 persisted across time and that the required storage size is relatively 
 small (no more than 1 GiB for 30+ containers), it may be desirable to 
-use in-memory storage </p>
+use it with an in-memory storage file system.</p>
 <p>Finally, other requirements include the Python3 runtime environment and 
 other Python packages such as Flask.</p>
 <h2 id="microservices">Microservices</h2>
@@ -506,32 +507,32 @@ to take into account, as well as a proposed placement, are shown in the
 next image.</p>
 <p><img alt="Microservice placement" src="../img/deployment/placement.svg" /></p>
 <p>Finally, it should also be considered that some of these microservices, 
-due to their inner operations and continuous polling, can show an overhead 
+due to their inner operations and continuous polling, can present an overhead 
 that although should not be particularly high, it could be noticeable
 particularly in experimentation testbeds. Because of this, it is advisable
 to run as many microservices as possible in an dedicated/isolated instance
 separated from any environment not to be disturbed. </p>
 <h3 id="passive">Passive</h3>
-<p>services: <strong>Structure Snapshoter, Database Snapshoter, 
+<p>Services: <strong>Structure Snapshoter, Database Snapshoter, 
 Refeeder Snapshoter</strong></p>
 <p>Regarding the passive microservices, the <em>Structure Snapshoter</em> in 
 particular has to poll the containers via the <em>Container Scaler</em> service, 
-which is deployed in all the infrastructure nodes that host containers. 
-Because of this the latency of this microservice should also be small 
+which is deployed in all the infrastructure hosts that run containers. 
+Because of this, the latency of this microservice should also be small 
 when interacting with the nodes.</p>
 <h3 id="active">Active</h3>
-<p>services: <strong>Guardian, Scaler</strong></p>
+<p>Services: <strong>Guardian, Scaler</strong></p>
 <p>As with the <em>Structure Snapshoter</em> passive microservice, the <em>Scaler</em> 
-also need to interact with the infrastructure nodes and their 
+also need to interact with the infrastructure hosts and their 
 <em>Container Scaler</em> service, so the latency between the two should 
 be kept low.</p>
 <h3 id="other">Other</h3>
-<p>services: <strong>Orchestrator, Container Scaler</strong></p>
+<p>Services: <strong>Orchestrator, Container Scaler</strong></p>
 <p>When it comes to the remaining microservices, the Orchestrator should be
 placed near the <em>State Database</em>, as it may require to perform many 
 database operations in a short amount of time, while the 
 <em>Container Scaler</em> is <strong>required</strong> to be deployed on each infrastructure 
-node that hosts containers.</p>
+host that runs containers.</p>
                 
               
               

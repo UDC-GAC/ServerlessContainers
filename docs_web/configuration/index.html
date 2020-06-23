@@ -242,12 +242,62 @@
     
     <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
     
-      
     
+      <label class="md-nav__link md-nav__link--active" for="__toc">
+        Configuration
+        <span class="md-nav__icon md-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 9h14V7H3v2m0 4h14v-2H3v2m0 4h14v-2H3v2m16 0h2v-2h-2v2m0-10v2h2V7h-2m0 6h2v-2h-2v2z"/></svg>
+        </span>
+      </label>
     
     <a href="./" title="Configuration" class="md-nav__link md-nav__link--active">
       Configuration
     </a>
+    
+      
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#responsiveness" class="md-nav__link">
+    Responsiveness
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#benevolence" class="md-nav__link">
+    Benevolence
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rule-configuration" class="md-nav__link">
+    Rule configuration
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#service-configuration" class="md-nav__link">
+    Service configuration
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
     
   </li>
 
@@ -302,8 +352,44 @@
 <nav class="md-nav md-nav--secondary" aria-label="Table of contents">
   
   
-    
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#responsiveness" class="md-nav__link">
+    Responsiveness
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#benevolence" class="md-nav__link">
+    Benevolence
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rule-configuration" class="md-nav__link">
+    Rule configuration
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#service-configuration" class="md-nav__link">
+    Service configuration
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -323,6 +409,8 @@
                   
                 
                 
+                  <h1>Configuration</h1>
+                
                 <p>The behavior of the <strong><em>Serverless Container</em></strong> framework can be 
 configured to better adapt to the needs of the applications. Such 
 configuration can be even changed dynamically if needed thanks to the 
@@ -333,7 +421,7 @@ dimension</strong>. To better approach these two dimensions, the first one
 is referred to as the <strong>Responsiveness</strong> of the framework, while the 
 second one is referred to as the <strong>Benevolence</strong>.</p>
 <p><img alt="Configuration" src="../img/configuration/configuration.svg" /> </p>
-<h1 id="responsiveness">Responsiveness</h1>
+<h2 id="responsiveness">Responsiveness</h2>
 <p>As its name implies, this configuration aspect of the framework dictates 
 <strong>how fast the changes are made</strong> when it comes to adapting the resource 
 limits to the application's real usage. The reason why we have to take 
@@ -345,7 +433,7 @@ usage patterns, we need to take into account some kind of time buffer
 before changing the resource limits. This time buffer allows to have 
 some assurance that after a scaling operation, another one won't be 
 needed soon after.</p>
-<p>As seen on the image above, the responsiveness can be modulated 
+<p>As seen on the image below, the responsiveness can be modulated 
 differently to adapt to two possible scenarios:</p>
 <ul>
 <li>A: Time to pass before performing a <strong>scaling down</strong> operation.</li>
@@ -360,7 +448,7 @@ execution overheads.</p>
 <p><img alt="Responsiveness Configuration" src="../img/configuration/configuration_responsiveness.svg" /></p>
 <p>To tune the Responsiveness of the framework, the request-generating 
 Rules will have to be modified.</p>
-<h1 id="benevolence">Benevolence</h1>
+<h2 id="benevolence">Benevolence</h2>
 <p>In the case of Benevolence, as its name says, it modules how the 
 framework addresses the <strong>scaling operations</strong> in terms of the <strong>number 
 of resources</strong> that it takes away or that it gives. </p>
@@ -371,10 +459,10 @@ a large number of resources when scaling up.</p>
 <p>On the other hand, if we want to push the serverless scenario to the 
 limit we can set narrower boundaries and more restrained scaling up
 operations. </p>
-<p>To module the behaviour between these two options, thus tuning the 
-framework to behave closer to the traditional instance or closer to
-the serverless paradigm, we can use the following configuration 
-parameters:</p>
+<p>As it can be seen on the image below, to module the behaviour between 
+these two options, thus tuning the framework to behave closer to the 
+traditional instance or closer to the serverless paradigm, we can use 
+the following configuration parameters:</p>
 <ul>
 <li>1) <strong>Scaling up amount</strong>. A fixed and configurable amount.</li>
 <li>2) <strong>Scaling down policy</strong>. Although several are possible, to implement
@@ -387,7 +475,7 @@ scaling down policy to define the final allocated resource limit.</li>
 <p><img alt="Benevolence Configuration" src="../img/configuration/configuration_benevolence.svg" /></p>
 <p>To tune the Benevolence of the framework, mainly the amount parameter of 
 the down-scaling Rules will have to be adapted.</p>
-<h1 id="rule-configuration">Rule configuration</h1>
+<h2 id="rule-configuration">Rule configuration</h2>
 <p>As previously stated, in order to configure the framework on the vertical
 and time dimensions, the <strong>Rule documents</strong> have to be modified.</p>
 <p>To tune the <strong>Responsiveness</strong>, we have to modify the request-generating 
@@ -438,7 +526,7 @@ a boundary applied for each resource, as seen next:</p>
 }
 </code></pre>
 
-<h1 id="service-configuration">Service configuration</h1>
+<h2 id="service-configuration">Service configuration</h2>
 <p>As previously stated, most of the microservices work with polling time 
 windows. The relation between all of the services' time windows may be
 important, although the framework has been designed to be robust and

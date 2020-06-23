@@ -21,9 +21,9 @@ management that implements a serverless scenario.
 
 Among other perks, the main benefits of this framework include:
 
-* **Higher resource efficiency**, if the containers have a low resource usage, 
-they are given a smaller set of resources, if they have a higher usage, 
- they are given a larger set over time.
+* **Higher resource efficiency**, if the containers have a low resource 
+usage, they are given a smaller set of resources, if they have a higher 
+usage, they are given a larger set over time.
 
 * **Pay per 'real' usage billing policy**, only the used resources are 
 considered when billing.
@@ -51,7 +51,7 @@ serverless paradigm only the **used resources** are billed.
 ## Scaling policy
 
 In order to better see how the **_Serverless Containers_** framework 
-achieves it goal, we can study an example of several scaling operations 
+achieves its goal, we can study an example of several scaling operations 
 taking place on a time window.
 
 ![Time series](img/use_case/timeseries.svg)
@@ -67,7 +67,7 @@ represent the allocated resource **limit** and the upper and lower
 between the previously mentioned thresholds.
 * Two horizontal lines that do not vary, which represent the **maximum** 
 and **minimum resource limits**. The maximum would be equivalent to the 
-initial allocated resource son a traditional instance, while the minimum 
+initial allocated resources on a traditional instance, while the minimum 
 would represent the least amount of resources that we will grant the 
 container.
 
@@ -76,14 +76,15 @@ for a balance when it comes to setting an appropriate allocated resource
 amount, continuously responding to the resource usage variations. 
 Such response can be seen in the several scaling operations that take 
 place, such as at seconds 70 (down), 270 (up) and 420 (down). 
-In order to detect the conditions that trigger these scaling 
-requirements, two thresholds, or boundaries, are used:
 
-* the **upper boundary**, which defines a threshold that, once surpassed, 
+In order to detect the conditions that trigger these scaling 
+requirements, two limits (or boundaries) are used:
+
+* **Upper limit**, which defines a threshold that, once surpassed, 
 signals for a need to scale up the allocated resource limit to avoid any 
 future bottleneck.
-* the **lower boundary**, which triggers a scale down of the allocated 
-resource amount once the usage falls beneath the boundary.
+* **Lower limit**, which triggers a scale down of the allocated 
+resource amount once the usage falls below the boundary.
 
 Thus, it is easy to see that if the thresholds are considered, the 
 first and third scaling operations were caused because the resource 
@@ -108,18 +109,18 @@ the provider.
 Because of these reasons it is important to define a key ratio, the 
 **resource utilization**, which can be easily obtained from the amount of 
 used and the allocated resources. The next image shows the previously 
-used time window but with areas as the focus of the study:
+used time window but with areas as the focus of the study.
 
 ![Areas](img/use_case/integrals.svg)
 
 We can see that there are three areas:
 
-* The **used area** (dots), which represents the amount of resources 
+* **Used area** (dots), which represents the amount of resources 
 used by the container.
-* The **allocated area** (waves), representing the changing amount of 
+* **Allocated area** (waves), representing the changing amount of 
 resources set apart for this container via the framework and a series 
 of scaling operations.
-* The **reserved area** (stripes), which represents the theoretical 
+* **Reserved area** (stripes), which represents the theoretical 
 limit of resources that the container had at any moment. It is worth 
 noting that this area would effectively represent the resource 
 footprint of a virtual machine whose resources are allocated and never 

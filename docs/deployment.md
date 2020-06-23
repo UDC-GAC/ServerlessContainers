@@ -1,6 +1,7 @@
 The **_Serverless Container framework_** can be deployed by cloning its 
 [GitHub repo](https://github.com/UDC-GAC/ServerlessContainers) 
-and placing and starting the proper services on the right environments.
+and placing and starting the proper services, in the correct order and 
+on the right environments.
 
 To clone the project, you can use:
 ```
@@ -13,7 +14,7 @@ described:
 ## Containers
 
 **_Serverless Containers_** supports any container engine and 
-container technology that is backed by the cgroup file system. 
+container technology that is backed by the cgroups file system. 
 Specifically, for development the 
 [LXD container manager](https://linuxcontainers.org/lxd/introduction/), 
 which deploys [Linux Containers (LXC)](https://linuxcontainers.org/), 
@@ -49,7 +50,7 @@ frameworks. Nonetheless, because the need for a high response of the
 database operations, the fact that the stored data does not need to be 
 persisted across time and that the required storage size is relatively 
 small (no more than 1 GiB for 30+ containers), it may be desirable to 
-use in-memory storage 
+use it with an in-memory storage file system.
 
 Finally, other requirements include the Python3 runtime environment and 
 other Python packages such as Flask.
@@ -67,7 +68,7 @@ next image.
 ![Microservice placement](img/deployment/placement.svg)
 
 Finally, it should also be considered that some of these microservices, 
-due to their inner operations and continuous polling, can show an overhead 
+due to their inner operations and continuous polling, can present an overhead 
 that although should not be particularly high, it could be noticeable
 particularly in experimentation testbeds. Because of this, it is advisable
 to run as many microservices as possible in an dedicated/isolated instance
@@ -75,32 +76,32 @@ separated from any environment not to be disturbed.
 
 ### Passive
 
-services: **Structure Snapshoter, Database Snapshoter, 
+Services: **Structure Snapshoter, Database Snapshoter, 
 Refeeder Snapshoter**
 
 Regarding the passive microservices, the *Structure Snapshoter* in 
 particular has to poll the containers via the *Container Scaler* service, 
-which is deployed in all the infrastructure nodes that host containers. 
-Because of this the latency of this microservice should also be small 
+which is deployed in all the infrastructure hosts that run containers. 
+Because of this, the latency of this microservice should also be small 
 when interacting with the nodes.
  
 
 ### Active
 
-services: **Guardian, Scaler**
+Services: **Guardian, Scaler**
 
 As with the *Structure Snapshoter* passive microservice, the *Scaler* 
-also need to interact with the infrastructure nodes and their 
+also need to interact with the infrastructure hosts and their 
 *Container Scaler* service, so the latency between the two should 
 be kept low.
 
 
 ### Other
 
-services: **Orchestrator, Container Scaler**
+Services: **Orchestrator, Container Scaler**
 
 When it comes to the remaining microservices, the Orchestrator should be
 placed near the *State Database*, as it may require to perform many 
 database operations in a short amount of time, while the 
 *Container Scaler* is **required** to be deployed on each infrastructure 
-node that hosts containers.
+host that runs containers.

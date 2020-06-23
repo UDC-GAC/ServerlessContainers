@@ -12,7 +12,7 @@ second one is referred to as the **Benevolence**.
 
 ![Configuration](img/configuration/configuration.svg) 
 
-# Responsiveness
+## Responsiveness
 
 As its name implies, this configuration aspect of the framework dictates 
 **how fast the changes are made** when it comes to adapting the resource 
@@ -27,7 +27,7 @@ before changing the resource limits. This time buffer allows to have
 some assurance that after a scaling operation, another one won't be 
 needed soon after.
 
-As seen on the image above, the responsiveness can be modulated 
+As seen on the image below, the responsiveness can be modulated 
 differently to adapt to two possible scenarios:
 
 * A: Time to pass before performing a **scaling down** operation.
@@ -45,7 +45,7 @@ execution overheads.
 To tune the Responsiveness of the framework, the request-generating 
 Rules will have to be modified.
 
-# Benevolence
+## Benevolence
 
 In the case of Benevolence, as its name says, it modules how the 
 framework addresses the **scaling operations** in terms of the **number 
@@ -60,10 +60,10 @@ On the other hand, if we want to push the serverless scenario to the
 limit we can set narrower boundaries and more restrained scaling up
 operations. 
 
-To module the behaviour between these two options, thus tuning the 
-framework to behave closer to the traditional instance or closer to
-the serverless paradigm, we can use the following configuration 
-parameters:
+As it can be seen on the image below, to module the behaviour between 
+these two options, thus tuning the framework to behave closer to the 
+traditional instance or closer to the serverless paradigm, we can use 
+the following configuration parameters:
 
 * 1) **Scaling up amount**. A fixed and configurable amount.
 * 2) **Scaling down policy**. Although several are possible, to implement
@@ -78,7 +78,7 @@ scaling down policy to define the final allocated resource limit.
 To tune the Benevolence of the framework, mainly the amount parameter of 
 the down-scaling Rules will have to be adapted.
 
-# Rule configuration
+## Rule configuration
 
 As previously stated, in order to configure the framework on the vertical
 and time dimensions, the **Rule documents** have to be modified.
@@ -135,7 +135,7 @@ a boundary applied for each resource, as seen next:
 }
 ```  
 
-# Service configuration
+## Service configuration
 
 As previously stated, most of the microservices work with polling time 
 windows. The relation between all of the services' time windows may be
