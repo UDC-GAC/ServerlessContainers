@@ -56,4 +56,5 @@ the institutional webpage of this framework.
 8. [Source Code (external)](code/src/index.html): 
 If you are interested on the code and inline code documentation. 
 
-[PDF](latex/manual.pdf)
+If you prefer a PDF version of this webpage, you can get it
+[here](latex/manual.pdf).
