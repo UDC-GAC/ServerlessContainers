@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.7.2" />
+<meta name="generator" content="pdoc 0.8.1" />
 <title>src.Guardian.Guardian API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -64,21 +64,26 @@ import logging
 
 from json_logic import jsonLogic
 
-import src.MyUtils.MyUtils as MyUtils
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+    get_time_now_string, update_structure, get_host_containers, get_structures, copy_structure_base, \
+    generate_event_name, generate_request_name
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
-GUARDABLE_RESOURCES = [&#39;cpu&#39;, &#39;mem&#39;, &#39;energy&#39;]
+GUARDABLE_RESOURCES = [&#39;cpu&#39;] # TODO This should be configurable
+#GUARDABLE_RESOURCES = [&#39;cpu&#39;, &#39;mem&#39;, &#39;energy&#39;]
 
-BDWATCHDOG_CONTAINER_METRICS = [&#39;proc.cpu.user&#39;, &#39;proc.mem.resident&#39;, &#39;proc.cpu.kernel&#39;, &#39;proc.mem.virtual&#39;]
-BDWATCHDOG_APPLICATION_METRICS = [&#39;structure.cpu.usage&#39;, &#39;structure.mem.usage&#39;, &#39;structure.energy.usage&#39;]
+BDWATCHDOG_CONTAINER_METRICS = [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;] #+ [&#39;proc.mem.resident&#39;, &#39;proc.mem.virtual&#39;]
+BDWATCHDOG_APPLICATION_METRICS = [&#39;structure.cpu.usage&#39;] #+ [&#39;structure.mem.usage&#39;] + [&#39;structure.energy.usage&#39;]
 GUARDIAN_CONTAINER_METRICS = {
     &#39;structure.cpu.usage&#39;: [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;],
-    &#39;structure.mem.usage&#39;: [&#39;proc.mem.resident&#39;]}
+#    &#39;structure.mem.usage&#39;: [&#39;proc.mem.resident&#39;]
+}
 GUARDIAN_APPLICATION_METRICS = {
     &#39;structure.cpu.usage&#39;: [&#39;structure.cpu.usage&#39;],
-    &#39;structure.mem.usage&#39;: [&#39;structure.mem.usage&#39;],
-    &#39;structure.energy.usage&#39;: [&#39;structure.energy.usage&#39;]}
+#    &#39;structure.mem.usage&#39;: [&#39;structure.mem.usage&#39;],
+#    &#39;structure.energy.usage&#39;: [&#39;structure.energy.usage&#39;]
+}
 GUARDIAN_METRICS = {&#34;container&#34;: GUARDIAN_CONTAINER_METRICS, &#34;application&#34;: GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {&#34;container&#34;: BDWATCHDOG_CONTAINER_METRICS, &#34;application&#34;: BDWATCHDOG_APPLICATION_METRICS}
 
@@ -439,12 +444,12 @@ class Guardian:
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
                 if self.rule_triggers_event(rule, data, resources):
-                    event_name = MyUtils.generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
+                    event_name = generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
                     event = self.generate_event(event_name, structure_name, rule[&#34;resource&#34;], rule[&#34;action&#34;])
                     events.append(event)
 
             except KeyError as e:
-                MyUtils.log_warning(
+                log_warning(
                     &#34;rule: {0} is missing a parameter {1} {2}&#34;.format(rule[&#34;name&#34;],
                                                                       str(e), str(traceback.format_exc())), self.debug)
 
@@ -486,7 +491,7 @@ class Guardian:
                     # If rescaling a container, check that the current resource value exists, otherwise there
                     # is nothing to rescale
                     if self.is_container(structure) and &#34;current&#34; not in structure[&#34;resources&#34;][resource_label]:
-                        MyUtils.log_warning(
+                        log_warning(
                             &#34;No current value for container&#39; {0}&#39; and resource &#39;{1}&#39;, can&#39;t rescale&#34;.format(
                                 structure[&#34;name&#34;], resource_label), self.debug)
                         continue
@@ -494,7 +499,7 @@ class Guardian:
                     # If no policy is set for scaling, default to &#34;fixed amount&#34;
                     if &#34;rescale_by&#34; not in rule.keys():
                         rule[&#34;rescale_by&#34;] = &#34;amount&#34;
-                        MyUtils.log_warning(
+                        log_warning(
                             &#34;No rescale_by policy is set in rule : &#39;{0}&#39;, falling back to default amount&#34;.format(
                                 rule[&#34;name&#34;]), self.debug)
 
@@ -527,7 +532,7 @@ class Guardian:
 
                     # If the remaining amount is non-zero, create the Request
                     if amount != 0:
-                        action = MyUtils.generate_request_name(amount, resource_label)
+                        action = generate_request_name(amount, resource_label)
                         request = self.generate_request(structure, amount, resource_label, action)
 
                         # For the moment, energy rescaling is uniquely mapped to cpu rescaling
@@ -545,13 +550,13 @@ class Guardian:
                         generated_requests.append(request)
 
                     # Remove the events that triggered the request
-                    event_name = MyUtils.generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
+                    event_name = generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
                     if event_name not in events_to_remove:
                         events_to_remove[event_name] = 0
                     events_to_remove[event_name] += rule[&#34;events_to_remove&#34;]
 
             except KeyError as e:
-                MyUtils.log_warning(
+                log_warning(
                     &#34;rule: {0} is missing a parameter {1} {2} &#34;.format(rule[&#34;name&#34;], str(e),
                                                                        str(traceback.format_exc())), self.debug)
 
@@ -564,10 +569,13 @@ class Guardian:
         container_guard_policy_str = &#34;with policy: {0}&#34;.format(container[&#34;guard_policy&#34;])
         # TODO check if the resource is unguarded and if that is the case, do not print anything or
         # just a cpu(unguarded)
-        resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
-            self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
-            self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
-            self.get_container_energy_str(resources))
+        # This should be adapted according the resources configured
+        # resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
+        #     self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
+        #     self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
+        #     self.get_container_energy_str(resources))
+        resources_str = &#34;cpu({0})&#34;.format(self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages))
+
 
         ev, req = list(), list()
         for event in triggered_events:
@@ -575,12 +583,12 @@ class Guardian:
         for request in triggered_requests:
             req.append(request[&#34;action&#34;])
         triggered_requests_and_events = &#34;#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}&#34;.format(str(ev), str(req))
-        MyUtils.log_info(
+        log_info(
             &#34; &#34;.join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
             self.debug)
 
-    def process_serverless_structure(self, config, structure, usages, limits, rules):
-        event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
+    def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
+        event_timeout = myConfig.get_config_value(&#34;EVENT_TIMEOUT&#34;)
 
         # Match usages and rules to generate events
         triggered_events = self.match_usages_and_limits(structure[&#34;name&#34;], rules, usages, limits,
@@ -625,9 +633,9 @@ class Guardian:
         if self.debug:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
-    def serverless(self, config, structure, rules):
-        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+    def serverless(self, myConfig, structure, rules):
+        window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = myConfig.get_config_value(&#34;WINDOW_DELAY&#34;)
 
         structure_subtype = structure[&#34;subtype&#34;]
 
@@ -654,7 +662,7 @@ class Guardian:
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                MyUtils.log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
+                log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
                 return
 
             resources = structure[&#34;resources&#34;]
@@ -664,26 +672,26 @@ class Guardian:
             limits_resources = limits[&#34;resources&#34;]
 
             if not limits_resources:
-                MyUtils.log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
+                log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
                 return
 
             # TODO FIX This only applies to containers, currently not used for applications
             if structure_subtype == &#34;container&#34;:
-                resources_to_adjust = [&#34;cpu&#34;, &#34;mem&#34;]
+                resources_to_adjust = GUARDABLE_RESOURCES #[&#34;cpu&#34;, &#34;mem&#34;]
                 # resources_to_adjust = []
                 limits[&#34;resources&#34;] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
 
                 # Remote database operation
                 self.couchdb_handler.update_limit(limits)
 
-            self.process_serverless_structure(config, structure, usages, limits_resources, rules)
+            self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
 
         except Exception as e:
-            MyUtils.log_error(
+            log_error(
                 &#34;error with structure: {0} {1} {2}&#34;.format(structure[&#34;name&#34;], str(e), str(traceback.format_exc())),
                 self.debug)
 
-    def guard_structures(self, config, structures):
+    def guard_structures(self, myConfig, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
@@ -691,63 +699,64 @@ class Guardian:
         for structure in structures:
             if &#34;guard_policy&#34; not in structure:
                 # Default option will be serverless
-                thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
                 thread.start()
                 threads.append(thread)
                 # self.serverless(config, structure, rules)
             else:
                 if structure[&#34;guard_policy&#34;] == &#34;serverless&#34;:
-                    thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                    thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
                     thread.start()
                     threads.append(thread)
                 else:
-                    self.serverless(config, structure, rules)
+                    self.serverless(myConfig, structure, rules)
         for process in threads:
             process.join()
 
     def guard(self, ):
         global CPU_SHARES_PER_WATT
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
         while True:
 
             # Get service info
-            service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
 
             # Heartbeat
-            MyUtils.beat(self.couchdb_handler, SERVICE_NAME)
+            beat(self.couchdb_handler, SERVICE_NAME)
 
             # CONFIG
-            config = service[&#34;config&#34;]
-            self.debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
-            window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-            structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;STRUCTURE_GUARDED&#34;)
-            thread = None
-            CPU_SHARES_PER_WATT = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;CPU_SHARES_PER_WATT&#34;)
-            GUARDIAN_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;ACTIVE&#34;)
+            myConfig.set_config(service[&#34;config&#34;])
+            self.debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+            window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+            structure_guarded = myConfig.get_config_value(&#34;STRUCTURE_GUARDED&#34;)
+            CPU_SHARES_PER_WATT = myConfig.get_config_value(&#34;CPU_SHARES_PER_WATT&#34;)
+            GUARDIAN_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
 
+            thread = None
             if GUARDIAN_IS_ACTIVATED:
                 # Remote database operation
-                structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+                structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
                 if structures:
-                    thread = Thread(target=self.guard_structures, args=(config, structures,))
+                    thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
                     thread.start()
             else:
-                MyUtils.log_info(
+                log_info(
                     &#34;Guardian is not activated&#34;, self.debug)
-            MyUtils.log_info(
-                &#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), self.debug)
+            log_info(
+                &#34;Epoch processed at {0}&#34;.format(get_time_now_string()), self.debug)
             time.sleep(window_difference)
 
-            if thread and thread.isAlive():
+            if thread and thread.is_alive():
                 delay_start = time.time()
-                MyUtils.log_warning(
+                log_warning(
                     &#34;Previous thread didn&#39;t finish before next poll is due, with window time of &#34; +
-                    &#34;{0} seconds, at {1}&#34;.format(str(window_difference), MyUtils.get_time_now_string()), self.debug)
-                MyUtils.log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
+                    &#34;{0} seconds, at {1}&#34;.format(str(window_difference), get_time_now_string()), self.debug)
+                log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
                 thread.join()
                 delay_end = time.time()
-                MyUtils.log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
-                                    self.debug)
+                log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
+                            self.debug)
 
 
 def main():
@@ -755,7 +764,7 @@ def main():
         guardian = Guardian()
         guardian.guard()
     except Exception as e:
-        MyUtils.log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == &#34;__main__&#34;:
@@ -783,7 +792,7 @@ if __name__ == &#34;__main__&#34;:
         guardian = Guardian()
         guardian.guard()
     except Exception as e:
-        MyUtils.log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
 </details>
 </dd>
 </dl>
@@ -1142,12 +1151,12 @@ to generate scaling Requests.</p>
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
                 if self.rule_triggers_event(rule, data, resources):
-                    event_name = MyUtils.generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
+                    event_name = generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
                     event = self.generate_event(event_name, structure_name, rule[&#34;resource&#34;], rule[&#34;action&#34;])
                     events.append(event)
 
             except KeyError as e:
-                MyUtils.log_warning(
+                log_warning(
                     &#34;rule: {0} is missing a parameter {1} {2}&#34;.format(rule[&#34;name&#34;],
                                                                       str(e), str(traceback.format_exc())), self.debug)
 
@@ -1189,7 +1198,7 @@ to generate scaling Requests.</p>
                     # If rescaling a container, check that the current resource value exists, otherwise there
                     # is nothing to rescale
                     if self.is_container(structure) and &#34;current&#34; not in structure[&#34;resources&#34;][resource_label]:
-                        MyUtils.log_warning(
+                        log_warning(
                             &#34;No current value for container&#39; {0}&#39; and resource &#39;{1}&#39;, can&#39;t rescale&#34;.format(
                                 structure[&#34;name&#34;], resource_label), self.debug)
                         continue
@@ -1197,7 +1206,7 @@ to generate scaling Requests.</p>
                     # If no policy is set for scaling, default to &#34;fixed amount&#34;
                     if &#34;rescale_by&#34; not in rule.keys():
                         rule[&#34;rescale_by&#34;] = &#34;amount&#34;
-                        MyUtils.log_warning(
+                        log_warning(
                             &#34;No rescale_by policy is set in rule : &#39;{0}&#39;, falling back to default amount&#34;.format(
                                 rule[&#34;name&#34;]), self.debug)
 
@@ -1230,7 +1239,7 @@ to generate scaling Requests.</p>
 
                     # If the remaining amount is non-zero, create the Request
                     if amount != 0:
-                        action = MyUtils.generate_request_name(amount, resource_label)
+                        action = generate_request_name(amount, resource_label)
                         request = self.generate_request(structure, amount, resource_label, action)
 
                         # For the moment, energy rescaling is uniquely mapped to cpu rescaling
@@ -1248,13 +1257,13 @@ to generate scaling Requests.</p>
                         generated_requests.append(request)
 
                     # Remove the events that triggered the request
-                    event_name = MyUtils.generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
+                    event_name = generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
                     if event_name not in events_to_remove:
                         events_to_remove[event_name] = 0
                     events_to_remove[event_name] += rule[&#34;events_to_remove&#34;]
 
             except KeyError as e:
-                MyUtils.log_warning(
+                log_warning(
                     &#34;rule: {0} is missing a parameter {1} {2} &#34;.format(rule[&#34;name&#34;], str(e),
                                                                        str(traceback.format_exc())), self.debug)
 
@@ -1267,10 +1276,13 @@ to generate scaling Requests.</p>
         container_guard_policy_str = &#34;with policy: {0}&#34;.format(container[&#34;guard_policy&#34;])
         # TODO check if the resource is unguarded and if that is the case, do not print anything or
         # just a cpu(unguarded)
-        resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
-            self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
-            self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
-            self.get_container_energy_str(resources))
+        # This should be adapted according the resources configured
+        # resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
+        #     self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
+        #     self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
+        #     self.get_container_energy_str(resources))
+        resources_str = &#34;cpu({0})&#34;.format(self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages))
+
 
         ev, req = list(), list()
         for event in triggered_events:
@@ -1278,12 +1290,12 @@ to generate scaling Requests.</p>
         for request in triggered_requests:
             req.append(request[&#34;action&#34;])
         triggered_requests_and_events = &#34;#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}&#34;.format(str(ev), str(req))
-        MyUtils.log_info(
+        log_info(
             &#34; &#34;.join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
             self.debug)
 
-    def process_serverless_structure(self, config, structure, usages, limits, rules):
-        event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
+    def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
+        event_timeout = myConfig.get_config_value(&#34;EVENT_TIMEOUT&#34;)
 
         # Match usages and rules to generate events
         triggered_events = self.match_usages_and_limits(structure[&#34;name&#34;], rules, usages, limits,
@@ -1328,9 +1340,9 @@ to generate scaling Requests.</p>
         if self.debug:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
-    def serverless(self, config, structure, rules):
-        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+    def serverless(self, myConfig, structure, rules):
+        window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = myConfig.get_config_value(&#34;WINDOW_DELAY&#34;)
 
         structure_subtype = structure[&#34;subtype&#34;]
 
@@ -1357,7 +1369,7 @@ to generate scaling Requests.</p>
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                MyUtils.log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
+                log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
                 return
 
             resources = structure[&#34;resources&#34;]
@@ -1367,26 +1379,26 @@ to generate scaling Requests.</p>
             limits_resources = limits[&#34;resources&#34;]
 
             if not limits_resources:
-                MyUtils.log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
+                log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
                 return
 
             # TODO FIX This only applies to containers, currently not used for applications
             if structure_subtype == &#34;container&#34;:
-                resources_to_adjust = [&#34;cpu&#34;, &#34;mem&#34;]
+                resources_to_adjust = GUARDABLE_RESOURCES #[&#34;cpu&#34;, &#34;mem&#34;]
                 # resources_to_adjust = []
                 limits[&#34;resources&#34;] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
 
                 # Remote database operation
                 self.couchdb_handler.update_limit(limits)
 
-            self.process_serverless_structure(config, structure, usages, limits_resources, rules)
+            self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
 
         except Exception as e:
-            MyUtils.log_error(
+            log_error(
                 &#34;error with structure: {0} {1} {2}&#34;.format(structure[&#34;name&#34;], str(e), str(traceback.format_exc())),
                 self.debug)
 
-    def guard_structures(self, config, structures):
+    def guard_structures(self, myConfig, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
@@ -1394,63 +1406,64 @@ to generate scaling Requests.</p>
         for structure in structures:
             if &#34;guard_policy&#34; not in structure:
                 # Default option will be serverless
-                thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
                 thread.start()
                 threads.append(thread)
                 # self.serverless(config, structure, rules)
             else:
                 if structure[&#34;guard_policy&#34;] == &#34;serverless&#34;:
-                    thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                    thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
                     thread.start()
                     threads.append(thread)
                 else:
-                    self.serverless(config, structure, rules)
+                    self.serverless(myConfig, structure, rules)
         for process in threads:
             process.join()
 
     def guard(self, ):
         global CPU_SHARES_PER_WATT
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
         while True:
 
             # Get service info
-            service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
 
             # Heartbeat
-            MyUtils.beat(self.couchdb_handler, SERVICE_NAME)
+            beat(self.couchdb_handler, SERVICE_NAME)
 
             # CONFIG
-            config = service[&#34;config&#34;]
-            self.debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
-            window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-            structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;STRUCTURE_GUARDED&#34;)
-            thread = None
-            CPU_SHARES_PER_WATT = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;CPU_SHARES_PER_WATT&#34;)
-            GUARDIAN_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;ACTIVE&#34;)
+            myConfig.set_config(service[&#34;config&#34;])
+            self.debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+            window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+            structure_guarded = myConfig.get_config_value(&#34;STRUCTURE_GUARDED&#34;)
+            CPU_SHARES_PER_WATT = myConfig.get_config_value(&#34;CPU_SHARES_PER_WATT&#34;)
+            GUARDIAN_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
 
+            thread = None
             if GUARDIAN_IS_ACTIVATED:
                 # Remote database operation
-                structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+                structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
                 if structures:
-                    thread = Thread(target=self.guard_structures, args=(config, structures,))
+                    thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
                     thread.start()
             else:
-                MyUtils.log_info(
+                log_info(
                     &#34;Guardian is not activated&#34;, self.debug)
-            MyUtils.log_info(
-                &#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), self.debug)
+            log_info(
+                &#34;Epoch processed at {0}&#34;.format(get_time_now_string()), self.debug)
             time.sleep(window_difference)
 
-            if thread and thread.isAlive():
+            if thread and thread.is_alive():
                 delay_start = time.time()
-                MyUtils.log_warning(
+                log_warning(
                     &#34;Previous thread didn&#39;t finish before next poll is due, with window time of &#34; +
-                    &#34;{0} seconds, at {1}&#34;.format(str(window_difference), MyUtils.get_time_now_string()), self.debug)
-                MyUtils.log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
+                    &#34;{0} seconds, at {1}&#34;.format(str(window_difference), get_time_now_string()), self.debug)
+                log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
                 thread.join()
                 delay_end = time.time()
-                MyUtils.log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
-                                    self.debug)</code></pre>
+                log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
+                            self.debug)</code></pre>
 </details>
 <h3>Static methods</h3>
 <dl>
@@ -1534,7 +1547,7 @@ def adjust_amount(amount, structure_resources, structure_limits):
 </dl>
 <h2 id="raises">Raises</h2>
 <dl>
-<dt><code>ValueError</code> <code>if</code> <code>value1</code> &gt; <code>value2</code></dt>
+<dt><code>ValueError if value1 &gt; value2</code></dt>
 <dd>&nbsp;</dd>
 </dl></section>
 <details class="source">
@@ -1584,7 +1597,7 @@ def check_invalid_values(value1, label1, value2, label2, resource=&#34;n/a&#34;)
 </dl>
 <h2 id="raises">Raises</h2>
 <dl>
-<dt><code>Exception</code> <code>if</code> <code>value</code> <code>is</code> <code>N</code>/<code>A</code></dt>
+<dt><code>Exception if value is N/A</code></dt>
 <dd>&nbsp;</dd>
 </dl></section>
 <details class="source">
@@ -2112,51 +2125,52 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 </summary>
 <pre><code class="python">def guard(self, ):
     global CPU_SHARES_PER_WATT
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
     while True:
 
         # Get service info
-        service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)
+        service = get_service(self.couchdb_handler, SERVICE_NAME)
 
         # Heartbeat
-        MyUtils.beat(self.couchdb_handler, SERVICE_NAME)
+        beat(self.couchdb_handler, SERVICE_NAME)
 
         # CONFIG
-        config = service[&#34;config&#34;]
-        self.debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
-        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        structure_guarded = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;STRUCTURE_GUARDED&#34;)
-        thread = None
-        CPU_SHARES_PER_WATT = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;CPU_SHARES_PER_WATT&#34;)
-        GUARDIAN_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;ACTIVE&#34;)
+        myConfig.set_config(service[&#34;config&#34;])
+        self.debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+        window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+        structure_guarded = myConfig.get_config_value(&#34;STRUCTURE_GUARDED&#34;)
+        CPU_SHARES_PER_WATT = myConfig.get_config_value(&#34;CPU_SHARES_PER_WATT&#34;)
+        GUARDIAN_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
 
+        thread = None
         if GUARDIAN_IS_ACTIVATED:
             # Remote database operation
-            structures = MyUtils.get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+            structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
             if structures:
-                thread = Thread(target=self.guard_structures, args=(config, structures,))
+                thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
                 thread.start()
         else:
-            MyUtils.log_info(
+            log_info(
                 &#34;Guardian is not activated&#34;, self.debug)
-        MyUtils.log_info(
-            &#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), self.debug)
+        log_info(
+            &#34;Epoch processed at {0}&#34;.format(get_time_now_string()), self.debug)
         time.sleep(window_difference)
 
-        if thread and thread.isAlive():
+        if thread and thread.is_alive():
             delay_start = time.time()
-            MyUtils.log_warning(
+            log_warning(
                 &#34;Previous thread didn&#39;t finish before next poll is due, with window time of &#34; +
-                &#34;{0} seconds, at {1}&#34;.format(str(window_difference), MyUtils.get_time_now_string()), self.debug)
-            MyUtils.log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
+                &#34;{0} seconds, at {1}&#34;.format(str(window_difference), get_time_now_string()), self.debug)
+            log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
             thread.join()
             delay_end = time.time()
-            MyUtils.log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
-                                self.debug)</code></pre>
+            log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
+                        self.debug)</code></pre>
 </details>
 </dd>
 <dt id="src.Guardian.Guardian.Guardian.guard_structures"><code class="name flex">
-<span>def <span class="ident">guard_structures</span></span>(<span>self, config, structures)</span>
+<span>def <span class="ident">guard_structures</span></span>(<span>self, myConfig, structures)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -2164,7 +2178,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def guard_structures(self, config, structures):
+<pre><code class="python">def guard_structures(self, myConfig, structures):
     # Remote database operation
     rules = self.couchdb_handler.get_rules()
 
@@ -2172,17 +2186,17 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
     for structure in structures:
         if &#34;guard_policy&#34; not in structure:
             # Default option will be serverless
-            thread = Thread(target=self.serverless, args=(config, structure, rules,))
+            thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
             thread.start()
             threads.append(thread)
             # self.serverless(config, structure, rules)
         else:
             if structure[&#34;guard_policy&#34;] == &#34;serverless&#34;:
-                thread = Thread(target=self.serverless, args=(config, structure, rules,))
+                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
                 thread.start()
                 threads.append(thread)
             else:
-                self.serverless(config, structure, rules)
+                self.serverless(myConfig, structure, rules)
     for process in threads:
         process.join()</code></pre>
 </details>
@@ -2208,7 +2222,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
                 # If rescaling a container, check that the current resource value exists, otherwise there
                 # is nothing to rescale
                 if self.is_container(structure) and &#34;current&#34; not in structure[&#34;resources&#34;][resource_label]:
-                    MyUtils.log_warning(
+                    log_warning(
                         &#34;No current value for container&#39; {0}&#39; and resource &#39;{1}&#39;, can&#39;t rescale&#34;.format(
                             structure[&#34;name&#34;], resource_label), self.debug)
                     continue
@@ -2216,7 +2230,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
                 # If no policy is set for scaling, default to &#34;fixed amount&#34;
                 if &#34;rescale_by&#34; not in rule.keys():
                     rule[&#34;rescale_by&#34;] = &#34;amount&#34;
-                    MyUtils.log_warning(
+                    log_warning(
                         &#34;No rescale_by policy is set in rule : &#39;{0}&#39;, falling back to default amount&#34;.format(
                             rule[&#34;name&#34;]), self.debug)
 
@@ -2249,7 +2263,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 
                 # If the remaining amount is non-zero, create the Request
                 if amount != 0:
-                    action = MyUtils.generate_request_name(amount, resource_label)
+                    action = generate_request_name(amount, resource_label)
                     request = self.generate_request(structure, amount, resource_label, action)
 
                     # For the moment, energy rescaling is uniquely mapped to cpu rescaling
@@ -2267,13 +2281,13 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
                     generated_requests.append(request)
 
                 # Remove the events that triggered the request
-                event_name = MyUtils.generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
+                event_name = generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
                 if event_name not in events_to_remove:
                     events_to_remove[event_name] = 0
                 events_to_remove[event_name] += rule[&#34;events_to_remove&#34;]
 
         except KeyError as e:
-            MyUtils.log_warning(
+            log_warning(
                 &#34;rule: {0} is missing a parameter {1} {2} &#34;.format(rule[&#34;name&#34;], str(e),
                                                                    str(traceback.format_exc())), self.debug)
 
@@ -2308,12 +2322,12 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
         try:
             # Check that the rule is active, the resource to watch is guarded and that the rule is activated
             if self.rule_triggers_event(rule, data, resources):
-                event_name = MyUtils.generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
+                event_name = generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
                 event = self.generate_event(event_name, structure_name, rule[&#34;resource&#34;], rule[&#34;action&#34;])
                 events.append(event)
 
         except KeyError as e:
-            MyUtils.log_warning(
+            log_warning(
                 &#34;rule: {0} is missing a parameter {1} {2}&#34;.format(rule[&#34;name&#34;],
                                                                   str(e), str(traceback.format_exc())), self.debug)
 
@@ -2336,10 +2350,13 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
     container_guard_policy_str = &#34;with policy: {0}&#34;.format(container[&#34;guard_policy&#34;])
     # TODO check if the resource is unguarded and if that is the case, do not print anything or
     # just a cpu(unguarded)
-    resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
-        self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
-        self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
-        self.get_container_energy_str(resources))
+    # This should be adapted according the resources configured
+    # resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
+    #     self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
+    #     self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
+    #     self.get_container_energy_str(resources))
+    resources_str = &#34;cpu({0})&#34;.format(self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages))
+
 
     ev, req = list(), list()
     for event in triggered_events:
@@ -2347,13 +2364,13 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
     for request in triggered_requests:
         req.append(request[&#34;action&#34;])
     triggered_requests_and_events = &#34;#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}&#34;.format(str(ev), str(req))
-    MyUtils.log_info(
+    log_info(
         &#34; &#34;.join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
         self.debug)</code></pre>
 </details>
 </dd>
 <dt id="src.Guardian.Guardian.Guardian.process_serverless_structure"><code class="name flex">
-<span>def <span class="ident">process_serverless_structure</span></span>(<span>self, config, structure, usages, limits, rules)</span>
+<span>def <span class="ident">process_serverless_structure</span></span>(<span>self, myConfig, structure, usages, limits, rules)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -2361,8 +2378,8 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def process_serverless_structure(self, config, structure, usages, limits, rules):
-    event_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
+<pre><code class="python">def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
+    event_timeout = myConfig.get_config_value(&#34;EVENT_TIMEOUT&#34;)
 
     # Match usages and rules to generate events
     triggered_events = self.match_usages_and_limits(structure[&#34;name&#34;], rules, usages, limits,
@@ -2409,7 +2426,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 </details>
 </dd>
 <dt id="src.Guardian.Guardian.Guardian.serverless"><code class="name flex">
-<span>def <span class="ident">serverless</span></span>(<span>self, config, structure, rules)</span>
+<span>def <span class="ident">serverless</span></span>(<span>self, myConfig, structure, rules)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -2417,9 +2434,9 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def serverless(self, config, structure, rules):
-    window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-    window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+<pre><code class="python">def serverless(self, myConfig, structure, rules):
+    window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+    window_delay = myConfig.get_config_value(&#34;WINDOW_DELAY&#34;)
 
     structure_subtype = structure[&#34;subtype&#34;]
 
@@ -2446,7 +2463,7 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
 
         # Skip this structure if all the usage metrics are unavailable
         if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-            MyUtils.log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
+            log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
             return
 
         resources = structure[&#34;resources&#34;]
@@ -2456,22 +2473,22 @@ the following format: <em>[max, current, upper limit, usage, lower limit, min]</
         limits_resources = limits[&#34;resources&#34;]
 
         if not limits_resources:
-            MyUtils.log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
+            log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
             return
 
         # TODO FIX This only applies to containers, currently not used for applications
         if structure_subtype == &#34;container&#34;:
-            resources_to_adjust = [&#34;cpu&#34;, &#34;mem&#34;]
+            resources_to_adjust = GUARDABLE_RESOURCES #[&#34;cpu&#34;, &#34;mem&#34;]
             # resources_to_adjust = []
             limits[&#34;resources&#34;] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
 
             # Remote database operation
             self.couchdb_handler.update_limit(limits)
 
-        self.process_serverless_structure(config, structure, usages, limits_resources, rules)
+        self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
 
     except Exception as e:
-        MyUtils.log_error(
+        log_error(
             &#34;error with structure: {0} {1} {2}&#34;.format(structure[&#34;name&#34;], str(e), str(traceback.format_exc())),
             self.debug)</code></pre>
 </details>
@@ -2563,7 +2580,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.7.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

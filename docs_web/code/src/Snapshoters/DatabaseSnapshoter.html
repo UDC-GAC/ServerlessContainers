@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.7.2" />
+<meta name="generator" content="pdoc 0.8.1" />
 <title>src.Snapshoters.DatabaseSnapshoter API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -67,7 +67,8 @@ import logging
 
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
-import src.MyUtils.MyUtils as MyUtils
+from src.MyUtils import MyUtils
+from src.MyUtils.MyUtils import MyConfig
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
@@ -78,19 +79,18 @@ MAX_FAIL_NUM = 5
 debug = True
 
 PERSIST_METRICS = [&#34;max&#34;, &#34;min&#34;, &#34;upper&#34;, &#34;lower&#34;, &#34;current&#34;, &#34;usage&#34;, &#34;fixed&#34;, &#34;shares&#34;]
-PERSIST_CONFIG_SERVICES = [
-    {&#34;name&#34;: &#34;guardian&#34;,
-     &#34;parameters&#34;: [
-         (&#34;WINDOW_DELAY&#34;, &#34;conf.guardian.window_delay&#34;),
-         (&#34;EVENT_TIMEOUT&#34;, &#34;conf.guardian.event_timeout&#34;),
-         (&#34;WINDOW_TIMELAPSE&#34;, &#34;conf.guardian.window_timelapse&#34;)
-     ]},
-    {&#34;name&#34;: &#34;scaler&#34;,
-     &#34;parameters&#34;: [
-         (&#34;REQUEST_TIMEOUT&#34;, &#34;conf.scaler.request_timeout&#34;),
-         (&#34;POLLING_FREQUENCY&#34;, &#34;conf.scaler.polling_frequency&#34;)
-     ]}
-]
+PERSIST_CONFIG_SERVICES_NAMES = [&#34;guardian&#34;, &#34;scaler&#34;]
+PERSIST_CONFIG_SERVICES_DOCS = {
+    &#34;guardian&#34;: [
+        (&#34;WINDOW_DELAY&#34;, &#34;conf.guardian.window_delay&#34;),
+        (&#34;EVENT_TIMEOUT&#34;, &#34;conf.guardian.event_timeout&#34;),
+        (&#34;WINDOW_TIMELAPSE&#34;, &#34;conf.guardian.window_timelapse&#34;)
+    ],
+    &#34;scaler&#34;: [
+        (&#34;REQUEST_TIMEOUT&#34;, &#34;conf.scaler.request_timeout&#34;),
+        (&#34;POLLING_FREQUENCY&#34;, &#34;conf.scaler.polling_frequency&#34;)
+    ]
+}
 
 
 def translate_structure_doc_to_timeseries(doc):
@@ -125,22 +125,12 @@ def get_users():
     # Remote database operation
     for user in db_handler.get_users():
         timestamp = int(time.time())
-        timeseries = dict(metric=&#34;user.energy.used&#34;, value=user[&#34;energy&#34;][&#34;used&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
-        timeseries = dict(metric=&#34;user.energy.max&#34;, value=user[&#34;energy&#34;][&#34;max&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
-        timeseries = dict(metric=&#34;user.cpu.usage&#34;, value=user[&#34;cpu&#34;][&#34;usage&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
-        timeseries = dict(metric=&#34;user.cpu.current&#34;, value=user[&#34;cpu&#34;][&#34;current&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
+        for submetric in [&#34;used&#34;, &#34;max&#34;, &#34;usage&#34;, &#34;current&#34;]:
+            timeseries = dict(metric=&#34;user.energy.{0}&#34;.format(submetric),
+                              value=user[&#34;energy&#34;][submetric],
+                              timestamp=timestamp,
+                              tags={&#34;user&#34;: user[&#34;name&#34;]})
+            docs.append(timeseries)
     return docs
 
 
@@ -162,74 +152,35 @@ def get_structures():
 
 def get_configs():
     docs = list()
-    # Remote database operation
-    services = db_handler.get_services()
-    for service in PERSIST_CONFIG_SERVICES:
-        service_name = service[&#34;name&#34;]
-        for s in services:
-            if service_name == s[&#34;name&#34;]:
-                service_doc = s
-                break
-        for parameter in service[&#34;parameters&#34;]:
+    services = db_handler.get_services()  # Remote database operation
+    filtered_services = [s for s in services if s[&#34;name&#34;] in PERSIST_CONFIG_SERVICES_NAMES]
+    for service in filtered_services:
+        for parameter in PERSIST_CONFIG_SERVICES_DOCS[service[&#34;name&#34;]]:
             database_key_name, timeseries_metric_name = parameter
-            value = service_doc[&#34;config&#34;][database_key_name]
-            timestamp = int(time.time())
-            timeseries = dict(metric=timeseries_metric_name, value=value, timestamp=timestamp,
-                              tags={&#34;service&#34;: service_name})
+            timeseries = dict(metric=timeseries_metric_name,
+                              value=service[&#34;config&#34;][database_key_name],
+                              timestamp=int(time.time()),
+                              tags={&#34;service&#34;: service[&#34;name&#34;]})
             docs.append(timeseries)
     return docs
 
 
-# TODO These methods could be better implemented through function passing
-def persist_users():
+funct_map = {&#34;users&#34;: get_users,
+             &#34;limits&#34;: get_limits,
+             &#34;structures&#34;: get_structures,
+             &#34;configs&#34;: get_configs}
+
+
+def persist_docs(funct):
     t0 = time.time()
     docs = list()
     try:
-        docs += get_users()
+        docs += funct_map[funct]()
     except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve user info, error {0}.&#34;.format(str(e)), debug)
+        MyUtils.log_warning(&#34;Couldn&#39;t retrieve {0} info, error {1}.&#34;.format(funct, str(e)), debug)
     t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the user&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
-    send_data(docs)
-
-
-def persist_limits():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_limits()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve limits info, error {0}.&#34;.format(str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the limits&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
-    send_data(docs)
-
-
-def persist_structures():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_structures()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve structure info, error {0}.&#34;.format(str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the structures&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
-    send_data(docs)
-
-
-def persist_config():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_configs()
-    except (requests.exceptions.HTTPError, KeyError, ValueError):
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve config info.&#34;, debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the config documents&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
+    MyUtils.log_info(&#34;It took {0} seconds to get the {1} info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0)), funct), debug)
     send_data(docs)
 
 
@@ -250,46 +201,22 @@ def send_data(docs):
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
-    fail_count = 0
     global debug
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
     while True:
         # Get service info
-        # Remote database operation
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        service = MyUtils.get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        # Remote database operation
-        MyUtils.beat(db_handler, SERVICE_NAME)
+        MyUtils.beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
-        config = service[&#34;config&#34;]
-        polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;POLLING_FREQUENCY&#34;)
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+        myConfig.set_config(service[&#34;config&#34;])
+        polling_frequency = myConfig.get_config_value(&#34;POLLING_FREQUENCY&#34;)
+        debug = myConfig.get_config_value(&#34;DEBUG&#34;)
 
-        # THREADED
-        # threads = list()
-        # t = Thread(target=persist_limits, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_structures, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_config, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_users, args=())
-        # t.start()
-        # threads.append(t)
-        # for t in threads:
-        #    t.join()
-        # THREADED
-
-        # UNTHREADED
-        persist_limits()
-        persist_structures()
-        persist_config()
-        persist_users()
-        # UNTHREADED
+        for docType in [&#34;limits&#34;, &#34;structures&#34;, &#34;users&#34;, &#34;configs&#34;]:
+            persist_docs(docType)
 
         MyUtils.log_info(&#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)
@@ -324,20 +251,15 @@ if __name__ == &#34;__main__&#34;:
 </summary>
 <pre><code class="python">def get_configs():
     docs = list()
-    # Remote database operation
-    services = db_handler.get_services()
-    for service in PERSIST_CONFIG_SERVICES:
-        service_name = service[&#34;name&#34;]
-        for s in services:
-            if service_name == s[&#34;name&#34;]:
-                service_doc = s
-                break
-        for parameter in service[&#34;parameters&#34;]:
+    services = db_handler.get_services()  # Remote database operation
+    filtered_services = [s for s in services if s[&#34;name&#34;] in PERSIST_CONFIG_SERVICES_NAMES]
+    for service in filtered_services:
+        for parameter in PERSIST_CONFIG_SERVICES_DOCS[service[&#34;name&#34;]]:
             database_key_name, timeseries_metric_name = parameter
-            value = service_doc[&#34;config&#34;][database_key_name]
-            timestamp = int(time.time())
-            timeseries = dict(metric=timeseries_metric_name, value=value, timestamp=timestamp,
-                              tags={&#34;service&#34;: service_name})
+            timeseries = dict(metric=timeseries_metric_name,
+                              value=service[&#34;config&#34;][database_key_name],
+                              timestamp=int(time.time()),
+                              tags={&#34;service&#34;: service[&#34;name&#34;]})
             docs.append(timeseries)
     return docs</code></pre>
 </details>
@@ -390,22 +312,12 @@ if __name__ == &#34;__main__&#34;:
     # Remote database operation
     for user in db_handler.get_users():
         timestamp = int(time.time())
-        timeseries = dict(metric=&#34;user.energy.used&#34;, value=user[&#34;energy&#34;][&#34;used&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
-        timeseries = dict(metric=&#34;user.energy.max&#34;, value=user[&#34;energy&#34;][&#34;max&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
-        timeseries = dict(metric=&#34;user.cpu.usage&#34;, value=user[&#34;cpu&#34;][&#34;usage&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
-        timeseries = dict(metric=&#34;user.cpu.current&#34;, value=user[&#34;cpu&#34;][&#34;current&#34;],
-                          timestamp=timestamp,
-                          tags={&#34;user&#34;: user[&#34;name&#34;]})
-        docs.append(timeseries)
+        for submetric in [&#34;used&#34;, &#34;max&#34;, &#34;usage&#34;, &#34;current&#34;]:
+            timeseries = dict(metric=&#34;user.energy.{0}&#34;.format(submetric),
+                              value=user[&#34;energy&#34;][submetric],
+                              timestamp=timestamp,
+                              tags={&#34;user&#34;: user[&#34;name&#34;]})
+            docs.append(timeseries)
     return docs</code></pre>
 </details>
 </dd>
@@ -436,53 +348,29 @@ if __name__ == &#34;__main__&#34;:
 </summary>
 <pre><code class="python">def persist():
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
-    fail_count = 0
     global debug
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
     while True:
         # Get service info
-        # Remote database operation
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        service = MyUtils.get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        # Remote database operation
-        MyUtils.beat(db_handler, SERVICE_NAME)
+        MyUtils.beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
-        config = service[&#34;config&#34;]
-        polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;POLLING_FREQUENCY&#34;)
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+        myConfig.set_config(service[&#34;config&#34;])
+        polling_frequency = myConfig.get_config_value(&#34;POLLING_FREQUENCY&#34;)
+        debug = myConfig.get_config_value(&#34;DEBUG&#34;)
 
-        # THREADED
-        # threads = list()
-        # t = Thread(target=persist_limits, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_structures, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_config, args=())
-        # t.start()
-        # threads.append(t)
-        # t = Thread(target=persist_users, args=())
-        # t.start()
-        # threads.append(t)
-        # for t in threads:
-        #    t.join()
-        # THREADED
-
-        # UNTHREADED
-        persist_limits()
-        persist_structures()
-        persist_config()
-        persist_users()
-        # UNTHREADED
+        for docType in [&#34;limits&#34;, &#34;structures&#34;, &#34;users&#34;, &#34;configs&#34;]:
+            persist_docs(docType)
 
         MyUtils.log_info(&#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
         time.sleep(polling_frequency)</code></pre>
 </details>
 </dd>
-<dt id="src.Snapshoters.DatabaseSnapshoter.persist_config"><code class="name flex">
-<span>def <span class="ident">persist_config</span></span>(<span>)</span>
+<dt id="src.Snapshoters.DatabaseSnapshoter.persist_docs"><code class="name flex">
+<span>def <span class="ident">persist_docs</span></span>(<span>funct)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -490,82 +378,16 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def persist_config():
+<pre><code class="python">def persist_docs(funct):
     t0 = time.time()
     docs = list()
     try:
-        docs += get_configs()
-    except (requests.exceptions.HTTPError, KeyError, ValueError):
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve config info.&#34;, debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the config documents&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
-    send_data(docs)</code></pre>
-</details>
-</dd>
-<dt id="src.Snapshoters.DatabaseSnapshoter.persist_limits"><code class="name flex">
-<span>def <span class="ident">persist_limits</span></span>(<span>)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def persist_limits():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_limits()
+        docs += funct_map[funct]()
     except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve limits info, error {0}.&#34;.format(str(e)), debug)
+        MyUtils.log_warning(&#34;Couldn&#39;t retrieve {0} info, error {1}.&#34;.format(funct, str(e)), debug)
     t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the limits&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
-    send_data(docs)</code></pre>
-</details>
-</dd>
-<dt id="src.Snapshoters.DatabaseSnapshoter.persist_structures"><code class="name flex">
-<span>def <span class="ident">persist_structures</span></span>(<span>)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def persist_structures():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_structures()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve structure info, error {0}.&#34;.format(str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the structures&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
-    send_data(docs)</code></pre>
-</details>
-</dd>
-<dt id="src.Snapshoters.DatabaseSnapshoter.persist_users"><code class="name flex">
-<span>def <span class="ident">persist_users</span></span>(<span>)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def persist_users():
-    t0 = time.time()
-    docs = list()
-    try:
-        docs += get_users()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve user info, error {0}.&#34;.format(str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the user&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
+    MyUtils.log_info(&#34;It took {0} seconds to get the {1} info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0)), funct), debug)
     send_data(docs)</code></pre>
 </details>
 </dd>
@@ -654,10 +476,7 @@ if __name__ == &#34;__main__&#34;:
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.get_users" href="#src.Snapshoters.DatabaseSnapshoter.get_users">get_users</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.main" href="#src.Snapshoters.DatabaseSnapshoter.main">main</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist" href="#src.Snapshoters.DatabaseSnapshoter.persist">persist</a></code></li>
-<li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist_config" href="#src.Snapshoters.DatabaseSnapshoter.persist_config">persist_config</a></code></li>
-<li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist_limits" href="#src.Snapshoters.DatabaseSnapshoter.persist_limits">persist_limits</a></code></li>
-<li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist_structures" href="#src.Snapshoters.DatabaseSnapshoter.persist_structures">persist_structures</a></code></li>
-<li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist_users" href="#src.Snapshoters.DatabaseSnapshoter.persist_users">persist_users</a></code></li>
+<li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist_docs" href="#src.Snapshoters.DatabaseSnapshoter.persist_docs">persist_docs</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.send_data" href="#src.Snapshoters.DatabaseSnapshoter.send_data">send_data</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.translate_structure_doc_to_timeseries" href="#src.Snapshoters.DatabaseSnapshoter.translate_structure_doc_to_timeseries">translate_structure_doc_to_timeseries</a></code></li>
 </ul>
@@ -694,7 +513,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.7.2</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>
