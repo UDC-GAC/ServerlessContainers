@@ -17,7 +17,7 @@ nav:
 theme:
     name: material
     #custom_dir: 'custom_theme/'
-    favicon: 'img/favicon.ico'
+    favicon: 'img/icon.png'
 
 # Repository
 repo_name: 'JonatanEnes/ServerlessContainers'

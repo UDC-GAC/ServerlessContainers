@@ -16,20 +16,10 @@
 \BOOKMARK [3][-]{subsubsection.4.3.1}{Passive}{subsection.4.3}% 16
 \BOOKMARK [3][-]{subsubsection.4.3.2}{Active}{subsection.4.3}% 17
 \BOOKMARK [3][-]{subsubsection.4.3.3}{Other}{subsection.4.3}% 18
-\BOOKMARK [1][-]{section.5}{Quickstart}{}% 19
-\BOOKMARK [2][-]{subsection.5.1}{Container Scaler deployment}{section.5}% 20
-\BOOKMARK [2][-]{subsection.5.2}{Initializing the container's limit}{section.5}% 21
-\BOOKMARK [2][-]{subsection.5.3}{Initializing State Database}{section.5}% 22
-\BOOKMARK [2][-]{subsection.5.4}{Start the Orchestrator}{section.5}% 23
-\BOOKMARK [2][-]{subsection.5.5}{Starting the services}{section.5}% 24
-\BOOKMARK [2][-]{subsection.5.6}{Transitioning the containers to serverless instances}{section.5}% 25
-\BOOKMARK [2][-]{subsection.5.7}{Returning the containers to traditional instances}{section.5}% 26
-\BOOKMARK [2][-]{subsection.5.8}{Shutting everything down}{section.5}% 27
-\BOOKMARK [2][-]{subsection.5.9}{Orchestrator's API}{section.5}% 28
-\BOOKMARK [1][-]{section.6}{Configuration}{}% 29
-\BOOKMARK [2][-]{subsection.6.1}{Responsiveness}{section.6}% 30
-\BOOKMARK [2][-]{subsection.6.2}{Benevolence}{section.6}% 31
-\BOOKMARK [2][-]{subsection.6.3}{Rule Configuration}{section.6}% 32
-\BOOKMARK [2][-]{subsection.6.4}{Service Configuration}{section.6}% 33
-\BOOKMARK [1][-]{section.7}{Contact}{}% 34
-\BOOKMARK [0][-]{section.7}{References}{}% 35
+\BOOKMARK [1][-]{section.5}{Configuration}{}% 19
+\BOOKMARK [2][-]{subsection.5.1}{Responsiveness}{section.5}% 20
+\BOOKMARK [2][-]{subsection.5.2}{Benevolence}{section.5}% 21
+\BOOKMARK [2][-]{subsection.5.3}{Rule Configuration}{section.5}% 22
+\BOOKMARK [2][-]{subsection.5.4}{Service Configuration}{section.5}% 23
+\BOOKMARK [1][-]{section.6}{Contact}{}% 24
+\BOOKMARK [0][-]{section.6}{References}{}% 25

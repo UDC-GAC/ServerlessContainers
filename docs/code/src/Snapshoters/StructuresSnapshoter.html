@@ -304,7 +304,7 @@ def persist():
 
         time.sleep(polling_frequency)
 
-        if thread and thread.isAlive():
+        if thread and thread.is_alive():
             delay_start = time.time()
             log_warning(
                 &#34;Previous thread didn&#39;t finish before next poll is due, with polling time of {0} seconds, at {1}&#34;.format(

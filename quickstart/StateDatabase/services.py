@@ -2,13 +2,13 @@
 import src.StateDatabase.couchdb as couchDB
 import src.StateDatabase.utils as couchdb_utils
 
-
 guardian = dict(
     name="guardian",
     type="service",
     heartbeat="",
     config=dict(
         STRUCTURE_GUARDED="container",
+        GUARDABLE_RESOURCES=["cpu","mem"],
         WINDOW_TIMELAPSE=10,
         WINDOW_DELAY=10,
         EVENT_TIMEOUT=100,
@@ -43,7 +43,8 @@ structures_snapshoter = dict(
     heartbeat="",
     config=dict(
         POLLING_FREQUENCY=5,
-        PERSIST_APPS=False
+        PERSIST_APPS=False,
+        RESOURCES_PERSISTED=["cpu","mem"]
     )
 )
 
@@ -67,7 +68,6 @@ sanity_checker = dict(
         DEBUG=True
     )
 )
-
 
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()

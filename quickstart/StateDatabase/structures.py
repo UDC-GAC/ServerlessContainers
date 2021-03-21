@@ -12,7 +12,8 @@ base_container = dict(
     name="base_container",
     guard=False,
     resources=dict(
-        cpu=dict(max=200, min=50, guard=True)
+        cpu=dict(max=400, min=50, guard=True),
+        mem=dict(max=8192, min=1024, guard=True)
     )
 )
 
@@ -45,7 +46,10 @@ if __name__ == "__main__":
                                      "1": {"cont0": 100, "free": 0},
                                      "2": {"cont1": 100, "free": 0},
                                      "3": {"cont1": 100, "free": 0}
-                                 })))
+                                 }),
+                        mem=dict(max=16384, free=0)
+                    )
+                )
         handler.add_structure(host)
 
 
@@ -56,7 +60,8 @@ if __name__ == "__main__":
             guard=True,
             guard_policy="serverless",
             resources=dict(
-                cpu=dict(max=8196, min=100, guard=False)
+                cpu=dict(max=400, min=100, guard=False),
+                mem=dict(max=8196, min=2048, guard=False)
             ),
             containers=["cont0", "cont1"]
         )

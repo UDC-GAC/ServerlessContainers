@@ -83,7 +83,7 @@ def get_container_usages(container_name):
 
         for metric in REFEEDER_APPLICATION_METRICS:
             if container_info[metric] == NO_METRIC_DATA_DEFAULT_VALUE:
-                MyUtils.log_error("No metric info for {0} in container {1}".format(metric, container_name), debug=True)
+                MyUtils.log_warning("No metric info for {0} in container {1}".format(metric, container_name), debug=True)
 
 
     except requests.ConnectionError as e:
@@ -101,7 +101,10 @@ def generate_application_metrics(application):
         application_info = merge(application_info, container_info)
 
     for resource in application_info:
-        application["resources"][resource]["usage"] = application_info[resource]
+        if resource in application["resources"]:
+            application["resources"][resource]["usage"] = application_info[resource]
+        else:
+            MyUtils.log_warning("No resource {0} info for application {1}".format(resource,application["name"]), debug=True)
 
     return application
 
@@ -190,7 +193,7 @@ def refeed():
         MyUtils.log_info("Refeed processed at {0}".format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)
 
-        if thread.isAlive():
+        if thread.is_alive():
             delay_start = time.time()
             MyUtils.log_warning(
                 "Previous thread didn't finish before next poll is due, with window time of {0} seconds, at {1}".format(

@@ -31,24 +31,20 @@ import logging
 from json_logic import jsonLogic
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_time_now_string, update_structure, get_host_containers, get_structures, copy_structure_base, \
-    generate_event_name, generate_request_name
+    get_time_now_string, get_structures, generate_event_name, generate_request_name
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
-GUARDABLE_RESOURCES = ['cpu'] # TODO This should be configurable
-#GUARDABLE_RESOURCES = ['cpu', 'mem', 'energy']
-
-BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel'] #+ ['proc.mem.resident', 'proc.mem.virtual']
-BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage'] #+ ['structure.mem.usage'] + ['structure.energy.usage']
+BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel'] + ['proc.mem.resident', 'proc.mem.virtual']
+BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage'] + ['structure.mem.usage'] + ['structure.energy.usage']
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
-#    'structure.mem.usage': ['proc.mem.resident']
+    'structure.mem.usage': ['proc.mem.resident']
 }
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
-#    'structure.mem.usage': ['structure.mem.usage'],
-#    'structure.energy.usage': ['structure.energy.usage']
+    'structure.mem.usage': ['structure.mem.usage'],
+    'structure.energy.usage': ['structure.energy.usage']
 }
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
@@ -57,18 +53,14 @@ TAGS = {"container": "host", "application": "structure"}
 
 translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage"}
 
-# RESOURCES = ['cpu', 'mem', 'disk', 'net', 'energy']
-
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
-                         "EVENT_TIMEOUT": 40, "DEBUG": True, "STRUCTURE_GUARDED": "container",
-                         "CPU_SHARES_PER_WATT": 8,
-                         "ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
+                         "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
+                         "CPU_SHARES_PER_WATT": 5, "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
-CPU_SHARES_PER_WATT = 5  # 7  # How many cpu shares to rescale per watt
 
 
 class Guardian:
@@ -84,7 +76,6 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.guardable_resources = GUARDABLE_RESOURCES
         self.debug = True
 
     @staticmethod
@@ -122,7 +113,11 @@ class Guardian:
 
         Raises:
             ValueError if value1 > value2
+            RuntimeError if value1 > value2 and value1 is current and value2 is max, that is the current is higher than the max
         """
+        if value1 > value2 and label1 == "current" and label2 == "max":
+            raise RuntimeError(
+                "somehow this structure has a resource limit applied higher than maximum for {0}".format(resource))
         if value1 > value2:
             raise ValueError("in resources: {0} value for '{1}': {2} is greater than value for '{3}': {4}".format(
                 resource, label1, str(value1), label2, str(value2)))
@@ -291,8 +286,7 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
-    @staticmethod
-    def get_amount_from_proportional_energy_rescaling(structure, resource):
+    def get_amount_from_proportional_energy_rescaling(self, structure, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
         energy-based CPU scaling*.
         With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
@@ -311,7 +305,7 @@ class Guardian:
         max_resource_limit = structure["resources"][resource]["max"]
         current_resource_limit = structure["resources"][resource]["usage"]
         difference = max_resource_limit - current_resource_limit
-        energy_amplification = difference * CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
+        energy_amplification = difference * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
         return int(energy_amplification)
 
     def get_container_energy_str(self, resources_dict):
@@ -335,9 +329,8 @@ class Guardian:
 
     def adjust_container_state(self, resources, limits, resources_to_adjust):
         for resource in resources_to_adjust:
-            errors = True
-            while errors:
-                # TODO here the service may enter on an infinite loop
+            n_loop, errors = 0, True
+            while errors and n_loop < 10:
                 try:
                     self.check_invalid_container_state(resources, limits, resource)
                     errors = False
@@ -347,9 +340,18 @@ class Guardian:
                     limits[resource]["upper"] = resources[resource]["current"] - boundary
                     limits[resource]["lower"] = limits[resource]["upper"] - boundary
                     # limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
+                except RuntimeError as e:
+                    raise e
+                n_loop += 1
+                if n_loop >= 10:
+                    raise RuntimeError("Error fixing limits")
         return limits
 
     def check_invalid_container_state(self, resources, limits, resource):
+        if resource not in resources:
+            raise RuntimeError("resource values not available for resource {0}".format(resource))
+        if resource not in limits:
+            raise RuntimeError("limit values not available for resource {0}".format(resource))
         data = {"res": resources, "lim": limits}
         values_tuples = [("max", "res"), ("current", "res"), ("upper", "lim"), ("lower", "lim"), ("min", "res")]
         values = dict()
@@ -362,14 +364,11 @@ class Guardian:
             self.check_unset_values(values[value], value, resource)
 
         # Check if the first value is greater than the second
-        # check the full chain "max > upper > current > lower > min"
+        # check the full chain max > upper > current > lower
         if values["current"] != NOT_AVAILABLE_STRING:
-            self.check_invalid_values(values["current"], "current", values["max"], "max")
+            self.check_invalid_values(values["current"], "current", values["max"], "max", resource=resource)
         self.check_invalid_values(values["upper"], "upper", values["current"], "current", resource=resource)
         self.check_invalid_values(values["lower"], "lower", values["upper"], "upper", resource=resource)
-        # TODO FIX This may cause the program to enter on an infinite loop due to the lower
-        # boundary dropping under the minimum
-        # self.check_invalid_values(values["min"], "min", values["lower"], "lower", resource=resource)
 
         # Check that there is a boundary between values, like the current and upper, so
         # that the limit can be surpassed
@@ -392,10 +391,23 @@ class Guardian:
                jsonLogic(rule["rule"], data)
 
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
-        events = []
-        data = dict()
 
+        resources_with_rules = list()
+        for rule in rules:
+            if rule["resource"] in resources_with_rules:
+                pass
+            else:
+                resources_with_rules.append(rule["resource"])
+
+        useful_resources = list()
         for resource in self.guardable_resources:
+            if resource not in resources_with_rules:
+                log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
+            else:
+                useful_resources.append(resource)
+
+        data = dict()
+        for resource in useful_resources:
             if resource in resources:
                 data[resource] = {
                     "limits": {resource: limits[resource]},
@@ -403,9 +415,12 @@ class Guardian:
 
         for usage_metric in usages:
             keys = usage_metric.split(".")
+            struct_type, usage_resource = keys[0], keys[1]
             # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
-            data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
+            if usage_resource in useful_resources:
+                data[usage_resource][struct_type][usage_resource][keys[2]] = usages[usage_metric]
 
+        events = []
         for rule in rules:
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
@@ -415,9 +430,8 @@ class Guardian:
                     events.append(event)
 
             except KeyError as e:
-                log_warning(
-                    "rule: {0} is missing a parameter {1} {2}".format(rule["name"],
-                                                                      str(e), str(traceback.format_exc())), self.debug)
+                log_warning("rule: {0} is missing a parameter {1} {2}".format(
+                    rule["name"], str(e), str(traceback.format_exc())), self.debug)
 
         return events
 
@@ -462,7 +476,7 @@ class Guardian:
                                 structure["name"], resource_label), self.debug)
                         continue
 
-                    # If no policy is set for scaling, default to "fixed amount"
+                    # If no policy is set for scaling, default to "amount"
                     if "rescale_by" not in rule.keys():
                         rule["rescale_by"] = "amount"
                         log_warning(
@@ -533,15 +547,10 @@ class Guardian:
 
         container_name_str = "@" + container["name"]
         container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
-        # TODO check if the resource is unguarded and if that is the case, do not print anything or
-        # just a cpu(unguarded)
-        # This should be adapted according the resources configured
-        # resources_str = "cpu({0}) - mem({1}) - energy({2})".format(
-        #     self.get_resource_summary("cpu", resources, limits, usages),
-        #     self.get_resource_summary("mem", resources, limits, usages),
-        #     self.get_container_energy_str(resources))
-        resources_str = "cpu({0})".format(self.get_resource_summary("cpu", resources, limits, usages))
-
+        resources_str = "| "
+        for resource in self.guardable_resources:
+            resources_str += resource + "({0})".format(
+                self.get_resource_summary(resource, resources, limits, usages)) + " | "
 
         ev, req = list(), list()
         for event in triggered_events:
@@ -619,7 +628,7 @@ class Guardian:
                 # Default is container
                 metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
                 metrics_to_generate = GUARDIAN_CONTAINER_METRICS
-                tag = "host"
+                tag = TAGS["container"]
 
             # Remote database operation
             usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]}, window_difference,
@@ -641,11 +650,10 @@ class Guardian:
                 log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
-            # TODO FIX This only applies to containers, currently not used for applications
+            # This only applies to containers, currently not used for applications
+            # Adjust the container's limits according to the current value
             if structure_subtype == "container":
-                resources_to_adjust = GUARDABLE_RESOURCES #["cpu", "mem"]
-                # resources_to_adjust = []
-                limits["resources"] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
+                limits["resources"] = self.adjust_container_state(resources, limits_resources, self.guardable_resources)
 
                 # Remote database operation
                 self.couchdb_handler.update_limit(limits)
@@ -663,19 +671,15 @@ class Guardian:
 
         threads = []
         for structure in structures:
-            if "guard_policy" not in structure:
+            if "guard_policy" not in structure or structure["guard_policy"] == "serverless":
                 # Default option will be serverless
-                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+                thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
+                                args=(myConfig, structure, rules,))
                 thread.start()
                 threads.append(thread)
-                # self.serverless(config, structure, rules)
             else:
-                if structure["guard_policy"] == "serverless":
-                    thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
-                    thread.start()
-                    threads.append(thread)
-                else:
-                    self.serverless(myConfig, structure, rules)
+                # Default is still serverless for now
+                self.serverless(myConfig, structure, rules)
         for process in threads:
             process.join()
 
@@ -694,23 +698,29 @@ class Guardian:
             # CONFIG
             myConfig.set_config(service["config"])
             self.debug = myConfig.get_config_value("DEBUG")
+            self.guardable_resources = myConfig.get_config_value("GUARDABLE_RESOURCES")
+            self.cpu_shares_per_watt = myConfig.get_config_value("CPU_SHARES_PER_WATT")
             window_difference = myConfig.get_config_value("WINDOW_TIMELAPSE")
+            window_delay = myConfig.get_config_value("WINDOW_DELAY")
             structure_guarded = myConfig.get_config_value("STRUCTURE_GUARDED")
-            CPU_SHARES_PER_WATT = myConfig.get_config_value("CPU_SHARES_PER_WATT")
-            GUARDIAN_IS_ACTIVATED = myConfig.get_config_value("ACTIVE")
+            guardian_is_active = myConfig.get_config_value("ACTIVE")
+            log_info("Guarding:{0} resources for '{1}' with time window lapse and delay: {2},{3}".format(
+                self.guardable_resources, structure_guarded, window_difference, window_delay), self.debug)
 
             thread = None
-            if GUARDIAN_IS_ACTIVATED:
+            if guardian_is_active:
                 # Remote database operation
                 structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
                 if structures:
-                    thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
+                    log_info("{0} Structures to process".format(len(structures)), self.debug)
+                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(myConfig, structures,))
                     thread.start()
+                else:
+                    log_info("No structures to process", self.debug)
             else:
-                log_info(
-                    "Guardian is not activated", self.debug)
-            log_info(
-                "Epoch processed at {0}".format(get_time_now_string()), self.debug)
+                log_info("Guardian is not activated", self.debug)
+
+            log_info("Epoch processed at {0}".format(get_time_now_string()), self.debug)
             time.sleep(window_difference)
 
             if thread and thread.is_alive():
@@ -721,8 +731,7 @@ class Guardian:
                 log_warning("Going to wait until thread finishes before proceeding", self.debug)
                 thread.join()
                 delay_end = time.time()
-                log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)),
-                            self.debug)
+                log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), self.debug)
 
 
 def main():

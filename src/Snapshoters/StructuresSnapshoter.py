@@ -36,8 +36,6 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
-RESOURCES = ["cpu"] # TODO this should be configurable
-#RESOURCES = ["cpu", "mem"]
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
@@ -45,15 +43,17 @@ translate_map = {
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True, "ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu"],
+                         "ACTIVE": True}
 MAX_FAIL_NUM = 5
 debug = True
+resources_persisted = ["cpu"]
 
 
 def generate_timeseries(container_name, resources):
     timestamp = int(time.time())
 
-    for resource in RESOURCES:
+    for resource in resources_persisted:
         value = resources[resource][translate_map[resource]["limit_label"]]
         metric = translate_map[resource]["metric"]
         timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags=dict(host=container_name))
@@ -69,7 +69,7 @@ def update_container_current_values(container_name, resources):
     database_structure = db_handler.get_structure(container_name)
     new_structure = copy_structure_base(database_structure)
     new_structure["resources"] = dict()
-    for resource in RESOURCES:
+    for resource in resources_persisted:
         if resource not in new_structure:
             new_structure["resources"][resource] = dict()
 
@@ -132,8 +132,11 @@ def persist_applications(container_resources_dict):
 
     # Generate the applications current resource values
     for app in applications:
-        for resource in RESOURCES:
-            app["resources"][resource]["current"] = 0
+        for resource in resources_persisted:
+            if resource not in app["resources"]:
+                log_error("Application {0} is missing info of resource {1}".format(app["name"], resource), debug)
+            else:
+                app["resources"][resource]["current"] = 0
 
         application_containers = app["containers"]
         for container_name in application_containers:
@@ -144,7 +147,7 @@ def persist_applications(container_resources_dict):
                     + " app info will not be totally accurate", debug)
                 continue
 
-            for resource in RESOURCES:
+            for resource in resources_persisted:
                 try:
                     current_resource_label = translate_map[resource]["limit_label"]
                     container_resources = container_resources_dict[container_name]["resources"]
@@ -244,24 +247,26 @@ def persist_thread():
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
-    global debug
+    global resources_persisted, debug
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
 
     while True:
         # Get service info
-        service = get_service(db_handler, SERVICE_NAME) # Remote database operation
+        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        beat(db_handler, SERVICE_NAME) # Remote database operation
+        beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
         myConfig.set_config(service["config"])
         polling_frequency = myConfig.get_config_value("POLLING_FREQUENCY")
         debug = myConfig.get_config_value("DEBUG")
+        resources_persisted = myConfig.get_config_value("RESOURCES_PERSISTED")
+        service_active = myConfig.get_config_value("ACTIVE")
+        log_info("Going to snapshot resources: {0}".format(resources_persisted), debug)
 
-        SERVICE_IS_ACTIVATED = myConfig.get_config_value("ACTIVE")
         thread = None
-        if SERVICE_IS_ACTIVATED:
+        if service_active:
             thread = Thread(target=persist_thread, args=())
             thread.start()
             log_info("Structures snapshoted at {0}".format(get_time_now_string()), debug)
@@ -270,7 +275,7 @@ def persist():
 
         time.sleep(polling_frequency)
 
-        if thread and thread.isAlive():
+        if thread and thread.is_alive():
             delay_start = time.time()
             log_warning(
                 "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}".format(

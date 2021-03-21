@@ -1,0 +1,83 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=cont0"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=cont0"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=cont0"
+          ]
+        },{
+          "metric": "limit.cpu.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=cont0"
+          ]
+        },{
+          "metric": "limit.cpu.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=cont0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    },{
+      "metrics": [
+        {
+          "metric": "proc.cpu.user",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=cont1"
+          ]
+        },
+        {
+          "metric": "proc.cpu.kernel",
+          "aggregator": "zimsum",
+          "tags": [
+            "host=cont1"
+          ]
+        },{
+          "metric": "structure.cpu.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=cont1"
+          ]
+        },{
+          "metric": "limit.cpu.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=cont1"
+          ]
+        },{
+          "metric": "limit.cpu.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=cont1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymin": 0,
+        "ymax": 800
+      }
+    }
+  ]
+}

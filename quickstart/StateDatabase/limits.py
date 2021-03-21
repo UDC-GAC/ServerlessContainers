@@ -9,7 +9,8 @@ base_limits = dict(
         type='limit',
         name="base_container",
         resources=dict(
-            cpu=dict(upper=100, lower=50, boundary=25)
+            cpu=dict(upper=100, lower=50, boundary=25),
+            mem=dict(upper=2048, lower=512, boundary=256)
         )
     )
 

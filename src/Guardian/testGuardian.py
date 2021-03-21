@@ -29,7 +29,7 @@ from test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exce
     CpuRescaleUp, energy_exceeded_upper, CpuRescaleDown, MemRescaleUp, MemRescaleDown, EnergyRescaleUp, \
     EnergyRescaleDown, energy_dropped_lower
 from test.documents.services import guardian_service as guardian
-from src.Guardian.Guardian import CPU_SHARES_PER_WATT, NOT_AVAILABLE_STRING
+from src.Guardian.Guardian import NOT_AVAILABLE_STRING
 from src.MyUtils import MyUtils
 from src.MyUtils.MyUtils import generate_event_name
 from unittest import TestCase
@@ -37,6 +37,7 @@ from src.Guardian import Guardian
 from src.StateDatabase.couchdb import CouchDBServer
 from src.StateDatabase.opentsdb import OpenTSDBServer
 
+CPU_SHARES_PER_WATT = 5
 
 class GuardianTest(TestCase):
     def setUp(self):
