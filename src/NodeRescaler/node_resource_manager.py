@@ -65,7 +65,7 @@ MAX_TICKS_PER_CPU = 100000
 
 def get_node_cpus(container_name):
     # Get info from cgroups cpuacct subsystem
-    cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc", container_name, "cpu.cfs_quota_us"])
+    cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_name), "cpu.cfs_quota_us"])
     op = read_cgroup_file_value(cpu_accounting_path)
     if op["success"]:
         cpu_limit = int(op["data"])
@@ -76,7 +76,7 @@ def get_node_cpus(container_name):
         return False, op
 
     # Get info from cgroups cpuset subsystem
-    cpus_path = "/".join([CGROUP_PATH, "cpuset", "lxc", container_name, "cpuset.cpus"])
+    cpus_path = "/".join([CGROUP_PATH, "cpuset", "lxc.payload.{0}".format(container_name), "cpuset.cpus"])
     op = read_cgroup_file_value(cpus_path)
     if op["success"]:
         cpus = op["data"]
@@ -96,7 +96,7 @@ def get_node_cpus(container_name):
         else:
             effective_cpus += (int(ranges[1]) - int(ranges[0])) + 1
 
-        # Get the effective limit of the container, if allowance is set, then it
+    # Get the effective limit of the container, if allowance is set, then it
     # is medium-limit by number of cpus available otherwise it is the number of
     # cores multiplied per 100 for percentage
     if cpu_limit == -1:
@@ -118,8 +118,8 @@ def set_node_cpus(container_name, cpu_resource):
     applied_changes = dict()
 
     if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
-        cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc", container_name, "cpu.cfs_quota_us"])
-        cpu_quota_path = "/".join([CGROUP_PATH, "cpuacct", "lxc", container_name, "cpu.cfs_period_us"])
+        cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_name), "cpu.cfs_quota_us"])
+        cpu_quota_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_name), "cpu.cfs_period_us"])
 
         try:
             if cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL] == "-1":
@@ -151,7 +151,7 @@ def set_node_cpus(container_name, cpu_resource):
 
     if CPU_LIMIT_CPUS_LABEL in cpu_resource:
         # container.config["limits.cpu"] = cpu_resource[CPU_LIMIT_CPUS_LABEL]
-        cpu_cpuset_path = "/".join([CGROUP_PATH, "cpuset", "lxc", container_name, "cpuset.cpus"])
+        cpu_cpuset_path = "/".join([CGROUP_PATH, "cpuset", "lxc.payload.{0}".format(container_name), "cpuset.cpus"])
 
         op = write_cgroup_file_value(cpu_cpuset_path, str(cpu_resource[CPU_LIMIT_CPUS_LABEL]))
         if not op["success"]:
@@ -172,7 +172,7 @@ LOWER_LIMIT_MEGABYTES = 64
 
 def get_node_mem(container_name):
     final_dict = dict()
-    memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
+    memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc.payload.{0}".format(container_name), "memory.limit_in_bytes"])
 
     op = read_cgroup_file_value(memory_limit_path)
     if op["success"]:
@@ -197,7 +197,7 @@ def set_node_mem(container_name, mem_resource):
     if MEM_LIMIT_LABEL in mem_resource:
         value = int(mem_resource[MEM_LIMIT_LABEL])
         value_megabytes_integer = 0
-        if value is -1:
+        if value == -1:
             value_megabytes = str(value)
         elif value < LOWER_LIMIT_MEGABYTES:
             # Don't allow values lower than an amount like 64 MB as it will probably block the container
@@ -208,7 +208,7 @@ def set_node_mem(container_name, mem_resource):
 
         # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
         # swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.memsw.limit_in_bytes"])
-        memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.limit_in_bytes"])
+        memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc.payload.{0}".format(container_name), "memory.limit_in_bytes"])
 
         # Get the current memory limit in megabytes, that should be equal to the swap space
         success, current_mem_value = get_node_mem(container_name)
@@ -282,7 +282,7 @@ def get_device_major_minor_raw_device(device_path):
 
 
 def get_node_disk_limits(container_name):
-    blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_name])
+    blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc.payload.{0}".format(container_name)])
     devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
     devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
     devices_read_limits = dict()
