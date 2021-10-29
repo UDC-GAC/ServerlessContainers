@@ -5,7 +5,7 @@ source "${scriptDir}/../set_env.sh"
 if [ -z "$1" ]
 then
       echo "Argument not given for new value for WINDOW_TIMELAPSE, using 10 as default"
-      value=1
+      value=10
 else
     value=$1
 fi
