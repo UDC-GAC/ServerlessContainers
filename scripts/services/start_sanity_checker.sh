@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
-tmux new -d -s "SanityChecker" "source set_pythonpath.sh; python3 SanityChecker/SanityChecker.py"
-
+scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+source "${scriptDir}/../../set_pythonpath.sh"
+tmux new -d -s "SanityChecker" "python3 src/SanityChecker/SanityChecker.py"

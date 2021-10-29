@@ -224,7 +224,7 @@ def refeed():
         MyUtils.log_info(&#34;Refeed processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)
 
-        if thread.isAlive():
+        if thread.is_alive():
             delay_start = time.time()
             MyUtils.log_warning(
                 &#34;Previous thread didn&#39;t finish before next poll is due, with window time of {0} seconds, at {1}&#34;.format(
@@ -377,7 +377,7 @@ if __name__ == &#34;__main__&#34;:
         MyUtils.log_info(&#34;Refeed processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
         time.sleep(window_difference)
 
-        if thread.isAlive():
+        if thread.is_alive():
             delay_start = time.time()
             MyUtils.log_warning(
                 &#34;Previous thread didn&#39;t finish before next poll is due, with window time of {0} seconds, at {1}&#34;.format(

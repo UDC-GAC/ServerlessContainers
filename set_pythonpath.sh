@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
-export PYTHONPATH=$scriptDir
+script_directory=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 
-export BDWATCHDOG_PATH=$scriptDir/../bdwatchdog/
-export RESCALING_PATH=$scriptDir
-export PYTHONPATH=$BDWATCHDOG_PATH:$RESCALING_PATH
+export BDWATCHDOG_PATH=$script_directory/../BDWatchdog/
+export SERVERLESS_PATH=$script_directory
+export PYTHONPATH=$BDWATCHDOG_PATH:$SERVERLESS_PATH
 
 
