@@ -1,5 +1,5 @@
 # /usr/bin/python
-from src.MyUtils.CheckAliveBase import CheckAliveBase as CheckAlive
+from src.SanityChecker.CheckAliveBase import CheckAliveBase as CheckAlive
 
 
 def main():

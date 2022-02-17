@@ -35,7 +35,7 @@ from functools import wraps
 
 node_resource_manager = None
 
-app = Flask(__name__)
+node_rescaler = Flask(__name__)
 
 
 def initialize_LXD(f):
@@ -53,7 +53,7 @@ def initialize_LXD(f):
     return wrap
 
 
-@app.route("/container/", methods=['GET'])
+@node_rescaler.route("/container/", methods=['GET'])
 @initialize_LXD
 def get_containers_resources():
     try:
@@ -67,7 +67,7 @@ def get_containers_resources():
         return jsonify(node_resource_manager.get_all_nodes())
 
 
-@app.route("/container/<container_name>", methods=['PUT'])
+@node_rescaler.route("/container/<container_name>", methods=['PUT'])
 @initialize_LXD
 def set_container_resources(container_name):
     if container_name != "":
@@ -85,7 +85,7 @@ def set_container_resources(container_name):
         abort(400)
 
 
-@app.route("/container/<container_name>", methods=['GET'])
+@node_rescaler.route("/container/<container_name>", methods=['GET'])
 @initialize_LXD
 def get_container_resources(container_name):
     if container_name != "":
@@ -98,7 +98,7 @@ def get_container_resources(container_name):
         return jsonify(node_resource_manager.get_all_nodes())
 
 
-@app.route("/heartbeat", methods=['GET'])
+@node_rescaler.route("/heartbeat", methods=['GET'])
 def heartbeat():
     return Response(json.dumps({"status": "alive"}), status=200, mimetype='application/json')
 
@@ -106,4 +106,4 @@ def heartbeat():
 if __name__ == "__main__":
     node_resource_manager = LXDContainerManager()
     WSGIRequestHandler.protocol_version = "HTTP/1.1"
-    app.run(host='0.0.0.0', port=8000)
+    node_rescaler.run(host='0.0.0.0', port=8000)

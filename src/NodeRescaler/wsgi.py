@@ -23,8 +23,8 @@
 
 from werkzeug.serving import WSGIRequestHandler
 
-from src.NodeRescaler.NodeRescaler import app
+from src.NodeRescaler.NodeRescaler import node_rescaler
 
 if __name__ == "__main__":
     WSGIRequestHandler.protocol_version = "HTTP/1.1"
-    app.run(host='0.0.0.0', port=8000)
+    node_rescaler.run(host='0.0.0.0', port=8000)

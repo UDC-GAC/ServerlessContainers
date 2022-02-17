@@ -49,8 +49,8 @@ class LXDContainerManager:
 
     def read_keys(self):
         # TODO Improve key handling
-        self.LXD_CRT = '/${HOME}/development/lxd.crt'
-        self.LXD_KEY = '/${HOME}/development/lxd.key'
+        self.LXD_CRT = '/${LXD_KEY_PATH}/${LXD_KEY_NAME}.crt'
+        self.LXD_KEY = '/${LXD_KEY_PATH}/${LXD_KEY_NAME}.key'
         self.LXD_ENDPOINT = 'https://localhost:8443'
 
     def __init__(self):
