@@ -39,9 +39,6 @@ class CheckAliveBase:
         self.__POLLING_TIME__ = 5
         self.__MAX_TIME_ALLOWED__ = 30  # seconds
 
-    def set_infrastructure_name(self, INFRASTRUCTURE_NAME):
-        self.__INFRASTRUCTURE_NAME__ = INFRASTRUCTURE_NAME
-
     def set_REST_services(self, REST_SERVICES):
         self.__REST_SERVICES__ = REST_SERVICES
 
@@ -105,9 +102,9 @@ class CheckAliveBase:
                 print("")
 
     def report(self):
-        db = couchDB.CouchDBServer(couchdb_url="couchdb".format(self.__INFRASTRUCTURE_NAME__))
+        db = couchDB.CouchDBServer(couchdb_url="couchdb")
 
-        orchestrator_hostname = "orchestrator".format(self.__INFRASTRUCTURE_NAME__)
+        orchestrator_hostname = "orchestrator"
         self.__REST_SERVICES__.append((orchestrator_hostname, orchestrator_hostname, "5000"))
 
         while True:
