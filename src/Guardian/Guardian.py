@@ -720,14 +720,14 @@ class Guardian:
             else:
                 log_info("Guardian is not activated", self.debug)
 
-            log_info("Epoch processed at {0}".format(get_time_now_string()), self.debug)
+            log_info("Epoch processed", self.debug)
             time.sleep(window_difference)
 
             if thread and thread.is_alive():
                 delay_start = time.time()
                 log_warning(
                     "Previous thread didn't finish before next poll is due, with window time of " +
-                    "{0} seconds, at {1}".format(str(window_difference), get_time_now_string()), self.debug)
+                    "{0} seconds".format(str(window_difference)), self.debug)
                 log_warning("Going to wait until thread finishes before proceeding", self.debug)
                 thread.join()
                 delay_end = time.time()

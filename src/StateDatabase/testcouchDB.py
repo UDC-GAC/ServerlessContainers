@@ -25,9 +25,9 @@ from unittest import TestCase
 
 from src.StateDatabase.couchdb import CouchDBServer
 from src.Guardian.Guardian import Guardian
-from test.documents.limits import base_limits
-from test.documents.rules import cpu_exceeded_upper, CpuRescaleUp
-from test.documents.structures import base_container
+from src.test.documents.limits import base_limits
+from src.test.documents.rules import cpu_exceeded_upper, CpuRescaleUp
+from src.test.documents.structures import base_container
 
 
 class DocumentTest(TestCase):

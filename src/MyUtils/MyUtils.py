@@ -29,7 +29,7 @@ import logging
 import sys
 import requests
 import traceback
-
+from termcolor import colored
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -84,26 +84,26 @@ def get_config_value(config, default_config, key):
 def log_info(message, debug):
     logging.info(message)
     if debug:
-        print("INFO: " + message)
+        print("[{0}] INFO: {1}".format(get_time_now_string(), message))
 
 
 # DON'T NEED TO TEST
 def log_warning(message, debug):
     logging.warning(message)
     if debug:
-        print("WARN: " + message)
+        print("[{0}] WARN: {1}".format(get_time_now_string(), message))
 
 
 # DON'T NEED TO TEST
 def log_error(message, debug):
     logging.error(message)
     if debug:
-        eprint("ERROR: " + message)
+        print(colored("[{0}] ERROR: {1}".format(get_time_now_string(), message), "red"))
 
 
 # DON'T NEED TO TEST
 def get_time_now_string():
-    return str(time.strftime("%D %H:%M:%S", time.localtime()))
+    return str(time.strftime("%H:%M:%S", time.localtime()))
 
 
 def get_host_containers(container_host_ip, container_host_port, rescaler_http_session, debug):
@@ -201,7 +201,7 @@ def get_cpu_list(cpu_num_string):
 def copy_structure_base(structure):
     keys_to_copy = ["_id", "type", "subtype", "name"]
     # TODO FIX, some structures types have specific fields, fix accordingly
-    if structure["subtype"] is "container":
+    if structure["subtype"] == "container":
         keys_to_copy.append("host")
     new_struct = dict()
     for key in keys_to_copy:

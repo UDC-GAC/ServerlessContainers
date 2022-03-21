@@ -25,10 +25,10 @@ import random
 import unittest
 import time
 
-from test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower, \
+from src.test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower, \
     CpuRescaleUp, energy_exceeded_upper, CpuRescaleDown, MemRescaleUp, MemRescaleDown, EnergyRescaleUp, \
     EnergyRescaleDown, energy_dropped_lower
-from test.documents.services import guardian_service as guardian
+from src.test.documents.services import guardian_service as guardian
 from src.Guardian.Guardian import NOT_AVAILABLE_STRING
 from src.MyUtils import MyUtils
 from src.MyUtils.MyUtils import generate_event_name
