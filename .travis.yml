@@ -17,8 +17,8 @@ before_install:
 
     - curl https://couchdb.apache.org/repo/keys.asc | gpg --dearmor > couchdb-repo-keyring.gnp && sudo mv couchdb-repo-keyring.gnp /usr/share/keyrings/
     - echo "deb [signed-by=/usr/share/keyrings/couchdb-repo-keyring.gnp] https://apache.jfrog.io/artifactory/couchdb-deb focal main" > couchdb.list && sudo mv couchdb.list /etc/apt/sources.list.d/
-    - apt update
-    - apt install couchdb
+    - sudo apt update
+    - sudo apt install couchdb
 
 before_script:
    - source set_pythonpath.sh
