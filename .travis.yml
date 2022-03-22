@@ -15,18 +15,10 @@ before_install:
     - sudo apt-get update
     - sudo apt install python3-nose python3-coverage
 
-    - sudo apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libcurl4-openssl-dev
-    - sudo apt -y install libmozjs-68-0 libmozjs-68-dev libmozjs-52-0 libmozjs-52-dev
-    - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
-    - wget https://dlcdn.apache.org/couchdb/source/3.2.0/apache-couchdb-3.2.0.tar.gz
-    - tar -xvzf apache-couchdb-3.2.0.tar.gz
-    - cd apache-couchdb-3.2.0/
-    - sudo ./configure
-    - sudo make release
-    - find rel/couchdb -type d -exec chmod 0770 {} \;
-    - sudo chmod 0644 rel/couchdb/etc/*
-    - sudo rel/couchdb/bin/couchdb 2>/dev/null &
-    - cd ..
+    - curl https://couchdb.apache.org/repo/keys.asc | gpg --dearmor > couchdb-repo-keyring.gnp && sudo mv couchdb-repo-keyring.gnp /usr/share/keyrings/
+    - echo "deb [signed-by=/usr/share/keyrings/couchdb-repo-keyring.gnp] https://apache.jfrog.io/artifactory/couchdb-deb focal main" > couchdb.list && sudo mv couchdb.list /etc/apt/sources.list.d/
+    - apt update
+    - apt install couchdb
 
 before_script:
    - source set_pythonpath.sh
