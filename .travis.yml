@@ -14,15 +14,7 @@ before_install:
   - echo "deb [signed-by=/usr/share/keyrings/couchdb-repo-keyring.gnp] https://apache.jfrog.io/artifactory/couchdb-deb focal main" > couchdb.list
   - sudo mv couchdb.list /etc/apt/sources.list.d/
   - sudo apt update
-  - chown -R root:ubuntu /var/cache/debconf/
-  - sudo echo "couchdb couchdb/mode select standalone" | debconf-set-selections
-  - sudo echo "couchdb couchdb/mode seen true" | debconf-set-selections
-  - sudo echo "couchdb couchdb/bindaddress string 0.0.0.0" | debconf-set-selections
-  - sudo echo "couchdb couchdb/bindaddress seen true" | debconf-set-selections
-  - sudo echo "couchdb couchdb/adminpass password admin" | debconf-set-selections
-  - sudo echo "couchdb couchdb/adminpass seen true" | debconf-set-selections
-  - sudo echo "couchdb couchdb/adminpass_again password admin" | debconf-set-selections
-  - sudo echo "couchdb couchdb/adminpass_again seen true" | debconf-set-selections
+  - sudo echo "couchdb couchdb/mode select none" | debconf-set-selections
   - DEBIAN_FRONTEND=noninteractive apt-get install -y --force-yes couchdb
 
 install:
