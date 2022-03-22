@@ -22,7 +22,7 @@ before_install:
   - echo "couchdb couchdb/adminpass seen true" | sudo debconf-set-selections
   - echo "couchdb couchdb/adminpass_again password admin" | sudo debconf-set-selections
   - echo "couchdb couchdb/adminpass_again seen true" | sudo debconf-set-selections
-  - DEBIAN_FRONTEND=noninteractive apt-get install -y --force-yes couchdb
+  - DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --force-yes couchdb
 
 install:
   - pip install -r requirements.txt
