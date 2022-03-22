@@ -32,7 +32,7 @@ before_install:
 
 script:
    - source set_pythonpath.sh && nosetests3 --with-coverage src/Guardian/*
-   - python3.6 -m unittest Guardian/testGuardian.py
+   - python3.8 -m unittest Guardian/testGuardian.py
 
 
 after_success:
