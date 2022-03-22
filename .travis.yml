@@ -3,29 +3,36 @@ dist: focal
 language: python
 python:
   - "3.8"
-install:
-  - pip install -r requirements.txt
-
 sudo: true
 
 before_install:
-    - pip install pytest pytest-cov
-    - pip install coveralls
+  - sudo apt-get update
+  - sudo apt install python3-nose python3-coverage
 
-    - sudo apt-get update
-    - sudo apt install python3-nose python3-coverage
+  - curl https://couchdb.apache.org/repo/keys.asc | gpg --dearmor > couchdb-repo-keyring.gnp
+  - sudo mv couchdb-repo-keyring.gnp /usr/share/keyrings/
+  - echo "deb [signed-by=/usr/share/keyrings/couchdb-repo-keyring.gnp] https://apache.jfrog.io/artifactory/couchdb-deb focal main" > couchdb.list
+  - sudo mv couchdb.list /etc/apt/sources.list.d/
+  - sudo apt update
+  - echo "couchdb couchdb/mode select standalone
+    couchdb couchdb/mode seen true
+    couchdb couchdb/bindaddress string 0.0.0.0
+    couchdb couchdb/bindaddress seen true
+    couchdb couchdb/adminpass password admin
+    couchdb couchdb/adminpass seen true
+    couchdb couchdb/adminpass_again password admin
+    couchdb couchdb/adminpass_again seen true" | debconf-set-selections
+  - DEBIAN_FRONTEND=noninteractive apt-get install -y --force-yes couchdb
 
-    - curl https://couchdb.apache.org/repo/keys.asc | gpg --dearmor > couchdb-repo-keyring.gnp && sudo mv couchdb-repo-keyring.gnp /usr/share/keyrings/
-    - echo "deb [signed-by=/usr/share/keyrings/couchdb-repo-keyring.gnp] https://apache.jfrog.io/artifactory/couchdb-deb focal main" > couchdb.list && sudo mv couchdb.list /etc/apt/sources.list.d/
-    - sudo apt update
-    - sudo apt install couchdb
+install:
+  - pip install -r requirements.txt
 
 before_script:
-   - source set_pythonpath.sh
+  - source set_pythonpath.sh
 
 script:
-   - nosetests3 --with-coverage src/Guardian/*
-   - python3.8 -m unittest Guardian/testGuardian.py
+  - nosetests3 --with-coverage src/Guardian/*
+  - python3.8 -m unittest Guardian/testGuardian.py
 
 after_success:
-    - coveralls
+  - coveralls
