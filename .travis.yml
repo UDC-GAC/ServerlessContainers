@@ -1,5 +1,5 @@
 os: linux
-dist: xenial
+dist: focal
 language: python
 python:
   - "3.8"
@@ -13,7 +13,8 @@ before_install:
     - pip install coveralls
 
     - sudo apt-get update
-    - sudo apt install python3-nose
+    - sudo apt install python3-nose python3-coverage
+
     - sudo apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libmozjs185-dev libcurl4-openssl-dev
     - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
     - wget https://archive.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
