@@ -62,15 +62,20 @@ class MyConfig:
     def __init__(self, DEFAULTS_CONFIG):
         self.DEFAULTS_CONFIG = DEFAULTS_CONFIG
 
+    def get_config(self):
+        return self.config
+
     def set_config(self, config):
         self.config = config
 
-    def get_config_value(self, key):
+    def get_value(self, key):
         try:
             return self.config[key]
         except KeyError:
             return self.DEFAULTS_CONFIG[key]
 
+    def set_value(self, key, value):
+        self.config[key] = value
 
 # DON'T NEED TO TEST
 def get_config_value(config, default_config, key):
@@ -91,7 +96,7 @@ def log_info(message, debug):
 def log_warning(message, debug):
     logging.warning(message)
     if debug:
-        print("[{0}] WARN: {1}".format(get_time_now_string(), message))
+        print(colored("[{0}] WARN: {1}".format(get_time_now_string(), message), "yellow"))
 
 
 # DON'T NEED TO TEST

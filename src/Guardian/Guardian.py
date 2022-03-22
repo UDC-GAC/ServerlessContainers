@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
 # Copyright (c) 2019 Universidade da Coruña
 # Authors:
 #     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
@@ -116,7 +119,7 @@ class Guardian:
             RuntimeError if value1 > value2 and value1 is current and value2 is max, that is the current is higher than the max
         """
         if value1 > value2 and label1 == "current" and label2 == "max":
-            raise RuntimeError(
+            raise ValueError(
                 "somehow this structure has a resource limit applied higher than maximum for {0}".format(resource))
         if value1 > value2:
             raise ValueError("in resources: {0} value for '{1}': {2} is greater than value for '{3}': {4}".format(
@@ -385,10 +388,13 @@ class Guardian:
 
     @staticmethod
     def rule_triggers_event(rule, data, resources):
-        return rule["active"] and \
-               resources[rule["resource"]]["guard"] and \
-               rule["generates"] == "events" and \
-               jsonLogic(rule["rule"], data)
+        if rule["resource"] not in resources:
+            return False
+        else:
+            return rule["active"] and \
+                   resources[rule["resource"]]["guard"] and \
+                   rule["generates"] == "events" and \
+                   jsonLogic(rule["rule"], data)
 
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
 
@@ -563,7 +569,7 @@ class Guardian:
             self.debug)
 
     def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
-        event_timeout = myConfig.get_config_value("EVENT_TIMEOUT")
+        event_timeout = myConfig.get_value("EVENT_TIMEOUT")
 
         # Match usages and rules to generate events
         triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits,
@@ -609,8 +615,8 @@ class Guardian:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
     def serverless(self, myConfig, structure, rules):
-        window_difference = myConfig.get_config_value("WINDOW_TIMELAPSE")
-        window_delay = myConfig.get_config_value("WINDOW_DELAY")
+        window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
+        window_delay = myConfig.get_value("WINDOW_DELAY")
 
         structure_subtype = structure["subtype"]
 
@@ -697,13 +703,13 @@ class Guardian:
 
             # CONFIG
             myConfig.set_config(service["config"])
-            self.debug = myConfig.get_config_value("DEBUG")
-            self.guardable_resources = myConfig.get_config_value("GUARDABLE_RESOURCES")
-            self.cpu_shares_per_watt = myConfig.get_config_value("CPU_SHARES_PER_WATT")
-            window_difference = myConfig.get_config_value("WINDOW_TIMELAPSE")
-            window_delay = myConfig.get_config_value("WINDOW_DELAY")
-            structure_guarded = myConfig.get_config_value("STRUCTURE_GUARDED")
-            guardian_is_active = myConfig.get_config_value("ACTIVE")
+            self.debug = myConfig.get_value("DEBUG")
+            self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
+            self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
+            window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
+            window_delay = myConfig.get_value("WINDOW_DELAY")
+            structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
+            guardian_is_active = myConfig.get_value("ACTIVE")
             log_info("Guarding:{0} resources for '{1}' with time window lapse and delay: {2},{3}".format(
                 self.guardable_resources, structure_guarded, window_difference, window_delay), self.debug)
 

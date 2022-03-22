@@ -178,8 +178,8 @@ def persist():
 
         # CONFIG
         myConfig.set_config(service["config"])
-        polling_frequency = myConfig.get_config_value("POLLING_FREQUENCY")
-        debug = myConfig.get_config_value("DEBUG")
+        polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
+        debug = myConfig.get_value("DEBUG")
 
         for docType in ["limits", "structures", "users", "configs"]:
             persist_docs(docType)

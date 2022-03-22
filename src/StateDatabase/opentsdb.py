@@ -77,6 +77,10 @@ class OpenTSDBServer:
                                   headers={'content-type': 'application/json', 'Accept': 'application/json'})
             if r.status_code == 200:
                 return json.loads(r.text)
+            elif r.status_code == 400:
+                error_message = json.loads(r.content)["error"]["message"]
+                if "No such name for 'tagv'" in error_message:
+                    return {}
             else:
                 r.raise_for_status()
         except requests.ConnectionError as e:
@@ -85,6 +89,7 @@ class OpenTSDBServer:
                 raise e
             else:
                 self.get_points(query, tries)
+
 
     def get_structure_timeseries(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics,
                                  downsample=5):

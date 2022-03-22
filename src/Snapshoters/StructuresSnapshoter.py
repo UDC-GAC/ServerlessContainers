@@ -259,10 +259,10 @@ def persist():
 
         # CONFIG
         myConfig.set_config(service["config"])
-        polling_frequency = myConfig.get_config_value("POLLING_FREQUENCY")
-        debug = myConfig.get_config_value("DEBUG")
-        resources_persisted = myConfig.get_config_value("RESOURCES_PERSISTED")
-        service_active = myConfig.get_config_value("ACTIVE")
+        polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
+        debug = myConfig.get_value("DEBUG")
+        resources_persisted = myConfig.get_value("RESOURCES_PERSISTED")
+        service_active = myConfig.get_value("ACTIVE")
         log_info("Going to snapshot resources: {0}".format(resources_persisted), debug)
 
         thread = None

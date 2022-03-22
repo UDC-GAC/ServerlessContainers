@@ -2,7 +2,7 @@ os: linux
 dist: xenial
 language: python
 python:
-  - "3.6.6"
+  - "3.8"
 install:
   - pip install -r requirements.txt
 
@@ -31,11 +31,9 @@ before_install:
 
 
 script:
-#  - export PYTHONPATH=. && nosetests --with-coverage
-   - export PYTHONPATH=. && nosetests --exclude=Guardian --with-coverage
-#  - python3.6 -m unittest Guardian/testGuardian.py
-#  - python3.6 -m unittest MyUtils/testMyUtils.py
-#  - python3.6 -m unittest StateDatabase/testcouchDB.py
+   - source set_pythonpath.sh && nosetests3 --with-coverage src/Guardian/*
+   - python3.6 -m unittest Guardian/testGuardian.py
+
 
 after_success:
     - coveralls
