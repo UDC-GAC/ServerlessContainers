@@ -6,10 +6,6 @@ python:
 install:
   - pip install -r requirements.txt
 
-#services:
-
-#before_script:
-
 sudo: true
 
 before_install:
@@ -17,6 +13,7 @@ before_install:
     - pip install coveralls
 
     - sudo apt-get update
+    - sudo apt install python3-nose
     - sudo apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libmozjs185-dev libcurl4-openssl-dev
     - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
     - wget https://archive.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
@@ -29,11 +26,12 @@ before_install:
     - sudo rel/couchdb/bin/couchdb 2>/dev/null &
     - cd ..
 
+before_script:
+   - source set_pythonpath.sh
 
 script:
-   - source set_pythonpath.sh && nosetests3 --with-coverage src/Guardian/*
+   - nosetests3 --with-coverage src/Guardian/*
    - python3.8 -m unittest Guardian/testGuardian.py
-
 
 after_success:
     - coveralls
