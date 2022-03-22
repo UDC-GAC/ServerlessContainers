@@ -14,6 +14,7 @@ before_install:
   - echo "deb [signed-by=/usr/share/keyrings/couchdb-repo-keyring.gnp] https://apache.jfrog.io/artifactory/couchdb-deb focal main" > couchdb.list
   - sudo mv couchdb.list /etc/apt/sources.list.d/
   - sudo apt update
+  - chown -R root:ubuntu /var/cache/debconf/
   - sudo echo "couchdb couchdb/mode select standalone" | debconf-set-selections
   - sudo echo "couchdb couchdb/mode seen true" | debconf-set-selections
   - sudo echo "couchdb couchdb/bindaddress string 0.0.0.0" | debconf-set-selections
