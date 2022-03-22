@@ -41,15 +41,15 @@ class DocumentTest(TestCase):
         self.__database = database_test_name
 
     def tearDown(self):
-        self.handler.remove_database(self.__database)
-        self.handler.close_connection()
+        self.couchdb.remove_database(self.__database)
+        self.couchdb.close_connection()
 
     def setUp(self):
-        self.handler = CouchDBServer(self.__server_address, self.__server_port)
-        self.handler.set_database_name(self.__database_type, self.__database)
-        if self.handler.database_exists(self.__database):
-            self.handler.remove_database(self.__database)
-        self.handler.create_database(self.__database)
+        self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+        self.couchdb.set_database_name(self.__database_type, self.__database)
+        if self.couchdb.database_exists(self.__database):
+            self.couchdb.remove_database(self.__database)
+        self.couchdb.create_database(self.__database)
         self.guardian = Guardian()
 
 
@@ -78,12 +78,12 @@ class StructureTest(DocumentTest):
     def testStructures(self):
         structure = dict(base_container)
         with self.assertRaises(ValueError):
-            self.handler.get_structure(structure["name"])
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_structures()))
+            self.couchdb.get_structure(structure["name"])
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_structures()))
 
-        self.handler.add_structure(structure)
-        retrieved_structure = self.handler.get_structure(structure["name"])
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+        self.couchdb.add_structure(structure)
+        retrieved_structure = self.couchdb.get_structure(structure["name"])
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
         TestCase.assertTrue(self, self.compare_structures(structure, retrieved_structure))
 
         modified_structure = retrieved_structure
@@ -91,9 +91,9 @@ class StructureTest(DocumentTest):
         modified_structure["guard_policy"] = False
         modified_structure["resources"]["cpu"]["min"] += 100
 
-        TestCase.assertTrue(self, self.handler.update_structure(modified_structure))
-        retrieved_structure = self.handler.get_structure(structure["name"])
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+        TestCase.assertTrue(self, self.couchdb.update_structure(modified_structure))
+        retrieved_structure = self.couchdb.get_structure(structure["name"])
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
         TestCase.assertTrue(self, self.compare_structures(modified_structure, retrieved_structure))
 
 
@@ -121,21 +121,21 @@ class LimitsTest(DocumentTest):
         structure = dict(base_container)
 
         with self.assertRaises(ValueError):
-            self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_all_limits()))
+            self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_all_limits()))
 
-        self.handler.add_limit(limits)
+        self.couchdb.add_limit(limits)
 
-        retrieved_limits = self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+        retrieved_limits = self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
         TestCase.assertTrue(self, self.compare_limits(limits, retrieved_limits))
 
         modified_limits = retrieved_limits
         modified_limits["resources"]["cpu"]["upper"] += 100
 
-        TestCase.assertTrue(self, self.handler.update_limit(modified_limits))
-        retrieved_limits = self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+        TestCase.assertTrue(self, self.couchdb.update_limit(modified_limits))
+        retrieved_limits = self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
         TestCase.assertTrue(self, self.compare_limits(modified_limits, retrieved_limits))
 
 
@@ -144,22 +144,22 @@ class EventsAndRequestsTest(DocumentTest):
     __server_port = "5984"
 
     def tearDown(self):
-        self.handler.remove_database("events-test")
-        self.handler.remove_database("requests-test")
-        self.handler.close_connection()
+        self.couchdb.remove_database("events-test")
+        self.couchdb.remove_database("requests-test")
+        self.couchdb.close_connection()
 
     def setUp(self):
-        self.handler = CouchDBServer(self.__server_address, self.__server_port)
-        self.handler.set_database_name("events", "events-test")
-        self.handler.set_database_name("requests", "requests-test")
+        self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+        self.couchdb.set_database_name("events", "events-test")
+        self.couchdb.set_database_name("requests", "requests-test")
 
-        if self.handler.database_exists("events-test"):
-            self.handler.remove_database("events-test")
-        self.handler.create_database("events-test")
+        if self.couchdb.database_exists("events-test"):
+            self.couchdb.remove_database("events-test")
+        self.couchdb.create_database("events-test")
 
-        if self.handler.database_exists("requests-test"):
-            self.handler.remove_database("requests-test")
-        self.handler.create_database("requests-test")
+        if self.couchdb.database_exists("requests-test"):
+            self.couchdb.remove_database("requests-test")
+        self.couchdb.create_database("requests-test")
 
         self.guardian = Guardian()
 
@@ -207,6 +207,8 @@ class EventsAndRequestsTest(DocumentTest):
 
         resource, rescale_rule, amount = "cpu", CpuRescaleUp, 100
 
+        self.guardian.guardable_resources = ["cpu"]
+
         usages["structure." + resource + ".usage"] = limits["resources"][resource]["lower"] + amount
         events = list()
 
@@ -222,15 +224,42 @@ class EventsAndRequestsTest(DocumentTest):
                                                                                     limits["resources"],
                                                                                     usages)
 
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
-        self.handler.add_events(events)
-        TestCase.assertEqual(self, first=num_needed_events, second=len(self.handler.get_events(structure)))
-        self.handler.delete_events(self.handler.get_events(structure))
-        self.handler.compact_database("events-test")
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
+        self.couchdb.add_events(events)
+        TestCase.assertEqual(self, first=num_needed_events, second=len(self.couchdb.get_events(structure)))
+        self.couchdb.delete_events(self.couchdb.get_events(structure))
+        self.couchdb.compact_database("events-test")
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
 
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))
-        self.handler.add_requests(generated_requests)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_requests(structure)))
-        self.handler.delete_request(self.handler.get_requests(structure)[0])
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
+        self.couchdb.add_requests(generated_requests)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_requests(structure)))
+        self.couchdb.delete_request(self.couchdb.get_requests(structure)[0])
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
+
+class BenchmarkTest(DocumentTest):
+    __database = "structures-test"
+    __database_type = "structures"
+
+    def setUp(self):
+        super().set_database(self.__database_type, self.__database)
+        super().setUp()
+
+
+    def testBenchmarkWithStructures(self):
+        N_DOCS = 100
+
+        structure = dict(base_container)
+        for i in range(N_DOCS):
+            c_name = "struct{0}".format(i)
+            structure["name"] = c_name
+            self.couchdb.add_structure(structure)
+            cont_limits = base_limits.copy()
+            cont_limits["name"] = c_name
+            self.couchdb.add_limit(cont_limits)
+
+        for i in range(N_DOCS):
+            c_name = "struct{0}".format(i)
+            retrieved_structure = self.couchdb.get_structure(c_name)
+            self.couchdb.get_limits(retrieved_structure)
+            self.couchdb.delete_structure(retrieved_structure)

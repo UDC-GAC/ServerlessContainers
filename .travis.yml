@@ -15,11 +15,12 @@ before_install:
     - sudo apt-get update
     - sudo apt install python3-nose python3-coverage
 
-    - sudo apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libmozjs185-dev libcurl4-openssl-dev
+    - sudo apt-get --no-install-recommends -y install build-essential pkg-config erlang libicu-dev libcurl4-openssl-dev
+    - sudo apt -y install libmozjs-68-0 libmozjs-68-dev libmozjs-52-0 libmozjs-52-dev
     - erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
-    - wget https://archive.apache.org/dist/couchdb/source/2.0.0/apache-couchdb-2.0.0.tar.gz
-    - tar -xvzf apache-couchdb-2.0.0.tar.gz
-    - cd apache-couchdb-2.0.0/
+    - wget https://dlcdn.apache.org/couchdb/source/3.2.0/apache-couchdb-3.2.0.tar.gz
+    - tar -xvzf apache-couchdb-3.2.0.tar.gz
+    - cd apache-couchdb-3.2.0/
     - sudo ./configure
     - sudo make release
     - find rel/couchdb -type d -exec chmod 0770 {} \;
