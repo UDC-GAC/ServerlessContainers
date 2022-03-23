@@ -31,8 +31,8 @@ import traceback
 import logging
 
 import src.StateDatabase.couchdb as couchDB
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_time_now_string, update_structure, get_host_containers, get_structures, copy_structure_base
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, \
+    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
@@ -43,8 +43,7 @@ translate_map = {
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu"],
-                         "ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu"], "ACTIVE": True}
 MAX_FAIL_NUM = 5
 debug = True
 resources_persisted = ["cpu"]
@@ -74,12 +73,10 @@ def update_container_current_values(container_name, resources):
             new_structure["resources"][resource] = dict()
 
         if resource not in resources or not resources[resource]:
-            log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name),
-                      debug)
+            log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name), debug)
             new_structure["resources"][resource]["current"] = 0
         else:
-            new_structure["resources"][resource]["current"] = resources[resource][
-                translate_map[resource]["limit_label"]]
+            new_structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
 
     # Remote database operation
     update_structure(new_structure, db_handler, debug, max_tries=3)
@@ -172,10 +169,9 @@ def persist_applications(container_resources_dict):
         update_structure(app, db_handler, debug)
 
 
-def fill_container_dict(diff_hosts, containers):
+def fill_container_dict(hosts_info, containers):
     def host_info_request(h, d):
-        host_containers = get_host_containers(
-            h["host_rescaler_ip"], h["host_rescaler_port"], rescaler_http_session, debug)
+        host_containers = get_host_containers(h["host_rescaler_ip"], h["host_rescaler_port"], rescaler_http_session, debug)
         for container_name in host_containers:
             if container_name in container_list_names:
                 d[container_name] = host_containers[container_name]
@@ -183,8 +179,8 @@ def fill_container_dict(diff_hosts, containers):
     container_list_names = [c["name"] for c in containers]
     container_info = dict()
     threads = list()
-    for hostname in diff_hosts:
-        host = diff_hosts[hostname]
+    for hostname in hosts_info:
+        host = hosts_info[hostname]
         t = Thread(target=host_info_request, args=(host, container_info,))
         t.start()
         threads.append(t)
@@ -202,55 +198,53 @@ def get_container_resources_dict():
         return
 
     # Get all the different hosts of the containers
-    diff_hosts = dict()
+    hosts_info = dict()
     for container in containers:
-        container_host = container["host"]
-        if container_host not in diff_hosts:
-            diff_hosts[container_host] = dict()
-            diff_hosts[container_host]["host_rescaler_ip"] = container["host_rescaler_ip"]
-            diff_hosts[container_host]["host_rescaler_port"] = container["host_rescaler_port"]
+        cont_host = container["host"]
+        if cont_host not in hosts_info:
+            hosts_info[cont_host] = dict()
+            hosts_info[cont_host]["host_rescaler_ip"] = container["host_rescaler_ip"]
+            hosts_info[cont_host]["host_rescaler_port"] = container["host_rescaler_port"]
 
     # For each host, retrieve its containers and persist the ones we look for
-    # time0 = time.time()
-    container_resources_dict = fill_container_dict(diff_hosts, containers)
-    # time1 = time.time()
+    container_info = fill_container_dict(hosts_info, containers)
 
-    container_resources_dictV2 = dict()
+    container_resources_dict = dict()
     for container in containers:
         container_name = container["name"]
-        container_resources_dictV2[container_name] = container
-        container_resources_dictV2[container_name]["resources"] = container_resources_dict[container_name]
+        container_resources_dict[container_name] = container
+        container_resources_dict[container_name]["resources"] = container_info[container_name]
 
-    # p0 = time1 - time0
-    # MyUtils.log_info("It took {0} seconds to get containers from hosts (LXD)".format(str("%.2f" % p0)), debug)
-
-    return container_resources_dictV2
+    return container_resources_dict
 
 
 def persist_thread():
     t0 = time.time()
     container_resources_dict = get_container_resources_dict()
-    # t1 = time.time()
+    t1 = time.time()
     persist_applications(container_resources_dict)
-    # t2 = time.time()
+    t2 = time.time()
     persist_containers(container_resources_dict)
     t3 = time.time()
 
-    p0 = t3 - t0
-    # p1 = t2 - t1
-    # p2 = t3 - t2
-    # MyUtils.log_info("It took {0} seconds to get container info".format(str("%.2f" % p0)), debug)
-    # MyUtils.log_info("It took {0} seconds to snapshot application".format(str("%.2f" % p1)), debug)
-    log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % p0)), debug)
+    log_info("It took {0} seconds to get container info".format(str("%.2f" % (t1 - t0))), debug)
+    log_info("It took {0} seconds to snapshot applications".format(str("%.2f" % (t2 - t1))), debug)
+    log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % (t3 - t2))), debug)
 
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
-    global resources_persisted, debug
+    global resources_persisted
+    global debug
+
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
 
     while True:
+        log_info("----------------------", debug)
+        log_info("Starting Epoch", debug)
+        t0 = time.time()
+
         # Get service info
         service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
@@ -262,28 +256,31 @@ def persist():
         polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
         debug = myConfig.get_value("DEBUG")
         resources_persisted = myConfig.get_value("RESOURCES_PERSISTED")
-        service_active = myConfig.get_value("ACTIVE")
+        SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
         log_info("Going to snapshot resources: {0}".format(resources_persisted), debug)
 
+        log_info("Config is as follows:", debug)
+        log_info(".............................................", debug)
+        log_info("Polling frequency -> {0}".format(polling_frequency), debug)
+        log_info("Resources to be snapshoter are -> {0}".format(resources_persisted), debug)
+        log_info(".............................................", debug)
+
         thread = None
-        if service_active:
+        if SERVICE_IS_ACTIVATED:
             thread = Thread(target=persist_thread, args=())
             thread.start()
-            log_info("Structures snapshoted at {0}".format(get_time_now_string()), debug)
         else:
-            log_info("Structure snapshoter is not activated", debug)
+            log_info("Structure snapshoter is not activated, will not do anything", debug)
 
         time.sleep(polling_frequency)
 
-        if thread and thread.is_alive():
-            delay_start = time.time()
-            log_warning(
-                "Previous thread didn't finish before next poll is due, with polling time of {0} seconds, at {1}".format(
-                    str(polling_frequency), get_time_now_string()), debug)
-            log_warning("Going to wait until thread finishes before proceeding", debug)
-            thread.join()
-            delay_end = time.time()
-            log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
+        wait_operation_thread(thread, debug)
+
+        t1 = time.time()
+        time_proc = "%.2f" % (t1 - t0 - polling_frequency)
+        time_total = "%.2f" % (t1 - t0)
+        log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(polling_frequency)), debug)
+        log_info("----------------------\n", debug)
 
 
 def main():

@@ -32,9 +32,12 @@ import traceback
 import logging
 
 import src.StateDatabase.couchdb as couchDB
-import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.opentsdb as bdwatchdog
 from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
+
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+    get_time_now_string, get_structures, update_structure, generate_request_name
+
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True,
                          "ACTIVE": True}
@@ -68,11 +71,12 @@ def fix_container_cpu_mapping(container, cpu_used_cores, cpu_used_shares, max_cp
         set_container_resources(structure_name, rescaler_ip, rescaler_port, resource_dict, rescaler_http_session)
         return True
     except (Exception, RuntimeError, ValueError, requests.HTTPError) as e:
-        MyUtils.log_error("Error when setting container resources: {0}".format(str(e)), debug)
+        log_error("Error when setting container resources: {0}".format(str(e)), debug)
         return False
 
 
-def check_host_mapping(host_info_cache):
+def check_host_cpu_limits(host_info_cache):
+    errors_detected = False
     for host in host_info_cache.values():
         all_accounted_shares = 0
         map = host["resources"]["cpu"]["core_usage_mapping"]
@@ -81,7 +85,10 @@ def check_host_mapping(host_info_cache):
                 if container != "free":
                     all_accounted_shares += core[container]
         if all_accounted_shares > host["resources"]["cpu"]["max"]:
-            MyUtils.log_error("Host {0} has more mapped shares than its maximum".format(host["name"]), debug)
+            log_error("Host {0} has more mapped shares than its maximum".format(host["name"]), debug)
+            errors_detected = True
+    return errors_detected
+
 
 def check_containers_cpu_limits(containers):
     errors_detected = False
@@ -91,8 +98,7 @@ def check_containers_cpu_limits(containers):
         real_resources = container_info_cache[container["name"]]["resources"]
         current_cpu_limit = get_current_resource_value(container, real_resources, "cpu")
         if current_cpu_limit > max_cpu_limit:
-
-            MyUtils.log_error("container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max "
+            log_error("container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max "
                               "parameter in its configuration".format(container["name"], current_cpu_limit, max_cpu_limit), debug)
             errors_detected = True
     return errors_detected
@@ -119,50 +125,41 @@ def check_container_cpu_mapping(container, host_info, cpu_used_cores, cpu_used_s
         return True, None, None
 
 
-def fill_host_info_cache(containers):
-    global host_info_cache
-    host_info_cache = dict()
-    for container in containers:
-        if container["host"] not in host_info_cache:
-            host_info_cache[container["host"]] = db_handler.get_structure(container["host"])
-    return
-
-
 def check_container_core_mapping(container, real_resources):
+    errors_detected = False
     database_resources = container["resources"]
     host_info = host_info_cache[container["host"]]
     max_cpu_limit = database_resources["cpu"]["max"]
     current_cpu_limit = get_current_resource_value(container, real_resources, "cpu")
-    cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
+    cpu_list = get_cpu_list(real_resources["cpu"]["cpu_num"])
     c_name = container["name"]
 
     map_host_valid, actual_used_cores, actual_used_shares = \
         check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
 
     if not map_host_valid:
-        MyUtils.log_error("Detected invalid core mapping for container {0}, trying to automatically fix".format(c_name), debug)
+        log_error("Detected invalid core mapping for container {0}, trying to automatically fix".format(c_name), debug)
         success = fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares, max_cpu_limit)
         if success:
-            MyUtils.log_error("Succeded fixing {0} container's core mapping".format(container["name"]), debug)
-            return True
+            log_error("Succeeded fixing {0} container's core mapping".format(container["name"]), debug)
+            errors_detected = True
         else:
-            MyUtils.log_error("Failed in fixing {0} container's core mapping".format(container["name"]), debug)
-            return False
+            log_error("Failed in fixing {0} container's core mapping".format(container["name"]), debug)
+            errors_detected = False
+    return errors_detected
 
 
 def check_core_mapping(containers):
     errors_detected = False
     for container in containers:
         c_name = container["name"]
-        MyUtils.log_info("Checking container {0}".format(c_name), debug)
+        log_info("Checking container {0}".format(c_name), debug)
         if c_name not in container_info_cache or "resources" not in container_info_cache[c_name]:
-            MyUtils.log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), debug)
+            log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), debug)
             continue
         real_resources = container_info_cache[c_name]["resources"]
-        error = not check_container_core_mapping(container, real_resources)
-        errors_detected = errors_detected or error
+        errors_detected = errors_detected or check_container_core_mapping(container, real_resources)
     return errors_detected
-
 
 
 def filter_requests(request_timeout):
@@ -218,8 +215,7 @@ def filter_requests(request_timeout):
         for action in structure_requests_dict[structure]:
             final_requests.append(structure_requests_dict[structure][action])
 
-    MyUtils.log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter),
-                     debug)
+    log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter), debug)
     return final_requests
 
 
@@ -258,7 +254,7 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
     core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
 
     current_cpu_limit = get_current_resource_value(database_resources, real_resources, resource)
-    cpu_list = MyUtils.get_cpu_list(real_resources["cpu"]["cpu_num"])
+    cpu_list = get_cpu_list(real_resources["cpu"]["cpu_num"])
 
     host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
     host_cpu_list = [str(i) for i in range(host_max_cores)]
@@ -457,7 +453,7 @@ def set_container_resources(container, node_rescaler_endpoint, node_rescaler_por
     if r.status_code == 201:
         return dict(r.json())
     else:
-        MyUtils.log_error(str(json.dumps(r.json())), debug)
+        log_error(str(json.dumps(r.json())), debug)
         r.raise_for_status()
 
 
@@ -472,13 +468,13 @@ def process_request(request, real_resources, database_resources):
         new_resources = apply_request(request, real_resources, database_resources)
 
         if new_resources:
-            MyUtils.log_info("Request: {0} for container : {1} for new resources : {2}".format(
+            log_info("Request: {0} for container : {1} for new resources : {2}".format(
                 request["action"], request["structure"], json.dumps(new_resources)), debug)
 
             # Apply changes through a REST call
             set_container_resources(structure_name, rescaler_ip, rescaler_port, new_resources, rescaler_http_session)
     except (Exception, RuntimeError, ValueError, requests.HTTPError) as e:
-        MyUtils.log_error("Error with container {0} {1}".format(request["structure"], str(e)), debug)
+        log_error("Error with container {0} {1}".format(request["structure"], str(e)), debug)
         return
 
 
@@ -492,7 +488,7 @@ def rescale_container(request, structure):
         # Get the resources the container is using from its host NodeScaler (the 'current' value)
         c_name = structure["name"]
         if c_name not in container_info_cache or "resources" not in container_info_cache[c_name]:
-            MyUtils.log_error(
+            log_error(
                 "Couldn't get container's {0} resources, can't rescale".format(c_name), debug)
             return
         real_resources = container_info_cache[c_name]["resources"]
@@ -500,7 +496,7 @@ def rescale_container(request, structure):
         # Process the request
         process_request(request, real_resources, database_resources)
     except Exception as e:
-        MyUtils.log_error(str(e) + " " + str(traceback.format_exc()), debug)
+        log_error(str(e) + " " + str(traceback.format_exc()), debug)
 
 
 def sort_containers_by_usage_margin(container1, container2, resource):
@@ -540,8 +536,7 @@ def generate_requests(new_requests, app_label):
     for req in new_requests:
         db_handler.add_request(req)
     rescaled_containers = [c["structure"] for c in new_requests]
-    MyUtils.log_info("App {0} rescaled by rescaling containers: {1} rescaling at {2}".format(
-        app_label, str(rescaled_containers), MyUtils.get_time_now_string()), debug)
+    log_info("App {0} rescaled by rescaling containers: {1} rescaling".format(app_label, str(rescaled_containers)), debug)
 
 
 def single_container_rescale(request, app_containers, resource_usage_cache):
@@ -563,10 +558,10 @@ def single_container_rescale(request, app_containers, resource_usage_cache):
             # to be rescaled without dropping under the minimum value
             if current_value < resource_shares:
                 # Container doesn't have enough resources to free
-                MyUtils.log_error("Container doesn't have enough resources to free", debug)
+                log_error("Container doesn't have enough resources to free", debug)
             elif current_value + amount < container["resources"][resource]["min"]:
                 # Container can't free that amount without dropping under the minimum
-                MyUtils.log_error(
+                log_error(
                     "Container {0} can't free that amount without dropping under the minimum".format(container["name"]),
                     debug)
             else:
@@ -580,10 +575,10 @@ def single_container_rescale(request, app_containers, resource_usage_cache):
 
             if host_info_cache[container_host]["resources"][resource]["free"] < resource_shares:
                 # Container's host doesn't have enough free resources
-                MyUtils.log_error("Container's host doesn't have enough free resources", debug)
+                log_error("Container's host doesn't have enough free resources", debug)
             elif current_value + amount > container["resources"][resource]["max"]:
                 # Container can't get that amount without exceeding the maximum
-                MyUtils.log_error("Container can't get that amount without exceeding the maximum", debug)
+                log_error("Container can't get that amount without exceeding the maximum", debug)
             else:
                 scalable_containers.append(container)
 
@@ -609,7 +604,7 @@ def single_container_rescale(request, app_containers, resource_usage_cache):
             host_rescaler_ip=best_fit_container["host_rescaler_ip"],
             host_rescaler_port=best_fit_container["host_rescaler_port"],
             structure=best_fit_container["name"],
-            action=MyUtils.generate_request_name(amount, resource),
+            action=generate_request_name(amount, resource),
             timestamp=int(time.time()),
             structure_type="container"
         )
@@ -638,7 +633,7 @@ def rescale_application(request, structure):
     total_amount = request["amount"]
 
     if total_amount == 0:
-        MyUtils.log_info("Empty request at".format(MyUtils.get_time_now_string()), debug)
+        log_info("Empty request", debug)
         return
 
     # TODO re-think the policy to set the number of splits
@@ -704,7 +699,7 @@ def rescale_application(request, structure):
     if len(requests) > 0:
         # Couldn't completely rescale the application as some split of a major rescaling operation could
         # not be completed
-        MyUtils.log_warning(
+        log_warning(
             "App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been rescaled".format(
                 request["structure"], str(iterations * split_amount), request["resource"]), debug)
 
@@ -717,7 +712,7 @@ def process_requests(reqs):
         try:
             structure = db_handler.get_structure(structure_name)
         except (requests.exceptions.HTTPError, ValueError):
-            MyUtils.log_error("Error, couldn't find structure {0} in database".format(structure_name), debug)
+            log_error("Error, couldn't find structure {0} in database".format(structure_name), debug)
             continue
 
         # Rescale the structure accordingly, whether it is a container or an application
@@ -739,10 +734,18 @@ def split_requests(all_requests):
     return scale_down, scale_up
 
 
+def fill_host_info_cache(containers):
+    global host_info_cache
+    host_info_cache = dict()
+    for container in containers:
+        if container["host"] not in host_info_cache:
+            host_info_cache[container["host"]] = db_handler.get_structure(container["host"])
+    return
+
 def persist_host_thread(host):
     global host_info_cache
     data = host_info_cache[host]
-    MyUtils.update_structure(data, db_handler, debug, max_tries=20)
+    update_structure(data, db_handler, debug, max_tries=20)
 
 
 def persist_new_host_information():
@@ -762,7 +765,7 @@ apply_request_by_resource = {"cpu": apply_cpu_request, "mem": apply_mem_request,
 
 
 def scale_structures(new_requests):
-    MyUtils.log_info("Processing requests at {0}".format(MyUtils.get_time_now_string()), debug)
+    log_info("Processing requests", debug)
 
     t0 = time.time()
 
@@ -777,7 +780,7 @@ def scale_structures(new_requests):
     persist_new_host_information()
 
     t1 = time.time()
-    MyUtils.log_info("It took {0} seconds to process requests".format(str("%.2f" % (t1 - t0))), debug)
+    log_info("It took {0} seconds to process requests".format(str("%.2f" % (t1 - t0))), debug)
 
 
 def scale():
@@ -786,69 +789,74 @@ def scale():
     global host_info_cache
     global container_info_cache
 
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+
     # Remove previous requests
-    MyUtils.log_info("Purging previous requests at {0}".format(MyUtils.get_time_now_string()), debug)
+    log_info("Purging any previous requests", debug)
     filter_requests(0)
+    log_info("----------------------\n", debug)
 
     while True:
+        log_info("----------------------", debug)
+        log_info("Starting Epoch", debug)
+        t0 = time.time()
 
         # Remote database operation
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        service = get_service(db_handler, SERVICE_NAME)
 
         # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)
+        beat(db_handler, SERVICE_NAME)
 
         # CONFIG
-        config = service["config"]
-        polling_frequency = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
-        request_timeout = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "REQUEST_TIMEOUT")
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "DEBUG")
-        CHECK_CORE_MAP = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "CHECK_CORE_MAP")
-        SERVICE_IS_ACTIVATED = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, "ACTIVE")
+        myConfig.set_config(service["config"])
+        polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
+        request_timeout = myConfig.get_value("REQUEST_TIMEOUT")
+        debug = myConfig.get_value("DEBUG")
+        CHECK_CORE_MAP = myConfig.get_value("CHECK_CORE_MAP")
+        SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
 
         if SERVICE_IS_ACTIVATED:
-            MyUtils.log_info("Starting Epoch", debug)
 
-            t0 = time.time()
             # Get the container structures and their resource information as such data is going to be needed
-            containers = MyUtils.get_structures(db_handler, debug, subtype="container")
+            containers = get_structures(db_handler, debug, subtype="container")
             try:
                 container_info_cache = get_container_resources_dict()  # Reset the cache
             except (Exception, RuntimeError) as e:
-                MyUtils.log_info("Error getting host document, skipping this time", debug)
-                MyUtils.log_error(str(e), debug)
+                log_error("Error getting host document, skipping epoch altogether", debug)
+                log_error(str(e), debug)
                 time.sleep(polling_frequency)
                 continue
 
             # Fill the host information cache
-            MyUtils.log_info("Getting host and container info at {0}".format(MyUtils.get_time_now_string()), debug)
+            log_info("Getting host and container info", debug)
             host_info_cache = dict()  # Reset the cache
             try:
                 fill_host_info_cache(containers)
             except (Exception, RuntimeError) as e:
-                MyUtils.log_info("Error getting host document, skipping this time", debug)
-                MyUtils.log_error(str(e), debug)
+                log_error("Error getting host document, skipping epoch altogether", debug)
+                log_error(str(e), debug)
                 time.sleep(polling_frequency)
                 continue
 
             # Do the core mapping check-up
             if CHECK_CORE_MAP:
-                MyUtils.log_info("Doing container CPU check", debug)
+                log_info("Doing container CPU limits check", debug)
+                log_info("First hosts", debug)
+                errors_detected = check_host_cpu_limits(host_info_cache)
+                if errors_detected:
+                    log_info("Errors detected during host CPU limits check", debug)
+
+                log_info("Second containers", debug)
                 errors_detected = check_containers_cpu_limits(containers)
                 if errors_detected:
-                    MyUtils.log_info("Errors detected during container CPU limits check", debug)
+                    log_info("Errors detected during container CPU limits check", debug)
 
-                MyUtils.log_info("Doing core mapping check", debug)
-                MyUtils.log_info("First hosts", debug)
-                check_host_mapping(host_info_cache)
-
-                MyUtils.log_info("Second containers", debug)
+                log_info("Doing core mapping check", debug)
                 errors_detected = check_core_mapping(containers)
                 if errors_detected:
-                    MyUtils.log_info("Errors detected during container CPU map check", debug)
-
+                    log_info("Errors detected during container CPU map check", debug)
             else:
-                MyUtils.log_info("Core map check has been disabled", debug)
+                log_info("Core map check has been disabled", debug)
 
             # Get the requests
             new_requests = filter_requests(request_timeout)
@@ -856,26 +864,25 @@ def scale():
 
             # Process first the application requests, as they generate container ones
             if app_reqs:
-                MyUtils.log_info("Processing applications requests", debug)
+                log_info("Processing applications requests", debug)
                 scale_structures(app_reqs)
             else:
-                MyUtils.log_info("No applications requests", debug)
+                log_info("No applications requests", debug)
 
             # Then process container ones
             if container_reqs:
-                MyUtils.log_info("Processing container requests", debug)
+                log_info("Processing container requests", debug)
                 scale_structures(container_reqs)
             else:
-                MyUtils.log_info("No container requests", debug)
+                log_info("No container requests", debug)
 
             t1 = time.time()
-            MyUtils.log_info("It took {0} seconds to process epoch".format(str("%.2f" % (t1 - t0))), debug)
-            MyUtils.log_info("Epoch processed", debug)
-            MyUtils.log_info("----------------------\n", debug)
+            log_info("Epoch processed in {0} seconds".format(str("%.2f" % (t1 - t0))), debug)
 
         else:
-            MyUtils.log_info("Scaler service is not activated", debug)
+            log_info("Scaler service is not activated", debug)
 
+        log_info("----------------------\n", debug)
         time.sleep(polling_frequency)
 
 
@@ -884,7 +891,7 @@ def main():
         # Act like an infinite loop and should never return aside from an exception
         scale()
     except Exception as e:
-        MyUtils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

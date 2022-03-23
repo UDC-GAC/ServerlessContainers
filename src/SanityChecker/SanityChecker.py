@@ -94,7 +94,7 @@ def check_sanity():
         compact_databases()
         check_unstable_configuration()
         # check_core_mapping()
-        MyUtils.log_info("Sanity checked at {0}".format(MyUtils.get_time_now_string()), debug)
+        MyUtils.log_info("Sanity checked", debug)
 
         time_waited = 0
         heartbeat_delay = 10  # seconds

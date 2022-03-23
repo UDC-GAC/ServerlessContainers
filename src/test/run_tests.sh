@@ -11,6 +11,9 @@ echo "Setting up local redirection of ports to remote host"
 tmux new -d -s "COUCHDB_forwarding" "ssh -L 5984:${REMOTE_HOST}:5984 root@${REMOTE_HOST}"
 tmux new -d -s "OPENSTDB_forwarding" "ssh -L 4242:${REMOTE_HOST}:4242 root@${REMOTE_HOST}"
 
+echo "Wait a little bit so the SSH tunnels with the forwarding are set up"
+sleep 2
+
 echo "Running tests"
 nosetests3 \
     ${SERVERLESS_PATH}/src/Guardian/* \

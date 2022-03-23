@@ -34,7 +34,7 @@ import logging
 from json_logic import jsonLogic
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_time_now_string, get_structures, generate_event_name, generate_request_name
+    get_time_now_string, get_structures, generate_event_name, generate_request_name, wait_operation_thread
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
@@ -65,6 +65,7 @@ NOT_AVAILABLE_STRING = "n/a"
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
 
+debug = True
 
 class Guardian:
     """
@@ -79,7 +80,7 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.debug = True
+        debug = True
 
     @staticmethod
     def check_unset_values(value, label, resource):
@@ -333,7 +334,8 @@ class Guardian:
     def adjust_container_state(self, resources, limits, resources_to_adjust):
         for resource in resources_to_adjust:
             n_loop, errors = 0, True
-            while errors and n_loop < 10:
+            while errors:
+                n_loop += 1
                 try:
                     self.check_invalid_container_state(resources, limits, resource)
                     errors = False
@@ -344,10 +346,13 @@ class Guardian:
                     limits[resource]["lower"] = limits[resource]["upper"] - boundary
                     # limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
                 except RuntimeError as e:
+                    log_error(str(e), debug)
                     raise e
-                n_loop += 1
                 if n_loop >= 10:
-                    raise RuntimeError("Error fixing limits")
+                    message = "Limits for {0} can't be adjusted, check the configuration (max:{1},current:{2}, boundary:{3}, min:{4})".format(
+                        resource, resources[resource]["max"], int(resources[resource]["current"]), limits[resource]["boundary"] , resources[resource]["min"])
+                    raise RuntimeError(message)
+                    # TODO This prevents from checking other resources
         return limits
 
     def check_invalid_container_state(self, resources, limits, resource):
@@ -408,7 +413,7 @@ class Guardian:
         useful_resources = list()
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
-                log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
+                log_warning("Resource {0} has no rules applied to it".format(resource), debug)
             else:
                 useful_resources.append(resource)
 
@@ -437,7 +442,7 @@ class Guardian:
 
             except KeyError as e:
                 log_warning("rule: {0} is missing a parameter {1} {2}".format(
-                    rule["name"], str(e), str(traceback.format_exc())), self.debug)
+                    rule["name"], str(e), str(traceback.format_exc())), debug)
 
         return events
 
@@ -479,7 +484,7 @@ class Guardian:
                     if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
                         log_warning(
                             "No current value for container' {0}' and resource '{1}', can't rescale".format(
-                                structure["name"], resource_label), self.debug)
+                                structure["name"], resource_label), debug)
                         continue
 
                     # If no policy is set for scaling, default to "amount"
@@ -487,7 +492,7 @@ class Guardian:
                         rule["rescale_by"] = "amount"
                         log_warning(
                             "No rescale_by policy is set in rule : '{0}', falling back to default amount".format(
-                                rule["name"]), self.debug)
+                                rule["name"]), debug)
 
                     # Get the amount to be applied from the policy set
                     if rule["rescale_by"] == "amount":
@@ -544,7 +549,7 @@ class Guardian:
             except KeyError as e:
                 log_warning(
                     "rule: {0} is missing a parameter {1} {2} ".format(rule["name"], str(e),
-                                                                       str(traceback.format_exc())), self.debug)
+                                                                       str(traceback.format_exc())), debug)
 
         return generated_requests, events_to_remove
 
@@ -566,7 +571,7 @@ class Guardian:
         triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
         log_info(
             " ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
-            self.debug)
+            debug)
 
     def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
         event_timeout = myConfig.get_value("EVENT_TIMEOUT")
@@ -611,7 +616,7 @@ class Guardian:
             triggered_requests = list()
 
         # DEBUG AND INFO OUTPUT
-        if self.debug:
+        if debug:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
     def serverless(self, myConfig, structure, rules):
@@ -643,7 +648,7 @@ class Guardian:
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                log_warning("structure: {0} has no usage data".format(structure["name"]), self.debug)
+                log_warning("structure: {0} has no usage data".format(structure["name"]), debug)
                 return
 
             resources = structure["resources"]
@@ -653,7 +658,7 @@ class Guardian:
             limits_resources = limits["resources"]
 
             if not limits_resources:
-                log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
+                log_warning("structure: {0} has no limits".format(structure["name"]), debug)
                 return
 
             # This only applies to containers, currently not used for applications
@@ -667,9 +672,7 @@ class Guardian:
             self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
 
         except Exception as e:
-            log_error(
-                "error with structure: {0} {1} {2}".format(structure["name"], str(e), str(traceback.format_exc())),
-                self.debug)
+            log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), debug)
 
     def guard_structures(self, myConfig, structures):
         # Remote database operation
@@ -691,9 +694,15 @@ class Guardian:
 
     def guard(self, ):
         global CPU_SHARES_PER_WATT
+        global debug
+
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+
         while True:
+            log_info("----------------------", debug)
+            log_info("Starting Epoch", debug)
+            t0 = time.time()
 
             # Get service info
             service = get_service(self.couchdb_handler, SERVICE_NAME)
@@ -703,41 +712,44 @@ class Guardian:
 
             # CONFIG
             myConfig.set_config(service["config"])
-            self.debug = myConfig.get_value("DEBUG")
+            debug = myConfig.get_value("DEBUG")
             self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
             window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             window_delay = myConfig.get_value("WINDOW_DELAY")
             structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
-            guardian_is_active = myConfig.get_value("ACTIVE")
-            log_info("Guarding:{0} resources for '{1}' with time window lapse and delay: {2},{3}".format(
-                self.guardable_resources, structure_guarded, window_difference, window_delay), self.debug)
+            SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
+
+            log_info("Config is as follows:", debug)
+            log_info(".............................................", debug)
+            log_info("Time window lapse -> {0}".format(window_difference), debug)
+            log_info("Delay -> {0}".format(window_delay), debug)
+            log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
+            log_info("Structure type guarded is -> {0}".format(structure_guarded), debug)
+            log_info(".............................................", debug)
 
             thread = None
-            if guardian_is_active:
+            if SERVICE_IS_ACTIVATED:
                 # Remote database operation
-                structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+                structures = get_structures(self.couchdb_handler, debug, subtype=structure_guarded)
                 if structures:
-                    log_info("{0} Structures to process".format(len(structures)), self.debug)
+                    log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
                     thread = Thread(name="guard_structures", target=self.guard_structures, args=(myConfig, structures,))
                     thread.start()
                 else:
-                    log_info("No structures to process", self.debug)
+                    log_info("No structures to process", debug)
             else:
-                log_info("Guardian is not activated", self.debug)
+                log_info("Guardian is not activated", debug)
 
-            log_info("Epoch processed", self.debug)
             time.sleep(window_difference)
 
-            if thread and thread.is_alive():
-                delay_start = time.time()
-                log_warning(
-                    "Previous thread didn't finish before next poll is due, with window time of " +
-                    "{0} seconds".format(str(window_difference)), self.debug)
-                log_warning("Going to wait until thread finishes before proceeding", self.debug)
-                thread.join()
-                delay_end = time.time()
-                log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), self.debug)
+            wait_operation_thread(thread, debug)
+
+            t1 = time.time()
+            time_proc= "%.2f" % (t1 - t0 - window_difference)
+            time_total = "%.2f" % (t1 - t0)
+            log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(window_difference)), debug)
+            log_info("----------------------\n", debug)
 
 
 def main():

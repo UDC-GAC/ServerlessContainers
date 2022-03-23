@@ -2,6 +2,7 @@ json-logic-qubit==0.9.1
 requests==2.21.0
 Flask==1.1.4
 pylxd==2.2.8
+MarkupSafe=2.0.1
 termcolor
 pytest
 pytest-cov

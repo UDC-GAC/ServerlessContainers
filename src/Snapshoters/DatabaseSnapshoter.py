@@ -23,8 +23,6 @@
 
 from __future__ import print_function
 
-from threading import Thread
-
 import requests
 import json
 import time
@@ -33,12 +31,14 @@ import logging
 
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
-from src.MyUtils import MyUtils
-from src.MyUtils.MyUtils import MyConfig
+
+
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, \
+    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"] ,"ACTIVE": True}
 OPENTSDB_STORED_VALUES_AS_NULL = 0
 SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
@@ -75,14 +75,13 @@ def translate_structure_doc_to_timeseries(doc):
                                           tags={"structure": struct_name})
                         timeseries_list.append(timeseries)
                     else:
-                        MyUtils.log_error(
+                        log_error(
                             "Error with document: {0}, doc metric {1} has null value '{2}', assuming a value of '{3}'".format(
                                 str(doc), doc_metric, value, OPENTSDB_STORED_VALUES_AS_NULL), debug)
 
         return timeseries_list
     except (ValueError, KeyError) as e:
-        MyUtils.log_error("Error {0} {1} with document: {2} ".format(str(e), str(traceback.format_exc()), str(doc)),
-                          debug)
+        log_error("Error {0} {1} with document: {2} ".format(str(e), str(traceback.format_exc()), str(doc)), debug)
         raise
 
 
@@ -136,55 +135,84 @@ funct_map = {"users": get_users,
              "structures": get_structures,
              "configs": get_configs}
 
-
-def persist_docs(funct):
-    t0 = time.time()
+def get_data(funct):
     docs = list()
     try:
         docs += funct_map[funct]()
     except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning("Couldn't retrieve {0} info, error {1}.".format(funct, str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info("It took {0} seconds to get the {1} info".format(str("%.2f" % (t1 - t0)), funct), debug)
-    send_data(docs)
-
+        log_warning("Couldn't retrieve {0} info, error {1}.".format(funct, str(e)), debug)
+    return docs
 
 def send_data(docs):
+    num_sent_docs = 0
     if docs:
         # Remote database operation
         success, info = opentsdb_handler.send_json_documents(docs)
         if not success:
-            MyUtils.log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])),
-                              debug)
+            log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])), debug)
         else:
-            MyUtils.log_info(
-                "Post was done at: {0} with {1} documents".format(time.strftime("%D %H:%M:%S", time.localtime()),
-                                                                  str(len(docs))), debug)
-    else:
-        MyUtils.log_warning("Couldn't retrieve any info.", debug)
+            num_sent_docs = len(docs)
+    return num_sent_docs
+
+def persist_docs(funct):
+
+    t0 = time.time()
+    docs = get_data(funct)
+    t1 = time.time()
+
+    if docs:
+        log_info("It took {0} seconds to get {1} info".format(str("%.2f" % (t1 - t0)), funct), debug)
+        num_docs = send_data(docs)
+        t2 = time.time()
+        if num_docs > 0:
+            log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)),funct), debug)
+            log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), funct), debug)
+
+
 
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+
     global debug
+
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+
     while True:
+        log_info("----------------------", debug)
+        log_info("Starting Epoch", debug)
+        t0 = time.time()
+
         # Get service info
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)  # Remote database operation
+        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)  # Remote database operation
+        beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
         myConfig.set_config(service["config"])
         polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
         debug = myConfig.get_value("DEBUG")
+        documents_persisted = myConfig.get_value("DOCUMENTS_PERSISTED")
+        SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
 
-        for docType in ["limits", "structures", "users", "configs"]:
-            persist_docs(docType)
+        log_info("Config is as follows:", debug)
+        log_info(".............................................", debug)
+        log_info("Polling frequency -> {0}".format(polling_frequency), debug)
+        log_info("Documents to be persisted are -> {0}".format(documents_persisted), debug)
+        log_info(".............................................", debug)
 
-        MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), debug)
+        if SERVICE_IS_ACTIVATED:
+            for docType in documents_persisted:
+                persist_docs(docType)
+        else:
+            log_info("Structure snapshoter is not activated, will not do anything", debug)
+
+        t1 = time.time()
+        log_info("Epoch processed in {0} seconds ".format("%.2f" % (t1 - t0)), debug)
+        log_info("----------------------\n", debug)
+
         time.sleep(polling_frequency)
 
 
@@ -192,7 +220,7 @@ def main():
     try:
         persist()
     except Exception as e:
-        MyUtils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
