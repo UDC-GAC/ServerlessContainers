@@ -39,7 +39,7 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
     get_time_now_string, get_structures, update_structure, generate_request_name
 
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True,
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True,
                          "ACTIVE": True}
 SERVICE_NAME = "scaler"
 db_handler = couchDB.CouchDBServer()
@@ -138,7 +138,8 @@ def check_container_core_mapping(container, real_resources):
         check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
 
     if not map_host_valid:
-        log_error("Detected invalid core mapping for container {0}, trying to automatically fix".format(c_name), debug)
+        log_error("Detected invalid core mapping for container {0} {1}-{2}/{3}-{4}".format(c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares), debug)
+        log_error("trying to automatically fix", debug)
         success = fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares, max_cpu_limit)
         if success:
             log_error("Succeeded fixing {0} container's core mapping".format(container["name"]), debug)
@@ -240,8 +241,8 @@ def get_cpu_list(cpu_num_string):
         if len(ranges) == 1:
             cpu_list.append(ranges[0])
         else:
-            for subpart in ranges:
-                cpu_list.append(subpart)
+            for n in range(int(ranges[0]), int(ranges[1])+1):
+                cpu_list.append(str(n))
     return cpu_list
 
 
@@ -315,7 +316,7 @@ def apply_cpu_request(request, database_resources, real_resources, amount):
                         used_cores.append(core)
 
         if needed_shares > 0:
-            raise ValueError("Error in setting cpu, couldn't get the resources needed")
+            raise ValueError("Error in setting cpu, couldn't get the resources needed, missing {0} shares".format(needed_shares))
             # FIXME couldn't do rescale up properly as shares to get remain
 
     elif amount < 0:
@@ -417,8 +418,10 @@ def get_current_resource_value(database_resources, real_resources, resource):
 
 
 def check_host_has_enough_free_resources(host_info, needed_resources, resource):
-    if host_info["resources"][resource]["free"] < needed_resources:
-        raise ValueError("Error in setting {0}, couldn't get the resources needed".format(resource))
+    host_shares = host_info["resources"][resource]["free"]
+    if host_shares < needed_resources:
+        missing_shares = needed_resources - host_shares
+        raise ValueError("Error in setting {0}, couldn't get the resources needed, missing {1} shares".format(resource, missing_shares))
 
 
 def apply_request(request, real_resources, database_resources):
@@ -783,6 +786,13 @@ def scale_structures(new_requests):
     log_info("It took {0} seconds to process requests".format(str("%.2f" % (t1 - t0))), debug)
 
 
+def invalid_conf(config):
+    # TODO THis code is duplicated on the structures and database snapshoters
+    for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY")),("REQUEST_TIMEOUT",config.get_value("REQUEST_TIMEOUT"))]:
+        if num < 5:
+            return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
+    return False, ""
+
 def scale():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
     global debug
@@ -814,6 +824,20 @@ def scale():
         debug = myConfig.get_value("DEBUG")
         CHECK_CORE_MAP = myConfig.get_value("CHECK_CORE_MAP")
         SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
+
+        ## CHECK INVALID CONFIG ##
+        # TODO THis code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency < 5:
+                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
+
+            log_info("----------------------\n", debug)
+            time.sleep(polling_frequency)
+            continue
 
         if SERVICE_IS_ACTIVATED:
 
@@ -880,7 +904,7 @@ def scale():
             log_info("Epoch processed in {0} seconds".format(str("%.2f" % (t1 - t0))), debug)
 
         else:
-            log_info("Scaler service is not activated", debug)
+            log_warning("Scaler service is not activated", debug)
 
         log_info("----------------------\n", debug)
         time.sleep(polling_frequency)

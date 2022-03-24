@@ -33,8 +33,7 @@ import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
 
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, \
-    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
@@ -170,7 +169,12 @@ def persist_docs(funct):
             log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), funct), debug)
 
 
-
+def invalid_conf(config):
+    # TODO THis code is duplicated on the structures and database snapshoters
+    for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
+        if num < 5:
+            return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
+    return False, ""
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
@@ -203,11 +207,25 @@ def persist():
         log_info("Documents to be persisted are -> {0}".format(documents_persisted), debug)
         log_info(".............................................", debug)
 
+        ## CHECK INVALID CONFIG ##
+        # TODO THis code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency < 5:
+                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
+
+            log_info("----------------------\n", debug)
+            time.sleep(polling_frequency)
+            continue
+
         if SERVICE_IS_ACTIVATED:
             for docType in documents_persisted:
                 persist_docs(docType)
         else:
-            log_info("Structure snapshoter is not activated, will not do anything", debug)
+            log_warning("Database snapshoter is not activated, will not do anything", debug)
 
         t1 = time.time()
         log_info("Epoch processed in {0} seconds ".format("%.2f" % (t1 - t0)), debug)

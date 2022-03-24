@@ -33,8 +33,8 @@ import logging
 
 from json_logic import jsonLogic
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_time_now_string, get_structures, generate_event_name, generate_request_name, wait_operation_thread
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning,\
+    get_structures, generate_event_name, generate_request_name, wait_operation_thread
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
@@ -65,7 +65,6 @@ NOT_AVAILABLE_STRING = "n/a"
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
 
-debug = True
 
 class Guardian:
     """
@@ -346,7 +345,7 @@ class Guardian:
                     limits[resource]["lower"] = limits[resource]["upper"] - boundary
                     # limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
                 except RuntimeError as e:
-                    log_error(str(e), debug)
+                    log_error(str(e), self.debug)
                     raise e
                 if n_loop >= 10:
                     message = "Limits for {0} can't be adjusted, check the configuration (max:{1},current:{2}, boundary:{3}, min:{4})".format(
@@ -413,7 +412,7 @@ class Guardian:
         useful_resources = list()
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
-                log_warning("Resource {0} has no rules applied to it".format(resource), debug)
+                log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
             else:
                 useful_resources.append(resource)
 
@@ -442,7 +441,7 @@ class Guardian:
 
             except KeyError as e:
                 log_warning("rule: {0} is missing a parameter {1} {2}".format(
-                    rule["name"], str(e), str(traceback.format_exc())), debug)
+                    rule["name"], str(e), str(traceback.format_exc())), self.debug)
 
         return events
 
@@ -484,7 +483,7 @@ class Guardian:
                     if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
                         log_warning(
                             "No current value for container' {0}' and resource '{1}', can't rescale".format(
-                                structure["name"], resource_label), debug)
+                                structure["name"], resource_label), self.debug)
                         continue
 
                     # If no policy is set for scaling, default to "amount"
@@ -492,7 +491,7 @@ class Guardian:
                         rule["rescale_by"] = "amount"
                         log_warning(
                             "No rescale_by policy is set in rule : '{0}', falling back to default amount".format(
-                                rule["name"]), debug)
+                                rule["name"]), self.debug)
 
                     # Get the amount to be applied from the policy set
                     if rule["rescale_by"] == "amount":
@@ -549,7 +548,7 @@ class Guardian:
             except KeyError as e:
                 log_warning(
                     "rule: {0} is missing a parameter {1} {2} ".format(rule["name"], str(e),
-                                                                       str(traceback.format_exc())), debug)
+                                                                       str(traceback.format_exc())), self.debug)
 
         return generated_requests, events_to_remove
 
@@ -571,10 +570,9 @@ class Guardian:
         triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
         log_info(
             " ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
-            debug)
+            self.debug)
 
-    def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
-        event_timeout = myConfig.get_value("EVENT_TIMEOUT")
+    def process_serverless_structure(self, structure, usages, limits, rules):
 
         # Match usages and rules to generate events
         triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits,
@@ -588,7 +586,7 @@ class Guardian:
         all_events = self.couchdb_handler.get_events(structure)
 
         # Filter the events according to timestamp
-        filtered_events, old_events = self.sort_events(all_events, event_timeout)
+        filtered_events, old_events = self.sort_events(all_events, self.event_timeout)
 
         if old_events:
             # Remote database operation
@@ -616,18 +614,21 @@ class Guardian:
             triggered_requests = list()
 
         # DEBUG AND INFO OUTPUT
-        if debug:
+        if self.debug:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
-    def serverless(self, myConfig, structure, rules):
-        window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
-        window_delay = myConfig.get_value("WINDOW_DELAY")
-
+    def serverless(self, structure, rules):
         structure_subtype = structure["subtype"]
 
         try:
             # Check if structure is guarded
             if "guard" not in structure or not structure["guard"]:
+                log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
+                return
+
+            # Check if the structure has any resource set to guarded
+            if not any(["guard" in res and res["guard"] for res in structure["resources"].values()]):
+                log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
                 return
 
             # Check if structure is being monitored, otherwise, ignore
@@ -642,13 +643,18 @@ class Guardian:
                 tag = TAGS["container"]
 
             # Remote database operation
-            usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]}, window_difference,
-                                                                    window_delay,
+            usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
+                                                                    self.window_difference, self.window_delay,
                                                                     metrics_to_retrieve, metrics_to_generate)
+
+            for metric in usages:
+                if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+                    log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
+
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                log_warning("structure: {0} has no usage data".format(structure["name"]), debug)
+                log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
                 return
 
             resources = structure["resources"]
@@ -658,7 +664,7 @@ class Guardian:
             limits_resources = limits["resources"]
 
             if not limits_resources:
-                log_warning("structure: {0} has no limits".format(structure["name"]), debug)
+                log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
             # This only applies to containers, currently not used for applications
@@ -669,12 +675,12 @@ class Guardian:
                 # Remote database operation
                 self.couchdb_handler.update_limit(limits)
 
-            self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
+            self.process_serverless_structure(structure, usages, limits_resources, rules)
 
         except Exception as e:
-            log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), debug)
+            log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
 
-    def guard_structures(self, myConfig, structures):
+    def guard_structures(self, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
@@ -683,27 +689,46 @@ class Guardian:
             if "guard_policy" not in structure or structure["guard_policy"] == "serverless":
                 # Default option will be serverless
                 thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
-                                args=(myConfig, structure, rules,))
+                                args=(structure, rules,))
                 thread.start()
                 threads.append(thread)
             else:
                 # Default is still serverless for now
-                self.serverless(myConfig, structure, rules)
+                self.serverless(structure, rules)
         for process in threads:
             process.join()
 
-    def guard(self, ):
-        global CPU_SHARES_PER_WATT
-        global debug
+    def invalid_conf(self, ):
+        for res in self.guardable_resources:
+            if res not in ["cpu", "mem", "disk", "net", "energy"]:
+                return True, "Resource to be guarded '{0}' is invalid".format(res)
 
+        if self.structure_guarded not in ["container","application"]:
+            return True, "Structure to be guarded '{0}' is invalid".format(self.structure_guarded)
+
+        for key, num in [("WINDOW_TIMELAPSE",self.window_difference), ("WINDOW_DELAY",self.window_delay), ("EVENT_TIMEOUT",self.event_timeout)]:
+            if num < 5:
+                return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
+        return False, ""
+
+
+    def start_epoch(self):
+        log_info("----------------------", self.debug)
+        log_info("Starting Epoch", self.debug)
+        return time.time()
+
+    def end_epoch(self, t0):
+        t1 = time.time()
+        time_proc = "%.2f" % (t1 - t0 - self.window_difference)
+        time_total = "%.2f" % (t1 - t0)
+        log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(self.window_difference)), self.debug)
+        log_info("----------------------\n", self.debug)
+
+    def guard(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
         while True:
-            log_info("----------------------", debug)
-            log_info("Starting Epoch", debug)
-            t0 = time.time()
-
             # Get service info
             service = get_service(self.couchdb_handler, SERVICE_NAME)
 
@@ -712,44 +737,56 @@ class Guardian:
 
             # CONFIG
             myConfig.set_config(service["config"])
-            debug = myConfig.get_value("DEBUG")
+            self.debug = myConfig.get_value("DEBUG")
+            debug = self.debug
             self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
-            window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
-            window_delay = myConfig.get_value("WINDOW_DELAY")
-            structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
+            self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
+            self.window_delay = myConfig.get_value("WINDOW_DELAY")
+            self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
+            self.event_timeout = myConfig.get_value("EVENT_TIMEOUT")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
+
+            t0 = self.start_epoch()
 
             log_info("Config is as follows:", debug)
             log_info(".............................................", debug)
-            log_info("Time window lapse -> {0}".format(window_difference), debug)
-            log_info("Delay -> {0}".format(window_delay), debug)
+            log_info("Time window lapse -> {0}".format(self.window_difference), debug)
+            log_info("Delay -> {0}".format(self.window_delay), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
-            log_info("Structure type guarded is -> {0}".format(structure_guarded), debug)
+            log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
             log_info(".............................................", debug)
+
+            ## CHECK INVALID CONFIG ##
+            invalid, message = self.invalid_conf()
+            if invalid:
+                log_error(message, debug)
+                if self.window_difference < 5:
+                    log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
+                    self.window_difference = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
+                time.sleep(self.window_difference)
+                self.end_epoch(t0)
+                continue
 
             thread = None
             if SERVICE_IS_ACTIVATED:
                 # Remote database operation
-                structures = get_structures(self.couchdb_handler, debug, subtype=structure_guarded)
+                structures = get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
                 if structures:
                     log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
-                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(myConfig, structures,))
+                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
                     thread.start()
                 else:
                     log_info("No structures to process", debug)
             else:
-                log_info("Guardian is not activated", debug)
+                log_warning("Guardian is not activated", debug)
 
-            time.sleep(window_difference)
+            time.sleep(self.window_difference)
 
             wait_operation_thread(thread, debug)
 
-            t1 = time.time()
-            time_proc= "%.2f" % (t1 - t0 - window_difference)
-            time_total = "%.2f" % (t1 - t0)
-            log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(window_difference)), debug)
-            log_info("----------------------\n", debug)
+            self.end_epoch(t0)
+
 
 
 def main():

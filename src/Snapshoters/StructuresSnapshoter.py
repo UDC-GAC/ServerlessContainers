@@ -32,7 +32,7 @@ import logging
 
 import src.StateDatabase.couchdb as couchDB
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, \
-    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread
+    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
@@ -231,6 +231,12 @@ def persist_thread():
     log_info("It took {0} seconds to snapshot applications".format(str("%.2f" % (t2 - t1))), debug)
     log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % (t3 - t2))), debug)
 
+def invalid_conf(config):
+    # TODO THis code is duplicated on the structures and database snapshoters
+    for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
+        if num < 5:
+            return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
+    return False, ""
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
@@ -265,12 +271,26 @@ def persist():
         log_info("Resources to be snapshoter are -> {0}".format(resources_persisted), debug)
         log_info(".............................................", debug)
 
+        ## CHECK INVALID CONFIG ##
+        # TODO THis code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency < 5:
+                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
+
+            log_info("----------------------\n", debug)
+            time.sleep(polling_frequency)
+            continue
+
         thread = None
         if SERVICE_IS_ACTIVATED:
             thread = Thread(target=persist_thread, args=())
             thread.start()
         else:
-            log_info("Structure snapshoter is not activated, will not do anything", debug)
+            log_warning("Structure snapshoter is not activated, will not do anything", debug)
 
         time.sleep(polling_frequency)
 

@@ -52,6 +52,13 @@ def get_db():
     return g.db_handler
 
 
+def valid_resource(resource):
+    if resource not in ["cpu", "mem", "disk", "net", "energy"]:
+        return False
+    else:
+        return True
+
+
 def retrieve_service(service_name):
     try:
         return get_db().get_service(service_name)
@@ -136,17 +143,29 @@ def set_service_information(service_name):
 def set_service_value(service_name, key):
     put_done = False
     tries = 0
+
+    data = request.json
+    if not data:
+        abort(400, {"message": "empty content"})
+
     value = request.json["value"]
-    # TODO This should do properly, with a map of values per service that should be integer, string or boolean
-    if value == "true" or value == "false":
+
+    if not isinstance(value, (list, str)):
+        abort(400, {"message": "invalid content, resources must be a list or a string"})
+    elif value == "true" or value == "false":
         value = value == "true"
     elif value == "container" or value == "application":
         pass
+    elif isinstance(value, list):
+        pass
     else:
-        if 0 < int(value) < 1:
-            value = float(value)
-        else:
-            value = int(value)
+        try:
+            if 0 < int(value) < 1:
+                value = float(value)
+            else:
+                value = int(value)
+        except ValueError:
+            abort(400, {"message": "bad content"})
 
     while not put_done:
         tries += 1
@@ -216,6 +235,27 @@ def deactivate_rule(rule_name):
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
+@app.route("/rule/<rule_name>/amount", methods=['PUT'])
+def dchange_amount_rule(rule_name):
+    put_done = False
+    tries = 0
+    try:
+        amount = int(request.json["value"])
+    except KeyError:
+        return abort(400)
+
+    while not put_done:
+        tries += 1
+        rule = retrieve_rule(rule_name)
+        rule["amount"] = amount
+        get_db().update_rule(rule)
+
+        time.sleep(BACK_OFF_TIME)
+        rule = retrieve_rule(rule_name)
+        put_done = rule["amount"] == amount
+        if tries >= MAX_TRIES:
+            return abort(400, {"message": "MAX_TRIES updating database document"})
+    return jsonify(201)
 
 def retrieve_structure(structure_name):
     try:
@@ -257,6 +297,9 @@ def get_structure_parameter_of_resource(structure_name, resource, parameter):
 
 @app.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['PUT'])
 def set_structure_parameter_of_resource(structure_name, resource, parameter):
+    if not valid_resource(resource):
+        return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+
     try:
         value = int(request.json["value"])
         if value < 0:
@@ -335,20 +378,18 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
         new_structure = MyUtils.copy_structure_base(structure)
         new_structure["resources"] = dict()
         for resource in resources:
-            if resource not in ["cpu", "mem", "disk", "net", "energy"]:
-                continue
-            else:
-                new_structure["resources"][resource] = {"guard": state}
+            if not valid_resource(resource):
+                return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+
+        for resource in resources:
+            new_structure["resources"][resource] = {"guard": state}
         get_db().update_structure(new_structure)
 
         time.sleep(BACK_OFF_TIME)
         structure = retrieve_structure(structure_name)
         put_done = True
         for resource in resources:
-            if resource not in ["cpu", "mem", "disk", "net", "energy"]:
-                continue
-            else:
-                put_done = put_done and structure["resources"][resource]["guard"] == state
+            put_done = put_done and structure["resources"][resource]["guard"] == state
 
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
@@ -365,8 +406,6 @@ def get_resources_to_change_guard_from_request(request):
         resources = data["resources"]
         if not isinstance(resources, (list, str)):
             abort(400, {"message": "invalid content, resources must be a list or a string"})
-        elif isinstance(resources, str):
-            resources = [resources]
     except (KeyError, TypeError):
         abort(400, {"message": "invalid content, must be a json object with resources as key"})
     return resources
@@ -402,6 +441,9 @@ def get_structure_resource_limits(structure_name, resource):
 
 @app.route("/structure/<structure_name>/limits/<resource>/boundary", methods=['PUT'])
 def set_structure_resource_limit_boundary(structure_name, resource):
+    if not valid_resource(resource):
+        return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+
     structure = retrieve_structure(structure_name)
     structure_limits = get_db().get_limits(structure)
     current_boundary = -1
