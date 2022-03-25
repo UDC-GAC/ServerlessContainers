@@ -1,0 +1,118 @@
+{
+  "timeseries": [
+    {
+      "metrics": [
+        {
+          "aggregator": "zimsum",
+          "metric": "proc.cpu.user",
+          "tags": [
+            "host=node0"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "proc.cpu.kernel",
+          "tags": [
+            "host=node0"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "structure.cpu.max",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "limit.cpu.upper",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "structure.cpu.current",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "limit.cpu.lower",
+          "tags": [
+            "structure=node0"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "structure.cpu.min",
+          "tags": [
+            "structure=node0"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymax": 250,
+        "ymin": 0
+      }
+    },
+    {
+      "metrics": [
+        {
+          "aggregator": "zimsum",
+          "metric": "proc.cpu.user",
+          "tags": [
+            "host=node1"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "proc.cpu.kernel",
+          "tags": [
+            "host=node1"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "structure.cpu.max",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "limit.cpu.upper",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "structure.cpu.current",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "limit.cpu.lower",
+          "tags": [
+            "structure=node1"
+          ]
+        },
+        {
+          "aggregator": "zimsum",
+          "metric": "structure.cpu.min",
+          "tags": [
+            "structure=node1"
+          ]
+        }
+      ],
+      "yranges": {
+        "ymax": 250,
+        "ymin": 0
+      }
+    }
+  ]
+}

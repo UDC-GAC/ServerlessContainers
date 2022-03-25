@@ -37,7 +37,7 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"] ,"ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"] ,"ACTIVE": True}
 OPENTSDB_STORED_VALUES_AS_NULL = 0
 SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
@@ -172,7 +172,7 @@ def persist_docs(funct):
 def invalid_conf(config):
     # TODO THis code is duplicated on the structures and database snapshoters
     for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
-        if num < 5:
+        if num < 3:
             return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
     return False, ""
 
@@ -213,7 +213,7 @@ def persist():
         if invalid:
             log_error(message, debug)
             time.sleep(polling_frequency)
-            if polling_frequency < 5:
+            if polling_frequency < 4:
                 log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
                 polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
 

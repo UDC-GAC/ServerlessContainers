@@ -43,7 +43,7 @@ translate_map = {
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu"], "ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu"], "ACTIVE": True}
 MAX_FAIL_NUM = 5
 debug = True
 resources_persisted = ["cpu"]
@@ -234,7 +234,7 @@ def persist_thread():
 def invalid_conf(config):
     # TODO THis code is duplicated on the structures and database snapshoters
     for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
-        if num < 5:
+        if num < 3:
             return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
     return False, ""
 

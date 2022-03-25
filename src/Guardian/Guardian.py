@@ -753,6 +753,7 @@ class Guardian:
             log_info(".............................................", debug)
             log_info("Time window lapse -> {0}".format(self.window_difference), debug)
             log_info("Delay -> {0}".format(self.window_delay), debug)
+            log_info("Event timeout -> {0}".format(self.event_timeout), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
             log_info(".............................................", debug)

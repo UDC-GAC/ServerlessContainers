@@ -23,33 +23,20 @@
 
 import json
 import time
-from flask import Flask, g
+from flask import Flask
 from flask import Response
 from flask import abort
 from flask import jsonify
 from flask import request
 import argparse
-import os
 
-import src.StateDatabase.couchdb as couchDB
 import src.MyUtils.MyUtils as MyUtils
+from src.Orchestrator.rules import rules_routes
+from src.Orchestrator.utils import get_db, BACK_OFF_TIME, MAX_TRIES
 
 app = Flask(__name__)
 
-MAX_TRIES = 10
-BACK_OFF_TIME = 2
-
-COUCHDB_URL = os.getenv('COUCHDB_URL')
-if not COUCHDB_URL:
-    COUCHDB_URL = "couchdb"
-
-
-def get_db():
-    global COUCHDB_URL
-    """Opens a new database connection if there is none yet for the current application context."""
-    if not hasattr(g, 'db_handler'):
-        g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
-    return g.db_handler
+app.register_blueprint(rules_routes)
 
 
 def valid_resource(resource):
@@ -167,6 +154,11 @@ def set_service_value(service_name, key):
         except ValueError:
             abort(400, {"message": "bad content"})
 
+    # Check if it is really needed to carry out the operation
+    service = retrieve_service(service_name)
+    if key in service["config"] and service["config"][key] == value:
+        put_done = True
+
     while not put_done:
         tries += 1
         service = retrieve_service(service_name)
@@ -182,80 +174,6 @@ def set_service_value(service_name, key):
 
     return jsonify(201)
 
-
-def retrieve_rule(rule_name):
-    try:
-        return get_db().get_rule(rule_name)
-    except ValueError:
-        return abort(404)
-
-
-@app.route("/rule/", methods=['GET'])
-def get_rules():
-    return jsonify(get_db().get_rules())
-
-
-@app.route("/rule/<rule_name>", methods=['GET'])
-def get_rule(rule_name):
-    return jsonify(retrieve_rule(rule_name))
-
-
-@app.route("/rule/<rule_name>/activate", methods=['PUT'])
-def activate_rule(rule_name):
-    put_done = False
-    tries = 0
-    while not put_done:
-        tries += 1
-        rule = retrieve_rule(rule_name)
-        rule["active"] = True
-        get_db().update_rule(rule)
-        rule = retrieve_rule(rule_name)
-
-        time.sleep(BACK_OFF_TIME)
-        put_done = rule["active"]
-        if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
-    return jsonify(201)
-
-
-@app.route("/rule/<rule_name>/deactivate", methods=['PUT'])
-def deactivate_rule(rule_name):
-    put_done = False
-    tries = 0
-    while not put_done:
-        tries += 1
-        rule = retrieve_rule(rule_name)
-        rule["active"] = False
-        get_db().update_rule(rule)
-
-        time.sleep(BACK_OFF_TIME)
-        rule = retrieve_rule(rule_name)
-        put_done = not rule["active"]
-        if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
-    return jsonify(201)
-
-@app.route("/rule/<rule_name>/amount", methods=['PUT'])
-def dchange_amount_rule(rule_name):
-    put_done = False
-    tries = 0
-    try:
-        amount = int(request.json["value"])
-    except KeyError:
-        return abort(400)
-
-    while not put_done:
-        tries += 1
-        rule = retrieve_rule(rule_name)
-        rule["amount"] = amount
-        get_db().update_rule(rule)
-
-        time.sleep(BACK_OFF_TIME)
-        rule = retrieve_rule(rule_name)
-        put_done = rule["amount"] == amount
-        if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
-    return jsonify(201)
 
 def retrieve_structure(structure_name):
     try:
@@ -521,7 +439,7 @@ def heartbeat():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Ochestrator REST service to autmatically change configuration on the CouchDb rescaling database')
+        description='Ochestrator REST service to automatically change configuration on the CouchDb rescaling database')
     parser.add_argument('--database_url_string', type=str, default="couchdb",
                         help="The hostname that hosts the rescaling couchDB")
     args = parser.parse_args()

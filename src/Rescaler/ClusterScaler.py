@@ -122,7 +122,7 @@ def check_container_cpu_mapping(container, host_info, cpu_used_cores, cpu_used_s
     if sorted(cpu_used_cores) != sorted(cpu_accounted_cores) or cpu_used_shares != cpu_accounted_shares:
         return False, cpu_accounted_cores, cpu_accounted_shares
     else:
-        return True, None, None
+        return True, cpu_accounted_cores, cpu_accounted_shares
 
 
 def check_container_core_mapping(container, real_resources):
@@ -134,8 +134,7 @@ def check_container_core_mapping(container, real_resources):
     cpu_list = get_cpu_list(real_resources["cpu"]["cpu_num"])
     c_name = container["name"]
 
-    map_host_valid, actual_used_cores, actual_used_shares = \
-        check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
+    map_host_valid, actual_used_cores, actual_used_shares = check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
 
     if not map_host_valid:
         log_error("Detected invalid core mapping for container {0} {1}-{2}/{3}-{4}".format(c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares), debug)
@@ -159,7 +158,8 @@ def check_core_mapping(containers):
             log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), debug)
             continue
         real_resources = container_info_cache[c_name]["resources"]
-        errors_detected = errors_detected or check_container_core_mapping(container, real_resources)
+        errors = check_container_core_mapping(container, real_resources)
+        errors_detected = errors_detected or errors
     return errors_detected
 
 
