@@ -214,6 +214,12 @@ def copy_structure_base(structure):
     return new_struct
 
 
+def valid_resource(resource):
+    if resource not in ["cpu", "mem", "disk", "net", "energy"]:
+        return False
+    else:
+        return True
+
 # DON'T NEED TO TEST
 def get_resource(structure, resource):
     return structure["resources"][resource]
