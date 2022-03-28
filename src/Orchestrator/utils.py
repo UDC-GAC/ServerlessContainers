@@ -4,7 +4,7 @@ import os
 import src.StateDatabase.couchdb as couchDB
 
 MAX_TRIES = 10
-BACK_OFF_TIME = 2
+BACK_OFF_TIME_MS = 500
 COUCHDB_URL = os.getenv('COUCHDB_URL')
 if not COUCHDB_URL:
     COUCHDB_URL = "couchdb"

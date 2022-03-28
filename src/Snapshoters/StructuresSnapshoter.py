@@ -43,43 +43,33 @@ translate_map = {
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu"], "ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu", "mem"], "ACTIVE": True}
 MAX_FAIL_NUM = 5
 debug = True
-resources_persisted = ["cpu"]
-
-
-def generate_timeseries(container_name, resources):
-    timestamp = int(time.time())
-
-    for resource in resources_persisted:
-        value = resources[resource][translate_map[resource]["limit_label"]]
-        metric = translate_map[resource]["metric"]
-        timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags=dict(host=container_name))
-
-        print(json.dumps(timeseries))
 
 
 def update_container_current_values(container_name, resources):
-    if not resources:
-        log_error("Unable to get resource info for container {0}".format(container_name), debug)
-
     # Remote database operation
     database_structure = db_handler.get_structure(container_name)
-    new_structure = copy_structure_base(database_structure)
-    new_structure["resources"] = dict()
+    #new_structure = copy_structure_base(database_structure)
+    structure = database_structure.copy()
+
+    if not "resources" in structure:
+        structure["resources"] = dict()
+
     for resource in resources_persisted:
-        if resource not in new_structure:
-            new_structure["resources"][resource] = dict()
+
+        if resource not in structure["resources"]:
+            structure["resources"][resource] = dict()
 
         if resource not in resources or not resources[resource]:
             log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name), debug)
-            new_structure["resources"][resource]["current"] = 0
+            structure["resources"][resource]["current"] = 0
         else:
-            new_structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
+            structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
 
     # Remote database operation
-    update_structure(new_structure, db_handler, debug, max_tries=3)
+    update_structure(structure, db_handler, debug, max_tries=3)
 
 
 def thread_persist_container(container, container_resources_dict):
@@ -109,7 +99,12 @@ def persist_containers(container_resources_dict):
     for container in containers:
         # Check that the document has been properly initialized, otherwise it might be overwritten with just
         # the "current" value without possibility of correcting it
-        if "cpu" not in container["resources"] or "max" not in container["resources"]["cpu"]:
+        skip = False
+        for resource in resources_persisted:
+            if resource not in container["resources"] or "max" not in container["resources"][resource]:
+                log_error("Container {0} has not a proper config for the resource {1}".format(container["name"], resource),debug)
+                skip = True
+        if skip:
             continue
 
         process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
@@ -200,11 +195,11 @@ def get_container_resources_dict():
     # Get all the different hosts of the containers
     hosts_info = dict()
     for container in containers:
-        cont_host = container["host"]
-        if cont_host not in hosts_info:
-            hosts_info[cont_host] = dict()
-            hosts_info[cont_host]["host_rescaler_ip"] = container["host_rescaler_ip"]
-            hosts_info[cont_host]["host_rescaler_port"] = container["host_rescaler_port"]
+        host = container["host"]
+        if host not in hosts_info:
+            hosts_info[host] = dict()
+            hosts_info[host]["host_rescaler_ip"] = container["host_rescaler_ip"]
+            hosts_info[host]["host_rescaler_port"] = container["host_rescaler_port"]
 
     # For each host, retrieve its containers and persist the ones we look for
     container_info = fill_container_dict(hosts_info, containers)
@@ -212,6 +207,10 @@ def get_container_resources_dict():
     container_resources_dict = dict()
     for container in containers:
         container_name = container["name"]
+        if container_name not in container_info:
+            log_warning("Container info for {0} not found, check that it is really living in its supposed host '{1}', and that "
+                        "the host is alive and with the Node Scaler service running".format(container_name, container["host"]), debug)
+            continue
         container_resources_dict[container_name] = container
         container_resources_dict[container_name]["resources"] = container_info[container_name]
 
@@ -232,7 +231,7 @@ def persist_thread():
     log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % (t3 - t2))), debug)
 
 def invalid_conf(config):
-    # TODO THis code is duplicated on the structures and database snapshoters
+    # TODO Tiis code is duplicated on the structures and database snapshoters
     for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
         if num < 3:
             return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
@@ -272,12 +271,12 @@ def persist():
         log_info(".............................................", debug)
 
         ## CHECK INVALID CONFIG ##
-        # TODO THis code is duplicated on the structures and database snapshoters
+        # TODO This code is duplicated on the structures and database snapshoters
         invalid, message = invalid_conf(myConfig)
         if invalid:
             log_error(message, debug)
             time.sleep(polling_frequency)
-            if polling_frequency < 5:
+            if polling_frequency < 3:
                 log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
                 polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
 

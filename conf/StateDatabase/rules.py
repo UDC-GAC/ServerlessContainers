@@ -20,7 +20,8 @@ cpu_exceeded_upper = dict(
                 {"var": "cpu.structure.cpu.max"}]}
         ]
         }),
-    generates="events", action={"events": {"scale": {"up": 1}}},
+    generates="events",
+    action={"events": {"scale": {"up": 1}}},
     active=True
 )
 
@@ -64,7 +65,8 @@ CpuRescaleUp = dict(
     generates="requests",
     action={"requests": ["CpuRescaleUp"]},
     amount=225,
-    rescale_by="amount",
+    rescale_policy="amount",
+    rescale_type="up",
     active=True
 )
 
@@ -85,8 +87,8 @@ CpuRescaleDown = dict(
     events_to_remove=6,
     generates="requests",
     action={"requests": ["CpuRescaleDown"]},
-    amount=-20,
-    rescale_by="fit_to_usage",
+    rescale_policy="fit_to_usage",
+    rescale_type="down",
     active=True,
 )
 mem_exceeded_upper = dict(
@@ -152,7 +154,8 @@ MemRescaleUp = dict(
     events_to_remove=2,
     action={"requests": ["MemRescaleUp"]},
     amount=3072,
-    rescale_by="amount",
+    rescale_policy="amount",
+    rescale_type="up",
     active=True
 )
 
@@ -173,9 +176,8 @@ MemRescaleDown = dict(
     generates="requests",
     events_to_remove=8,
     action={"requests": ["MemRescaleDown"]},
-    amount=-512,
-    percentage_reduction=50,
-    rescale_by="fit_to_usage",
+    rescale_policy="fit_to_usage",
+    rescale_type="down",
     active=True
 )
 

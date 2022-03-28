@@ -145,21 +145,22 @@ class LXDContainerManager:
                 mem_success, mem_resources = get_node_mem(node_name)
                 node_dict[DICT_MEM_LABEL] = mem_resources
 
-                disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
-                if type(disk_resources) == list and len(disk_resources) > 0:
-                    node_dict[DICT_DISK_LABEL] = disk_resources[0]
-                elif disk_resources:
-                    node_dict[DICT_DISK_LABEL] = disk_resources
-                else:
-                    node_dict[DICT_DISK_LABEL] = []
-                # TODO support multiple disks
+                # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                # if type(disk_resources) == list and len(disk_resources) > 0:
+                #     node_dict[DICT_DISK_LABEL] = disk_resources[0]
+                # elif disk_resources:
+                #     node_dict[DICT_DISK_LABEL] = disk_resources
+                # else:
+                #     node_dict[DICT_DISK_LABEL] = []
+                # # TODO support multiple disks
+                #
+                # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
+                # if net_resources:
+                #     node_dict[DICT_NET_LABEL] = net_resources[0]
+                # else:
+                #     node_dict[DICT_NET_LABEL] = []
+                # # TODO support multiple networks
 
-                net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
-                if net_resources:
-                    node_dict[DICT_NET_LABEL] = net_resources[0]
-                else:
-                    node_dict[DICT_NET_LABEL] = []
-                # TODO support multiple networks
                 return node_dict
             else:
                 # If container not running, skip

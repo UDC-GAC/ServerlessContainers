@@ -44,7 +44,8 @@ if __name__ == "__main__":
     containers.append(("node2", host))
     containers.append(("node3", host))
 
-    hosts.append("host1")
+    host = "host1"
+    hosts.append(host)
     containers.append(("node4", host))
     containers.append(("node5", host))
     containers.append(("node6", host))

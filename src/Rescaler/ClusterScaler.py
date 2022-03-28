@@ -36,7 +36,7 @@ import src.StateDatabase.opentsdb as bdwatchdog
 from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_time_now_string, get_structures, update_structure, generate_request_name
+    get_structures, update_structure, generate_request_name
 
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True,
@@ -94,6 +94,12 @@ def check_containers_cpu_limits(containers):
     errors_detected = False
     for container in containers:
         database_resources = container["resources"]
+
+        if "max" not in database_resources["cpu"]:
+            log_error("container {0} has not a maximum value set, check its configuration".format(container["name"]), debug)
+            errors_detected = True
+            continue
+
         max_cpu_limit = database_resources["cpu"]["max"]
         real_resources = container_info_cache[container["name"]]["resources"]
         current_cpu_limit = get_current_resource_value(container, real_resources, "cpu")
@@ -128,6 +134,14 @@ def check_container_cpu_mapping(container, host_info, cpu_used_cores, cpu_used_s
 def check_container_core_mapping(container, real_resources):
     errors_detected = False
     database_resources = container["resources"]
+
+    if container["host"] not in host_info_cache:
+        log_error("Host info '{0}' for container {1} is missing".format(container["host"] , container["name"]), debug)
+        return True
+    elif "max" not in database_resources["cpu"]:
+        # This error should have been previously detected
+        return True
+
     host_info = host_info_cache[container["host"]]
     max_cpu_limit = database_resources["cpu"]["max"]
     current_cpu_limit = get_current_resource_value(container, real_resources, "cpu")
@@ -762,11 +776,6 @@ def persist_new_host_information():
         t.join()
 
 
-rescaling_function = {"container": rescale_container, "application": rescale_application}
-apply_request_by_resource = {"cpu": apply_cpu_request, "mem": apply_mem_request, "disk": apply_disk_request,
-                             "net": apply_net_request}
-
-
 def scale_structures(new_requests):
     log_info("Processing requests", debug)
 
@@ -868,19 +877,19 @@ def scale():
                 log_info("First hosts", debug)
                 errors_detected = check_host_cpu_limits(host_info_cache)
                 if errors_detected:
-                    log_info("Errors detected during host CPU limits check", debug)
+                    log_error("Errors detected during host CPU limits check", debug)
 
                 log_info("Second containers", debug)
                 errors_detected = check_containers_cpu_limits(containers)
                 if errors_detected:
-                    log_info("Errors detected during container CPU limits check", debug)
+                    log_error("Errors detected during container CPU limits check", debug)
 
                 log_info("Doing core mapping check", debug)
                 errors_detected = check_core_mapping(containers)
                 if errors_detected:
-                    log_info("Errors detected during container CPU map check", debug)
+                    log_error("Errors detected during container CPU map check", debug)
             else:
-                log_info("Core map check has been disabled", debug)
+                log_warning("Core map check has been disabled", debug)
 
             # Get the requests
             new_requests = filter_requests(request_timeout)
@@ -909,6 +918,9 @@ def scale():
         log_info("----------------------\n", debug)
         time.sleep(polling_frequency)
 
+
+rescaling_function = {"container": rescale_container, "application": rescale_application}
+apply_request_by_resource = {"cpu": apply_cpu_request, "mem": apply_mem_request, "disk": apply_disk_request, "net": apply_net_request}
 
 def main():
     try:

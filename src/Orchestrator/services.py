@@ -4,7 +4,7 @@ from flask import jsonify
 from flask import request
 import time
 
-from src.Orchestrator.utils import BACK_OFF_TIME, MAX_TRIES, get_db
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 service_routes = Blueprint('services', __name__)
 
@@ -36,7 +36,7 @@ def set_service_information(service_name):
             service["config"][key] = data[key]
         get_db().update_service(service)
 
-        time.sleep(BACK_OFF_TIME)
+        time.sleep(BACK_OFF_TIME_MS / 1000)
         put_done = True
         service = retrieve_service(service_name)
         for key in data:
@@ -87,7 +87,7 @@ def set_service_value(service_name, key):
         service["config"][key] = value
         get_db().update_service(service)
 
-        time.sleep(BACK_OFF_TIME)
+        time.sleep(BACK_OFF_TIME_MS / 1000)
         service = retrieve_service(service_name)
         put_done = service["config"][key] == value
 

@@ -5,7 +5,7 @@ from flask import request
 import time
 
 
-from src.Orchestrator.utils import BACK_OFF_TIME, MAX_TRIES, get_db
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 users_routes = Blueprint('users', __name__)
 
@@ -38,7 +38,7 @@ def set_user_energy_max(user_name):
         user["energy"]["max"] = value
         get_db().update_user(user)
 
-        time.sleep(BACK_OFF_TIME)
+        time.sleep(BACK_OFF_TIME_MS / 1000)
         user = get_db().get_user(user_name)
         put_done = user["energy"]["max"] == value
 

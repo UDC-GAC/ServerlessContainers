@@ -228,8 +228,7 @@ class Guardian:
             for field in ["max", "current", "max", "min"]:
                 strings.append(str(self.try_get_value(metrics, field)))
         else:
-            for field in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits),
-                          ("min", metrics)]:
+            for field in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits), ("min", metrics)]:
                 strings.append(str(self.try_get_value(field[1], field[0])))
             strings.insert(3, usage_value_string)  # Manually add the usage metric
 
@@ -381,13 +380,11 @@ class Guardian:
         # that the limit can be surpassed
         if values["current"] != NOT_AVAILABLE_STRING:
             if values["current"] - values["boundary"] < values["upper"]:
-                raise ValueError(
-                    "value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
+                raise ValueError("value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
                         str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
             elif values["current"] - values["boundary"] > values["upper"]:
-                raise ValueError(
-                    "value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
+                raise ValueError("value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
                         str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
     @staticmethod
@@ -472,83 +469,114 @@ class Guardian:
     def match_rules_and_events(self, structure, rules, events, limits, usages):
         generated_requests = list()
         events_to_remove = dict()
+
         for rule in rules:
-            try:
-                resource_label = rule["resource"]
-                if rule["active"] and rule["generates"] == "requests" and resource_label in events and jsonLogic(
-                        rule["rule"], events[resource_label]):
+            # Check that the rule has the required parameters
+            rule_invalid = False
+            for key in ["active", "resource", "generates", "name", ]:
+                if key not in rule:
+                    log_warning("Rule: {0} is missing a key parameter {1}, skipping it".format(rule["name"], key), self.debug)
+                    rule_invalid = True
+            if rule_invalid:
+                continue
 
-                    # If rescaling a container, check that the current resource value exists, otherwise there
-                    # is nothing to rescale
-                    if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
-                        log_warning(
-                            "No current value for container' {0}' and resource '{1}', can't rescale".format(
-                                structure["name"], resource_label), self.debug)
-                        continue
+            if rule["generates"] == "requests":
+                if "rescale_policy" not in rule or "rescale_type" not in rule:
+                    log_warning("Rule: {0} is missing the 'rescale_type' or the 'rescale_policy' parameter, skipping it".format(rule["name"]), self.debug)
+                    continue
 
-                    # If no policy is set for scaling, default to "amount"
-                    if "rescale_by" not in rule.keys():
-                        rule["rescale_by"] = "amount"
-                        log_warning(
-                            "No rescale_by policy is set in rule : '{0}', falling back to default amount".format(
-                                rule["name"]), self.debug)
+                if rule["rescale_type"] == "up" and "amount" not in rule:
+                    log_warning("Rule: {0} is missing a the amount parameter, skipping it".format(rule["name"]), self.debug)
+                    continue
 
-                    # Get the amount to be applied from the policy set
-                    if rule["rescale_by"] == "amount":
+
+            resource_label = rule["resource"]
+
+            rule_activated = rule["active"] and \
+                             rule["generates"] == "requests" and \
+                             resource_label in events and \
+                             jsonLogic(rule["rule"], events[resource_label])
+
+            if rule_activated:
+                # If rescaling a container, check that the current resource value exists, otherwise there
+                # is nothing to rescale
+                if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
+                    log_warning("No current value for container' {0}' and "
+                                "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
+                    continue
+
+                # Get the amount to be applied from the policy set
+                if rule["rescale_type"] == "up":
+                    if rule["rescale_policy"] == "amount":
                         amount = rule["amount"]
-                    elif rule["rescale_by"] == "fit_to_usage":
+                    elif rule["rescale_policy"] == "proportional":
+                        amount = rule["amount"]
+                        current_resource_limit = structure["resources"][resource_label]["current"]
+                        upper_limit = limits[resource_label]["upper"]
+                        usage = usages[translator_dict[resource_label]]
+                        ratio = (usage - upper_limit) / (current_resource_limit - upper_limit)
+                        amount = ratio * amount
+                        log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
+                            current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
+                    else:
+                        log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+                        continue
+                elif rule["rescale_type"] == "down":
+                    if rule["rescale_policy"] == "amount":
+                        amount = rule["amount"]
+                    elif rule["rescale_policy"] == "fit_to_usage":
                         current_resource_limit = structure["resources"][resource_label]["current"]
                         boundary = limits[resource_label]["boundary"]
                         usage = usages[translator_dict[resource_label]]
                         amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
-                    elif rule["rescale_by"] == "proportional" and rule["resource"] == "energy":
+                    elif rule["rescale_policy"] == "proportional" and rule["resource"] == "energy":
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     else:
-                        amount = rule["amount"]
+                        log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+                        continue
+                else:
+                    log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
+                    continue
 
-                    # Special case for amount being between 0 and 1 or between -1 and 0
-                    # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
-                    # due to a float rounding error
-                    if int(amount) == 0 and amount < 0:
-                        amount = -1
-                    elif int(amount) == 0 and amount > 0:
-                        amount = 1
+                # Special case for amount being between 0 and 1 or between -1 and 0
+                # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
+                # due to a float rounding error
+                if int(amount) == 0 and amount < 0:
+                    amount = -1
+                elif int(amount) == 0 and amount > 0:
+                    amount = 1
 
-                    # If the resource is susceptible to check, ensure that it does not surpass any limit
-                    if resource_label not in NON_ADJUSTABLE_RESOURCES:
-                        structure_resources = structure["resources"][resource_label]
-                        structure_limits = limits[resource_label]
-                        amount = self.adjust_amount(amount, structure_resources, structure_limits)
+                # If the resource is susceptible to check, ensure that it does not surpass any limit
+                if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                    structure_resources = structure["resources"][resource_label]
+                    structure_limits = limits[resource_label]
+                    amount = self.adjust_amount(amount, structure_resources, structure_limits)
 
-                    # If the remaining amount is non-zero, create the Request
-                    if amount != 0:
-                        action = generate_request_name(amount, resource_label)
-                        request = self.generate_request(structure, amount, resource_label, action)
+                # If the remaining amount is non-zero, create the Request
+                if amount != 0:
+                    action = generate_request_name(amount, resource_label)
+                    request = self.generate_request(structure, amount, resource_label, action)
 
-                        # For the moment, energy rescaling is uniquely mapped to cpu rescaling
-                        if resource_label == "energy":
-                            request["resource"] = "cpu"
-                            request["for_energy"] = True
+                    # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+                    if resource_label == "energy":
+                        request["resource"] = "cpu"
+                        request["for_energy"] = True
 
-                        # If scaling a container, add its host information as it will be needed
-                        if self.is_container(structure):
-                            request["host"] = structure["host"]
-                            request["host_rescaler_ip"] = structure["host_rescaler_ip"]
-                            request["host_rescaler_port"] = structure["host_rescaler_port"]
+                    # If scaling a container, add its host information as it will be needed
+                    if self.is_container(structure):
+                        request["host"] = structure["host"]
+                        request["host_rescaler_ip"] = structure["host_rescaler_ip"]
+                        request["host_rescaler_port"] = structure["host_rescaler_port"]
 
-                        # Append the generated request
-                        generated_requests.append(request)
+                    # Append the generated request
+                    generated_requests.append(request)
 
-                    # Remove the events that triggered the request
-                    event_name = generate_event_name(events[resource_label]["events"], resource_label)
-                    if event_name not in events_to_remove:
-                        events_to_remove[event_name] = 0
-                    events_to_remove[event_name] += rule["events_to_remove"]
+                # Remove the events that triggered the request
+                event_name = generate_event_name(events[resource_label]["events"], resource_label)
+                if event_name not in events_to_remove:
+                    events_to_remove[event_name] = 0
+                events_to_remove[event_name] += rule["events_to_remove"]
 
-            except KeyError as e:
-                log_warning(
-                    "rule: {0} is missing a parameter {1} {2} ".format(rule["name"], str(e),
-                                                                       str(traceback.format_exc())), self.debug)
 
         return generated_requests, events_to_remove
 
@@ -556,11 +584,10 @@ class Guardian:
         resources = container["resources"]
 
         container_name_str = "@" + container["name"]
-        container_guard_policy_str = "with policy: {0}".format(container["guard_policy"])
         resources_str = "| "
         for resource in self.guardable_resources:
-            resources_str += resource + "({0})".format(
-                self.get_resource_summary(resource, resources, limits, usages)) + " | "
+            if container["resources"][resource]["guard"]:
+                resources_str += resource + "({0})".format(self.get_resource_summary(resource, resources, limits, usages)) + " | "
 
         ev, req = list(), list()
         for event in triggered_events:
@@ -569,7 +596,7 @@ class Guardian:
             req.append(request["action"])
         triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
         log_info(
-            " ".join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
+            " ".join([container_name_str, resources_str, triggered_requests_and_events]),
             self.debug)
 
     def process_serverless_structure(self, structure, usages, limits, rules):
@@ -686,15 +713,11 @@ class Guardian:
 
         threads = []
         for structure in structures:
-            if "guard_policy" not in structure or structure["guard_policy"] == "serverless":
-                # Default option will be serverless
-                thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
-                                args=(structure, rules,))
-                thread.start()
-                threads.append(thread)
-            else:
-                # Default is still serverless for now
-                self.serverless(structure, rules)
+            thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
+                            args=(structure, rules,))
+            thread.start()
+            threads.append(thread)
+
         for process in threads:
             process.join()
 

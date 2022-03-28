@@ -156,14 +156,14 @@ class CouchDBServer:
 
         return output_dict
 
-    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=500, max_tries=10):
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
         r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
                 # update revision and retry after slightly random wait
                 if 0 <= previous_tries < max_tries:
-                    time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
                     matches = self.__find_documents_by_matches(database, {"_id": doc["_id"]})
                     if len(matches) > 0:
                         new_doc = matches[0]
@@ -178,7 +178,7 @@ class CouchDBServer:
                     r.raise_for_status()
             elif r.status_code == 404:
                 # Database may have been reinitialized (deleted and recreated), wait and retry again
-                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
                 return self.__resilient_update_doc(database, doc, previous_tries + 1)
             else:
                 r.raise_for_status()

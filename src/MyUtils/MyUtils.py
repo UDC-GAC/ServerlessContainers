@@ -204,7 +204,7 @@ def get_cpu_list(cpu_num_string):
 
 
 def copy_structure_base(structure):
-    keys_to_copy = ["_id", "type", "subtype", "name"]
+    keys_to_copy = ["_id", "_rev", "type", "subtype", "name"]
     # TODO FIX, some structures types have specific fields, fix accordingly
     if structure["subtype"] == "container":
         keys_to_copy.append("host")

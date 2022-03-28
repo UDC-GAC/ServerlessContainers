@@ -66,10 +66,10 @@ def check_unstable_configuration():
         for rule in rules:
             if "generates" in rule and rule["generates"] == "requests" and rule["active"]:
                 event_count = int(rule["events_to_remove"])
-                event_window_time_to_trigger = window_timelapse * (event_count + 1)
+                event_window_time_to_trigger = window_timelapse * (event_count)
                 # Leave a slight buffer time to account for window times skewness
                 if event_window_time_to_trigger > event_timeout:
-                    MyUtils.log_warning(
+                    MyUtils.log_error(
                         "Rule: '{0}' could never be activated -> guardian event timeout: '{1}', number of events".format(
                             rule["name"], str(event_timeout)) +
                         " required to trigger the rule: '{0}' and guardian polling time: '{1}'".format(
