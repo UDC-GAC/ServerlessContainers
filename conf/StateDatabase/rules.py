@@ -181,6 +181,61 @@ MemRescaleDown = dict(
     active=True
 )
 
+
+# This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
+cpu_usage_low = dict(
+    _id='cpu_usage_low',
+    type='rule',
+    resource="cpu",
+    name='cpu_usage_low',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"-": [
+                    {"var": "cpu.structure.cpu.current"},
+                    {"var": "cpu.structure.cpu.min"}]
+                },
+                25
+            ]},
+            {"<": [
+                {"/": [
+                    {"var": "cpu.structure.cpu.usage"},
+                    {"var": "cpu.structure.cpu.current"}]
+                },
+                0.4
+            ]}
+        ]}
+    ),
+    active=False
+)
+
+# This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
+cpu_usage_high = dict(
+    _id='cpu_usage_high',
+    type='rule',
+    resource="cpu",
+    name='cpu_usage_high',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"-": [
+                    {"var": "cpu.structure.cpu.max"},
+                    {"var": "cpu.structure.cpu.current"}]
+                },
+                25
+            ]},
+            {">": [
+                {"/": [
+                    {"var": "cpu.structure.cpu.usage"},
+                    {"var": "cpu.structure.cpu.current"}]
+                },
+                0.7
+            ]}
+        ]}
+    ),
+    active=False
+)
+
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
@@ -197,3 +252,5 @@ if __name__ == "__main__":
         handler.add_rule(mem_dropped_lower)
         handler.add_rule(MemRescaleUp)
         handler.add_rule(MemRescaleDown)
+        handler.add_rule(cpu_usage_high)
+        handler.add_rule(cpu_usage_low)

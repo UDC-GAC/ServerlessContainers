@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-tmux kill-session -t "Refeeder"
+tmux kill-session -t "refeeder"

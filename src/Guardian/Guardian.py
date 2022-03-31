@@ -240,7 +240,8 @@ class Guardian:
         """
         expected_value = structure_resources["current"] + amount
         lower_limit = structure_limits["lower"] + amount
-        min_limit, max_limit = structure_resources["min"], structure_resources["max"]
+        max_limit = structure_resources["max"]
+        min_limit = structure_resources["min"]
 
         if lower_limit < min_limit:
             amount += min_limit - lower_limit
@@ -667,11 +668,11 @@ class Guardian:
                                                                     metrics_to_retrieve, metrics_to_generate)
 
             for metric in usages:
-                if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+                if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE and metric in self.guardable_resources:
                     log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
 
             # Skip this structure if all the usage metrics are unavailable
-            if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+            if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE and metric in self.guardable_resources for metric in usages]):
                 log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
                 return
 
@@ -685,13 +686,11 @@ class Guardian:
                 log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
-            # This only applies to containers, currently not used for applications
-            # Adjust the container's limits according to the current value
-            if structure_subtype == "container":
-                limits["resources"] = self.adjust_container_state(resources, limits_resources, self.guardable_resources)
+            # Adjust the structure limits according to the current value
+            limits["resources"] = self.adjust_container_state(resources, limits_resources, self.guardable_resources)
 
-                # Remote database operation
-                self.couchdb_handler.update_limit(limits)
+            # Remote database operation
+            self.couchdb_handler.update_limit(limits)
 
             self.process_serverless_structure(structure, usages, limits_resources, rules)
 

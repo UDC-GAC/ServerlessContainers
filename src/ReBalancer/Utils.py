@@ -43,11 +43,12 @@ def get_user_apps(applications, user):
 
 def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
     try:
-        data = {"energy":
-                    {"structure":
-                         {"energy":
-                              {"usage": application["resources"]["energy"]["usage"],
-                               "max": application["resources"]["energy"]["max"]}}},
+        data = {
+                # "energy":
+                #     {"structure":
+                #          {"energy":
+                #               {"usage": application["resources"]["energy"]["usage"],
+                #                "max": application["resources"]["energy"]["max"]}}},
                 "cpu":
                     {"structure":
                          {"cpu":
@@ -62,25 +63,25 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
         MyUtils.log_error("Invalid app rebalancing policy '{0}'".format(rebalancing_level), debug=True)
         return False
 
-    rule_low_usage = couchdb_handler.get_rule("energy_exceeded_upper")
-    if jsonLogic(rule_low_usage["rule"], data):
-        # Application is overusing energy
-        if rebalancing_level == "container":
-            # Let the Guardian or the dynamic energy balancing deal with it
-            return False
-        elif rebalancing_level == "application":
-            # It may be a receiver for dynamic energy rebalancing
-            return True
-
-    rule_high_usage = couchdb_handler.get_rule("energy_dropped_lower")
-    if jsonLogic(rule_high_usage["rule"], data):
-        # Application is underusing energy
-        if rebalancing_level == "container":
-            # Let the Guardian or the dynamic energy balancing deal with it
-            return False
-            # It may be a donor for dynamic energy rebalancing
-        elif rebalancing_level == "application":
-            return True
+    # rule_low_usage = couchdb_handler.get_rule("energy_exceeded_upper")
+    # if jsonLogic(rule_low_usage["rule"], data):
+    #     # Application is overusing energy
+    #     if rebalancing_level == "container":
+    #         # Let the Guardian or the dynamic energy balancing deal with it
+    #         return False
+    #     elif rebalancing_level == "application":
+    #         # It may be a receiver for dynamic energy rebalancing
+    #         return True
+    #
+    # rule_high_usage = couchdb_handler.get_rule("energy_dropped_lower")
+    # if jsonLogic(rule_high_usage["rule"], data):
+    #     # Application is underusing energy
+    #     if rebalancing_level == "container":
+    #         # Let the Guardian or the dynamic energy balancing deal with it
+    #         return False
+    #         # It may be a donor for dynamic energy rebalancing
+    #     elif rebalancing_level == "application":
+    #         return True
 
     # The application is in the middle area of energy utilization
     if rebalancing_level == "container":

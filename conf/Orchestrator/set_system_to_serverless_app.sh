@@ -11,8 +11,10 @@ echo "Setting Guardian to guard applications"
 bash $ORCHESTRATOR_PATH/Guardian/set_to_application.sh
 
 echo "Setting application to guarded"
-bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_guarded.sh app1 "${resources[@]}"
+bash $ORCHESTRATOR_PATH/Structures/set_to_guarded.sh app1
 
+echo "Setting resources to guarded"
+bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_guarded.sh app1 "${resources[@]}"
 
 echo "Activate Guardian and Scaler services"
 bash $ORCHESTRATOR_PATH/Guardian/activate.sh

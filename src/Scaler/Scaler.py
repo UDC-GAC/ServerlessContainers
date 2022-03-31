@@ -53,7 +53,7 @@ RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem'
                               'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
                               'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
-APP_SCALING_SPLIT_AMOUNT = 45
+APP_SCALING_SPLIT_AMOUNT = 5
 
 
 class Scaler:

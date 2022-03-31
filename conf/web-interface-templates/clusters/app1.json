@@ -10,6 +10,20 @@
           ]
         },
         {
+          "metric": "limit.cpu.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.cpu.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
           "metric": "structure.cpu.usage",
           "aggregator": "zimsum",
           "tags": [

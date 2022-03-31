@@ -63,6 +63,14 @@ sanity_checker = dict(
     )
 )
 
+rebalancer  = dict(
+    name="rebalancer",
+    type="service",
+    heartbeat="",
+    config=dict(
+        DEBUG=True
+    )
+)
 
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
@@ -79,3 +87,4 @@ if __name__ == "__main__":
         handler.add_service(structures_snapshoter)
         handler.add_service(refeeder)
         handler.add_service(sanity_checker)
+        handler.add_service(rebalancer)
