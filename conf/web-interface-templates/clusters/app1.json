@@ -19,7 +19,7 @@
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 20000
+        "ymax": 2000
       }
     },{
       "metrics": [
@@ -40,7 +40,7 @@
       ],
       "yranges": {
         "ymin": 0,
-        "ymax": 1500000
+        "ymax": 20000
       }
     },{
       "metrics": [

@@ -32,9 +32,10 @@ import traceback
 import logging
 
 from json_logic import jsonLogic
+from termcolor import colored
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning,\
-    get_structures, generate_event_name, generate_request_name, wait_operation_thread
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
@@ -79,7 +80,6 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        debug = True
 
     @staticmethod
     def check_unset_values(value, label, resource):
@@ -143,14 +143,6 @@ class Guardian:
             return int(d[key])
         except (KeyError, ValueError):
             return NOT_AVAILABLE_STRING
-
-    @staticmethod
-    def is_application(structure):
-        return structure["subtype"] == "application"
-
-    @staticmethod
-    def is_container(structure):
-        return structure["subtype"] == "container"
 
     @staticmethod
     def sort_events(structure_events, event_timeout):
@@ -217,6 +209,7 @@ class Guardian:
         """
         metrics = resources_dict[resource_label]
         limits = limits_dict[resource_label]
+        color_map = {"max": "red", "current": "magenta", "upper": "yellow", "usage": "cyan", "lower": "green", "min": "blue"}
 
         if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
             usage_value_string = NOT_AVAILABLE_STRING
@@ -224,13 +217,9 @@ class Guardian:
             usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
 
         strings = list()
-        if not limits_dict and not usages_dict:
-            for field in ["max", "current", "max", "min"]:
-                strings.append(str(self.try_get_value(metrics, field)))
-        else:
-            for field in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits), ("min", metrics)]:
-                strings.append(str(self.try_get_value(field[1], field[0])))
-            strings.insert(3, usage_value_string)  # Manually add the usage metric
+        for key, values in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits), ("min", metrics)]:
+            strings.append(colored(str(self.try_get_value(values, key)), color_map[key]))
+        strings.insert(3, colored(usage_value_string, color_map["usage"]))  # Manually add the usage metric
 
         return ",".join(strings)
 
@@ -238,10 +227,8 @@ class Guardian:
     def adjust_amount(amount, structure_resources, structure_limits):
         """Pre-check and, if needed, adjust the scaled amount with the policy:
 
-        * If lower limit < min value -> Amount to reduce too large, adjust it so that the lower limit is set to the
-        minimum
-        * If new applied value > max value -> Amount to increase too large, adjust it so that the current value is set
-        to the maximum
+        * If lower limit < min value -> Amount to reduce too large, adjust it so that the lower limit is set to the minimum
+        * If new applied value > max value -> Amount to increase too large, adjust it so that the current value is set to the maximum
 
         Args:
             amount (integer): A number representing the amount to reduce or increase from the current value
@@ -256,9 +243,9 @@ class Guardian:
         min_limit, max_limit = structure_resources["min"], structure_resources["max"]
 
         if lower_limit < min_limit:
-            amount += (min_limit - lower_limit)
+            amount += min_limit - lower_limit
         elif expected_value > max_limit:
-            amount -= (expected_value - max_limit)
+            amount -= expected_value - max_limit
 
         return amount
 
@@ -331,6 +318,11 @@ class Guardian:
 
     def adjust_container_state(self, resources, limits, resources_to_adjust):
         for resource in resources_to_adjust:
+            if "boundary" not in limits[resource]:
+                raise RuntimeError("Missing boundary value for resource {0}".format(resource))
+            if "current" not in resources[resource]:
+                raise RuntimeError("Missing current value for resource {0}".format(resource))
+
             n_loop, errors = 0, True
             while errors:
                 n_loop += 1
@@ -339,16 +331,15 @@ class Guardian:
                     errors = False
                 except ValueError:
                     # Correct the chain current > upper > lower, including boundary between current and upper
-                    boundary = limits[resource]["boundary"]
-                    limits[resource]["upper"] = resources[resource]["current"] - boundary
-                    limits[resource]["lower"] = limits[resource]["upper"] - boundary
-                    # limits[resource]["lower"] = max(limits[resource]["upper"] - boundary, resources[resource]["min"])
+                    boundary = int(limits[resource]["boundary"])
+                    limits[resource]["upper"] = int(resources[resource]["current"] - boundary)
+                    limits[resource]["lower"] = int(limits[resource]["upper"] - boundary)
                 except RuntimeError as e:
                     log_error(str(e), self.debug)
                     raise e
                 if n_loop >= 10:
                     message = "Limits for {0} can't be adjusted, check the configuration (max:{1},current:{2}, boundary:{3}, min:{4})".format(
-                        resource, resources[resource]["max"], int(resources[resource]["current"]), limits[resource]["boundary"] , resources[resource]["min"])
+                        resource, resources[resource]["max"], int(resources[resource]["current"]), limits[resource]["boundary"], resources[resource]["min"])
                     raise RuntimeError(message)
                     # TODO This prevents from checking other resources
         return limits
@@ -381,11 +372,11 @@ class Guardian:
         if values["current"] != NOT_AVAILABLE_STRING:
             if values["current"] - values["boundary"] < values["upper"]:
                 raise ValueError("value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
-                        str(values["current"]), str(values["boundary"]), str(values["upper"])))
+                    str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
             elif values["current"] - values["boundary"] > values["upper"]:
                 raise ValueError("value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
-                        str(values["current"]), str(values["boundary"]), str(values["upper"])))
+                    str(values["current"]), str(values["boundary"]), str(values["upper"])))
 
     @staticmethod
     def rule_triggers_event(rule, data, resources):
@@ -454,16 +445,28 @@ class Guardian:
         return event
 
     @staticmethod
-    def generate_request(structure, amount, resource, action):
+    def generate_request(structure, amount, resource_label):
+        action = generate_request_name(amount, resource_label)
         request = dict(
             type="request",
-            resource=resource,
+            resource=resource_label,
             amount=int(amount),
             structure=structure["name"],
             action=action,
             timestamp=int(time.time()),
             structure_type=structure["subtype"]
         )
+        # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+        if resource_label == "energy":
+            request["resource"] = "cpu"
+            request["for_energy"] = True
+
+        # If scaling a container, add its host information as it will be needed
+        if structure_is_container(structure):
+            request["host"] = structure["host"]
+            request["host_rescaler_ip"] = structure["host_rescaler_ip"]
+            request["host_rescaler_port"] = structure["host_rescaler_port"]
+
         return request
 
     def match_rules_and_events(self, structure, rules, events, limits, usages):
@@ -489,7 +492,6 @@ class Guardian:
                     log_warning("Rule: {0} is missing a the amount parameter, skipping it".format(rule["name"]), self.debug)
                     continue
 
-
             resource_label = rule["resource"]
 
             rule_activated = rule["active"] and \
@@ -497,86 +499,76 @@ class Guardian:
                              resource_label in events and \
                              jsonLogic(rule["rule"], events[resource_label])
 
-            if rule_activated:
-                # If rescaling a container, check that the current resource value exists, otherwise there
-                # is nothing to rescale
-                if self.is_container(structure) and "current" not in structure["resources"][resource_label]:
-                    log_warning("No current value for container' {0}' and "
-                                "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
-                    continue
+            if not rule_activated:
+                continue
 
-                # Get the amount to be applied from the policy set
-                if rule["rescale_type"] == "up":
-                    if rule["rescale_policy"] == "amount":
-                        amount = rule["amount"]
-                    elif rule["rescale_policy"] == "proportional":
-                        amount = rule["amount"]
-                        current_resource_limit = structure["resources"][resource_label]["current"]
-                        upper_limit = limits[resource_label]["upper"]
-                        usage = usages[translator_dict[resource_label]]
-                        ratio = (usage - upper_limit) / (current_resource_limit - upper_limit)
-                        amount = ratio * amount
-                        log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
-                            current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
-                    else:
-                        log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
-                        continue
-                elif rule["rescale_type"] == "down":
-                    if rule["rescale_policy"] == "amount":
-                        amount = rule["amount"]
-                    elif rule["rescale_policy"] == "fit_to_usage":
-                        current_resource_limit = structure["resources"][resource_label]["current"]
-                        boundary = limits[resource_label]["boundary"]
-                        usage = usages[translator_dict[resource_label]]
-                        amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
-                    elif rule["rescale_policy"] == "proportional" and rule["resource"] == "energy":
-                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
-                    else:
-                        log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
-                        continue
+            # RULE HAS BEEN ACTIVATED
+
+            # If rescaling a container, check that the current resource value exists, otherwise there is nothing to rescale
+            if structure_is_container(structure) and "current" not in structure["resources"][resource_label]:
+                log_warning("No current value for container' {0}' and "
+                            "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
+                continue
+
+            # Get the amount to be applied from the policy set
+            if rule["rescale_type"] == "up":
+                if rule["rescale_policy"] == "amount":
+                    amount = rule["amount"]
+                elif rule["rescale_policy"] == "proportional":
+                    amount = rule["amount"]
+                    current_resource_limit = structure["resources"][resource_label]["current"]
+                    upper_limit = limits[resource_label]["upper"]
+                    usage = usages[translator_dict[resource_label]]
+                    ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
+                    amount = int(ratio * amount)
+                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
+                        current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
                 else:
-                    log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
+                    log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
+            elif rule["rescale_type"] == "down":
+                if rule["rescale_policy"] == "amount":
+                    amount = rule["amount"]
+                elif rule["rescale_policy"] == "fit_to_usage":
+                    current_resource_limit = structure["resources"][resource_label]["current"]
+                    boundary = limits[resource_label]["boundary"]
+                    usage = usages[translator_dict[resource_label]]
+                    amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                elif rule["rescale_policy"] == "proportional" and rule["resource"] == "energy":
+                    amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                else:
+                    log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+                    continue
+            else:
+                log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
+                continue
 
-                # Special case for amount being between 0 and 1 or between -1 and 0
-                # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
-                # due to a float rounding error
-                if int(amount) == 0 and amount < 0:
-                    amount = -1
-                elif int(amount) == 0 and amount > 0:
-                    amount = 1
+            # Ensure that amount is an integer, either by converting float -> int, or string -> int
+            amount = int(amount)
 
-                # If the resource is susceptible to check, ensure that it does not surpass any limit
-                if resource_label not in NON_ADJUSTABLE_RESOURCES:
-                    structure_resources = structure["resources"][resource_label]
-                    structure_limits = limits[resource_label]
-                    amount = self.adjust_amount(amount, structure_resources, structure_limits)
+            # If it is 0, because there was a previous floating value between -1 and 1, set it to 0 so that it does not generate any Request
+            if amount == 0:
+                log_warning("Amount generated for structure {0} with rule {1} is 0".format(structure["name"], rule["name"]), self.debug)
 
-                # If the remaining amount is non-zero, create the Request
-                if amount != 0:
-                    action = generate_request_name(amount, resource_label)
-                    request = self.generate_request(structure, amount, resource_label, action)
+            # If the resource is susceptible to check, ensure that it does not surpass any limit
+            new_amount = amount
+            if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                structure_resources = structure["resources"][resource_label]
+                structure_limits = limits[resource_label]
+                new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
+                if new_amount != amount:
+                    log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
+                        structure["name"], rule["name"], amount, new_amount), self.debug)
 
-                    # For the moment, energy rescaling is uniquely mapped to cpu rescaling
-                    if resource_label == "energy":
-                        request["resource"] = "cpu"
-                        request["for_energy"] = True
+            # Generate the request and append it
+            request = self.generate_request(structure, new_amount, resource_label)
+            generated_requests.append(request)
 
-                    # If scaling a container, add its host information as it will be needed
-                    if self.is_container(structure):
-                        request["host"] = structure["host"]
-                        request["host_rescaler_ip"] = structure["host_rescaler_ip"]
-                        request["host_rescaler_port"] = structure["host_rescaler_port"]
-
-                    # Append the generated request
-                    generated_requests.append(request)
-
-                # Remove the events that triggered the request
-                event_name = generate_event_name(events[resource_label]["events"], resource_label)
-                if event_name not in events_to_remove:
-                    events_to_remove[event_name] = 0
-                events_to_remove[event_name] += rule["events_to_remove"]
-
+            # Remove the events that triggered the request
+            event_name = generate_event_name(events[resource_label]["events"], resource_label)
+            if event_name not in events_to_remove:
+                events_to_remove[event_name] = 0
+            events_to_remove[event_name] += rule["events_to_remove"]
 
         return generated_requests, events_to_remove
 
@@ -678,7 +670,6 @@ class Guardian:
                 if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
 
-
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
                 log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
@@ -726,14 +717,13 @@ class Guardian:
             if res not in ["cpu", "mem", "disk", "net", "energy"]:
                 return True, "Resource to be guarded '{0}' is invalid".format(res)
 
-        if self.structure_guarded not in ["container","application"]:
+        if self.structure_guarded not in ["container", "application"]:
             return True, "Structure to be guarded '{0}' is invalid".format(self.structure_guarded)
 
-        for key, num in [("WINDOW_TIMELAPSE",self.window_difference), ("WINDOW_DELAY",self.window_delay), ("EVENT_TIMEOUT",self.event_timeout)]:
+        for key, num in [("WINDOW_TIMELAPSE", self.window_difference), ("WINDOW_DELAY", self.window_delay), ("EVENT_TIMEOUT", self.event_timeout)]:
             if num < 5:
                 return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
         return False, ""
-
 
     def start_epoch(self):
         log_info("----------------------", self.debug)
@@ -810,7 +800,6 @@ class Guardian:
             wait_operation_thread(thread, debug)
 
             self.end_epoch(t0)
-
 
 
 def main():

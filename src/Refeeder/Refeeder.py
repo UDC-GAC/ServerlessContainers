@@ -52,7 +52,9 @@ REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
                                 # 'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
                                 'energy': ["sys.cpu.energy"]}
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 15, "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "GENERATED_METRICS": ["cpu","mem"], "DEBUG": True}
+
+
 SERVICE_NAME = "refeeder"
 debug = True
 NOT_AVAILABLE_STRING = "n/a"
@@ -82,6 +84,8 @@ def get_container_usages(container_name):
                                                              BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS)
 
         for metric in REFEEDER_APPLICATION_METRICS:
+            if metric not in CONFIG_DEFAULT_VALUES["GENERATED_METRICS"]:
+                continue
             if container_info[metric] == NO_METRIC_DATA_DEFAULT_VALUE:
                 MyUtils.log_warning("No metric info for {0} in container {1}".format(metric, container_name), debug=True)
 
@@ -153,9 +157,9 @@ def refeed_thread():
     if applications:
         refeed_applications(applications)
 
-    users = db_handler.get_users()
-    if users:
-        refeed_user_used_energy(applications, users, db_handler, debug)
+    # users = db_handler.get_users()
+    # if users:
+    #     refeed_user_used_energy(applications, users, db_handler, debug)
 
     epoch_end = time.time()
     processing_time = epoch_end - epoch_start

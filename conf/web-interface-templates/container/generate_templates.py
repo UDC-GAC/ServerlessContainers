@@ -2,7 +2,7 @@
 import json
 import sys
 
-CONTAINERS_LIST = ["node0", "node1"]
+CONTAINERS_LIST = ["node0", "node1", "node2", "node3", "node4", "node5","node6","node7"]
 
 def get_metric(metric, tags):
     return {
@@ -28,7 +28,7 @@ def generate_cpu():
     all = dict()
     all["timeseries"] = list()
 
-    for node in ["node0", "node1"]:
+    for node in CONTAINERS_LIST:
         all["timeseries"].append(get_node_cpu(node))
 
     return json.dumps(all, indent=2, sort_keys=True)
@@ -50,7 +50,7 @@ def generate_mem():
     all["timeseries"] = list()
 
     for node in CONTAINERS_LIST:
-        all["timeseries"].append(get_node_cpu(node))
+        all["timeseries"].append(get_node_mem(node))
 
     return json.dumps(all, indent=2, sort_keys=True)
 

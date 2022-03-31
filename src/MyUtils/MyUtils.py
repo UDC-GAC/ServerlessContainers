@@ -281,6 +281,13 @@ def generate_request_name(amount, resource):
         raise ValueError("Invalid amount")
 
 
+def structure_is_application(structure):
+    return structure["subtype"] == "application"
+
+
+def structure_is_container(structure):
+    return structure["subtype"] == "container"
+
 # TESTED
 def generate_event_name(event, resource):
     if "scale" not in event:

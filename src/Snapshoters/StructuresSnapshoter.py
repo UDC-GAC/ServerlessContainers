@@ -25,7 +25,6 @@ from __future__ import print_function
 
 from threading import Thread
 import requests
-import json
 import time
 import traceback
 import logging
@@ -51,7 +50,6 @@ debug = True
 def update_container_current_values(container_name, resources):
     # Remote database operation
     database_structure = db_handler.get_structure(container_name)
-    #new_structure = copy_structure_base(database_structure)
     structure = database_structure.copy()
 
     if not "resources" in structure:
@@ -68,8 +66,10 @@ def update_container_current_values(container_name, resources):
         else:
             structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
 
+        structure["resources"][resource]["current"] = int(structure["resources"][resource]["current"])
+
     # Remote database operation
-    update_structure(structure, db_handler, debug, max_tries=3)
+    update_structure(structure, db_handler, debug)
 
 
 def thread_persist_container(container, container_resources_dict):
@@ -102,7 +102,7 @@ def persist_containers(container_resources_dict):
         skip = False
         for resource in resources_persisted:
             if resource not in container["resources"] or "max" not in container["resources"][resource]:
-                log_error("Container {0} has not a proper config for the resource {1}".format(container["name"], resource),debug)
+                log_error("Container {0} has not a proper config for the resource {1}".format(container["name"], resource), debug)
                 skip = True
         if skip:
             continue
@@ -117,7 +117,6 @@ def persist_containers(container_resources_dict):
 
 def persist_applications(container_resources_dict):
     # Try to get the applications, if unavailable, return
-    # Remote database operation
     applications = get_structures(db_handler, debug, subtype="application")
     if not applications:
         return
@@ -134,31 +133,23 @@ def persist_applications(container_resources_dict):
         for container_name in application_containers:
 
             if container_name not in container_resources_dict:
-                log_error(
-                    "Container info {0} is missing for app : {1}".format(container_name, app["name"])
-                    + " app info will not be totally accurate", debug)
+                log_error("Container info {0} is missing for app : {1}, app info will not be totally accurate".format(
+                    container_name, app["name"]), debug)
                 continue
 
             for resource in resources_persisted:
                 try:
-                    current_resource_label = translate_map[resource]["limit_label"]
                     container_resources = container_resources_dict[container_name]["resources"]
-
                     if resource not in container_resources or not container_resources[resource]:
-                        log_error(
-                            "Unable to get info for resource {0} for container {1} when computing {2} resources".format(
-                                resource, container_name, app["name"]), debug)
+                        log_error("Unable to get info for resource {0} for container {1} when computing app {2} resources".format(
+                            resource, container_name, app["name"]), debug)
                     else:
+                        current_resource_label = translate_map[resource]["limit_label"]
                         app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
                 except KeyError:
                     if "name" in container_resources_dict[container_name] and "name" in app:
-                        log_error(
-                            "Container info {0} is missing for app : {1} and resource {2} resource,".format(
-                                container_name, app["name"], resource)
-                            + " app info will not be totally accurate", debug)
-                    else:
-                        log_error("Error with app or container info", debug)
-                        # TODO this error should be more self-explanatory
+                        log_error("Container info {0} is missing for app: {1} and resource {2} resource,".format(
+                            container_name, app["name"], resource) + " app info will not be totally accurate", debug)
 
         # Remote database operation
         update_structure(app, db_handler, debug)
@@ -230,12 +221,14 @@ def persist_thread():
     log_info("It took {0} seconds to snapshot applications".format(str("%.2f" % (t2 - t1))), debug)
     log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % (t3 - t2))), debug)
 
+
 def invalid_conf(config):
     # TODO Tiis code is duplicated on the structures and database snapshoters
-    for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
+    for key, num in [("POLLING_FREQUENCY", config.get_value("POLLING_FREQUENCY"))]:
         if num < 3:
             return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
     return False, ""
+
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)

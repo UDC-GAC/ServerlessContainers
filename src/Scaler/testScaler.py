@@ -22,7 +22,7 @@
 
 
 import unittest
-import src.Rescaler.ClusterScaler as scaler
+import src.Rescaler.Scaler as scaler
 
 
 class ClusterRescalerTest(unittest.TestCase):

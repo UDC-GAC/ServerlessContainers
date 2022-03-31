@@ -21,3 +21,7 @@ for i in "${nodes[@]}"
 do
 	bash $ORCHESTRATOR_PATH/Structures/set_to_guarded.sh $i
 done
+
+echo "Activate Guardian and Scaler services"
+bash $ORCHESTRATOR_PATH/Guardian/activate.sh
+bash $ORCHESTRATOR_PATH/Scaler/activate.sh
