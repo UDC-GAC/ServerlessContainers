@@ -10,6 +10,11 @@ resources=( cpu )
 echo "Setting Guardian to guard applications"
 bash $ORCHESTRATOR_PATH/Guardian/set_to_application.sh
 
+echo "Readjust Guardian configuration to the applications scenario"
+bash $ORCHESTRATOR_PATH/Guardian/set_window_delay.sh 15
+bash $ORCHESTRATOR_PATH/Guardian/set_window_timelapse.sh 10
+bash $ORCHESTRATOR_PATH/Guardian/set_event_timeout.sh 80
+
 echo "Setting application to guarded"
 bash $ORCHESTRATOR_PATH/Structures/set_to_guarded.sh app1
 

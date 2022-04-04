@@ -4,7 +4,7 @@ export SERVERLESS_PATH=$HOME/ServerlessContainers
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
 nodes=( node0 node1 node2 node3 node4 node5 node6 node7 )
-resources=( cpu )
+resources=( cpu mem )
 
 echo "Setting container resources to unguarded"
 for i in "${nodes[@]}"

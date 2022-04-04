@@ -206,7 +206,8 @@ cpu_usage_low = dict(
             ]}
         ]}
     ),
-    active=False
+    active=False,
+    generates="",
 )
 
 # This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
@@ -233,7 +234,8 @@ cpu_usage_high = dict(
             ]}
         ]}
     ),
-    active=False
+    active=False,
+    generates="",
 )
 
 if __name__ == "__main__":

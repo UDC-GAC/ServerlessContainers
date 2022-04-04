@@ -35,12 +35,13 @@ from json_logic import jsonLogic
 from termcolor import colored
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container
+    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
-BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel'] + ['proc.mem.resident', 'proc.mem.virtual']
-BDWATCHDOG_APPLICATION_METRICS = ['structure.cpu.usage'] + ['structure.mem.usage'] + ['structure.energy.usage']
+BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual']}
+BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage']}
+
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident']
@@ -479,7 +480,7 @@ class Guardian:
             rule_invalid = False
             for key in ["active", "resource", "generates", "name", ]:
                 if key not in rule:
-                    log_warning("Rule: {0} is missing a key parameter {1}, skipping it".format(rule["name"], key), self.debug)
+                    log_warning("Rule: {0} is missing a key parameter '{1}', skipping it".format(rule["name"], key), self.debug)
                     rule_invalid = True
             if rule_invalid:
                 continue
@@ -640,27 +641,32 @@ class Guardian:
     def serverless(self, structure, rules):
         structure_subtype = structure["subtype"]
 
+        # Check if structure is guarded
+        if "guard" not in structure or not structure["guard"]:
+            log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
+            return
+
+        # Check if the structure has any resource set to guarded
+        struct_guarded_resources = list()
+        for res in self.guardable_resources:
+            if res in structure["resources"] and "guard" in structure["resources"][res] and structure["resources"][res]["guard"]:
+                struct_guarded_resources.append(res)
+        if not struct_guarded_resources:
+            log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
+            return
+
+        # Check if structure is being monitored, otherwise, ignore
+        if structure_subtype not in BDWATCHDOG_METRICS or structure_subtype not in GUARDIAN_METRICS or structure_subtype not in TAGS:
+            log_error("Unknown structure subtype '{0}'".format(structure_subtype), self.debug)
+            return
+
         try:
-            # Check if structure is guarded
-            if "guard" not in structure or not structure["guard"]:
-                log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
-                return
-
-            # Check if the structure has any resource set to guarded
-            if not any(["guard" in res and res["guard"] for res in structure["resources"].values()]):
-                log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
-                return
-
-            # Check if structure is being monitored, otherwise, ignore
-            try:
-                metrics_to_retrieve = BDWATCHDOG_METRICS[structure_subtype]
-                metrics_to_generate = GUARDIAN_METRICS[structure_subtype]
-                tag = TAGS[structure_subtype]
-            except KeyError:
-                # Default is container
-                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
-                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
-                tag = TAGS["container"]
+            metrics_to_retrieve = list()
+            metrics_to_generate = dict()
+            for res in struct_guarded_resources:
+                metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
+                metrics_to_generate[generate_structure_usage_metric(res)] = GUARDIAN_METRICS[structure_subtype][generate_structure_usage_metric(res)]
+            tag = TAGS[structure_subtype]
 
             # Remote database operation
             usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
@@ -668,11 +674,11 @@ class Guardian:
                                                                     metrics_to_retrieve, metrics_to_generate)
 
             for metric in usages:
-                if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE and metric in self.guardable_resources:
+                if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
 
             # Skip this structure if all the usage metrics are unavailable
-            if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE and metric in self.guardable_resources for metric in usages]):
+            if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
                 log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
                 return
 

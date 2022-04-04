@@ -145,8 +145,13 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
             elif resource not in structure["resources"]:
                 return abort(400, {"message": "Resource '{0}' is missing in structure {1}".format(resource, structure_name)})
 
+    # 1st check, in case nothing has to be done really
+    put_done = True
+    structure = retrieve_structure(structure_name)
+    for resource in resources:
+        put_done = put_done and structure["resources"][resource]["guard"] == state
+
     tries = 0
-    put_done = False
     while not put_done:
         tries += 1
         structure = retrieve_structure(structure_name)

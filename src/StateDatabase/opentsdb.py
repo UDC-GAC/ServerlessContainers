@@ -33,7 +33,7 @@ from requests import ReadTimeout
 class OpenTSDBServer:
     __OPENTSDB_URL = "opentsdb"
     __OPENTSDB_PORT = 4242
-    NO_METRIC_DATA_DEFAULT_VALUE = 0  # -1
+    NO_METRIC_DATA_DEFAULT_VALUE = 0  # -1 # TODO this should be set to -1 and everything should work
     __TIMEOUT = 5
 
     def __init__(self, opentsdb_url=None, opentsdb_port=None):
@@ -91,8 +91,7 @@ class OpenTSDBServer:
                 self.get_points(query, tries)
 
 
-    def get_structure_timeseries(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics,
-                                 downsample=5):
+    def get_structure_timeseries(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics, downsample=5):
         usages = dict()
         subquery = list()
         for metric in retrieve_metrics:

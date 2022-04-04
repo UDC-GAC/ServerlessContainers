@@ -15,7 +15,7 @@ do
 
     echo "mem"
     bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $i mem 2048
-    bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh $i mem 256
+    bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh $i mem 350
     bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $i mem 0
 done
 
@@ -27,7 +27,7 @@ bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh app1 cpu 200
 
 echo "mem"
 bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh app1 mem 16384
-bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh app1 mem 1024
+bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh app1 mem 1500
 bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh app1 mem 1024
 
 

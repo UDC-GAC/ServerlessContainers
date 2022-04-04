@@ -28,6 +28,7 @@ import time
 import traceback
 import logging
 
+import src.Guardian.Guardian
 import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.couchdb as couchDB
 
@@ -59,8 +60,8 @@ def check_unstable_configuration():
         MyUtils.log_info("Checking for invalid configuration", debug)
         service = MyUtils.get_service(db_handler, "guardian")
         guardian_configuration = service["config"]
-        event_timeout = MyUtils.get_config_value(guardian_configuration, CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
-        window_timelapse = MyUtils.get_config_value(guardian_configuration, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+        event_timeout = MyUtils.get_config_value(guardian_configuration, src.Guardian.Guardian.CONFIG_DEFAULT_VALUES, "EVENT_TIMEOUT")
+        window_timelapse = MyUtils.get_config_value(guardian_configuration, src.Guardian.Guardian.CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
 
         rules = db_handler.get_rules()
         for rule in rules:

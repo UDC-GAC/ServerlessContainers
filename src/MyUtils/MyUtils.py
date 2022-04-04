@@ -314,3 +314,6 @@ def generate_event_name(event, resource):
         raise ValueError("Error generating event name")
 
     return final_string
+
+def generate_structure_usage_metric(resource):
+    return "structure.{0}.usage".format(resource)

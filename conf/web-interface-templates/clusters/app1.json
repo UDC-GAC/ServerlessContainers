@@ -3,6 +3,12 @@
     {
       "metrics": [
         {
+          "metric": "structure.cpu.max",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },{
           "metric": "structure.cpu.current",
           "aggregator": "zimsum",
           "tags": [
@@ -17,14 +23,20 @@
           ]
         },
         {
-          "metric": "limit.cpu.lower",
+          "metric": "structure.cpu.usage",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"
           ]
         },
         {
-          "metric": "structure.cpu.usage",
+          "metric": "limit.cpu.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },{
+          "metric": "structure.cpu.min",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"
@@ -38,14 +50,39 @@
     },{
       "metrics": [
         {
-          "metric": "structure.mem.current",
+          "metric": "structure.mem.max",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"
           ]
         },
         {
+          "metric": "structure.mem.current",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },{
+          "metric": "limit.mem.upper",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },{
           "metric": "structure.mem.usage",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },
+        {
+          "metric": "limit.mem.lower",
+          "aggregator": "zimsum",
+          "tags": [
+            "structure=app1"
+          ]
+        },{
+          "metric": "structure.mem.min",
           "aggregator": "zimsum",
           "tags": [
             "structure=app1"
