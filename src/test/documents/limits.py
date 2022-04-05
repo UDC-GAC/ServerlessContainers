@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2019 Universidade da Coruña
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -22,7 +22,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
-
 
 containers = ["node0", "node1", "node2", "node3",
               "node4", "node5", "node6", "node7",

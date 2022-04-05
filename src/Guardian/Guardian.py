@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2019 Universidade da Coruña
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
