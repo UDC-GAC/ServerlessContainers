@@ -56,6 +56,21 @@ RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem'
 APP_SCALING_SPLIT_AMOUNT = 5
 
 
+def set_container_resources(rescaler_http_session, container, resources, debug):
+    rescaler_ip = container["host_rescaler_ip"]
+    rescaler_port = container["host_rescaler_port"]
+    container_name = container["name"]
+    r = rescaler_http_session.put(
+        "http://{0}:{1}/container/{2}".format(rescaler_ip, rescaler_port, container_name),
+        data=json.dumps(resources),
+        headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
+    if r.status_code == 201:
+        return dict(r.json())
+    else:
+        log_error(str(json.dumps(r.json())), debug)
+        r.raise_for_status()
+
+
 class Scaler:
     """
     Scaler class that implements the logic for this microservice.
@@ -78,7 +93,7 @@ class Scaler:
         resource_dict["cpu"]["cpu_allowance_limit"] = int(cpu_used_shares)
         try:
             # TODO FIX this error should be further diagnosed, in case it affects other modules who use this call too
-            self.set_container_resources(container, resource_dict)
+            set_container_resources(self.rescaler_http_session, container, resource_dict, self.debug)
             return True
         except (Exception, RuntimeError, ValueError, requests.HTTPError) as e:
             log_error("Error when setting container resources: {0}".format(str(e)), self.debug)
@@ -179,7 +194,7 @@ class Scaler:
 
         if not map_host_valid:
             log_error(
-                "Detected invalid core mapping for container {0} {1}-{2}/{3}-{4}".format(c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares),
+                "Detected invalid core mapping for container {0}, has {1}-{2}, should be {3}-{4}".format(c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares),
                 self.debug)
             log_error("trying to automatically fix", self.debug)
             success = self.fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares)
@@ -294,7 +309,7 @@ class Scaler:
                     request["action"], request["structure"], json.dumps(new_resources)), self.debug)
 
                 # Apply changes through a REST call
-                self.set_container_resources(container, new_resources)
+                set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
         except (ValueError) as e:
             log_error("Error with container {0} in applying the request -> {1}".format(request["structure"], str(e)), self.debug)
             return
@@ -490,8 +505,7 @@ class Scaler:
             # Get the resources the container is using from its host NodeScaler (the 'current' value)
             c_name = structure["name"]
             if c_name not in self.container_info_cache or "resources" not in self.container_info_cache[c_name]:
-                log_error(
-                    "Couldn't get container's {0} resources, can't rescale".format(c_name), self.debug)
+                log_error("Couldn't get container's {0} resources, can't rescale".format(c_name), self.debug)
                 return
             real_resources = self.container_info_cache[c_name]["resources"]
 
@@ -733,20 +747,6 @@ class Scaler:
             except ValueError:
                 raise ValueError("Bad current {0} limit value".format(resource))
         return current_resource_limit
-
-    def set_container_resources(self, container, resources):
-        rescaler_ip = container["host_rescaler_ip"]
-        rescaler_port = container["host_rescaler_port"]
-        container_name = container["name"]
-        r = self.rescaler_http_session.put(
-            "http://{0}:{1}/container/{2}".format(rescaler_ip, rescaler_port, container_name),
-            data=json.dumps(resources),
-            headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
-        if r.status_code == 201:
-            return dict(r.json())
-        else:
-            log_error(str(json.dumps(r.json())), self.debug)
-            r.raise_for_status()
 
     def process_requests(self, reqs):
         for request in reqs:

@@ -16,7 +16,7 @@ do
     echo "mem"
     bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $i mem 2048
     bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh $i mem 350
-    bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $i mem 0
+    bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $i mem 512
 done
 
 echo "Setting app app1"
