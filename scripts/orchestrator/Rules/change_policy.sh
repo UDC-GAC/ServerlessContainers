@@ -6,7 +6,7 @@ source "${scriptDir}/../set_env.sh"
 if [ -z "$2" ]
 then
       echo "2 arguments are needed"
-      echo "1 -> rule name (e.g., CpuRescaleDown)"
+      echo "1 -> rule name (e.g., CpuRescaleUp)"
       echo "2 -> policy name (e.g., proportional)"
       exit 1
 fi
