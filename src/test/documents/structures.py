@@ -27,7 +27,6 @@
 base_container = dict(
     type='structure',
     subtype='container',
-    guard_policy="serverless",
     host='host0',
     host_rescaler_ip='host0',
     host_rescaler_port='8000',

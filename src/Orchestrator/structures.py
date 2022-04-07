@@ -588,3 +588,59 @@ def desubscribe_host(structure_name):
     get_db().delete_structure(host)
 
     return jsonify(201)
+
+
+@structure_routes.route("/structure/apps/<structure_name>", methods=['PUT'])
+def subscribe_app(structure_name):
+    data = request.json
+
+    # Check that all the needed data is present on the request
+    app = {}
+    for key in ["name", "guard", "subtype", "resources"]:
+        if key not in data:
+            return abort(400, {"message": "Missing key '{0}'".format(key)})
+        else:
+            app[key] = data[key]
+
+    # Check that all the needed data for resources is present on the request
+    app["resources"] = {}
+    if "resources" not in data:
+        return abort(400, {"message": "Missing resource information"})
+    elif "cpu" not in data["resources"] or "mem" not in data["resources"]:
+        return abort(400, {"message": "Missing cpu or mem resource information"})
+    else:
+        app["resources"] = {"cpu": {}, "mem": {}}
+        for key in ["max", "min", "guard"]:
+            if key not in data["resources"]["cpu"] or key not in data["resources"]["mem"]:
+                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
+            else:
+                app["resources"]["cpu"][key] = data["resources"]["cpu"][key]
+                app["resources"]["mem"][key] = data["resources"]["mem"][key]
+
+    if app["name"] != structure_name:
+        return abort(400, {"message": "Name mismatch".format(key)})
+
+    # Check if the app already exists
+    try:
+        app = get_db().get_structure(structure_name)
+        if app:
+            return abort(400, {"message": "App with this name already exists".format(key)})
+    except ValueError:
+        pass
+
+    #### ALL looks good up to this point, proceed
+    app["containers"] = list()
+
+    get_db().add_structure(app)
+
+    return jsonify(201)
+
+
+@structure_routes.route("/structure/apps/<structure_name>", methods=['DELETE'])
+def desubscribe_app(structure_name):
+    app = retrieve_structure(structure_name)
+
+    # Delete the document for this structure
+    get_db().delete_structure(app)
+
+    return jsonify(201)
