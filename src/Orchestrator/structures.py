@@ -349,6 +349,9 @@ def desubscribe_container(structure_name):
     if previous_state:
         disable_scaler(scaler_service)
 
+    # Free resources
+
+    # CPU
     # Get the core map of the container's host and free the allocated shares for this container
     cont_host = structure["host"]
     host = get_db().get_structure(cont_host)
@@ -362,6 +365,11 @@ def desubscribe_container(structure_name):
             core_map[core]["free"] += core_shares
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] += freed_shares
+
+    # MEM
+    host["resources"]["mem"]["free"] += structure["resources"]["mem"]["current"]
+
+
     get_db().update_structure(host)
 
     # Delete the document for this structure
@@ -430,11 +438,14 @@ def subscribe_container(structure_name):
     if previous_state:
         disable_scaler(scaler_service)
 
-    # Look for resource shares on the container's host
+    # Get the host info
     cont_host = container["host"]
     cont_name = container["name"]
     host = get_db().get_structure(cont_host)
 
+    # CPU
+
+    # Look for resource shares on the container's host
     needed_shares = container["resources"]["cpu"]["current"]
     if host["resources"]["cpu"]["free"] < needed_shares:
         return abort(400, {"message": "Host does not have enough shares".format(key)})
@@ -483,10 +494,24 @@ def subscribe_container(structure_name):
                     core_map[core]["free"] = 0
                     used_cores.append(core)
 
+    if pending_shares > 0:
+        return abort(400, {"message": "Container host does not have enough free CPU shares as requested"})
+
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] -= needed_shares
 
-    resource_dict = {"cpu": {"cpu_num": ",".join(used_cores), "cpu_allowance_limit": needed_shares}}
+    # MEM
+    needed_memory = container["resources"]["mem"]["current"]
+    host_memory = host["resources"]["mem"]["free"]
+
+    if needed_memory > host_memory:
+        return abort(400, {"message": "Container host does not have enough free memory requested"})
+
+    host["resources"]["mem"]["free"] -= needed_memory
+
+    resource_dict = {"cpu": {"cpu_num": ",".join(used_cores), "cpu_allowance_limit": needed_shares},
+                     "mem": {"mem_limit": needed_memory}}
+
     Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
 
     get_db().add_structure(container)
