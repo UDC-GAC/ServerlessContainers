@@ -300,7 +300,7 @@ def restore_scaler_state(scaler_service, previous_state):
     get_db().update_service(scaler_service)
 
 
-@structure_routes.route("/structure/<structure_name>/<app_name>", methods=['PUT'])
+@structure_routes.route("/structure/container/<structure_name>/<app_name>", methods=['PUT'])
 def subscribe_container_to_app(structure_name, app_name):
     structure = retrieve_structure(structure_name)
     app = retrieve_structure(app_name)
@@ -318,7 +318,7 @@ def subscribe_container_to_app(structure_name, app_name):
     return jsonify(201)
 
 
-@structure_routes.route("/structure/<structure_name>/<app_name>", methods=['DELETE'])
+@structure_routes.route("/structure/container/<structure_name>/<app_name>", methods=['DELETE'])
 def desubscribe_container_from_app(structure_name, app_name):
     container = retrieve_structure(structure_name)
     app = retrieve_structure(app_name)
@@ -332,7 +332,7 @@ def desubscribe_container_from_app(structure_name, app_name):
     return jsonify(201)
 
 
-@structure_routes.route("/structure/<structure_name>", methods=['DELETE'])
+@structure_routes.route("/structure/container/<structure_name>", methods=['DELETE'])
 def desubscribe_container(structure_name):
     structure = retrieve_structure(structure_name)
     cont_name = structure["name"]
@@ -369,7 +369,6 @@ def desubscribe_container(structure_name):
     # MEM
     host["resources"]["mem"]["free"] += structure["resources"]["mem"]["current"]
 
-
     get_db().update_structure(host)
 
     # Delete the document for this structure
@@ -381,7 +380,7 @@ def desubscribe_container(structure_name):
     return jsonify(201)
 
 
-@structure_routes.route("/structure/<structure_name>", methods=['PUT'])
+@structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
 def subscribe_container(structure_name):
     data = request.json
     node_scaler_session = requests.Session()
@@ -426,7 +425,7 @@ def subscribe_container(structure_name):
     except ValueError:
         return abort(400, {"message": "Container host does not exist".format(key)})
     host_containers = get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
-    print(host_containers)
+
     if container["name"] not in host_containers:
         return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
 
@@ -521,35 +520,71 @@ def subscribe_container(structure_name):
     restore_scaler_state(scaler_service, previous_state)
 
     return jsonify(201)
-#
-# def set_structure_guard_policy(structure_name, policy):
-#     try:
-#         put_done = False
-#         tries = 0
-#         while not put_done:
-#             tries += 1
-#             structure = retrieve_structure(structure_name)
-#             new_structure = MyUtils.copy_structure_base(structure)
-#             new_structure["guard_policy"] = policy
-#             get_db().update_structure(new_structure)
-#
-#             time.sleep(BACK_OFF_TIME_MS / 1000)
-#             structure = retrieve_structure(structure_name)
-#             put_done = structure["guard_policy"] == policy
-#
-#             if tries >= MAX_TRIES:
-#                 return abort(400, {"message": "MAX_TRIES updating database document"})
-#
-#     except ValueError:
-#         return abort(404)
-#     return jsonify(201)
-#
-#
-# @structure_routes.route("/structure/<structure_name>/guard_policy/serverless", methods=['PUT'])
-# def set_structure_guard_policy_to_serverless(structure_name):
-#     return set_structure_guard_policy(structure_name, "serverless")
-#
-#
-# @structure_routes.route("/structure/<structure_name>/guard_policy/fixed", methods=['PUT'])
-# def set_structure_guard_policy_to_fixed(structure_name):
-#     return set_structure_guard_policy(structure_name, "fixed")
+
+
+@structure_routes.route("/structure/host/<structure_name>", methods=['PUT'])
+def subscribe_host(structure_name):
+    data = request.json
+    node_scaler_session = requests.Session()
+
+    # Check that all the needed data is present on the request
+    host = {}
+    for key in ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]:
+        if key not in data:
+            return abort(400, {"message": "Missing key '{0}'".format(key)})
+        else:
+            host[key] = data[key]
+
+    # Check that all the needed data for resources is present on the request
+    host["resources"] = {}
+    if "resources" not in data:
+        return abort(400, {"message": "Missing resource information"})
+    elif "cpu" not in data["resources"] or "mem" not in data["resources"]:
+        return abort(400, {"message": "Missing cpu or mem resource information"})
+    else:
+        host["resources"] = {"cpu": {}, "mem": {}}
+        for key in ["max", "free"]:
+            if key not in data["resources"]["cpu"] or key not in data["resources"]["mem"]:
+                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
+            else:
+                host["resources"]["cpu"][key] = data["resources"]["cpu"][key]
+                host["resources"]["mem"][key] = data["resources"]["mem"][key]
+
+        host["resources"]["cpu"]["core_usage_mapping"] = {}
+        for n in range(0, int(host["resources"]["cpu"]["max"] / 100)):
+            host["resources"]["cpu"]["core_usage_mapping"][n] = {"free": 100}
+
+    if host["name"] != structure_name:
+        return abort(400, {"message": "Name mismatch".format(key)})
+
+    # Check if the host already exists
+    try:
+        host = get_db().get_structure(structure_name)
+        if host:
+            return abort(400, {"message": "Host with this name already exists".format(key)})
+    except ValueError:
+        pass
+
+    # Check that this supposed host exists and that it reports this container
+    try:
+        host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        if not host_containers:
+            raise RuntimeError()
+    except Exception:
+        return abort(400, {"message": "Could not connect to this host, is it up and has its node scaler up?"})
+
+    # Host looks good, insert it into the database
+
+    get_db().add_structure(host)
+
+    return jsonify(201)
+
+
+@structure_routes.route("/structure/host/<structure_name>", methods=['DELETE'])
+def desubscribe_host(structure_name):
+    host = retrieve_structure(structure_name)
+
+    # Delete the document for this structure
+    get_db().delete_structure(host)
+
+    return jsonify(201)

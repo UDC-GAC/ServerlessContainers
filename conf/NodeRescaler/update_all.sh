@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# DEPRECATED
+
 CONF_FOLDER=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 
 curl -X PUT -H "Content-Type: application/json" -d @$CONF_FOLDER/node0.json http://host0:8000/container/node0

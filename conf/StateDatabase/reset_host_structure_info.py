@@ -1,6 +1,8 @@
 # /usr/bin/python
 import src.StateDatabase.couchdb as couchDB
 
+# DEPRECATED
+
 if __name__ == "__main__":
     handler = couchDB.CouchDBServer()
 

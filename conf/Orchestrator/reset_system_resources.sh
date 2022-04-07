@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# DEPRECATED
+
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 export LXD_SCRIPT_PATH=${scriptDir}/../NodeRescaler/
 export CONF_SCRIPTS_PATH=${scriptDir}/../StateDatabase/

@@ -10,7 +10,7 @@ then
       exit 1
 fi
 
-curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/structure/$1 -d \
+curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/structure/container/$1 -d \
 '{
   "name": "'$1'",
   "resources": {

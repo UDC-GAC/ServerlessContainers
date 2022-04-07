@@ -2,6 +2,8 @@
 import src.StateDatabase.couchdb as couchDB
 import src.StateDatabase.utils as couchdb_utils
 
+# DEPRECATED
+
 base_container = dict(
     type='structure',
     subtype='container',
