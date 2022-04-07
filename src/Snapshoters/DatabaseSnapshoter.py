@@ -124,11 +124,14 @@ def get_configs():
     for service in filtered_services:
         for parameter in PERSIST_CONFIG_SERVICES_DOCS[service["name"]]:
             database_key_name, timeseries_metric_name = parameter
-            timeseries = dict(metric=timeseries_metric_name,
-                              value=service["config"][database_key_name],
-                              timestamp=int(time.time()),
-                              tags={"service": service["name"]})
-            docs.append(timeseries)
+            if  database_key_name in service["config"]:
+                timeseries = dict(metric=timeseries_metric_name,
+                                  value=service["config"][database_key_name],
+                                  timestamp=int(time.time()),
+                                  tags={"service": service["name"]})
+                docs.append(timeseries)
+            else:
+                log_warning("Missing config key '{0}' in service '{1}'".format(database_key_name, service["name"]), debug)
     return docs
 
 

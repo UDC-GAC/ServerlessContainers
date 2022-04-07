@@ -7,10 +7,7 @@ if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
 
-    database = "events"
-    initializer_utils.remove_db(database)
-    initializer_utils.create_db(database)
-
-    database = "requests"
-    initializer_utils.remove_db(database)
-    initializer_utils.create_db(database)
+    tables = ["events", "requests", "rules", "limits", "structures"]
+    for table in tables:
+        initializer_utils.remove_db(table)
+        initializer_utils.create_db(table)

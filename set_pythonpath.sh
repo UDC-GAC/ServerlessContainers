@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+thisDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 
-export BDWATCHDOG_PATH=$scriptDir/../BDWatchdog/
-export SERVERLESS_PATH=$scriptDir
+export BDWATCHDOG_PATH=$thisDir/../BDWatchdog/
+export SERVERLESS_PATH=$thisDir
 export PYTHONPATH=$BDWATCHDOG_PATH:$SERVERLESS_PATH
 
 

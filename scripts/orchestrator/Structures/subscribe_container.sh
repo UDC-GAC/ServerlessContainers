@@ -12,14 +12,24 @@ fi
 
 curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/structure/container/$1 -d \
 '{
-  "name": "'$1'",
-  "resources": {
-    "cpu": {"max": 200,  "current": 200,  "min": 20,   "guard": false},
-    "mem": {"max": 2048, "current": 2048, "min": 512,  "guard": false}
+  "container":
+  {
+    "name": "'$1'",
+    "resources": {
+      "cpu": {"max": 200,  "current": 200,  "min": 20,   "guard": false},
+      "mem": {"max": 2048, "current": 2048, "min": 512,  "guard": false}
+    },
+    "host_rescaler_ip": "'$2'",
+    "host_rescaler_port": "8000",
+    "host": "'$2'",
+    "guard": false,
+    "subtype": "container"
   },
-  "host_rescaler_ip": "'$2'",
-  "host_rescaler_port": "8000",
-  "host": "'$2'",
-  "guard": false,
-  "subtype": "container"
+  "limits":
+  {
+    "resources": {
+      "cpu": {"boundary": 20},
+      "mem": {"boundary": 256}
+    }
+  }
 }'
