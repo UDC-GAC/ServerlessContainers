@@ -136,3 +136,38 @@ def change_policy_rule(rule_name):
         return jsonify(201)
     else:
         return abort(400, {"message": "This rule can't have its policy changed"})
+
+@rules_routes.route("/rule/<rule_name>/events_up_required", methods=['PUT'])
+def change_event_up_amount(rule_name):
+    put_done = False
+    tries = 0
+    try:
+        amount = int(request.json["value"])
+    except KeyError:
+        return abort(400, {"message": "Invalid amount"})
+
+    rule = retrieve_rule(rule_name)
+    if rule["rescale_type"] not in ["down", "up"]:
+        return abort(400, {"message": "Can't apply this to this rule"})
+
+    while not put_done:
+        tries += 1
+        rule = retrieve_rule(rule_name)
+
+        correct_key = None
+        for key, part in rule["rule"]["and"][0].items():
+            if rule["rescale_type"] == "up" and part[0]["var"] == "events.scale.up":
+                rule["rule"]["and"][0][key][1] = amount
+                correct_key = key
+                break
+            else:
+                pass
+
+        get_db().update_rule(rule)
+
+        time.sleep(BACK_OFF_TIME_MS / 1000)
+        rule = retrieve_rule(rule_name)
+        put_done = rule["rule"]["and"][0][correct_key][1] == amount
+        if tries >= MAX_TRIES:
+            return abort(400, {"message": "MAX_TRIES updating database document"})
+    return jsonify(201)
