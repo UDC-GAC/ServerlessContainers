@@ -29,7 +29,6 @@ from flask import jsonify
 from flask import request
 import time
 
-
 from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 rules_routes = Blueprint('rules', __name__)
@@ -54,7 +53,9 @@ def get_rules():
 
 @rules_routes.route("/rule/<rule_name>/activate", methods=['PUT'])
 def activate_rule(rule_name):
-    put_done = False
+    rule = retrieve_rule(rule_name)
+    put_done = rule["active"]
+
     tries = 0
     while not put_done:
         tries += 1
@@ -72,7 +73,9 @@ def activate_rule(rule_name):
 
 @rules_routes.route("/rule/<rule_name>/deactivate", methods=['PUT'])
 def deactivate_rule(rule_name):
-    put_done = False
+    rule = retrieve_rule(rule_name)
+    put_done = not rule["active"]
+
     tries = 0
     while not put_done:
         tries += 1
@@ -90,12 +93,15 @@ def deactivate_rule(rule_name):
 
 @rules_routes.route("/rule/<rule_name>/amount", methods=['PUT'])
 def change_amount_rule(rule_name):
-    put_done = False
-    tries = 0
     try:
         amount = int(request.json["value"])
     except KeyError:
         return abort(400)
+
+    rule = retrieve_rule(rule_name)
+    put_done = rule["amount"] == amount
+
+    tries = 0
 
     while not put_done:
         tries += 1
@@ -110,64 +116,89 @@ def change_amount_rule(rule_name):
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
+
 @rules_routes.route("/rule/<rule_name>/policy", methods=['PUT'])
 def change_policy_rule(rule_name):
     rule = retrieve_rule(rule_name)
 
-    if rule["generates"] == "requests" and rule["rescale_type"] == "up":
-        put_done = False
-        tries = 0
-
-        rescale_policy = request.json["value"]
-        if rescale_policy not in ["amount", "proportional"]:
-            return abort(400, {"message": "Invalid policy"})
-        else:
-            while not put_done:
-                tries += 1
-                rule = retrieve_rule(rule_name)
-                rule["rescale_policy"] = rescale_policy
-                get_db().update_rule(rule)
-
-                time.sleep(BACK_OFF_TIME_MS / 1000)
-                rule = retrieve_rule(rule_name)
-                put_done = rule["rescale_policy"] == rescale_policy
-                if tries >= MAX_TRIES:
-                    return abort(400, {"message": "MAX_TRIES updating database document"})
-        return jsonify(201)
-    else:
+    if rule["generates"] != "requests" or rule["rescale_type"] != "up":
         return abort(400, {"message": "This rule can't have its policy changed"})
 
-@rules_routes.route("/rule/<rule_name>/events_up_required", methods=['PUT'])
+    rescale_policy = request.json["value"]
+    put_done = rule["rescale_policy"] == rescale_policy
+    tries = 0
+
+    if rescale_policy not in ["amount", "proportional"]:
+        return abort(400, {"message": "Invalid policy"})
+    else:
+        while not put_done:
+            tries += 1
+            rule = retrieve_rule(rule_name)
+            rule["rescale_policy"] = rescale_policy
+            get_db().update_rule(rule)
+
+            time.sleep(BACK_OFF_TIME_MS / 1000)
+            rule = retrieve_rule(rule_name)
+            put_done = rule["rescale_policy"] == rescale_policy
+            if tries >= MAX_TRIES:
+                return abort(400, {"message": "MAX_TRIES updating database document"})
+    return jsonify(201)
+
+
+
+@rules_routes.route("/rule/<rule_name>/events_required", methods=['PUT'])
 def change_event_up_amount(rule_name):
     put_done = False
     tries = 0
     try:
-        amount = int(request.json["value"])
+        new_amount = int(request.json["value"])
+        if new_amount < 0:
+            return abort(400, {"message": "Invalid amount, only 0 or greater are valid"})
+
+        event_type = request.json["event_type"]
+        if event_type not in ["down", "up"]:
+            return abort(400, {"message": "Invalid type of event, only 'up' or 'down' accepted"})
     except KeyError:
         return abort(400, {"message": "Invalid amount"})
 
     rule = retrieve_rule(rule_name)
     if rule["rescale_type"] not in ["down", "up"]:
-        return abort(400, {"message": "Can't apply this to this rule"})
+        return abort(400, {"message": "Can't apply this change to this rule"})
 
     while not put_done:
         tries += 1
         rule = retrieve_rule(rule_name)
 
         correct_key = None
-        for key, part in rule["rule"]["and"][0].items():
-            if rule["rescale_type"] == "up" and part[0]["var"] == "events.scale.up":
-                rule["rule"]["and"][0][key][1] = amount
-                correct_key = key
-                break
-            else:
-                pass
+        list_rules_entry = 0
+        for part in rule["rule"]["and"]:
+            # Get the first and only value from the dictionary
+            first_key = list(part.keys())[0]
+            first_val = part[first_key]
+            rule_part = first_val[0]["var"]
+            rule_amount = first_val[1]
+
+            if event_type == "up":
+                if rule_part == "events.scale.up":
+                    rule["rule"]["and"][list_rules_entry][first_key][1] = new_amount
+                    correct_key = first_key
+                    break
+
+            if event_type == "down":
+                if rule_part == "events.scale.down":
+                    rule["rule"]["and"][list_rules_entry][first_key][1] = new_amount
+                    rule["events_to_remove"] = new_amount
+
+                    correct_key = first_key
+                    break
+            list_rules_entry += 1
 
         get_db().update_rule(rule)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
+
         rule = retrieve_rule(rule_name)
-        put_done = rule["rule"]["and"][0][correct_key][1] == amount
+        put_done = rule["rule"]["and"][list_rules_entry][correct_key][1] == new_amount
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)

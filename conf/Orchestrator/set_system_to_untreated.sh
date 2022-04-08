@@ -36,3 +36,9 @@ bash $ORCHESTRATOR_PATH/StructuresSnapshoter/deactivate.sh
 bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/deactivate.sh
 bash $ORCHESTRATOR_PATH/Guardian/deactivate.sh
 bash $ORCHESTRATOR_PATH/Scaler/deactivate.sh
+
+echo "Deactivate rules"
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleDown
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh MemRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh MemRescaleDown

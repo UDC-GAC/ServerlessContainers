@@ -9,6 +9,9 @@ python3 ${scriptDir}/StateDatabase/services.py
 echo "Configuring the services"
 bash ${scriptDir}/Orchestrator/set_services_config.sh
 
+echo "Configuring the rules"
+bash ${scriptDir}/Orchestrator/set_rules_config.sh
+
 echo "Subscribing the hosts"
 bash ${scriptDir}/Orchestrator/subscribe_hosts.sh
 

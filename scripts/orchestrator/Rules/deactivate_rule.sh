@@ -2,7 +2,7 @@
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source "${scriptDir}/../set_env.sh"
 
-if [ -z "$2" ]
+if [ -z "$1" ]
 then
       echo "1 argument is needed"
       echo "1 -> rule name (e.g., cpu_dropped_lower)"
