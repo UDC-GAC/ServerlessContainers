@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export SERVERLESS_PATH=$HOME/ServerlessContainers
+scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
 echo "Configuring Guardian"

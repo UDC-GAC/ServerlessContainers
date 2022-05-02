@@ -16,7 +16,7 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
     "name": "'$1'",
     "resources": {
       "cpu": {"max": 1600,  "min": 20,   "guard": false},
-      "mem": {"max": 16384, "min": 512,  "guard": false}
+      "mem": {"max": 24576, "min": 512,  "guard": false}
     },
     "guard": false,
     "subtype": "application"

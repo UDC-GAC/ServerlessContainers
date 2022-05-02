@@ -18,6 +18,6 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
   "host_rescaler_port": "8000",
   "resources": {
     "cpu": {"max": 800,  "free": 800},
-    "mem": {"max": 8192, "free": 8192}
+    "mem": {"max": 24576, "free": 24576}
   }
 }'

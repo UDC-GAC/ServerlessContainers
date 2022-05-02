@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export SERVERLESS_PATH=$HOME/ServerlessContainers
+scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
+source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
 bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleUp
