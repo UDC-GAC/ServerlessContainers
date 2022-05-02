@@ -33,8 +33,8 @@ do
 done
 
 echo "Deactivate StructureSnapshoter, DatabaseSnapshoter, Guardian and Scaler services"
-bash $ORCHESTRATOR_PATH/StructuresSnapshoter/deactivate.sh
-bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/deactivate.sh
+#bash $ORCHESTRATOR_PATH/StructuresSnapshoter/deactivate.sh
+#bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/deactivate.sh
 bash $ORCHESTRATOR_PATH/Guardian/deactivate.sh
 bash $ORCHESTRATOR_PATH/Scaler/deactivate.sh
 

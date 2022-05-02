@@ -29,8 +29,8 @@ do
 done
 
 echo "Activate StructureSnapshoter, DatabaseSnapshoter, Guardian and Scaler services"
-bash $ORCHESTRATOR_PATH/StructuresSnapshoter/activate.sh
-bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/activate.sh
+#bash $ORCHESTRATOR_PATH/StructuresSnapshoter/activate.sh
+#bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/activate.sh
 bash $ORCHESTRATOR_PATH/Guardian/activate.sh
 bash $ORCHESTRATOR_PATH/Scaler/activate.sh
 

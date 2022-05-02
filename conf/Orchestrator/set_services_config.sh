@@ -13,9 +13,9 @@ bash $ORCHESTRATOR_PATH/Scaler/set_polling_frequency.sh 5
 bash $ORCHESTRATOR_PATH/Scaler/set_request_timeout.sh 20
 
 echo "Configuring Structures Snapshoter"
-bash $ORCHESTRATOR_PATH/StructuresSnapshoter/deactivate.sh
+bash $ORCHESTRATOR_PATH/StructuresSnapshoter/activate.sh
 bash $ORCHESTRATOR_PATH/StructuresSnapshoter/set_polling_frequency.sh 5
 
 echo "Configuring Database Snapshoter"
-bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/deactivate.sh
+bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/activate.sh
 bash $ORCHESTRATOR_PATH/StructuresSnapshoter/set_polling_frequency.sh 5
