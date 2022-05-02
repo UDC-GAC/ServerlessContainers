@@ -36,10 +36,10 @@ bash $ORCHESTRATOR_PATH/Scaler/activate.sh
 
 echo "Setting rule config"
 echo "Activate rules"
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleUp
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleDown
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh MemRescaleUp
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh MemRescaleDown
+bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh CpuRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh CpuRescaleDown
+bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh MemRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh MemRescaleDown
 echo "Set the correct amounts"
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh CpuRescaleUp 75
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh CpuRescaleUp proportional
