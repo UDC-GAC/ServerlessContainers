@@ -80,7 +80,7 @@ CpuRescaleDown = dict(
             {">=": [
                 {"var": "events.scale.down"},
                 6]},
-            {"==": [
+            {"<=": [
                 {"var": "events.scale.up"},
                 0]}
         ]}),
@@ -169,7 +169,7 @@ MemRescaleDown = dict(
             {">=": [
                 {"var": "events.scale.down"},
                 8]},
-            {"==": [
+            {"<=": [
                 {"var": "events.scale.up"},
                 0]}
         ]}),
