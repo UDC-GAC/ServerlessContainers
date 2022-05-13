@@ -35,8 +35,7 @@ class ApplicationRebalancer:
         self.__couchdb_handler = couchdb.CouchDBServer()
         self.__debug = True
         self.__config = {}
-        self.__ENERGY_DIFF_PERCENTAGE = 0.20
-        self.__ENERGY_STOLEN_PERCENTAGE = 0.20
+
 
     def __app_energy_can_be_rebalanced(self, application):
         return app_can_be_rebalanced(application, "application", self.__couchdb_handler)
@@ -107,8 +106,12 @@ class ApplicationRebalancer:
     def rebalance_applications(self, config):
         self.__config = config
         self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        self.__ENERGY_DIFF_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
+        self.__ENERGY_STOLEN_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
         MyUtils.log_info("_______________", self.__debug)
         MyUtils.log_info("Performing APP ENERGY Balancing", self.__debug)
+        MyUtils.log_info("ENERGY_DIFF_PERCENTAGE -> {0}".format(self.__ENERGY_DIFF_PERCENTAGE), self.__debug)
+        MyUtils.log_info("ENERGY_STOLEN_PERCENTAGE -> {0}".format(self.__ENERGY_STOLEN_PERCENTAGE), self.__debug)
 
         try:
             applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
@@ -138,6 +141,6 @@ class ApplicationRebalancer:
                 self.__dynamic_app_rebalancing(user_apps)
 
             else:
-                MyUtils.log_error("Unkwnown energy balancing policy '{0}'".format(balancing_policy), self.__debug)
+                MyUtils.log_error("Unknown energy balancing policy '{0}'".format(balancing_policy), self.__debug)
 
         MyUtils.log_info("_______________\n", self.__debug)

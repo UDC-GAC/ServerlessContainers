@@ -35,8 +35,6 @@ class UserRebalancer:
         self.__couchdb_handler = couchdb.CouchDBServer()
         self.__debug = True
         self.__config = {}
-        #self.__ENERGY_DIFF_PERCENTAGE = 0.40
-        #self.__ENERGY_STOLEN_PERCENTAGE = 0.40
 
     def update_user_used_energy(self, applications, users):
         for user in users:
@@ -112,6 +110,8 @@ class UserRebalancer:
 
         self.__ENERGY_DIFF_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
         self.__ENERGY_STOLEN_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
+        MyUtils.log_info("ENERGY_DIFF_PERCENTAGE -> {0}".format(self.__ENERGY_DIFF_PERCENTAGE), self.__debug)
+        MyUtils.log_info("ENERGY_STOLEN_PERCENTAGE -> {0}".format(self.__ENERGY_STOLEN_PERCENTAGE), self.__debug)
 
         MyUtils.log_info("_______________", self.__debug)
         MyUtils.log_info("Performing USER ENERGY Balancing", self.__debug)

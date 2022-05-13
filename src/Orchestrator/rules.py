@@ -93,6 +93,11 @@ def deactivate_rule(rule_name):
 
 @rules_routes.route("/rule/<rule_name>/amount", methods=['PUT'])
 def change_amount_rule(rule_name):
+    rule = retrieve_rule(rule_name)
+
+    if rule["generates"] != "requests" or rule["rescale_type"] != "up":
+        return abort(400, {"message": "This rule can't have its amount changed"})
+
     try:
         amount = int(request.json["value"])
     except KeyError:

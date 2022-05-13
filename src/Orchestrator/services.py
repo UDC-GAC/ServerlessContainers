@@ -94,7 +94,7 @@ def set_service_value(service_name, key):
         pass
     else:
         try:
-            if 0 < int(value) < 1:
+            if 0 < float(value) < 1:
                 value = float(value)
             else:
                 value = int(value)

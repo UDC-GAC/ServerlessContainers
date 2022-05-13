@@ -19,3 +19,12 @@ bash $ORCHESTRATOR_PATH/StructuresSnapshoter/set_polling_frequency.sh 5
 echo "Configuring Database Snapshoter"
 bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/activate.sh
 bash $ORCHESTRATOR_PATH/StructuresSnapshoter/set_polling_frequency.sh 5
+
+echo "Configuring Rebalancer"
+bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh
+bash $ORCHESTRATOR_PATH/Rebalancer/set_window_delay.sh 10
+bash $ORCHESTRATOR_PATH/Rebalancer/set_window_timelapse.sh 10
+bash $ORCHESTRATOR_PATH/Rebalancer/set_energy_diff_percentage.sh 0.40
+bash $ORCHESTRATOR_PATH/Rebalancer/set_energy_stolen_percentage.sh 0.40
+bash $ORCHESTRATOR_PATH/Rebalancer/deactivate_user_balancing.sh
+
