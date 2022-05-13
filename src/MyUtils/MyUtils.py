@@ -253,6 +253,20 @@ def get_structures(db_handler, debug, subtype="application"):
         log_warning("Couldn't retrieve " + subtype + " info.", debug=debug)
         return None
 
+
+def start_epoch(debug):
+    log_info("----------------------", debug)
+    log_info("Starting Epoch", debug)
+    return time.time()
+
+def end_epoch(debug, window_difference, t0):
+    t1 = time.time()
+    time_proc = "%.2f" % (t1 - t0 - window_difference)
+    time_total = "%.2f" % (t1 - t0)
+    log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(window_difference)), debug)
+    log_info("----------------------\n", debug)
+
+
 def wait_operation_thread(thread, debug):
     """This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
     A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this

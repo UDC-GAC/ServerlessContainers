@@ -35,7 +35,7 @@ from json_logic import jsonLogic
 from termcolor import colored
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric
+    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, start_epoch, end_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
@@ -596,8 +596,7 @@ class Guardian:
     def process_serverless_structure(self, structure, usages, limits, rules):
 
         # Match usages and rules to generate events
-        triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits,
-                                                        structure["resources"])
+        triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
 
         # Remote database operation
         if triggered_events:
@@ -619,8 +618,7 @@ class Guardian:
             reduced_events = self.reduce_structure_events(filtered_events)
 
             # Match events and rules to generate requests
-            triggered_requests, events_to_remove = self.match_rules_and_events(structure, rules, reduced_events, limits,
-                                                                               usages)
+            triggered_requests, events_to_remove = self.match_rules_and_events(structure, rules, reduced_events, limits, usages)
 
             # Remove events that generated the request
             # Remote database operation
@@ -730,17 +728,6 @@ class Guardian:
                 return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
         return False, ""
 
-    def start_epoch(self):
-        log_info("----------------------", self.debug)
-        log_info("Starting Epoch", self.debug)
-        return time.time()
-
-    def end_epoch(self, t0):
-        t1 = time.time()
-        time_proc = "%.2f" % (t1 - t0 - self.window_difference)
-        time_total = "%.2f" % (t1 - t0)
-        log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(self.window_difference)), self.debug)
-        log_info("----------------------\n", self.debug)
 
     def guard(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
@@ -765,7 +752,7 @@ class Guardian:
             self.event_timeout = myConfig.get_value("EVENT_TIMEOUT")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
 
-            t0 = self.start_epoch()
+            t0 = start_epoch(self.debug)
 
             log_info("Config is as follows:", debug)
             log_info(".............................................", debug)
@@ -784,7 +771,7 @@ class Guardian:
                     log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
                     self.window_difference = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
                 time.sleep(self.window_difference)
-                self.end_epoch(t0)
+                end_epoch(self.debug, self.window_difference, t0)
                 continue
 
             thread = None
@@ -804,7 +791,7 @@ class Guardian:
 
             wait_operation_thread(thread, debug)
 
-            self.end_epoch(t0)
+            end_epoch(t0, self.window_difference, t0)
 
 
 def main():
