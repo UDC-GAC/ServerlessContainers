@@ -24,7 +24,7 @@ repo_name: 'JonatanEnes/ServerlessContainers'
 repo_url: 'https://github.com/JonatanEnes/ServerlessContainers'
 
 # Copyright
-copyright: 'Copyright &copy; 2018 - 2020 Jonatan Enes'
+copyright: 'Copyright &copy; 2018 - 2022 Jonatan Enes'
 
 markdown_extensions:
   - attr_list
