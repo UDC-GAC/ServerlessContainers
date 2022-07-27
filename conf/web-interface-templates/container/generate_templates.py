@@ -14,8 +14,10 @@ def get_metric(metric, tags):
 def get_node_cpu(node):
     cont = dict()
     cont["metrics"] = list()
-    cont["metrics"].append(get_metric("proc.cpu.user", "host={0}".format(node)))
-    cont["metrics"].append(get_metric("proc.cpu.kernel", "host={0}".format(node)))
+    #cont["metrics"].append(get_metric("proc.cpu.user", "host={0}".format(node)))
+    #cont["metrics"].append(get_metric("proc.cpu.kernel", "host={0}".format(node)))
+    cont["metrics"].append(get_metric("sys.cpu.user", "host={0}".format(node)))
+    cont["metrics"].append(get_metric("sys.cpu.kernel", "host={0}".format(node)))
     cont["metrics"].append(get_metric("structure.cpu.max", "structure={0}".format(node)))
     cont["metrics"].append(get_metric("limit.cpu.upper", "structure={0}".format(node)))
     cont["metrics"].append(get_metric("structure.cpu.current", "structure={0}".format(node)))

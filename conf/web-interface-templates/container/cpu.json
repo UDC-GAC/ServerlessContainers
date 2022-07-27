@@ -4,14 +4,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node0"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node0"
           ]
@@ -61,14 +61,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node1"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node1"
           ]
@@ -118,14 +118,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node2"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node2"
           ]
@@ -175,14 +175,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node3"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node3"
           ]
@@ -232,14 +232,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node4"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node4"
           ]
@@ -289,14 +289,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node5"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node5"
           ]
@@ -346,14 +346,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node6"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node6"
           ]
@@ -403,14 +403,14 @@
       "metrics": [
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.user",
+          "metric": "sys.cpu.user",
           "tags": [
             "host=node7"
           ]
         },
         {
           "aggregator": "zimsum",
-          "metric": "proc.cpu.kernel",
+          "metric": "sys.cpu.kernel",
           "tags": [
             "host=node7"
           ]

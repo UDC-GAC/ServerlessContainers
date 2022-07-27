@@ -1,0 +1,1202 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      <link rel="icon" href="../img/icon.png">
+      <meta name="generator" content="mkdocs-1.2.3, mkdocs-material-7.3.5">
+    
+    
+      
+        <title>Serverless policy - Serverless Containers documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.cdeb8541.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.3f5d1f46.min.css">
+        
+      
+    
+    
+    
+      
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,400i,700%7CRoboto+Mono&display=fallback">
+        <style>:root{--md-text-font-family:"Roboto";--md-code-font-family:"Roboto Mono"}</style>
+      
+    
+    
+    
+    
+      
+
+
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="" data-md-color-primary="none" data-md-color-accent="none">
+  
+    
+    <script>function __prefix(e){return new URL("..",location).pathname+"."+e}function __get(e,t=localStorage){return JSON.parse(t.getItem(__prefix(e)))}</script>
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#objective" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Serverless Containers documentation" class="md-header__button md-logo" aria-label="Serverless Containers documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Serverless Containers documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Serverless policy
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+      </label>
+      
+<div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5z"/></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" aria-label="Clear" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        
+<a href="https://github.com/JonatanEnes/ServerlessContainers/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JonatanEnes/ServerlessContainers
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Serverless Containers documentation" class="md-nav__button md-logo" aria-label="Serverless Containers documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54z"/></svg>
+
+    </a>
+    Serverless Containers documentation
+  </label>
+  
+    <div class="md-nav__source">
+      
+<a href="https://github.com/JonatanEnes/ServerlessContainers/" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    JonatanEnes/ServerlessContainers
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        Introduction
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+    
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Serverless policy
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        Serverless policy
+      </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#objective" class="md-nav__link">
+    Objective
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-policy-works" class="md-nav__link">
+    How the policy works
+  </a>
+  
+    <nav class="md-nav" aria-label="How the policy works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-utilization" class="md-nav__link">
+    Resource utilization
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quickstart" class="md-nav__link">
+    Quickstart
+  </a>
+  
+    <nav class="md-nav" aria-label="Quickstart">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#container-scaler-deployment" class="md-nav__link">
+    Container Scaler deployment
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#initializing-the-containers-limit" class="md-nav__link">
+    Initializing the container's limit
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#initializing-state-database" class="md-nav__link">
+    Initializing State Database
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#start-the-orchestrator" class="md-nav__link">
+    Start the Orchestrator
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#starting-the-services" class="md-nav__link">
+    Starting the services
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transitioning-the-containers-to-serverless-instances" class="md-nav__link">
+    Transitioning the containers to serverless instances
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returning-the-containers-to-traditional-instances" class="md-nav__link">
+    Returning the containers to traditional instances
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shutting-everything-down" class="md-nav__link">
+    Shutting everything down
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#responsiveness" class="md-nav__link">
+    Responsiveness
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benevolence" class="md-nav__link">
+    Benevolence
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rule-configuration" class="md-nav__link">
+    Rule configuration
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#service-configuration" class="md-nav__link">
+    Service configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../energy_policy.md" class="md-nav__link">
+        Energy policy
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        Architecture
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        Deployment
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sponsors/" class="md-nav__link">
+        Sponsors
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../orchestrator_api/" class="md-nav__link">
+        Orchestrator's API
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="http://bdwatchdog.dec.udc.es/serverless/index.html" class="md-nav__link">
+        Homepage (external)
+      </a>
+    </li>
+  
+
+    
+      
+      
+      
+
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../code/src/" class="md-nav__link">
+        Source code (external)
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#objective" class="md-nav__link">
+    Objective
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-policy-works" class="md-nav__link">
+    How the policy works
+  </a>
+  
+    <nav class="md-nav" aria-label="How the policy works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#resource-utilization" class="md-nav__link">
+    Resource utilization
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quickstart" class="md-nav__link">
+    Quickstart
+  </a>
+  
+    <nav class="md-nav" aria-label="Quickstart">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#container-scaler-deployment" class="md-nav__link">
+    Container Scaler deployment
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#initializing-the-containers-limit" class="md-nav__link">
+    Initializing the container's limit
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#initializing-state-database" class="md-nav__link">
+    Initializing State Database
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#start-the-orchestrator" class="md-nav__link">
+    Start the Orchestrator
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#starting-the-services" class="md-nav__link">
+    Starting the services
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transitioning-the-containers-to-serverless-instances" class="md-nav__link">
+    Transitioning the containers to serverless instances
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#returning-the-containers-to-traditional-instances" class="md-nav__link">
+    Returning the containers to traditional instances
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shutting-everything-down" class="md-nav__link">
+    Shutting everything down
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#responsiveness" class="md-nav__link">
+    Responsiveness
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benevolence" class="md-nav__link">
+    Benevolence
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rule-configuration" class="md-nav__link">
+    Rule configuration
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#service-configuration" class="md-nav__link">
+    Service configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          <div class="md-content" data-md-component="content">
+            <article class="md-content__inner md-typeset">
+              
+                
+                  <a href="https://github.com/JonatanEnes/ServerlessContainers/edit/master/docs/serverless_policy.md" title="Edit this page" class="md-content__button md-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
+                  </a>
+                
+                
+                  <h1>Serverless policy</h1>
+                
+                <p>This framework is used to <strong>scale</strong> the <strong>resources</strong> of a <strong>container</strong>, 
+or a group of containers, both <strong>dynamically and in real time</strong>, so that 
+the limits placed on such resources can evolve over time. If we want to
+implement a serverless environment, then such resource limits will have to 
+change to be placed just above the usage. </p>
+<p>On the one hand, from a traditional <strong>virtual machine</strong> and <strong>Cloud</strong> 
+perspective, this approach is similar to the on-demand and pay 
+per usage resource provisioning, with the main difference being that on 
+this case, the limits can be changed multiple times during execution 
+instead of being specified only once at the instantiation phase.</p>
+<p>On the other hand, this approach is also really close to the 'original' 
+<strong>serverless</strong> paradigm, as the container and all the processes running on 
+it can not trust the pool of resources exposed to them. Such resources limits 
+can vary according to the usage the containers make fo them (e.g., if 
+the CPU usage increases, the CPU limit should also be raised via adding more cores).</p>
+<p>Combining both of these approaches, this framework comes up with a policy 
+so that that software containers (e.g., LXC, Docker), can benefit 
+from having a resource management that implements a serverless scenario. </p>
+<p>Among other perks, the main benefits of this framework and of using the
+serverless policy include:</p>
+<ul>
+<li>
+<p><strong>Higher resource utilization</strong>. If the containers have a low resource 
+usage, they are given a smaller set of resources. If they have a higher 
+usage, they are given a larger set. This allows to provision the resources
+more efficiently and increase their utilization ratio (used / allocated).</p>
+</li>
+<li>
+<p><strong>Pay per 'real' usage billing policy</strong>, only the used resources are 
+considered when billing, and by used we mean the actually consumed by the 
+containers, not the allocated ones.</p>
+</li>
+<li>
+<p><strong>Flexibility of the containers</strong>. Considering that containers can be highly similar 
+to virtual machines when it comes to the virtualization environment exposed, they can 
+be used to deploy a wider range of applications if compared to more traditional 
+serverless solutions.</p>
+</li>
+</ul>
+<h2 id="objective">Objective</h2>
+<p>The main objective of this policy is to adjust the resource limit, that 
+is, the amount of a resource that a container is given, so that such 
+limit is not far away of the real resource usage. If such limit is way 
+higher than the usage, we can talk of an <strong>underutilized</strong> resource 
+scenario, while if the limit is close to the usage, there is a 
+<strong>bottleneck</strong>.</p>
+<p>When using this policy, the framework makes a best-effort to keep a 
+balance between both scenarios, as if the <strong>allocated</strong> amount of 
+resource is set too close to the usage, any unexpected increase will 
+face a bottleneck, while if set too high, all the unused amount is 
+lost considering that in the serverless paradigm only the <strong>used 
+resources</strong> are billed.</p>
+<h2 id="how-the-policy-works">How the policy works</h2>
+<p>In order to better see how this policy achieves its goal, we can study an 
+example of several scaling operations taking place on a time window.</p>
+<p><img alt="Time series" src="../img/use_case/timeseries.svg" /></p>
+<p>First, in the image it can be seen that there are:</p>
+<ul>
+<li>A time series that varies (<em>orange</em>), this time series represents the 
+container <strong>aggregated resource usage</strong>, in this case of CPU.</li>
+<li>Three varying thresholds (<em>dashed lines</em>), which, from top to bottom, 
+represent the resource <strong>allocated amount</strong> and the upper and lower 
+<strong>boundaries</strong> (more on this later).</li>
+<li>Three colored areas (<em>blue</em>, <em>green</em> and <em>ochre</em>), which represent the areas
+between the previously mentioned thresholds.</li>
+<li>Two horizontal lines that do not vary, which represent the resource
+<strong>maximum</strong> and <strong>minimum limits</strong>. The maximum would be equivalent to the 
+initial allocated resources on a traditional instance, while the minimum 
+would represent the least amount of resources that we will grant the 
+container.</li>
+</ul>
+<p>As previously stated, the <strong><em>Serverless Containers</em></strong> framework looks 
+for a balance when it comes to setting an appropriate allocated resource 
+amount, continuously responding to the resource usage variations. 
+Such response can be seen in the several scaling operations that take 
+place, such as at seconds 70 (down), 270 (up) and 420 (down). </p>
+<p>In order to detect the conditions that trigger these scaling 
+requirements, two limits (or boundaries) are used:</p>
+<ul>
+<li><strong>Upper limit</strong>, which defines a threshold that, once surpassed, 
+signals for a need to scale up the allocated resource limit to avoid any 
+future bottleneck.</li>
+<li><strong>Lower limit</strong>, which triggers a scale down of the allocated 
+resource amount once the usage falls below the boundary.</li>
+</ul>
+<p>Thus, it is easy to see that if the thresholds are considered, the 
+first and third scaling operations were caused because the resource 
+usage fell under the lower boundary, while the second was caused because 
+it surpassed the upper boundary.</p>
+<h3 id="resource-utilization">Resource utilization</h3>
+<p>It is interesting to note how important it is to keep a balance that 
+does not impose a bottleneck but also stays close to the real resource 
+usage. As previously stated, the serverless paradigm differs from the 
+Cloud IaaS paradigm in that the resource limits can be modified 
+multiple times over time, instead of just defining such limit once at 
+the startup. </p>
+<p>Moreover, if we consider that the user of a serverless platform 
+typically does not specify such resource requirements and that
+the billed resources are only the used ones, the task of properly 
+scaling and setting limits becomes a crucial one which falls to 
+the provider.</p>
+<p>Because of these reasons it is important to define a key ratio, the 
+<strong>resource utilization</strong>, which can be easily obtained from the amount of 
+used and the allocated resources. The next image shows the previously 
+used time window but with areas as the focus of the study.</p>
+<p><img alt="Areas" src="../img/use_case/integrals.svg" /></p>
+<p>We can see that there are three areas:</p>
+<ul>
+<li><strong>Used area</strong> (<em>dots</em>), which represents the amount of resources 
+used by the container.</li>
+<li><strong>Allocated area</strong> (<em>waves</em>), representing the changing amount of 
+resources assigned to this container via the scaling operations.</li>
+<li><strong>Reserved area</strong> (<em>stripes</em>), which represents the theoretical 
+limit of resources that the container had at any moment. It is worth 
+noting that this area would effectively represent the resource 
+footprint of a virtual machine whose resources are allocated and never 
+changed.</li>
+</ul>
+<p>With these areas it is easy to see that the ratio of utilization of 
+this serverless framework would be higher than the one achieved by a 
+traditional instance. Moreover, an ideal serverless platform, 
+which allocates only the strictly needed resources at any moment, 
+performing instantaneous scaling operation, would have a ratio of 100% 
+(best-case scenario), while the ratio exposed by not performing any 
+scaling operation, such as with the traditional instance, would be 
+the worst-case scenario.</p>
+<h2 id="quickstart">Quickstart</h2>
+<p>The <strong><em>Serverless Container framework</em></strong> has been developed to be 
+modular at its core, meaning that it can be scaled and adapted to 
+the number of hosts and containers present in the infrastructure, 
+from a few containers on a single host to dozens of containers 
+spanned across multiple hosts.</p>
+<p>In order to show a quickstart with an example of usage, and keep it
+simple, this scenario will use 2 containers deployed on 1 host, with 
+CPU as the only scaled resource. We will also consider LXD as the 
+technology used to deploy the containers, that the host <em>host0</em> is 
+network-reachable using such name, and that a CouchDB database is 
+running and accessible as <em>couchdb</em>. It is also required to have 
+resource monitoring and a time series database.</p>
+<p>The requirements are overall described on the <a href="/deployment/">Deployment</a> 
+Section.</p>
+<h3 id="container-scaler-deployment">Container Scaler deployment</h3>
+<p>First, in order to make sure that the containers are properly detected 
+and supported, we have to make sure that the <em>Container Scaler</em> service
+(deployed on every host) is running. </p>
+<p>To do so, we can deploy 2 containers using LXD (in this case spawning 
+an Ubuntu 20.04 distro): </p>
+<pre><code>lxc init ubuntu:20.04 cont0
+lxc init ubuntu:20.04 cont1
+lxc start cont0 cont1
+</code></pre>
+<p>Next, from the framework's folder, start the service:</p>
+<pre><code>bash scripts/services/start_node_rescaler.sh
+</code></pre>
+<p>To make sure that the containers are accessible to the service, you can 
+open a web browser and point to the host's IP and the '8000' port and 
+'/container' path. You should see something similar to:</p>
+<p><img alt="container scaler API output" src="../img/quickstart/ContainerScaler.png" /> </p>
+<p>As you can see, the memory, disks and network resources are also 
+reported, but they will be ignored on this guide.</p>
+<h3 id="initializing-the-containers-limit">Initializing the container's limit</h3>
+<p>As of now, the containers could have no limits applied (-1 value) or 
+some predefined limits. Such resource limits can be easily changed 
+through REST API calls to the <em>Container Scaler</em> service. We can do this 
+with the 'curl' command:</p>
+<pre><code>curl -X PUT -H &quot;Content-Type: application/json&quot; -d '{&quot;cpu&quot;: {&quot;cpu_allowance_limit&quot;: &quot;200&quot;,&quot;cpu_num&quot;: &quot;0,1&quot;}}' http://host0:8000/container/cont0
+curl -X PUT -H &quot;Content-Type: application/json&quot; -d '{&quot;cpu&quot;: {&quot;cpu_allowance_limit&quot;: &quot;200&quot;,&quot;cpu_num&quot;: &quot;2,3&quot;}}' http://host0:8000/container/cont1
+</code></pre>
+<p>Although the -d payload can also be taken from a .json file 
+(see the 'NodeRescaler' folder contents).</p>
+<p>However, it has to be note that this out-of-band limit changing operation 
+is only intended for initializations or hard and direct limit changes for 
+experimentation reasons, for example. </p>
+<h3 id="initializing-state-database">Initializing State Database</h3>
+<p>In order to continue with the guide, and before initializing the 
+remaining microservices, we have to initialize the <em>State Database</em>. 
+This is needed considering that the services are configured and tuned 
+via unique documents stored on such <em>StateDatabase</em>. This allows to 
+change their configuration on-the-fly. </p>
+<p>To perform this initialization, you can use Python scripts that connect 
+to the database and insert the proper documents, as pre-configured by 
+the user.</p>
+<p>To initialize the services with their respective configuration files:</p>
+<pre><code>python3 quickstart/StateDatabase/services.py
+</code></pre>
+<p>To initialize the rules that will govern the rescaling policies, as well 
+as the events and requests databases, run:</p>
+<pre><code>python3 quickstart/StateDatabase/events_and_requests.py
+python3 quickstart/StateDatabase/rules.py
+</code></pre>
+<p>Finally, in order to initialize the containers and the hosts, as well as
+the container's limit thresholds, run: </p>
+<pre><code>python3 quickstart/StateDatabase/limits.py
+python3 quickstart/StateDatabase/structures.py
+</code></pre>
+<h3 id="start-the-orchestrator">Start the Orchestrator</h3>
+<p>In order to check that the previous step finished correctly and that all
+of the necessary documents were stored on the <em>State Database</em>, you can 
+use the <em>Orchestrator</em> service as it exposes an API of the database 
+contents. Start it with:</p>
+<pre><code>bash scripts/services/orchestrator/start_tmux.sh
+</code></pre>
+<p>And then check its output by opening a browser with the instance's IP on 
+which the Orchestrator was started, the port '5000' and the path 
+'/structure/cont0' (to see the cont0 structure document). You should see
+something similar to:</p>
+<p><img alt="orchestrator API output container 0" src="../img/quickstart/OrchestratorCont0.png" /> </p>
+<p>As you can see, the container is registered with resource limits of 50 
+and 200 for the minimum and maximum values, respectively. It can also 
+be appreciated that its configuration marks it as a non-scalable container
+(<em>i.e., guard:false</em>), even though the CPU is marked as subjected to be scaled.</p>
+<p>The full <em>Orchestrator</em> API can be checked below and it can be 
+used via scripts that perform REST calls.</p>
+<p>Using this service and the scripts, we will make sure that both of the 
+containers are set to be left unscaled (unguarded):</p>
+<pre><code>bash scripts/orchestrator/Structures/set_to_unguarded.sh cont0
+bash scripts/orchestrator/Structures/set_to_unguarded.sh cont1
+</code></pre>
+<p>A return code of 201 ensures that the operation was carried out 
+correctly. </p>
+<h3 id="starting-the-services">Starting the services</h3>
+<p>Now that the containers are up and running and that the <em>State Database</em> 
+has been initialized, the remaining microservices can also be started.</p>
+<p>First, the passive services should be started (tmux is used to de-attach 
+the program from the terminal and keep the service running):</p>
+<pre><code>bash scripts/services/database_snapshoter/start_tmux.sh
+bash scripts/services/structure_snapshoter/start_tmux.sh
+</code></pre>
+<p>Both of these services show an output each time they finish a polling 
+operation. The polling time can be configured with their respective 
+configuration documents.</p>
+<p>Secondly, the active services can be started:</p>
+<pre><code>bash scripts/services/guardian/start_tmux.sh
+bash scripts/orchestrator/Guardian/activate_guardian.sh
+bash scripts/services/scaler/start_tmux.sh
+</code></pre>
+<p>These services also output what they are doing, processing time windows 
+with a time length that is configurable.</p>
+<p>At this point, all of the necessary services would be running, however,
+nothing would be happening as both of the containers are in an 
+'unguarded' state, that is, they are being left untouched.</p>
+<p>We will deactivate the <em>Scaler</em> service for now:</p>
+<pre><code>bash scripts/orchestrator/Scaler/deactivate_scaler.sh
+</code></pre>
+<h3 id="transitioning-the-containers-to-serverless-instances">Transitioning the containers to serverless instances</h3>
+<p>In order to move the containers from following the resource management 
+of a <strong>traditional instance</strong>, that is, having the initial resources 
+fixed throughout their life-cycle, into a <strong>serverless environment</strong>, 
+we can use the same scripts as before:</p>
+<pre><code>bash scripts/orchestrator/Structures/set_to_guarded.sh cont0
+bash scripts/orchestrator/Structures/set_to_guarded.sh cont1
+</code></pre>
+<p>Now, both container are being monitored by the <em>Guardian</em> service and 
+their CPU limits will be scaled according to their internal CPU usage.</p>
+<p>However, the <em>Guardian</em> service will only create Requests for resource 
+scaling, either to lower or increase them, but not actual changes will 
+be made to the resource's limits.</p>
+<p>In order to apply the Requests as generated by the <em>Guardian</em> service,
+we will have to rely on the <em>Scaler</em> service. To let it work, 
+we will now activate it:</p>
+<pre><code>bash scripts/orchestrator/Scaler/activate_scaler.sh
+</code></pre>
+<p>Now, with all of the services properly working, the serverless 
+environment should be fully functional for the containers.</p>
+<p>As seen in the next image, a serverless policy is being applied to the 
+container as its resources are being continuously modified according to
+the resource usage:</p>
+<ul>
+<li>1) In the beginning, the CPU is idle so that after enough time passes 
+with the CPU underused, a scaling down operation is performed.</li>
+<li>2) Later, the CPU is suddenly heavily used to the point that a 
+bottleneck occurs. To fix this, a scaling up operation is performed. </li>
+<li>3) However, after increasing the resources, the upscale operations gave
+too many resources and now there is another under-utilization scenario. 
+A second scaling down operation is performed to adjust them.</li>
+<li>4) The usage fits perfectly between the lower and upper limits so it
+is under control.</li>
+<li>5) Finally, the CPU is idle again so that a last scaling down 
+operation is carried out, leaving the allocated resources to the 
+theoretical minimum (minimum + 2 x boundary).</li>
+</ul>
+<p><img alt="container example" src="../img/quickstart/scaling_examples.svg" /> </p>
+<p>The behavior exposed on the image can be configured and tuned with a few,
+critical parameters, as explained on the <a href="/configuration/">Configuration</a> 
+Section.</p>
+<h3 id="returning-the-containers-to-traditional-instances">Returning the containers to traditional instances</h3>
+<p>If at any moment we want to stop the scaling from taking place for 
+these containers, we have only to configure the containers to be left 
+alone (unguarded):</p>
+<pre><code>bash scripts/orchestrator/Structures/set_to_unguarded.sh cont0
+bash scripts/orchestrator/Structures/set_to_unguarded.sh cont1
+</code></pre>
+<p>If at this point we consider that the resource limits are too low, we 
+can always reset them. </p>
+<h3 id="shutting-everything-down">Shutting everything down</h3>
+<p>In order to shut everything down we only have to stop the Python 
+programs running the microservices. </p>
+<p>However, it has to be noted that it is possible to implement a 'partial'
+shut down of the system by only stopping the active services. Even 
+further, the system can be inactivated by only stopping or de-activating 
+the <em>Scaler</em> microservice, something that we effectively did at the end 
+of the <a href="/quickstart/#starting-the-services">Starting the services</a> subsection.</p>
+<h2 id="configuration">Configuration</h2>
+<p>The behavior of the <strong><em>Serverless Container</em></strong> framework can be 
+configured to better adapt to the needs of the applications. Such 
+configuration can be even changed dynamically if needed thanks to the 
+design choices.</p>
+<p>The configuration can be divided between two dimensions, being the 
+first the <strong>time dimension</strong> and the second one the <strong>resource limit 
+dimension</strong>. To better approach these two dimensions, the first one 
+is referred to as the <strong>Responsiveness</strong> of the framework, while the 
+second one is referred to as the <strong>Benevolence</strong>.</p>
+<p><img alt="Configuration" src="../img/configuration/configuration.svg" /> </p>
+<h3 id="responsiveness">Responsiveness</h3>
+<p>As its name implies, this configuration aspect of the framework dictates 
+<strong>how fast the changes are made</strong> when it comes to adapting the resource 
+limits to the application's real usage. The reason why we have to take 
+into account this, instead of just performing instant scaling 
+operations once the limits have been surpassed, lies behind the concept 
+of hysteresis. </p>
+<p>If we consider hysteresis as the degree of variation of the resource 
+usage patterns, we need to take into account some kind of time buffer 
+before changing the resource limits. This time buffer allows to have 
+some assurance that after a scaling operation, another one won't be 
+needed soon after.</p>
+<p>As seen on the image below, the responsiveness can be modulated 
+differently to adapt to two possible scenarios:</p>
+<ul>
+<li>A: Time to pass before performing a <strong>scaling down</strong> operation.</li>
+<li>B: Time to pass before performing a <strong>scaling up</strong> operation.</li>
+</ul>
+<p>It has to be noted the difference between the two. While on the <strong>A</strong> 
+scenario we can allow more time to pass, as the resources are in the 
+end being underutilized (the application is not being penalized), 
+on the <strong>B</strong> scenario the application may be close to, or suffering a 
+bottleneck, thus we may consider to shorten such times to avoid 
+execution overheads.</p>
+<p><img alt="Responsiveness Configuration" src="../img/configuration/configuration_responsiveness.svg" /></p>
+<p>To tune the Responsiveness of the framework, the request-generating 
+Rules will have to be modified.</p>
+<h3 id="benevolence">Benevolence</h3>
+<p>In the case of Benevolence, as its name says, it modules how the 
+framework addresses the <strong>scaling operations</strong> in terms of the <strong>number 
+of resources</strong> that it takes away or that it gives. </p>
+<p>On the one hand, a 'benevolent' framework adjusts the resources leaving 
+an ample margin between the limits so that the areas are large enough 
+to accommodate any resource variations, while at the same time giving 
+a large number of resources when scaling up.</p>
+<p>On the other hand, if we want to push the serverless scenario to the 
+limit we can set narrower boundaries and more restrained scaling up
+operations. </p>
+<p>As it can be seen on the image below, to module the behaviour between 
+these two options, thus tuning the framework to behave closer to the 
+traditional instance or closer to the serverless paradigm, we can use 
+the following configuration parameters:</p>
+<ul>
+<li>1) <strong>Scaling up amount</strong>. A fixed and configurable amount.</li>
+<li>2) <strong>Scaling down policy</strong>. Although several are possible, to implement
+the serverless scenario the only one usable is the 'fit to usage', which
+looks to set resource limits so that the usage falls between the upper 
+and lower boundaries (stable area).</li>
+<li>3) <strong>Boundary amount</strong>. This parameter is used combined with the 
+scaling down policy to define the final allocated resource limit.</li>
+</ul>
+<p><img alt="Benevolence Configuration" src="../img/configuration/configuration_benevolence.svg" /></p>
+<p>To tune the Benevolence of the framework, mainly the amount parameter of 
+the down-scaling Rules will have to be adapted.</p>
+<h3 id="rule-configuration">Rule configuration</h3>
+<p>As previously stated, in order to configure the framework on the vertical
+and time dimensions, the <strong>Rule documents</strong> have to be modified.</p>
+<p>To tune the <strong>Responsiveness</strong>, we have to modify the request-generating 
+Rules to specify the <strong>amount of time windows</strong> desired before a scaling 
+request is generated by the <em>Guardian</em>.</p>
+<p>As seen in the next Rule document, the number of time windows where the
+usage had to surpass the upper limits before one of this kind of 
+requests is generated is 4. We can also notice that the number of the 
+opposite event (usage fell below the lower limit) must also be lower 
+than 2. This is done in order to avoid hysteresis, skipping scenarios 
+where the resource usage is highly volatile and constantly crossing 
+both limits.</p>
+<pre><code>CpuRescaleUp = dict(
+    _id='CpuRescaleUp',
+    type='rule',
+    resource=&quot;cpu&quot;,
+    name='CpuRescaleUp',
+    rule=dict(
+        {&quot;and&quot;: [
+            {&quot;&gt;=&quot;: [
+                {&quot;var&quot;: &quot;events.scale.up&quot;},
+                4]},
+            {&quot;&lt;=&quot;: [
+                {&quot;var&quot;: &quot;events.scale.down&quot;},
+                2]}
+        ]}),
+    events_to_remove=4,
+    generates=&quot;requests&quot;,
+    action={&quot;requests&quot;: [&quot;CpuRescaleUp&quot;]},
+    amount=75,
+    rescale_by=&quot;amount&quot;,
+    active=True
+)
+</code></pre>
+<p>When it comes to <strong>Benevolence</strong>, we can also see on the previous Rule 
+document that the <strong>amount of CPU increased</strong> on a scaling up operation 
+will be 75 shares (i.e., three-quarters of a core).</p>
+<p>Finally, in order to configure the <strong>boundary</strong> parameter, we have to 
+use the Limits documents of each container. On these documents there is 
+a boundary applied for each resource, as seen next:</p>
+<pre><code>{
+    cpu: {
+        boundary: 25,
+        lower: 50,
+        upper: 75
+    }
+}
+</code></pre>
+<h3 id="service-configuration">Service configuration</h3>
+<p>As previously stated, most of the microservices work with polling time 
+windows. The relation between all of the services' time windows may be
+important, although the framework has been designed to be robust and
+tend for a behavior akin to an eventual consistency. The next image 
+describes such relationships:</p>
+<p><img alt="Time window analysis" src="../img/configuration/time_window_analysis.svg" /></p>
+<p>Nevertheless, both the <em>Guardian</em> and the <em>Scaler</em> time window 
+configuration may be worth mentioning:</p>
+<ul>
+<li><strong>Guardian</strong> : In this case, the time window directly influences the
+Responsiveness of the framework, as previously seen the scaling 
+operations are performed by measuring the number of time windows that
+the resource usage spends on one specific scenario.</li>
+<li><strong>Scaler</strong> : When it comes to the <em>Scaler</em> service, it is important 
+that its polling time window is lower than the <em>Guardian</em> service one, 
+as otherwise the Requests could be applied in an unordered fashion.</li>
+</ul>
+                
+              
+              
+                
+
+
+              
+            </article>
+          </div>
+        </div>
+        
+      </main>
+      
+        
+<footer class="md-footer">
+  
+    <nav class="md-footer__inner md-grid" aria-label="Footer">
+      
+        
+        <a href=".." class="md-footer__link md-footer__link--prev" aria-label="Previous: Introduction" rel="prev">
+          <div class="md-footer__button md-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
+          </div>
+          <div class="md-footer__title">
+            <div class="md-ellipsis">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              Introduction
+            </div>
+          </div>
+        </a>
+      
+      
+        
+        <a href="../architecture/" class="md-footer__link md-footer__link--next" aria-label="Next: Architecture" rel="next">
+          <div class="md-footer__title">
+            <div class="md-ellipsis">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              Architecture
+            </div>
+          </div>
+          <div class="md-footer__button md-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11H4z"/></svg>
+          </div>
+        </a>
+      
+    </nav>
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-footer-copyright">
+        
+          <div class="md-footer-copyright__highlight">
+            Copyright &copy; 2018 - 2022 Jonatan Enes
+          </div>
+        
+        
+          Made with
+          <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+            Material for MkDocs
+          </a>
+        
+        
+      </div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    <script id="__config" type="application/json">{"base": "..", "features": [], "translations": {"clipboard.copy": "Copy to clipboard", "clipboard.copied": "Copied to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.placeholder": "Type to start searching", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.term.missing": "Missing", "select.version.title": "Select version"}, "search": "../assets/javascripts/workers/search.8397ff9e.min.js", "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.1e84347e.min.js"></script>
+      
+    
+  </body>
+</html>

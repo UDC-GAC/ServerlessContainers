@@ -1,0 +1,25 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Use Case}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Main Goal}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Scaling policy}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Resource utilization}{section.2}% 5
+\BOOKMARK [1][-]{section.3}{Architecture}{}% 6
+\BOOKMARK [2][-]{subsection.3.1}{High-level diagram}{section.3}% 7
+\BOOKMARK [2][-]{subsection.3.2}{Microservice architecture}{section.3}% 8
+\BOOKMARK [3][-]{subsubsection.3.2.1}{Passive Microservices}{subsection.3.2}% 9
+\BOOKMARK [3][-]{subsubsection.3.2.2}{Active Microservices}{subsection.3.2}% 10
+\BOOKMARK [2][-]{subsection.3.3}{Other/Common Microservices and Databases}{section.3}% 11
+\BOOKMARK [1][-]{section.4}{Deployment}{}% 12
+\BOOKMARK [2][-]{subsection.4.1}{Containers}{section.4}% 13
+\BOOKMARK [2][-]{subsection.4.2}{Previous Requirements}{section.4}% 14
+\BOOKMARK [2][-]{subsection.4.3}{Microservices}{section.4}% 15
+\BOOKMARK [3][-]{subsubsection.4.3.1}{Passive}{subsection.4.3}% 16
+\BOOKMARK [3][-]{subsubsection.4.3.2}{Active}{subsection.4.3}% 17
+\BOOKMARK [3][-]{subsubsection.4.3.3}{Other}{subsection.4.3}% 18
+\BOOKMARK [1][-]{section.5}{Configuration}{}% 19
+\BOOKMARK [2][-]{subsection.5.1}{Responsiveness}{section.5}% 20
+\BOOKMARK [2][-]{subsection.5.2}{Benevolence}{section.5}% 21
+\BOOKMARK [2][-]{subsection.5.3}{Rule Configuration}{section.5}% 22
+\BOOKMARK [2][-]{subsection.5.4}{Service Configuration}{section.5}% 23
+\BOOKMARK [1][-]{section.6}{Contact}{}% 24
+\BOOKMARK [0][-]{section.6}{References}{}% 25

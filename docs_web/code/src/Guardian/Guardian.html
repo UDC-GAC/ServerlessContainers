@@ -1,0 +1,2588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.8.1" />
+<title>src.Guardian.Guardian API documentation</title>
+<meta name="description" content="" />
+<link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
+<link href='https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/8.0.0/sanitize.min.css' rel='stylesheet'>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css" rel="stylesheet">
+<style>.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{font-weight:bold}#index h4 + ul{margin-bottom:.6em}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<link rel="icon" href="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/icon_serverless.png">
+<style>
+.footer_image {
+max-width: 25%;
+float: left;
+padding: 1%;
+}
+</style>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>src.Guardian.Guardian</code></h1>
+</header>
+<section id="section-intro">
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+# Authors:
+#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Roberto R. Expósito
+#     - Juan Touriño
+#
+# This file is part of the ServerlessContainers framework, from
+# now on referred to as ServerlessContainers.
+#
+# ServerlessContainers is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3
+# of the License, or (at your option) any later version.
+#
+# ServerlessContainers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with ServerlessContainers. If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
+
+from __future__ import print_function
+
+from threading import Thread
+import time
+import traceback
+import logging
+
+from json_logic import jsonLogic
+
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+    get_time_now_string, update_structure, get_host_containers, get_structures, copy_structure_base, \
+    generate_event_name, generate_request_name
+import src.StateDatabase.couchdb as couchdb
+import src.StateDatabase.opentsdb as bdwatchdog
+
+GUARDABLE_RESOURCES = [&#39;cpu&#39;] # TODO This should be configurable
+#GUARDABLE_RESOURCES = [&#39;cpu&#39;, &#39;mem&#39;, &#39;energy&#39;]
+
+BDWATCHDOG_CONTAINER_METRICS = [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;] #+ [&#39;proc.mem.resident&#39;, &#39;proc.mem.virtual&#39;]
+BDWATCHDOG_APPLICATION_METRICS = [&#39;structure.cpu.usage&#39;] #+ [&#39;structure.mem.usage&#39;] + [&#39;structure.energy.usage&#39;]
+GUARDIAN_CONTAINER_METRICS = {
+    &#39;structure.cpu.usage&#39;: [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;],
+#    &#39;structure.mem.usage&#39;: [&#39;proc.mem.resident&#39;]
+}
+GUARDIAN_APPLICATION_METRICS = {
+    &#39;structure.cpu.usage&#39;: [&#39;structure.cpu.usage&#39;],
+#    &#39;structure.mem.usage&#39;: [&#39;structure.mem.usage&#39;],
+#    &#39;structure.energy.usage&#39;: [&#39;structure.energy.usage&#39;]
+}
+GUARDIAN_METRICS = {&#34;container&#34;: GUARDIAN_CONTAINER_METRICS, &#34;application&#34;: GUARDIAN_APPLICATION_METRICS}
+BDWATCHDOG_METRICS = {&#34;container&#34;: BDWATCHDOG_CONTAINER_METRICS, &#34;application&#34;: BDWATCHDOG_APPLICATION_METRICS}
+
+TAGS = {&#34;container&#34;: &#34;host&#34;, &#34;application&#34;: &#34;structure&#34;}
+
+translator_dict = {&#34;cpu&#34;: &#34;structure.cpu.usage&#34;, &#34;mem&#34;: &#34;structure.mem.usage&#34;, &#34;energy&#34;: &#34;structure.energy.usage&#34;}
+
+# RESOURCES = [&#39;cpu&#39;, &#39;mem&#39;, &#39;disk&#39;, &#39;net&#39;, &#39;energy&#39;]
+
+CONFIG_DEFAULT_VALUES = {&#34;WINDOW_TIMELAPSE&#34;: 10, &#34;WINDOW_DELAY&#34;: 10,
+                         &#34;EVENT_TIMEOUT&#34;: 40, &#34;DEBUG&#34;: True, &#34;STRUCTURE_GUARDED&#34;: &#34;container&#34;,
+                         &#34;CPU_SHARES_PER_WATT&#34;: 8,
+                         &#34;ACTIVE&#34;: True}
+SERVICE_NAME = &#34;guardian&#34;
+
+NOT_AVAILABLE_STRING = &#34;n/a&#34;
+
+NON_ADJUSTABLE_RESOURCES = [&#34;energy&#34;]
+CPU_SHARES_PER_WATT = 5  # 7  # How many cpu shares to rescale per watt
+
+
+class Guardian:
+    &#34;&#34;&#34;
+    Guardian class that implements the logic for this microservice. The Guardian takes care of matching the resource
+    time series with a subset of rules to generate Events and then, matches the event against another subset of rules
+    to generate scaling Requests.
+
+    For more information you can visit: https://serverlesscontainers.readthedocs.io/en/latest/#architecture-and-microservices
+    &#34;&#34;&#34;
+
+    def __init__(self):
+        self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
+        self.couchdb_handler = couchdb.CouchDBServer()
+        self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.guardable_resources = GUARDABLE_RESOURCES
+        self.debug = True
+
+    @staticmethod
+    def check_unset_values(value, label, resource):
+        &#34;&#34;&#34;Check if a value has the N/A value and, if that is the case, raise an informative exception
+
+        Args:
+            value (integer): The value to be inspected
+            label (string): Resource label name (e.g., upper limit), used for the exception string creation
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns:
+            None
+
+        Raises:
+            Exception if value is N/A
+        &#34;&#34;&#34;
+        if value == NOT_AVAILABLE_STRING:
+            raise ValueError(
+                &#34;value for &#39;{0}&#39; in resource &#39;{1}&#39; is not set or is not available.&#34;.format(label, resource))
+
+    @staticmethod
+    def check_invalid_values(value1, label1, value2, label2, resource=&#34;n/a&#34;):
+        &#34;&#34;&#34; Check that two values have properly values set with the policy value1 &lt; value2, otherwise raise ValueError
+
+        Args:
+            value1 (integer): First value
+            label1 (string): First resource label name (e.g., upper limit), used for the exception string creation
+            value2 (integer): Second value
+            label2 (string): Second resource label name (e.g., lower limit), used for the exception string creation
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns:
+            None
+
+        Raises:
+            ValueError if value1 &gt; value2
+        &#34;&#34;&#34;
+        if value1 &gt; value2:
+            raise ValueError(&#34;in resources: {0} value for &#39;{1}&#39;: {2} is greater than value for &#39;{3}&#39;: {4}&#34;.format(
+                resource, label1, str(value1), label2, str(value2)))
+
+    @staticmethod
+    def try_get_value(d, key):
+        &#34;&#34;&#34;Get the value stored in the dictionary or return a N/A string value if:
+
+        * it is not in it
+        * it is not an valid integer
+
+        Args:
+            d (dict): A dictionary storing values
+            key (string): A string key
+
+        Returns:
+            (integer/string) int-mapped value stored in dict
+        &#34;&#34;&#34;
+        try:
+            return int(d[key])
+        except (KeyError, ValueError):
+            return NOT_AVAILABLE_STRING
+
+    @staticmethod
+    def is_application(structure):
+        return structure[&#34;subtype&#34;] == &#34;application&#34;
+
+    @staticmethod
+    def is_container(structure):
+        return structure[&#34;subtype&#34;] == &#34;container&#34;
+
+    @staticmethod
+    def sort_events(structure_events, event_timeout):
+        &#34;&#34;&#34;Sorts the events according to a simple policy regarding the _[now - timeout &lt;----&gt; now]_ time window (TW):
+
+        * The event is **inside** the TW -&gt; valid event
+        * The event is **outside** the TW -&gt; invalid event
+
+        The &#39;now&#39; time reference is taken inside this function
+
+        Args:
+            structure_events (list): A list of the events triggered in the past for a specific structure
+            event_timeout (integer): A timeout in seconds
+
+        Returns:
+            (tuple[list,list]) A tuple of lists of events, first the valid and then the invalid.
+
+        &#34;&#34;&#34;
+        valid, invalid = list(), list()
+        for event in structure_events:
+            if event[&#34;timestamp&#34;] &lt; time.time() - event_timeout:
+                invalid.append(event)
+            else:
+                valid.append(event)
+        return valid, invalid
+
+    @staticmethod
+    def reduce_structure_events(structure_events):
+        &#34;&#34;&#34;Reduces a list of events that have been generated for a single Structure into one single event. Considering
+        that each event is a dictionary with an integer value for either a &#39;down&#39; or &#39;up&#39; event, all of the dictionaries
+        can be reduced to one that can have two values for either &#39;up&#39; and &#39;down&#39; events, considering that the Structure
+        resource may have a high hysteresis.
+
+        Args:
+            structure_events (list): A list of events for a single Structure
+
+        Returns:
+            (dict) A dictionary with the added up events in a signle dictionary
+
+        &#34;&#34;&#34;
+        events_reduced = {&#34;action&#34;: {}}
+        for event in structure_events:
+            resource = event[&#34;resource&#34;]
+            if resource not in events_reduced[&#34;action&#34;]:
+                events_reduced[&#34;action&#34;][resource] = {&#34;events&#34;: {&#34;scale&#34;: {&#34;down&#34;: 0, &#34;up&#34;: 0}}}
+            for key in event[&#34;action&#34;][&#34;events&#34;][&#34;scale&#34;].keys():
+                value = event[&#34;action&#34;][&#34;events&#34;][&#34;scale&#34;][key]
+                events_reduced[&#34;action&#34;][resource][&#34;events&#34;][&#34;scale&#34;][key] += value
+        return events_reduced[&#34;action&#34;]
+
+    def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
+        &#34;&#34;&#34;Produces a string to summarize the current state of a resource with all of its information and
+        the following format: _[max, current, upper limit, usage, lower limit, min]_
+
+        Args:
+            resource_label (string): The resource name label, used to create the string and to access the dictionaries
+            resources_dict (dict): a dictionary with the metrics (e.g., max, min) of the resources
+            limits_dict (dict): a dictionary with the limits (e.g., lower, upper) of the resources
+            usages_dict (dict): a dictionary with the usages of the resources
+
+        Returns:
+            (string) A summary string that contains all of the appropriate values for all of the resources
+
+        &#34;&#34;&#34;
+        metrics = resources_dict[resource_label]
+        limits = limits_dict[resource_label]
+
+        if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+            usage_value_string = NOT_AVAILABLE_STRING
+        else:
+            usage_value_string = str(&#34;%.2f&#34; % usages_dict[translator_dict[resource_label]])
+
+        strings = list()
+        if not limits_dict and not usages_dict:
+            for field in [&#34;max&#34;, &#34;current&#34;, &#34;max&#34;, &#34;min&#34;]:
+                strings.append(str(self.try_get_value(metrics, field)))
+        else:
+            for field in [(&#34;max&#34;, metrics), (&#34;current&#34;, metrics), (&#34;upper&#34;, limits), (&#34;lower&#34;, limits),
+                          (&#34;min&#34;, metrics)]:
+                strings.append(str(self.try_get_value(field[1], field[0])))
+            strings.insert(3, usage_value_string)  # Manually add the usage metric
+
+        return &#34;,&#34;.join(strings)
+
+    @staticmethod
+    def adjust_amount(amount, structure_resources, structure_limits):
+        &#34;&#34;&#34;Pre-check and, if needed, adjust the scaled amount with the policy:
+
+        * If lower limit &lt; min value -&gt; Amount to reduce too large, adjust it so that the lower limit is set to the
+        minimum
+        * If new applied value &gt; max value -&gt; Amount to increase too large, adjust it so that the current value is set
+        to the maximum
+
+        Args:
+            amount (integer): A number representing the amount to reduce or increase from the current value
+            structure_resources (dict): Dictionary with the structure resource control values (min,current,max)
+            structure_limits (dict): Dictionary with the structure resource limit values (lower,upper)
+
+        Returns:
+            (integer) The amount adjusted (trimmed) in case it would exceed any limit
+        &#34;&#34;&#34;
+        expected_value = structure_resources[&#34;current&#34;] + amount
+        lower_limit = structure_limits[&#34;lower&#34;] + amount
+        min_limit, max_limit = structure_resources[&#34;min&#34;], structure_resources[&#34;max&#34;]
+
+        if lower_limit &lt; min_limit:
+            amount += (min_limit - lower_limit)
+        elif expected_value &gt; max_limit:
+            amount -= (expected_value - max_limit)
+
+        return amount
+
+    @staticmethod
+    def get_amount_from_fit_reduction(current_resource_limit, boundary, current_resource_usage):
+        &#34;&#34;&#34;Get an amount that will be reduced from the current resource limit using a policy of *fit to the usage*.
+        With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
+        to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
+        find a scale down amount that makes the usage value stay between the _now new_ lower and upper limits.
+
+        Args:
+            current_resource_limit (integer): The current applied limit for this resource
+            boundary (integer): The boundary used between limits
+            current_resource_usage (integer): The usage value for this resource
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        &#34;&#34;&#34;
+        upper_to_lower_window = boundary
+        current_to_upper_window = boundary
+
+        # Set the limit so that the resource usage is placed in between the upper and lower limits
+        # and keeping the boundary between the upper and the real resource limits
+        desired_applied_resource_limit = \
+            current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
+
+        return -1 * (current_resource_limit - desired_applied_resource_limit)
+
+    @staticmethod
+    def get_amount_from_proportional_energy_rescaling(structure, resource):
+        &#34;&#34;&#34;Get an amount that will be reduced from the current resource limit using a policy of *proportional
+        energy-based CPU scaling*.
+        With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+        get closer to a limit.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            resource (string): The resource name, used for indexing puroposes
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        &#34;&#34;&#34;
+        max_resource_limit = structure[&#34;resources&#34;][resource][&#34;max&#34;]
+        current_resource_limit = structure[&#34;resources&#34;][resource][&#34;usage&#34;]
+        difference = max_resource_limit - current_resource_limit
+        energy_amplification = difference * CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
+        return int(energy_amplification)
+
+    def get_container_energy_str(self, resources_dict):
+        &#34;&#34;&#34;Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
+        Memory.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            resources_dict (dict): A dictionary with all the resources&#39; information, including energy
+
+        Returns:
+            (string) A string that summarizes the state of the energy resource
+
+        &#34;&#34;&#34;
+        energy_dict = resources_dict[&#34;energy&#34;]
+        string = list()
+        for field in [&#34;max&#34;, &#34;usage&#34;, &#34;min&#34;]:
+            string.append(str(self.try_get_value(energy_dict, field)))
+        return &#34;,&#34;.join(string)
+
+    def adjust_container_state(self, resources, limits, resources_to_adjust):
+        for resource in resources_to_adjust:
+            errors = True
+            while errors:
+                # TODO here the service may enter on an infinite loop
+                try:
+                    self.check_invalid_container_state(resources, limits, resource)
+                    errors = False
+                except ValueError:
+                    # Correct the chain current &gt; upper &gt; lower, including boundary between current and upper
+                    boundary = limits[resource][&#34;boundary&#34;]
+                    limits[resource][&#34;upper&#34;] = resources[resource][&#34;current&#34;] - boundary
+                    limits[resource][&#34;lower&#34;] = limits[resource][&#34;upper&#34;] - boundary
+                    # limits[resource][&#34;lower&#34;] = max(limits[resource][&#34;upper&#34;] - boundary, resources[resource][&#34;min&#34;])
+        return limits
+
+    def check_invalid_container_state(self, resources, limits, resource):
+        data = {&#34;res&#34;: resources, &#34;lim&#34;: limits}
+        values_tuples = [(&#34;max&#34;, &#34;res&#34;), (&#34;current&#34;, &#34;res&#34;), (&#34;upper&#34;, &#34;lim&#34;), (&#34;lower&#34;, &#34;lim&#34;), (&#34;min&#34;, &#34;res&#34;)]
+        values = dict()
+        for value, vtype in values_tuples:
+            values[value] = self.try_get_value(data[vtype][resource], value)
+        values[&#34;boundary&#34;] = data[&#34;lim&#34;][resource][&#34;boundary&#34;]
+
+        # Check values are set and valid, except for current as it may have not been persisted yet
+        for value in values:
+            self.check_unset_values(values[value], value, resource)
+
+        # Check if the first value is greater than the second
+        # check the full chain &#34;max &gt; upper &gt; current &gt; lower &gt; min&#34;
+        if values[&#34;current&#34;] != NOT_AVAILABLE_STRING:
+            self.check_invalid_values(values[&#34;current&#34;], &#34;current&#34;, values[&#34;max&#34;], &#34;max&#34;)
+        self.check_invalid_values(values[&#34;upper&#34;], &#34;upper&#34;, values[&#34;current&#34;], &#34;current&#34;, resource=resource)
+        self.check_invalid_values(values[&#34;lower&#34;], &#34;lower&#34;, values[&#34;upper&#34;], &#34;upper&#34;, resource=resource)
+        # TODO FIX This may cause the program to enter on an infinite loop due to the lower
+        # boundary dropping under the minimum
+        # self.check_invalid_values(values[&#34;min&#34;], &#34;min&#34;, values[&#34;lower&#34;], &#34;lower&#34;, resource=resource)
+
+        # Check that there is a boundary between values, like the current and upper, so
+        # that the limit can be surpassed
+        if values[&#34;current&#34;] != NOT_AVAILABLE_STRING:
+            if values[&#34;current&#34;] - values[&#34;boundary&#34;] &lt; values[&#34;upper&#34;]:
+                raise ValueError(
+                    &#34;value for &#39;current&#39;: {0} is too close (less than {1}) to value for &#39;upper&#39;: {2}&#34;.format(
+                        str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))
+
+            elif values[&#34;current&#34;] - values[&#34;boundary&#34;] &gt; values[&#34;upper&#34;]:
+                raise ValueError(
+                    &#34;value for &#39;current&#39;: {0} is too far (more than {1}) from value for &#39;upper&#39;: {2}&#34;.format(
+                        str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))
+
+    @staticmethod
+    def rule_triggers_event(rule, data, resources):
+        return rule[&#34;active&#34;] and \
+               resources[rule[&#34;resource&#34;]][&#34;guard&#34;] and \
+               rule[&#34;generates&#34;] == &#34;events&#34; and \
+               jsonLogic(rule[&#34;rule&#34;], data)
+
+    def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
+        events = []
+        data = dict()
+
+        for resource in self.guardable_resources:
+            if resource in resources:
+                data[resource] = {
+                    &#34;limits&#34;: {resource: limits[resource]},
+                    &#34;structure&#34;: {resource: resources[resource]}}
+
+        for usage_metric in usages:
+            keys = usage_metric.split(&#34;.&#34;)
+            # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
+            data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
+
+        for rule in rules:
+            try:
+                # Check that the rule is active, the resource to watch is guarded and that the rule is activated
+                if self.rule_triggers_event(rule, data, resources):
+                    event_name = generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
+                    event = self.generate_event(event_name, structure_name, rule[&#34;resource&#34;], rule[&#34;action&#34;])
+                    events.append(event)
+
+            except KeyError as e:
+                log_warning(
+                    &#34;rule: {0} is missing a parameter {1} {2}&#34;.format(rule[&#34;name&#34;],
+                                                                      str(e), str(traceback.format_exc())), self.debug)
+
+        return events
+
+    @staticmethod
+    def generate_event(event_name, structure_name, resource, action):
+        event = dict(
+            name=event_name,
+            resource=resource,
+            type=&#34;event&#34;,
+            structure=structure_name,
+            action=action,
+            timestamp=int(time.time()))
+        return event
+
+    @staticmethod
+    def generate_request(structure, amount, resource, action):
+        request = dict(
+            type=&#34;request&#34;,
+            resource=resource,
+            amount=int(amount),
+            structure=structure[&#34;name&#34;],
+            action=action,
+            timestamp=int(time.time()),
+            structure_type=structure[&#34;subtype&#34;]
+        )
+        return request
+
+    def match_rules_and_events(self, structure, rules, events, limits, usages):
+        generated_requests = list()
+        events_to_remove = dict()
+        for rule in rules:
+            try:
+                resource_label = rule[&#34;resource&#34;]
+                if rule[&#34;active&#34;] and rule[&#34;generates&#34;] == &#34;requests&#34; and resource_label in events and jsonLogic(
+                        rule[&#34;rule&#34;], events[resource_label]):
+
+                    # If rescaling a container, check that the current resource value exists, otherwise there
+                    # is nothing to rescale
+                    if self.is_container(structure) and &#34;current&#34; not in structure[&#34;resources&#34;][resource_label]:
+                        log_warning(
+                            &#34;No current value for container&#39; {0}&#39; and resource &#39;{1}&#39;, can&#39;t rescale&#34;.format(
+                                structure[&#34;name&#34;], resource_label), self.debug)
+                        continue
+
+                    # If no policy is set for scaling, default to &#34;fixed amount&#34;
+                    if &#34;rescale_by&#34; not in rule.keys():
+                        rule[&#34;rescale_by&#34;] = &#34;amount&#34;
+                        log_warning(
+                            &#34;No rescale_by policy is set in rule : &#39;{0}&#39;, falling back to default amount&#34;.format(
+                                rule[&#34;name&#34;]), self.debug)
+
+                    # Get the amount to be applied from the policy set
+                    if rule[&#34;rescale_by&#34;] == &#34;amount&#34;:
+                        amount = rule[&#34;amount&#34;]
+                    elif rule[&#34;rescale_by&#34;] == &#34;fit_to_usage&#34;:
+                        current_resource_limit = structure[&#34;resources&#34;][resource_label][&#34;current&#34;]
+                        boundary = limits[resource_label][&#34;boundary&#34;]
+                        usage = usages[translator_dict[resource_label]]
+                        amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                    elif rule[&#34;rescale_by&#34;] == &#34;proportional&#34; and rule[&#34;resource&#34;] == &#34;energy&#34;:
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    else:
+                        amount = rule[&#34;amount&#34;]
+
+                    # Special case for amount being between 0 and 1 or between -1 and 0
+                    # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
+                    # due to a float rounding error
+                    if int(amount) == 0 and amount &lt; 0:
+                        amount = -1
+                    elif int(amount) == 0 and amount &gt; 0:
+                        amount = 1
+
+                    # If the resource is susceptible to check, ensure that it does not surpass any limit
+                    if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                        structure_resources = structure[&#34;resources&#34;][resource_label]
+                        structure_limits = limits[resource_label]
+                        amount = self.adjust_amount(amount, structure_resources, structure_limits)
+
+                    # If the remaining amount is non-zero, create the Request
+                    if amount != 0:
+                        action = generate_request_name(amount, resource_label)
+                        request = self.generate_request(structure, amount, resource_label, action)
+
+                        # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+                        if resource_label == &#34;energy&#34;:
+                            request[&#34;resource&#34;] = &#34;cpu&#34;
+                            request[&#34;for_energy&#34;] = True
+
+                        # If scaling a container, add its host information as it will be needed
+                        if self.is_container(structure):
+                            request[&#34;host&#34;] = structure[&#34;host&#34;]
+                            request[&#34;host_rescaler_ip&#34;] = structure[&#34;host_rescaler_ip&#34;]
+                            request[&#34;host_rescaler_port&#34;] = structure[&#34;host_rescaler_port&#34;]
+
+                        # Append the generated request
+                        generated_requests.append(request)
+
+                    # Remove the events that triggered the request
+                    event_name = generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
+                    if event_name not in events_to_remove:
+                        events_to_remove[event_name] = 0
+                    events_to_remove[event_name] += rule[&#34;events_to_remove&#34;]
+
+            except KeyError as e:
+                log_warning(
+                    &#34;rule: {0} is missing a parameter {1} {2} &#34;.format(rule[&#34;name&#34;], str(e),
+                                                                       str(traceback.format_exc())), self.debug)
+
+        return generated_requests, events_to_remove
+
+    def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
+        resources = container[&#34;resources&#34;]
+
+        container_name_str = &#34;@&#34; + container[&#34;name&#34;]
+        container_guard_policy_str = &#34;with policy: {0}&#34;.format(container[&#34;guard_policy&#34;])
+        # TODO check if the resource is unguarded and if that is the case, do not print anything or
+        # just a cpu(unguarded)
+        # This should be adapted according the resources configured
+        # resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
+        #     self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
+        #     self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
+        #     self.get_container_energy_str(resources))
+        resources_str = &#34;cpu({0})&#34;.format(self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages))
+
+
+        ev, req = list(), list()
+        for event in triggered_events:
+            ev.append(event[&#34;name&#34;])
+        for request in triggered_requests:
+            req.append(request[&#34;action&#34;])
+        triggered_requests_and_events = &#34;#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}&#34;.format(str(ev), str(req))
+        log_info(
+            &#34; &#34;.join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
+            self.debug)
+
+    def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
+        event_timeout = myConfig.get_config_value(&#34;EVENT_TIMEOUT&#34;)
+
+        # Match usages and rules to generate events
+        triggered_events = self.match_usages_and_limits(structure[&#34;name&#34;], rules, usages, limits,
+                                                        structure[&#34;resources&#34;])
+
+        # Remote database operation
+        if triggered_events:
+            self.couchdb_handler.add_events(triggered_events)
+
+        # Remote database operation
+        all_events = self.couchdb_handler.get_events(structure)
+
+        # Filter the events according to timestamp
+        filtered_events, old_events = self.sort_events(all_events, event_timeout)
+
+        if old_events:
+            # Remote database operation
+            self.couchdb_handler.delete_events(old_events)
+
+        # If there are no events, nothing else to do as no requests will be generated
+        if filtered_events:
+            # Merge all the event counts
+            reduced_events = self.reduce_structure_events(filtered_events)
+
+            # Match events and rules to generate requests
+            triggered_requests, events_to_remove = self.match_rules_and_events(structure, rules, reduced_events, limits,
+                                                                               usages)
+
+            # Remove events that generated the request
+            # Remote database operation
+            for event in events_to_remove:
+                self.couchdb_handler.delete_num_events_by_structure(structure, event, events_to_remove[event])
+
+            if triggered_requests:
+                # Remote database operation
+                self.couchdb_handler.add_requests(triggered_requests)
+
+        else:
+            triggered_requests = list()
+
+        # DEBUG AND INFO OUTPUT
+        if self.debug:
+            self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
+
+    def serverless(self, myConfig, structure, rules):
+        window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = myConfig.get_config_value(&#34;WINDOW_DELAY&#34;)
+
+        structure_subtype = structure[&#34;subtype&#34;]
+
+        try:
+            # Check if structure is guarded
+            if &#34;guard&#34; not in structure or not structure[&#34;guard&#34;]:
+                return
+
+            # Check if structure is being monitored, otherwise, ignore
+            try:
+                metrics_to_retrieve = BDWATCHDOG_METRICS[structure_subtype]
+                metrics_to_generate = GUARDIAN_METRICS[structure_subtype]
+                tag = TAGS[structure_subtype]
+            except KeyError:
+                # Default is container
+                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
+                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
+                tag = &#34;host&#34;
+
+            # Remote database operation
+            usages = self.opentsdb_handler.get_structure_timeseries({tag: structure[&#34;name&#34;]}, window_difference,
+                                                                    window_delay,
+                                                                    metrics_to_retrieve, metrics_to_generate)
+
+            # Skip this structure if all the usage metrics are unavailable
+            if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+                log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
+                return
+
+            resources = structure[&#34;resources&#34;]
+
+            # Remote database operation
+            limits = self.couchdb_handler.get_limits(structure)
+            limits_resources = limits[&#34;resources&#34;]
+
+            if not limits_resources:
+                log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
+                return
+
+            # TODO FIX This only applies to containers, currently not used for applications
+            if structure_subtype == &#34;container&#34;:
+                resources_to_adjust = GUARDABLE_RESOURCES #[&#34;cpu&#34;, &#34;mem&#34;]
+                # resources_to_adjust = []
+                limits[&#34;resources&#34;] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
+
+                # Remote database operation
+                self.couchdb_handler.update_limit(limits)
+
+            self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
+
+        except Exception as e:
+            log_error(
+                &#34;error with structure: {0} {1} {2}&#34;.format(structure[&#34;name&#34;], str(e), str(traceback.format_exc())),
+                self.debug)
+
+    def guard_structures(self, myConfig, structures):
+        # Remote database operation
+        rules = self.couchdb_handler.get_rules()
+
+        threads = []
+        for structure in structures:
+            if &#34;guard_policy&#34; not in structure:
+                # Default option will be serverless
+                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+                thread.start()
+                threads.append(thread)
+                # self.serverless(config, structure, rules)
+            else:
+                if structure[&#34;guard_policy&#34;] == &#34;serverless&#34;:
+                    thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+                    thread.start()
+                    threads.append(thread)
+                else:
+                    self.serverless(myConfig, structure, rules)
+        for process in threads:
+            process.join()
+
+    def guard(self, ):
+        global CPU_SHARES_PER_WATT
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+        while True:
+
+            # Get service info
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
+
+            # Heartbeat
+            beat(self.couchdb_handler, SERVICE_NAME)
+
+            # CONFIG
+            myConfig.set_config(service[&#34;config&#34;])
+            self.debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+            window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+            structure_guarded = myConfig.get_config_value(&#34;STRUCTURE_GUARDED&#34;)
+            CPU_SHARES_PER_WATT = myConfig.get_config_value(&#34;CPU_SHARES_PER_WATT&#34;)
+            GUARDIAN_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
+
+            thread = None
+            if GUARDIAN_IS_ACTIVATED:
+                # Remote database operation
+                structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+                if structures:
+                    thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
+                    thread.start()
+            else:
+                log_info(
+                    &#34;Guardian is not activated&#34;, self.debug)
+            log_info(
+                &#34;Epoch processed at {0}&#34;.format(get_time_now_string()), self.debug)
+            time.sleep(window_difference)
+
+            if thread and thread.is_alive():
+                delay_start = time.time()
+                log_warning(
+                    &#34;Previous thread didn&#39;t finish before next poll is due, with window time of &#34; +
+                    &#34;{0} seconds, at {1}&#34;.format(str(window_difference), get_time_now_string()), self.debug)
+                log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
+                thread.join()
+                delay_end = time.time()
+                log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
+                            self.debug)
+
+
+def main():
+    try:
+        guardian = Guardian()
+        guardian.guard()
+    except Exception as e:
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+
+
+if __name__ == &#34;__main__&#34;:
+    main()</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="src.Guardian.Guardian.main"><code class="name flex">
+<span>def <span class="ident">main</span></span>(<span>)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def main():
+    try:
+        guardian = Guardian()
+        guardian.guard()
+    except Exception as e:
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="src.Guardian.Guardian.Guardian"><code class="flex name class">
+<span>class <span class="ident">Guardian</span></span>
+</code></dt>
+<dd>
+<section class="desc"><p>Guardian class that implements the logic for this microservice. The Guardian takes care of matching the resource
+time series with a subset of rules to generate Events and then, matches the event against another subset of rules
+to generate scaling Requests.</p>
+<p>For more information you can visit: <a href="https://serverlesscontainers.readthedocs.io/en/latest/#architecture-and-microservices">https://serverlesscontainers.readthedocs.io/en/latest/#architecture-and-microservices</a></p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class Guardian:
+    &#34;&#34;&#34;
+    Guardian class that implements the logic for this microservice. The Guardian takes care of matching the resource
+    time series with a subset of rules to generate Events and then, matches the event against another subset of rules
+    to generate scaling Requests.
+
+    For more information you can visit: https://serverlesscontainers.readthedocs.io/en/latest/#architecture-and-microservices
+    &#34;&#34;&#34;
+
+    def __init__(self):
+        self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
+        self.couchdb_handler = couchdb.CouchDBServer()
+        self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.guardable_resources = GUARDABLE_RESOURCES
+        self.debug = True
+
+    @staticmethod
+    def check_unset_values(value, label, resource):
+        &#34;&#34;&#34;Check if a value has the N/A value and, if that is the case, raise an informative exception
+
+        Args:
+            value (integer): The value to be inspected
+            label (string): Resource label name (e.g., upper limit), used for the exception string creation
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns:
+            None
+
+        Raises:
+            Exception if value is N/A
+        &#34;&#34;&#34;
+        if value == NOT_AVAILABLE_STRING:
+            raise ValueError(
+                &#34;value for &#39;{0}&#39; in resource &#39;{1}&#39; is not set or is not available.&#34;.format(label, resource))
+
+    @staticmethod
+    def check_invalid_values(value1, label1, value2, label2, resource=&#34;n/a&#34;):
+        &#34;&#34;&#34; Check that two values have properly values set with the policy value1 &lt; value2, otherwise raise ValueError
+
+        Args:
+            value1 (integer): First value
+            label1 (string): First resource label name (e.g., upper limit), used for the exception string creation
+            value2 (integer): Second value
+            label2 (string): Second resource label name (e.g., lower limit), used for the exception string creation
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns:
+            None
+
+        Raises:
+            ValueError if value1 &gt; value2
+        &#34;&#34;&#34;
+        if value1 &gt; value2:
+            raise ValueError(&#34;in resources: {0} value for &#39;{1}&#39;: {2} is greater than value for &#39;{3}&#39;: {4}&#34;.format(
+                resource, label1, str(value1), label2, str(value2)))
+
+    @staticmethod
+    def try_get_value(d, key):
+        &#34;&#34;&#34;Get the value stored in the dictionary or return a N/A string value if:
+
+        * it is not in it
+        * it is not an valid integer
+
+        Args:
+            d (dict): A dictionary storing values
+            key (string): A string key
+
+        Returns:
+            (integer/string) int-mapped value stored in dict
+        &#34;&#34;&#34;
+        try:
+            return int(d[key])
+        except (KeyError, ValueError):
+            return NOT_AVAILABLE_STRING
+
+    @staticmethod
+    def is_application(structure):
+        return structure[&#34;subtype&#34;] == &#34;application&#34;
+
+    @staticmethod
+    def is_container(structure):
+        return structure[&#34;subtype&#34;] == &#34;container&#34;
+
+    @staticmethod
+    def sort_events(structure_events, event_timeout):
+        &#34;&#34;&#34;Sorts the events according to a simple policy regarding the _[now - timeout &lt;----&gt; now]_ time window (TW):
+
+        * The event is **inside** the TW -&gt; valid event
+        * The event is **outside** the TW -&gt; invalid event
+
+        The &#39;now&#39; time reference is taken inside this function
+
+        Args:
+            structure_events (list): A list of the events triggered in the past for a specific structure
+            event_timeout (integer): A timeout in seconds
+
+        Returns:
+            (tuple[list,list]) A tuple of lists of events, first the valid and then the invalid.
+
+        &#34;&#34;&#34;
+        valid, invalid = list(), list()
+        for event in structure_events:
+            if event[&#34;timestamp&#34;] &lt; time.time() - event_timeout:
+                invalid.append(event)
+            else:
+                valid.append(event)
+        return valid, invalid
+
+    @staticmethod
+    def reduce_structure_events(structure_events):
+        &#34;&#34;&#34;Reduces a list of events that have been generated for a single Structure into one single event. Considering
+        that each event is a dictionary with an integer value for either a &#39;down&#39; or &#39;up&#39; event, all of the dictionaries
+        can be reduced to one that can have two values for either &#39;up&#39; and &#39;down&#39; events, considering that the Structure
+        resource may have a high hysteresis.
+
+        Args:
+            structure_events (list): A list of events for a single Structure
+
+        Returns:
+            (dict) A dictionary with the added up events in a signle dictionary
+
+        &#34;&#34;&#34;
+        events_reduced = {&#34;action&#34;: {}}
+        for event in structure_events:
+            resource = event[&#34;resource&#34;]
+            if resource not in events_reduced[&#34;action&#34;]:
+                events_reduced[&#34;action&#34;][resource] = {&#34;events&#34;: {&#34;scale&#34;: {&#34;down&#34;: 0, &#34;up&#34;: 0}}}
+            for key in event[&#34;action&#34;][&#34;events&#34;][&#34;scale&#34;].keys():
+                value = event[&#34;action&#34;][&#34;events&#34;][&#34;scale&#34;][key]
+                events_reduced[&#34;action&#34;][resource][&#34;events&#34;][&#34;scale&#34;][key] += value
+        return events_reduced[&#34;action&#34;]
+
+    def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
+        &#34;&#34;&#34;Produces a string to summarize the current state of a resource with all of its information and
+        the following format: _[max, current, upper limit, usage, lower limit, min]_
+
+        Args:
+            resource_label (string): The resource name label, used to create the string and to access the dictionaries
+            resources_dict (dict): a dictionary with the metrics (e.g., max, min) of the resources
+            limits_dict (dict): a dictionary with the limits (e.g., lower, upper) of the resources
+            usages_dict (dict): a dictionary with the usages of the resources
+
+        Returns:
+            (string) A summary string that contains all of the appropriate values for all of the resources
+
+        &#34;&#34;&#34;
+        metrics = resources_dict[resource_label]
+        limits = limits_dict[resource_label]
+
+        if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+            usage_value_string = NOT_AVAILABLE_STRING
+        else:
+            usage_value_string = str(&#34;%.2f&#34; % usages_dict[translator_dict[resource_label]])
+
+        strings = list()
+        if not limits_dict and not usages_dict:
+            for field in [&#34;max&#34;, &#34;current&#34;, &#34;max&#34;, &#34;min&#34;]:
+                strings.append(str(self.try_get_value(metrics, field)))
+        else:
+            for field in [(&#34;max&#34;, metrics), (&#34;current&#34;, metrics), (&#34;upper&#34;, limits), (&#34;lower&#34;, limits),
+                          (&#34;min&#34;, metrics)]:
+                strings.append(str(self.try_get_value(field[1], field[0])))
+            strings.insert(3, usage_value_string)  # Manually add the usage metric
+
+        return &#34;,&#34;.join(strings)
+
+    @staticmethod
+    def adjust_amount(amount, structure_resources, structure_limits):
+        &#34;&#34;&#34;Pre-check and, if needed, adjust the scaled amount with the policy:
+
+        * If lower limit &lt; min value -&gt; Amount to reduce too large, adjust it so that the lower limit is set to the
+        minimum
+        * If new applied value &gt; max value -&gt; Amount to increase too large, adjust it so that the current value is set
+        to the maximum
+
+        Args:
+            amount (integer): A number representing the amount to reduce or increase from the current value
+            structure_resources (dict): Dictionary with the structure resource control values (min,current,max)
+            structure_limits (dict): Dictionary with the structure resource limit values (lower,upper)
+
+        Returns:
+            (integer) The amount adjusted (trimmed) in case it would exceed any limit
+        &#34;&#34;&#34;
+        expected_value = structure_resources[&#34;current&#34;] + amount
+        lower_limit = structure_limits[&#34;lower&#34;] + amount
+        min_limit, max_limit = structure_resources[&#34;min&#34;], structure_resources[&#34;max&#34;]
+
+        if lower_limit &lt; min_limit:
+            amount += (min_limit - lower_limit)
+        elif expected_value &gt; max_limit:
+            amount -= (expected_value - max_limit)
+
+        return amount
+
+    @staticmethod
+    def get_amount_from_fit_reduction(current_resource_limit, boundary, current_resource_usage):
+        &#34;&#34;&#34;Get an amount that will be reduced from the current resource limit using a policy of *fit to the usage*.
+        With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
+        to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
+        find a scale down amount that makes the usage value stay between the _now new_ lower and upper limits.
+
+        Args:
+            current_resource_limit (integer): The current applied limit for this resource
+            boundary (integer): The boundary used between limits
+            current_resource_usage (integer): The usage value for this resource
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        &#34;&#34;&#34;
+        upper_to_lower_window = boundary
+        current_to_upper_window = boundary
+
+        # Set the limit so that the resource usage is placed in between the upper and lower limits
+        # and keeping the boundary between the upper and the real resource limits
+        desired_applied_resource_limit = \
+            current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
+
+        return -1 * (current_resource_limit - desired_applied_resource_limit)
+
+    @staticmethod
+    def get_amount_from_proportional_energy_rescaling(structure, resource):
+        &#34;&#34;&#34;Get an amount that will be reduced from the current resource limit using a policy of *proportional
+        energy-based CPU scaling*.
+        With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+        get closer to a limit.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            resource (string): The resource name, used for indexing puroposes
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        &#34;&#34;&#34;
+        max_resource_limit = structure[&#34;resources&#34;][resource][&#34;max&#34;]
+        current_resource_limit = structure[&#34;resources&#34;][resource][&#34;usage&#34;]
+        difference = max_resource_limit - current_resource_limit
+        energy_amplification = difference * CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
+        return int(energy_amplification)
+
+    def get_container_energy_str(self, resources_dict):
+        &#34;&#34;&#34;Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
+        Memory.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            resources_dict (dict): A dictionary with all the resources&#39; information, including energy
+
+        Returns:
+            (string) A string that summarizes the state of the energy resource
+
+        &#34;&#34;&#34;
+        energy_dict = resources_dict[&#34;energy&#34;]
+        string = list()
+        for field in [&#34;max&#34;, &#34;usage&#34;, &#34;min&#34;]:
+            string.append(str(self.try_get_value(energy_dict, field)))
+        return &#34;,&#34;.join(string)
+
+    def adjust_container_state(self, resources, limits, resources_to_adjust):
+        for resource in resources_to_adjust:
+            errors = True
+            while errors:
+                # TODO here the service may enter on an infinite loop
+                try:
+                    self.check_invalid_container_state(resources, limits, resource)
+                    errors = False
+                except ValueError:
+                    # Correct the chain current &gt; upper &gt; lower, including boundary between current and upper
+                    boundary = limits[resource][&#34;boundary&#34;]
+                    limits[resource][&#34;upper&#34;] = resources[resource][&#34;current&#34;] - boundary
+                    limits[resource][&#34;lower&#34;] = limits[resource][&#34;upper&#34;] - boundary
+                    # limits[resource][&#34;lower&#34;] = max(limits[resource][&#34;upper&#34;] - boundary, resources[resource][&#34;min&#34;])
+        return limits
+
+    def check_invalid_container_state(self, resources, limits, resource):
+        data = {&#34;res&#34;: resources, &#34;lim&#34;: limits}
+        values_tuples = [(&#34;max&#34;, &#34;res&#34;), (&#34;current&#34;, &#34;res&#34;), (&#34;upper&#34;, &#34;lim&#34;), (&#34;lower&#34;, &#34;lim&#34;), (&#34;min&#34;, &#34;res&#34;)]
+        values = dict()
+        for value, vtype in values_tuples:
+            values[value] = self.try_get_value(data[vtype][resource], value)
+        values[&#34;boundary&#34;] = data[&#34;lim&#34;][resource][&#34;boundary&#34;]
+
+        # Check values are set and valid, except for current as it may have not been persisted yet
+        for value in values:
+            self.check_unset_values(values[value], value, resource)
+
+        # Check if the first value is greater than the second
+        # check the full chain &#34;max &gt; upper &gt; current &gt; lower &gt; min&#34;
+        if values[&#34;current&#34;] != NOT_AVAILABLE_STRING:
+            self.check_invalid_values(values[&#34;current&#34;], &#34;current&#34;, values[&#34;max&#34;], &#34;max&#34;)
+        self.check_invalid_values(values[&#34;upper&#34;], &#34;upper&#34;, values[&#34;current&#34;], &#34;current&#34;, resource=resource)
+        self.check_invalid_values(values[&#34;lower&#34;], &#34;lower&#34;, values[&#34;upper&#34;], &#34;upper&#34;, resource=resource)
+        # TODO FIX This may cause the program to enter on an infinite loop due to the lower
+        # boundary dropping under the minimum
+        # self.check_invalid_values(values[&#34;min&#34;], &#34;min&#34;, values[&#34;lower&#34;], &#34;lower&#34;, resource=resource)
+
+        # Check that there is a boundary between values, like the current and upper, so
+        # that the limit can be surpassed
+        if values[&#34;current&#34;] != NOT_AVAILABLE_STRING:
+            if values[&#34;current&#34;] - values[&#34;boundary&#34;] &lt; values[&#34;upper&#34;]:
+                raise ValueError(
+                    &#34;value for &#39;current&#39;: {0} is too close (less than {1}) to value for &#39;upper&#39;: {2}&#34;.format(
+                        str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))
+
+            elif values[&#34;current&#34;] - values[&#34;boundary&#34;] &gt; values[&#34;upper&#34;]:
+                raise ValueError(
+                    &#34;value for &#39;current&#39;: {0} is too far (more than {1}) from value for &#39;upper&#39;: {2}&#34;.format(
+                        str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))
+
+    @staticmethod
+    def rule_triggers_event(rule, data, resources):
+        return rule[&#34;active&#34;] and \
+               resources[rule[&#34;resource&#34;]][&#34;guard&#34;] and \
+               rule[&#34;generates&#34;] == &#34;events&#34; and \
+               jsonLogic(rule[&#34;rule&#34;], data)
+
+    def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
+        events = []
+        data = dict()
+
+        for resource in self.guardable_resources:
+            if resource in resources:
+                data[resource] = {
+                    &#34;limits&#34;: {resource: limits[resource]},
+                    &#34;structure&#34;: {resource: resources[resource]}}
+
+        for usage_metric in usages:
+            keys = usage_metric.split(&#34;.&#34;)
+            # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
+            data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
+
+        for rule in rules:
+            try:
+                # Check that the rule is active, the resource to watch is guarded and that the rule is activated
+                if self.rule_triggers_event(rule, data, resources):
+                    event_name = generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
+                    event = self.generate_event(event_name, structure_name, rule[&#34;resource&#34;], rule[&#34;action&#34;])
+                    events.append(event)
+
+            except KeyError as e:
+                log_warning(
+                    &#34;rule: {0} is missing a parameter {1} {2}&#34;.format(rule[&#34;name&#34;],
+                                                                      str(e), str(traceback.format_exc())), self.debug)
+
+        return events
+
+    @staticmethod
+    def generate_event(event_name, structure_name, resource, action):
+        event = dict(
+            name=event_name,
+            resource=resource,
+            type=&#34;event&#34;,
+            structure=structure_name,
+            action=action,
+            timestamp=int(time.time()))
+        return event
+
+    @staticmethod
+    def generate_request(structure, amount, resource, action):
+        request = dict(
+            type=&#34;request&#34;,
+            resource=resource,
+            amount=int(amount),
+            structure=structure[&#34;name&#34;],
+            action=action,
+            timestamp=int(time.time()),
+            structure_type=structure[&#34;subtype&#34;]
+        )
+        return request
+
+    def match_rules_and_events(self, structure, rules, events, limits, usages):
+        generated_requests = list()
+        events_to_remove = dict()
+        for rule in rules:
+            try:
+                resource_label = rule[&#34;resource&#34;]
+                if rule[&#34;active&#34;] and rule[&#34;generates&#34;] == &#34;requests&#34; and resource_label in events and jsonLogic(
+                        rule[&#34;rule&#34;], events[resource_label]):
+
+                    # If rescaling a container, check that the current resource value exists, otherwise there
+                    # is nothing to rescale
+                    if self.is_container(structure) and &#34;current&#34; not in structure[&#34;resources&#34;][resource_label]:
+                        log_warning(
+                            &#34;No current value for container&#39; {0}&#39; and resource &#39;{1}&#39;, can&#39;t rescale&#34;.format(
+                                structure[&#34;name&#34;], resource_label), self.debug)
+                        continue
+
+                    # If no policy is set for scaling, default to &#34;fixed amount&#34;
+                    if &#34;rescale_by&#34; not in rule.keys():
+                        rule[&#34;rescale_by&#34;] = &#34;amount&#34;
+                        log_warning(
+                            &#34;No rescale_by policy is set in rule : &#39;{0}&#39;, falling back to default amount&#34;.format(
+                                rule[&#34;name&#34;]), self.debug)
+
+                    # Get the amount to be applied from the policy set
+                    if rule[&#34;rescale_by&#34;] == &#34;amount&#34;:
+                        amount = rule[&#34;amount&#34;]
+                    elif rule[&#34;rescale_by&#34;] == &#34;fit_to_usage&#34;:
+                        current_resource_limit = structure[&#34;resources&#34;][resource_label][&#34;current&#34;]
+                        boundary = limits[resource_label][&#34;boundary&#34;]
+                        usage = usages[translator_dict[resource_label]]
+                        amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                    elif rule[&#34;rescale_by&#34;] == &#34;proportional&#34; and rule[&#34;resource&#34;] == &#34;energy&#34;:
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    else:
+                        amount = rule[&#34;amount&#34;]
+
+                    # Special case for amount being between 0 and 1 or between -1 and 0
+                    # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
+                    # due to a float rounding error
+                    if int(amount) == 0 and amount &lt; 0:
+                        amount = -1
+                    elif int(amount) == 0 and amount &gt; 0:
+                        amount = 1
+
+                    # If the resource is susceptible to check, ensure that it does not surpass any limit
+                    if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                        structure_resources = structure[&#34;resources&#34;][resource_label]
+                        structure_limits = limits[resource_label]
+                        amount = self.adjust_amount(amount, structure_resources, structure_limits)
+
+                    # If the remaining amount is non-zero, create the Request
+                    if amount != 0:
+                        action = generate_request_name(amount, resource_label)
+                        request = self.generate_request(structure, amount, resource_label, action)
+
+                        # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+                        if resource_label == &#34;energy&#34;:
+                            request[&#34;resource&#34;] = &#34;cpu&#34;
+                            request[&#34;for_energy&#34;] = True
+
+                        # If scaling a container, add its host information as it will be needed
+                        if self.is_container(structure):
+                            request[&#34;host&#34;] = structure[&#34;host&#34;]
+                            request[&#34;host_rescaler_ip&#34;] = structure[&#34;host_rescaler_ip&#34;]
+                            request[&#34;host_rescaler_port&#34;] = structure[&#34;host_rescaler_port&#34;]
+
+                        # Append the generated request
+                        generated_requests.append(request)
+
+                    # Remove the events that triggered the request
+                    event_name = generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
+                    if event_name not in events_to_remove:
+                        events_to_remove[event_name] = 0
+                    events_to_remove[event_name] += rule[&#34;events_to_remove&#34;]
+
+            except KeyError as e:
+                log_warning(
+                    &#34;rule: {0} is missing a parameter {1} {2} &#34;.format(rule[&#34;name&#34;], str(e),
+                                                                       str(traceback.format_exc())), self.debug)
+
+        return generated_requests, events_to_remove
+
+    def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
+        resources = container[&#34;resources&#34;]
+
+        container_name_str = &#34;@&#34; + container[&#34;name&#34;]
+        container_guard_policy_str = &#34;with policy: {0}&#34;.format(container[&#34;guard_policy&#34;])
+        # TODO check if the resource is unguarded and if that is the case, do not print anything or
+        # just a cpu(unguarded)
+        # This should be adapted according the resources configured
+        # resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
+        #     self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
+        #     self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
+        #     self.get_container_energy_str(resources))
+        resources_str = &#34;cpu({0})&#34;.format(self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages))
+
+
+        ev, req = list(), list()
+        for event in triggered_events:
+            ev.append(event[&#34;name&#34;])
+        for request in triggered_requests:
+            req.append(request[&#34;action&#34;])
+        triggered_requests_and_events = &#34;#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}&#34;.format(str(ev), str(req))
+        log_info(
+            &#34; &#34;.join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
+            self.debug)
+
+    def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
+        event_timeout = myConfig.get_config_value(&#34;EVENT_TIMEOUT&#34;)
+
+        # Match usages and rules to generate events
+        triggered_events = self.match_usages_and_limits(structure[&#34;name&#34;], rules, usages, limits,
+                                                        structure[&#34;resources&#34;])
+
+        # Remote database operation
+        if triggered_events:
+            self.couchdb_handler.add_events(triggered_events)
+
+        # Remote database operation
+        all_events = self.couchdb_handler.get_events(structure)
+
+        # Filter the events according to timestamp
+        filtered_events, old_events = self.sort_events(all_events, event_timeout)
+
+        if old_events:
+            # Remote database operation
+            self.couchdb_handler.delete_events(old_events)
+
+        # If there are no events, nothing else to do as no requests will be generated
+        if filtered_events:
+            # Merge all the event counts
+            reduced_events = self.reduce_structure_events(filtered_events)
+
+            # Match events and rules to generate requests
+            triggered_requests, events_to_remove = self.match_rules_and_events(structure, rules, reduced_events, limits,
+                                                                               usages)
+
+            # Remove events that generated the request
+            # Remote database operation
+            for event in events_to_remove:
+                self.couchdb_handler.delete_num_events_by_structure(structure, event, events_to_remove[event])
+
+            if triggered_requests:
+                # Remote database operation
+                self.couchdb_handler.add_requests(triggered_requests)
+
+        else:
+            triggered_requests = list()
+
+        # DEBUG AND INFO OUTPUT
+        if self.debug:
+            self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
+
+    def serverless(self, myConfig, structure, rules):
+        window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = myConfig.get_config_value(&#34;WINDOW_DELAY&#34;)
+
+        structure_subtype = structure[&#34;subtype&#34;]
+
+        try:
+            # Check if structure is guarded
+            if &#34;guard&#34; not in structure or not structure[&#34;guard&#34;]:
+                return
+
+            # Check if structure is being monitored, otherwise, ignore
+            try:
+                metrics_to_retrieve = BDWATCHDOG_METRICS[structure_subtype]
+                metrics_to_generate = GUARDIAN_METRICS[structure_subtype]
+                tag = TAGS[structure_subtype]
+            except KeyError:
+                # Default is container
+                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
+                metrics_to_generate = GUARDIAN_CONTAINER_METRICS
+                tag = &#34;host&#34;
+
+            # Remote database operation
+            usages = self.opentsdb_handler.get_structure_timeseries({tag: structure[&#34;name&#34;]}, window_difference,
+                                                                    window_delay,
+                                                                    metrics_to_retrieve, metrics_to_generate)
+
+            # Skip this structure if all the usage metrics are unavailable
+            if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+                log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
+                return
+
+            resources = structure[&#34;resources&#34;]
+
+            # Remote database operation
+            limits = self.couchdb_handler.get_limits(structure)
+            limits_resources = limits[&#34;resources&#34;]
+
+            if not limits_resources:
+                log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
+                return
+
+            # TODO FIX This only applies to containers, currently not used for applications
+            if structure_subtype == &#34;container&#34;:
+                resources_to_adjust = GUARDABLE_RESOURCES #[&#34;cpu&#34;, &#34;mem&#34;]
+                # resources_to_adjust = []
+                limits[&#34;resources&#34;] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
+
+                # Remote database operation
+                self.couchdb_handler.update_limit(limits)
+
+            self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
+
+        except Exception as e:
+            log_error(
+                &#34;error with structure: {0} {1} {2}&#34;.format(structure[&#34;name&#34;], str(e), str(traceback.format_exc())),
+                self.debug)
+
+    def guard_structures(self, myConfig, structures):
+        # Remote database operation
+        rules = self.couchdb_handler.get_rules()
+
+        threads = []
+        for structure in structures:
+            if &#34;guard_policy&#34; not in structure:
+                # Default option will be serverless
+                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+                thread.start()
+                threads.append(thread)
+                # self.serverless(config, structure, rules)
+            else:
+                if structure[&#34;guard_policy&#34;] == &#34;serverless&#34;:
+                    thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+                    thread.start()
+                    threads.append(thread)
+                else:
+                    self.serverless(myConfig, structure, rules)
+        for process in threads:
+            process.join()
+
+    def guard(self, ):
+        global CPU_SHARES_PER_WATT
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+        while True:
+
+            # Get service info
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
+
+            # Heartbeat
+            beat(self.couchdb_handler, SERVICE_NAME)
+
+            # CONFIG
+            myConfig.set_config(service[&#34;config&#34;])
+            self.debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+            window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+            structure_guarded = myConfig.get_config_value(&#34;STRUCTURE_GUARDED&#34;)
+            CPU_SHARES_PER_WATT = myConfig.get_config_value(&#34;CPU_SHARES_PER_WATT&#34;)
+            GUARDIAN_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
+
+            thread = None
+            if GUARDIAN_IS_ACTIVATED:
+                # Remote database operation
+                structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+                if structures:
+                    thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
+                    thread.start()
+            else:
+                log_info(
+                    &#34;Guardian is not activated&#34;, self.debug)
+            log_info(
+                &#34;Epoch processed at {0}&#34;.format(get_time_now_string()), self.debug)
+            time.sleep(window_difference)
+
+            if thread and thread.is_alive():
+                delay_start = time.time()
+                log_warning(
+                    &#34;Previous thread didn&#39;t finish before next poll is due, with window time of &#34; +
+                    &#34;{0} seconds, at {1}&#34;.format(str(window_difference), get_time_now_string()), self.debug)
+                log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
+                thread.join()
+                delay_end = time.time()
+                log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
+                            self.debug)</code></pre>
+</details>
+<h3>Static methods</h3>
+<dl>
+<dt id="src.Guardian.Guardian.Guardian.adjust_amount"><code class="name flex">
+<span>def <span class="ident">adjust_amount</span></span>(<span>amount, structure_resources, structure_limits)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Pre-check and, if needed, adjust the scaled amount with the policy:</p>
+<ul>
+<li>If lower limit &lt; min value -&gt; Amount to reduce too large, adjust it so that the lower limit is set to the
+minimum</li>
+<li>If new applied value &gt; max value -&gt; Amount to increase too large, adjust it so that the current value is set
+to the maximum</li>
+</ul>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>amount</code></strong> :&ensp;<code>integer</code></dt>
+<dd>A number representing the amount to reduce or increase from the current value</dd>
+<dt><strong><code>structure_resources</code></strong> :&ensp;<code>dict</code></dt>
+<dd>Dictionary with the structure resource control values (min,current,max)</dd>
+<dt><strong><code>structure_limits</code></strong> :&ensp;<code>dict</code></dt>
+<dd>Dictionary with the structure resource limit values (lower,upper)</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(integer) The amount adjusted (trimmed) in case it would exceed any limit</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def adjust_amount(amount, structure_resources, structure_limits):
+    &#34;&#34;&#34;Pre-check and, if needed, adjust the scaled amount with the policy:
+
+    * If lower limit &lt; min value -&gt; Amount to reduce too large, adjust it so that the lower limit is set to the
+    minimum
+    * If new applied value &gt; max value -&gt; Amount to increase too large, adjust it so that the current value is set
+    to the maximum
+
+    Args:
+        amount (integer): A number representing the amount to reduce or increase from the current value
+        structure_resources (dict): Dictionary with the structure resource control values (min,current,max)
+        structure_limits (dict): Dictionary with the structure resource limit values (lower,upper)
+
+    Returns:
+        (integer) The amount adjusted (trimmed) in case it would exceed any limit
+    &#34;&#34;&#34;
+    expected_value = structure_resources[&#34;current&#34;] + amount
+    lower_limit = structure_limits[&#34;lower&#34;] + amount
+    min_limit, max_limit = structure_resources[&#34;min&#34;], structure_resources[&#34;max&#34;]
+
+    if lower_limit &lt; min_limit:
+        amount += (min_limit - lower_limit)
+    elif expected_value &gt; max_limit:
+        amount -= (expected_value - max_limit)
+
+    return amount</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.check_invalid_values"><code class="name flex">
+<span>def <span class="ident">check_invalid_values</span></span>(<span>value1, label1, value2, label2, resource='n/a')</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Check that two values have properly values set with the policy value1 &lt; value2, otherwise raise ValueError</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>value1</code></strong> :&ensp;<code>integer</code></dt>
+<dd>First value</dd>
+<dt><strong><code>label1</code></strong> :&ensp;<code>string</code></dt>
+<dd>First resource label name (e.g., upper limit), used for the exception string creation</dd>
+<dt><strong><code>value2</code></strong> :&ensp;<code>integer</code></dt>
+<dd>Second value</dd>
+<dt><strong><code>label2</code></strong> :&ensp;<code>string</code></dt>
+<dd>Second resource label name (e.g., lower limit), used for the exception string creation</dd>
+<dt><strong><code>resource</code></strong> :&ensp;<code>string</code></dt>
+<dd>Resource name (e.g., cpu), used for the exception string creation</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>None</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>ValueError if value1 &gt; value2</code></dt>
+<dd>&nbsp;</dd>
+</dl></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def check_invalid_values(value1, label1, value2, label2, resource=&#34;n/a&#34;):
+    &#34;&#34;&#34; Check that two values have properly values set with the policy value1 &lt; value2, otherwise raise ValueError
+
+    Args:
+        value1 (integer): First value
+        label1 (string): First resource label name (e.g., upper limit), used for the exception string creation
+        value2 (integer): Second value
+        label2 (string): Second resource label name (e.g., lower limit), used for the exception string creation
+        resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+    Returns:
+        None
+
+    Raises:
+        ValueError if value1 &gt; value2
+    &#34;&#34;&#34;
+    if value1 &gt; value2:
+        raise ValueError(&#34;in resources: {0} value for &#39;{1}&#39;: {2} is greater than value for &#39;{3}&#39;: {4}&#34;.format(
+            resource, label1, str(value1), label2, str(value2)))</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.check_unset_values"><code class="name flex">
+<span>def <span class="ident">check_unset_values</span></span>(<span>value, label, resource)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Check if a value has the N/A value and, if that is the case, raise an informative exception</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>value</code></strong> :&ensp;<code>integer</code></dt>
+<dd>The value to be inspected</dd>
+<dt><strong><code>label</code></strong> :&ensp;<code>string</code></dt>
+<dd>Resource label name (e.g., upper limit), used for the exception string creation</dd>
+<dt><strong><code>resource</code></strong> :&ensp;<code>string</code></dt>
+<dd>Resource name (e.g., cpu), used for the exception string creation</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>None</code></dt>
+<dd>&nbsp;</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>Exception if value is N/A</code></dt>
+<dd>&nbsp;</dd>
+</dl></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def check_unset_values(value, label, resource):
+    &#34;&#34;&#34;Check if a value has the N/A value and, if that is the case, raise an informative exception
+
+    Args:
+        value (integer): The value to be inspected
+        label (string): Resource label name (e.g., upper limit), used for the exception string creation
+        resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+    Returns:
+        None
+
+    Raises:
+        Exception if value is N/A
+    &#34;&#34;&#34;
+    if value == NOT_AVAILABLE_STRING:
+        raise ValueError(
+            &#34;value for &#39;{0}&#39; in resource &#39;{1}&#39; is not set or is not available.&#34;.format(label, resource))</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.generate_event"><code class="name flex">
+<span>def <span class="ident">generate_event</span></span>(<span>event_name, structure_name, resource, action)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def generate_event(event_name, structure_name, resource, action):
+    event = dict(
+        name=event_name,
+        resource=resource,
+        type=&#34;event&#34;,
+        structure=structure_name,
+        action=action,
+        timestamp=int(time.time()))
+    return event</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.generate_request"><code class="name flex">
+<span>def <span class="ident">generate_request</span></span>(<span>structure, amount, resource, action)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def generate_request(structure, amount, resource, action):
+    request = dict(
+        type=&#34;request&#34;,
+        resource=resource,
+        amount=int(amount),
+        structure=structure[&#34;name&#34;],
+        action=action,
+        timestamp=int(time.time()),
+        structure_type=structure[&#34;subtype&#34;]
+    )
+    return request</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.get_amount_from_fit_reduction"><code class="name flex">
+<span>def <span class="ident">get_amount_from_fit_reduction</span></span>(<span>current_resource_limit, boundary, current_resource_usage)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Get an amount that will be reduced from the current resource limit using a policy of <em>fit to the usage</em>.
+With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
+to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
+find a scale down amount that makes the usage value stay between the <em>now new</em> lower and upper limits.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>current_resource_limit</code></strong> :&ensp;<code>integer</code></dt>
+<dd>The current applied limit for this resource</dd>
+<dt><strong><code>boundary</code></strong> :&ensp;<code>integer</code></dt>
+<dd>The boundary used between limits</dd>
+<dt><strong><code>current_resource_usage</code></strong> :&ensp;<code>integer</code></dt>
+<dd>The usage value for this resource</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(int) The amount to be reduced using the fit to usage policy.</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def get_amount_from_fit_reduction(current_resource_limit, boundary, current_resource_usage):
+    &#34;&#34;&#34;Get an amount that will be reduced from the current resource limit using a policy of *fit to the usage*.
+    With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
+    to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
+    find a scale down amount that makes the usage value stay between the _now new_ lower and upper limits.
+
+    Args:
+        current_resource_limit (integer): The current applied limit for this resource
+        boundary (integer): The boundary used between limits
+        current_resource_usage (integer): The usage value for this resource
+
+    Returns:
+        (int) The amount to be reduced using the fit to usage policy.
+
+    &#34;&#34;&#34;
+    upper_to_lower_window = boundary
+    current_to_upper_window = boundary
+
+    # Set the limit so that the resource usage is placed in between the upper and lower limits
+    # and keeping the boundary between the upper and the real resource limits
+    desired_applied_resource_limit = \
+        current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
+
+    return -1 * (current_resource_limit - desired_applied_resource_limit)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling"><code class="name flex">
+<span>def <span class="ident">get_amount_from_proportional_energy_rescaling</span></span>(<span>structure, resource)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Get an amount that will be reduced from the current resource limit using a policy of <em>proportional
+energy-based CPU scaling</em>.
+With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+get closer to a limit.</p>
+<p><em>THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO</em>, see: <a href="http://bdwatchdog.dec.udc.es/energy/index.html">http://bdwatchdog.dec.udc.es/energy/index.html</a></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>structure</code></strong> :&ensp;<code>dict</code></dt>
+<dd>The dictionary containing all of the structure resource information</dd>
+<dt><strong><code>resource</code></strong> :&ensp;<code>string</code></dt>
+<dd>The resource name, used for indexing puroposes</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(int) The amount to be reduced using the fit to usage policy.</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def get_amount_from_proportional_energy_rescaling(structure, resource):
+    &#34;&#34;&#34;Get an amount that will be reduced from the current resource limit using a policy of *proportional
+    energy-based CPU scaling*.
+    With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+    get closer to a limit.
+
+    *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+    Args:
+        structure (dict): The dictionary containing all of the structure resource information
+        resource (string): The resource name, used for indexing puroposes
+
+    Returns:
+        (int) The amount to be reduced using the fit to usage policy.
+
+    &#34;&#34;&#34;
+    max_resource_limit = structure[&#34;resources&#34;][resource][&#34;max&#34;]
+    current_resource_limit = structure[&#34;resources&#34;][resource][&#34;usage&#34;]
+    difference = max_resource_limit - current_resource_limit
+    energy_amplification = difference * CPU_SHARES_PER_WATT  # How many cpu shares to rescale per watt
+    return int(energy_amplification)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.is_application"><code class="name flex">
+<span>def <span class="ident">is_application</span></span>(<span>structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def is_application(structure):
+    return structure[&#34;subtype&#34;] == &#34;application&#34;</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.is_container"><code class="name flex">
+<span>def <span class="ident">is_container</span></span>(<span>structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def is_container(structure):
+    return structure[&#34;subtype&#34;] == &#34;container&#34;</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.reduce_structure_events"><code class="name flex">
+<span>def <span class="ident">reduce_structure_events</span></span>(<span>structure_events)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Reduces a list of events that have been generated for a single Structure into one single event. Considering
+that each event is a dictionary with an integer value for either a 'down' or 'up' event, all of the dictionaries
+can be reduced to one that can have two values for either 'up' and 'down' events, considering that the Structure
+resource may have a high hysteresis.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>structure_events</code></strong> :&ensp;<code>list</code></dt>
+<dd>A list of events for a single Structure</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(dict) A dictionary with the added up events in a signle dictionary</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def reduce_structure_events(structure_events):
+    &#34;&#34;&#34;Reduces a list of events that have been generated for a single Structure into one single event. Considering
+    that each event is a dictionary with an integer value for either a &#39;down&#39; or &#39;up&#39; event, all of the dictionaries
+    can be reduced to one that can have two values for either &#39;up&#39; and &#39;down&#39; events, considering that the Structure
+    resource may have a high hysteresis.
+
+    Args:
+        structure_events (list): A list of events for a single Structure
+
+    Returns:
+        (dict) A dictionary with the added up events in a signle dictionary
+
+    &#34;&#34;&#34;
+    events_reduced = {&#34;action&#34;: {}}
+    for event in structure_events:
+        resource = event[&#34;resource&#34;]
+        if resource not in events_reduced[&#34;action&#34;]:
+            events_reduced[&#34;action&#34;][resource] = {&#34;events&#34;: {&#34;scale&#34;: {&#34;down&#34;: 0, &#34;up&#34;: 0}}}
+        for key in event[&#34;action&#34;][&#34;events&#34;][&#34;scale&#34;].keys():
+            value = event[&#34;action&#34;][&#34;events&#34;][&#34;scale&#34;][key]
+            events_reduced[&#34;action&#34;][resource][&#34;events&#34;][&#34;scale&#34;][key] += value
+    return events_reduced[&#34;action&#34;]</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.rule_triggers_event"><code class="name flex">
+<span>def <span class="ident">rule_triggers_event</span></span>(<span>rule, data, resources)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def rule_triggers_event(rule, data, resources):
+    return rule[&#34;active&#34;] and \
+           resources[rule[&#34;resource&#34;]][&#34;guard&#34;] and \
+           rule[&#34;generates&#34;] == &#34;events&#34; and \
+           jsonLogic(rule[&#34;rule&#34;], data)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.sort_events"><code class="name flex">
+<span>def <span class="ident">sort_events</span></span>(<span>structure_events, event_timeout)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Sorts the events according to a simple policy regarding the <em>[now - timeout &lt;----&gt; now]</em> time window (TW):</p>
+<ul>
+<li>The event is <strong>inside</strong> the TW -&gt; valid event</li>
+<li>The event is <strong>outside</strong> the TW -&gt; invalid event</li>
+</ul>
+<p>The 'now' time reference is taken inside this function</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>structure_events</code></strong> :&ensp;<code>list</code></dt>
+<dd>A list of the events triggered in the past for a specific structure</dd>
+<dt><strong><code>event_timeout</code></strong> :&ensp;<code>integer</code></dt>
+<dd>A timeout in seconds</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(tuple[list,list]) A tuple of lists of events, first the valid and then the invalid.</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def sort_events(structure_events, event_timeout):
+    &#34;&#34;&#34;Sorts the events according to a simple policy regarding the _[now - timeout &lt;----&gt; now]_ time window (TW):
+
+    * The event is **inside** the TW -&gt; valid event
+    * The event is **outside** the TW -&gt; invalid event
+
+    The &#39;now&#39; time reference is taken inside this function
+
+    Args:
+        structure_events (list): A list of the events triggered in the past for a specific structure
+        event_timeout (integer): A timeout in seconds
+
+    Returns:
+        (tuple[list,list]) A tuple of lists of events, first the valid and then the invalid.
+
+    &#34;&#34;&#34;
+    valid, invalid = list(), list()
+    for event in structure_events:
+        if event[&#34;timestamp&#34;] &lt; time.time() - event_timeout:
+            invalid.append(event)
+        else:
+            valid.append(event)
+    return valid, invalid</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.try_get_value"><code class="name flex">
+<span>def <span class="ident">try_get_value</span></span>(<span>d, key)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Get the value stored in the dictionary or return a N/A string value if:</p>
+<ul>
+<li>it is not in it</li>
+<li>it is not an valid integer</li>
+</ul>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>d</code></strong> :&ensp;<code>dict</code></dt>
+<dd>A dictionary storing values</dd>
+<dt><strong><code>key</code></strong> :&ensp;<code>string</code></dt>
+<dd>A string key</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(integer/string) int-mapped value stored in dict</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@staticmethod
+def try_get_value(d, key):
+    &#34;&#34;&#34;Get the value stored in the dictionary or return a N/A string value if:
+
+    * it is not in it
+    * it is not an valid integer
+
+    Args:
+        d (dict): A dictionary storing values
+        key (string): A string key
+
+    Returns:
+        (integer/string) int-mapped value stored in dict
+    &#34;&#34;&#34;
+    try:
+        return int(d[key])
+    except (KeyError, ValueError):
+        return NOT_AVAILABLE_STRING</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="src.Guardian.Guardian.Guardian.adjust_container_state"><code class="name flex">
+<span>def <span class="ident">adjust_container_state</span></span>(<span>self, resources, limits, resources_to_adjust)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def adjust_container_state(self, resources, limits, resources_to_adjust):
+    for resource in resources_to_adjust:
+        errors = True
+        while errors:
+            # TODO here the service may enter on an infinite loop
+            try:
+                self.check_invalid_container_state(resources, limits, resource)
+                errors = False
+            except ValueError:
+                # Correct the chain current &gt; upper &gt; lower, including boundary between current and upper
+                boundary = limits[resource][&#34;boundary&#34;]
+                limits[resource][&#34;upper&#34;] = resources[resource][&#34;current&#34;] - boundary
+                limits[resource][&#34;lower&#34;] = limits[resource][&#34;upper&#34;] - boundary
+                # limits[resource][&#34;lower&#34;] = max(limits[resource][&#34;upper&#34;] - boundary, resources[resource][&#34;min&#34;])
+    return limits</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.check_invalid_container_state"><code class="name flex">
+<span>def <span class="ident">check_invalid_container_state</span></span>(<span>self, resources, limits, resource)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def check_invalid_container_state(self, resources, limits, resource):
+    data = {&#34;res&#34;: resources, &#34;lim&#34;: limits}
+    values_tuples = [(&#34;max&#34;, &#34;res&#34;), (&#34;current&#34;, &#34;res&#34;), (&#34;upper&#34;, &#34;lim&#34;), (&#34;lower&#34;, &#34;lim&#34;), (&#34;min&#34;, &#34;res&#34;)]
+    values = dict()
+    for value, vtype in values_tuples:
+        values[value] = self.try_get_value(data[vtype][resource], value)
+    values[&#34;boundary&#34;] = data[&#34;lim&#34;][resource][&#34;boundary&#34;]
+
+    # Check values are set and valid, except for current as it may have not been persisted yet
+    for value in values:
+        self.check_unset_values(values[value], value, resource)
+
+    # Check if the first value is greater than the second
+    # check the full chain &#34;max &gt; upper &gt; current &gt; lower &gt; min&#34;
+    if values[&#34;current&#34;] != NOT_AVAILABLE_STRING:
+        self.check_invalid_values(values[&#34;current&#34;], &#34;current&#34;, values[&#34;max&#34;], &#34;max&#34;)
+    self.check_invalid_values(values[&#34;upper&#34;], &#34;upper&#34;, values[&#34;current&#34;], &#34;current&#34;, resource=resource)
+    self.check_invalid_values(values[&#34;lower&#34;], &#34;lower&#34;, values[&#34;upper&#34;], &#34;upper&#34;, resource=resource)
+    # TODO FIX This may cause the program to enter on an infinite loop due to the lower
+    # boundary dropping under the minimum
+    # self.check_invalid_values(values[&#34;min&#34;], &#34;min&#34;, values[&#34;lower&#34;], &#34;lower&#34;, resource=resource)
+
+    # Check that there is a boundary between values, like the current and upper, so
+    # that the limit can be surpassed
+    if values[&#34;current&#34;] != NOT_AVAILABLE_STRING:
+        if values[&#34;current&#34;] - values[&#34;boundary&#34;] &lt; values[&#34;upper&#34;]:
+            raise ValueError(
+                &#34;value for &#39;current&#39;: {0} is too close (less than {1}) to value for &#39;upper&#39;: {2}&#34;.format(
+                    str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))
+
+        elif values[&#34;current&#34;] - values[&#34;boundary&#34;] &gt; values[&#34;upper&#34;]:
+            raise ValueError(
+                &#34;value for &#39;current&#39;: {0} is too far (more than {1}) from value for &#39;upper&#39;: {2}&#34;.format(
+                    str(values[&#34;current&#34;]), str(values[&#34;boundary&#34;]), str(values[&#34;upper&#34;])))</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.get_container_energy_str"><code class="name flex">
+<span>def <span class="ident">get_container_energy_str</span></span>(<span>self, resources_dict)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
+Memory.</p>
+<p><em>THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO</em>, see: <a href="http://bdwatchdog.dec.udc.es/energy/index.html">http://bdwatchdog.dec.udc.es/energy/index.html</a></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>resources_dict</code></strong> :&ensp;<code>dict</code></dt>
+<dd>A dictionary with all the resources' information, including energy</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(string) A string that summarizes the state of the energy resource</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_container_energy_str(self, resources_dict):
+    &#34;&#34;&#34;Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
+    Memory.
+
+    *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+    Args:
+        resources_dict (dict): A dictionary with all the resources&#39; information, including energy
+
+    Returns:
+        (string) A string that summarizes the state of the energy resource
+
+    &#34;&#34;&#34;
+    energy_dict = resources_dict[&#34;energy&#34;]
+    string = list()
+    for field in [&#34;max&#34;, &#34;usage&#34;, &#34;min&#34;]:
+        string.append(str(self.try_get_value(energy_dict, field)))
+    return &#34;,&#34;.join(string)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.get_resource_summary"><code class="name flex">
+<span>def <span class="ident">get_resource_summary</span></span>(<span>self, resource_label, resources_dict, limits_dict, usages_dict)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>Produces a string to summarize the current state of a resource with all of its information and
+the following format: <em>[max, current, upper limit, usage, lower limit, min]</em></p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>resource_label</code></strong> :&ensp;<code>string</code></dt>
+<dd>The resource name label, used to create the string and to access the dictionaries</dd>
+<dt><strong><code>resources_dict</code></strong> :&ensp;<code>dict</code></dt>
+<dd>a dictionary with the metrics (e.g., max, min) of the resources</dd>
+<dt><strong><code>limits_dict</code></strong> :&ensp;<code>dict</code></dt>
+<dd>a dictionary with the limits (e.g., lower, upper) of the resources</dd>
+<dt><strong><code>usages_dict</code></strong> :&ensp;<code>dict</code></dt>
+<dd>a dictionary with the usages of the resources</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>(string) A summary string that contains all of the appropriate values for all of the resources</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
+    &#34;&#34;&#34;Produces a string to summarize the current state of a resource with all of its information and
+    the following format: _[max, current, upper limit, usage, lower limit, min]_
+
+    Args:
+        resource_label (string): The resource name label, used to create the string and to access the dictionaries
+        resources_dict (dict): a dictionary with the metrics (e.g., max, min) of the resources
+        limits_dict (dict): a dictionary with the limits (e.g., lower, upper) of the resources
+        usages_dict (dict): a dictionary with the usages of the resources
+
+    Returns:
+        (string) A summary string that contains all of the appropriate values for all of the resources
+
+    &#34;&#34;&#34;
+    metrics = resources_dict[resource_label]
+    limits = limits_dict[resource_label]
+
+    if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+        usage_value_string = NOT_AVAILABLE_STRING
+    else:
+        usage_value_string = str(&#34;%.2f&#34; % usages_dict[translator_dict[resource_label]])
+
+    strings = list()
+    if not limits_dict and not usages_dict:
+        for field in [&#34;max&#34;, &#34;current&#34;, &#34;max&#34;, &#34;min&#34;]:
+            strings.append(str(self.try_get_value(metrics, field)))
+    else:
+        for field in [(&#34;max&#34;, metrics), (&#34;current&#34;, metrics), (&#34;upper&#34;, limits), (&#34;lower&#34;, limits),
+                      (&#34;min&#34;, metrics)]:
+            strings.append(str(self.try_get_value(field[1], field[0])))
+        strings.insert(3, usage_value_string)  # Manually add the usage metric
+
+    return &#34;,&#34;.join(strings)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.guard"><code class="name flex">
+<span>def <span class="ident">guard</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def guard(self, ):
+    global CPU_SHARES_PER_WATT
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+    logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+    while True:
+
+        # Get service info
+        service = get_service(self.couchdb_handler, SERVICE_NAME)
+
+        # Heartbeat
+        beat(self.couchdb_handler, SERVICE_NAME)
+
+        # CONFIG
+        myConfig.set_config(service[&#34;config&#34;])
+        self.debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+        window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+        structure_guarded = myConfig.get_config_value(&#34;STRUCTURE_GUARDED&#34;)
+        CPU_SHARES_PER_WATT = myConfig.get_config_value(&#34;CPU_SHARES_PER_WATT&#34;)
+        GUARDIAN_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
+
+        thread = None
+        if GUARDIAN_IS_ACTIVATED:
+            # Remote database operation
+            structures = get_structures(self.couchdb_handler, self.debug, subtype=structure_guarded)
+            if structures:
+                thread = Thread(target=self.guard_structures, args=(myConfig, structures,))
+                thread.start()
+        else:
+            log_info(
+                &#34;Guardian is not activated&#34;, self.debug)
+        log_info(
+            &#34;Epoch processed at {0}&#34;.format(get_time_now_string()), self.debug)
+        time.sleep(window_difference)
+
+        if thread and thread.is_alive():
+            delay_start = time.time()
+            log_warning(
+                &#34;Previous thread didn&#39;t finish before next poll is due, with window time of &#34; +
+                &#34;{0} seconds, at {1}&#34;.format(str(window_difference), get_time_now_string()), self.debug)
+            log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, self.debug)
+            thread.join()
+            delay_end = time.time()
+            log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)),
+                        self.debug)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.guard_structures"><code class="name flex">
+<span>def <span class="ident">guard_structures</span></span>(<span>self, myConfig, structures)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def guard_structures(self, myConfig, structures):
+    # Remote database operation
+    rules = self.couchdb_handler.get_rules()
+
+    threads = []
+    for structure in structures:
+        if &#34;guard_policy&#34; not in structure:
+            # Default option will be serverless
+            thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+            thread.start()
+            threads.append(thread)
+            # self.serverless(config, structure, rules)
+        else:
+            if structure[&#34;guard_policy&#34;] == &#34;serverless&#34;:
+                thread = Thread(target=self.serverless, args=(myConfig, structure, rules,))
+                thread.start()
+                threads.append(thread)
+            else:
+                self.serverless(myConfig, structure, rules)
+    for process in threads:
+        process.join()</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.match_rules_and_events"><code class="name flex">
+<span>def <span class="ident">match_rules_and_events</span></span>(<span>self, structure, rules, events, limits, usages)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def match_rules_and_events(self, structure, rules, events, limits, usages):
+    generated_requests = list()
+    events_to_remove = dict()
+    for rule in rules:
+        try:
+            resource_label = rule[&#34;resource&#34;]
+            if rule[&#34;active&#34;] and rule[&#34;generates&#34;] == &#34;requests&#34; and resource_label in events and jsonLogic(
+                    rule[&#34;rule&#34;], events[resource_label]):
+
+                # If rescaling a container, check that the current resource value exists, otherwise there
+                # is nothing to rescale
+                if self.is_container(structure) and &#34;current&#34; not in structure[&#34;resources&#34;][resource_label]:
+                    log_warning(
+                        &#34;No current value for container&#39; {0}&#39; and resource &#39;{1}&#39;, can&#39;t rescale&#34;.format(
+                            structure[&#34;name&#34;], resource_label), self.debug)
+                    continue
+
+                # If no policy is set for scaling, default to &#34;fixed amount&#34;
+                if &#34;rescale_by&#34; not in rule.keys():
+                    rule[&#34;rescale_by&#34;] = &#34;amount&#34;
+                    log_warning(
+                        &#34;No rescale_by policy is set in rule : &#39;{0}&#39;, falling back to default amount&#34;.format(
+                            rule[&#34;name&#34;]), self.debug)
+
+                # Get the amount to be applied from the policy set
+                if rule[&#34;rescale_by&#34;] == &#34;amount&#34;:
+                    amount = rule[&#34;amount&#34;]
+                elif rule[&#34;rescale_by&#34;] == &#34;fit_to_usage&#34;:
+                    current_resource_limit = structure[&#34;resources&#34;][resource_label][&#34;current&#34;]
+                    boundary = limits[resource_label][&#34;boundary&#34;]
+                    usage = usages[translator_dict[resource_label]]
+                    amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                elif rule[&#34;rescale_by&#34;] == &#34;proportional&#34; and rule[&#34;resource&#34;] == &#34;energy&#34;:
+                    amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                else:
+                    amount = rule[&#34;amount&#34;]
+
+                # Special case for amount being between 0 and 1 or between -1 and 0
+                # This case better be addressed and dealt with otherwise it will indefinitely trigger the rule
+                # due to a float rounding error
+                if int(amount) == 0 and amount &lt; 0:
+                    amount = -1
+                elif int(amount) == 0 and amount &gt; 0:
+                    amount = 1
+
+                # If the resource is susceptible to check, ensure that it does not surpass any limit
+                if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                    structure_resources = structure[&#34;resources&#34;][resource_label]
+                    structure_limits = limits[resource_label]
+                    amount = self.adjust_amount(amount, structure_resources, structure_limits)
+
+                # If the remaining amount is non-zero, create the Request
+                if amount != 0:
+                    action = generate_request_name(amount, resource_label)
+                    request = self.generate_request(structure, amount, resource_label, action)
+
+                    # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+                    if resource_label == &#34;energy&#34;:
+                        request[&#34;resource&#34;] = &#34;cpu&#34;
+                        request[&#34;for_energy&#34;] = True
+
+                    # If scaling a container, add its host information as it will be needed
+                    if self.is_container(structure):
+                        request[&#34;host&#34;] = structure[&#34;host&#34;]
+                        request[&#34;host_rescaler_ip&#34;] = structure[&#34;host_rescaler_ip&#34;]
+                        request[&#34;host_rescaler_port&#34;] = structure[&#34;host_rescaler_port&#34;]
+
+                    # Append the generated request
+                    generated_requests.append(request)
+
+                # Remove the events that triggered the request
+                event_name = generate_event_name(events[resource_label][&#34;events&#34;], resource_label)
+                if event_name not in events_to_remove:
+                    events_to_remove[event_name] = 0
+                events_to_remove[event_name] += rule[&#34;events_to_remove&#34;]
+
+        except KeyError as e:
+            log_warning(
+                &#34;rule: {0} is missing a parameter {1} {2} &#34;.format(rule[&#34;name&#34;], str(e),
+                                                                   str(traceback.format_exc())), self.debug)
+
+    return generated_requests, events_to_remove</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.match_usages_and_limits"><code class="name flex">
+<span>def <span class="ident">match_usages_and_limits</span></span>(<span>self, structure_name, rules, usages, limits, resources)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
+    events = []
+    data = dict()
+
+    for resource in self.guardable_resources:
+        if resource in resources:
+            data[resource] = {
+                &#34;limits&#34;: {resource: limits[resource]},
+                &#34;structure&#34;: {resource: resources[resource]}}
+
+    for usage_metric in usages:
+        keys = usage_metric.split(&#34;.&#34;)
+        # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
+        data[keys[1]][keys[0]][keys[1]][keys[2]] = usages[usage_metric]
+
+    for rule in rules:
+        try:
+            # Check that the rule is active, the resource to watch is guarded and that the rule is activated
+            if self.rule_triggers_event(rule, data, resources):
+                event_name = generate_event_name(rule[&#34;action&#34;][&#34;events&#34;], rule[&#34;resource&#34;])
+                event = self.generate_event(event_name, structure_name, rule[&#34;resource&#34;], rule[&#34;action&#34;])
+                events.append(event)
+
+        except KeyError as e:
+            log_warning(
+                &#34;rule: {0} is missing a parameter {1} {2}&#34;.format(rule[&#34;name&#34;],
+                                                                  str(e), str(traceback.format_exc())), self.debug)
+
+    return events</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.print_structure_info"><code class="name flex">
+<span>def <span class="ident">print_structure_info</span></span>(<span>self, container, usages, limits, triggered_events, triggered_requests)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
+    resources = container[&#34;resources&#34;]
+
+    container_name_str = &#34;@&#34; + container[&#34;name&#34;]
+    container_guard_policy_str = &#34;with policy: {0}&#34;.format(container[&#34;guard_policy&#34;])
+    # TODO check if the resource is unguarded and if that is the case, do not print anything or
+    # just a cpu(unguarded)
+    # This should be adapted according the resources configured
+    # resources_str = &#34;cpu({0}) - mem({1}) - energy({2})&#34;.format(
+    #     self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages),
+    #     self.get_resource_summary(&#34;mem&#34;, resources, limits, usages),
+    #     self.get_container_energy_str(resources))
+    resources_str = &#34;cpu({0})&#34;.format(self.get_resource_summary(&#34;cpu&#34;, resources, limits, usages))
+
+
+    ev, req = list(), list()
+    for event in triggered_events:
+        ev.append(event[&#34;name&#34;])
+    for request in triggered_requests:
+        req.append(request[&#34;action&#34;])
+    triggered_requests_and_events = &#34;#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}&#34;.format(str(ev), str(req))
+    log_info(
+        &#34; &#34;.join([container_name_str, container_guard_policy_str, resources_str, triggered_requests_and_events]),
+        self.debug)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.process_serverless_structure"><code class="name flex">
+<span>def <span class="ident">process_serverless_structure</span></span>(<span>self, myConfig, structure, usages, limits, rules)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def process_serverless_structure(self, myConfig, structure, usages, limits, rules):
+    event_timeout = myConfig.get_config_value(&#34;EVENT_TIMEOUT&#34;)
+
+    # Match usages and rules to generate events
+    triggered_events = self.match_usages_and_limits(structure[&#34;name&#34;], rules, usages, limits,
+                                                    structure[&#34;resources&#34;])
+
+    # Remote database operation
+    if triggered_events:
+        self.couchdb_handler.add_events(triggered_events)
+
+    # Remote database operation
+    all_events = self.couchdb_handler.get_events(structure)
+
+    # Filter the events according to timestamp
+    filtered_events, old_events = self.sort_events(all_events, event_timeout)
+
+    if old_events:
+        # Remote database operation
+        self.couchdb_handler.delete_events(old_events)
+
+    # If there are no events, nothing else to do as no requests will be generated
+    if filtered_events:
+        # Merge all the event counts
+        reduced_events = self.reduce_structure_events(filtered_events)
+
+        # Match events and rules to generate requests
+        triggered_requests, events_to_remove = self.match_rules_and_events(structure, rules, reduced_events, limits,
+                                                                           usages)
+
+        # Remove events that generated the request
+        # Remote database operation
+        for event in events_to_remove:
+            self.couchdb_handler.delete_num_events_by_structure(structure, event, events_to_remove[event])
+
+        if triggered_requests:
+            # Remote database operation
+            self.couchdb_handler.add_requests(triggered_requests)
+
+    else:
+        triggered_requests = list()
+
+    # DEBUG AND INFO OUTPUT
+    if self.debug:
+        self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)</code></pre>
+</details>
+</dd>
+<dt id="src.Guardian.Guardian.Guardian.serverless"><code class="name flex">
+<span>def <span class="ident">serverless</span></span>(<span>self, myConfig, structure, rules)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def serverless(self, myConfig, structure, rules):
+    window_difference = myConfig.get_config_value(&#34;WINDOW_TIMELAPSE&#34;)
+    window_delay = myConfig.get_config_value(&#34;WINDOW_DELAY&#34;)
+
+    structure_subtype = structure[&#34;subtype&#34;]
+
+    try:
+        # Check if structure is guarded
+        if &#34;guard&#34; not in structure or not structure[&#34;guard&#34;]:
+            return
+
+        # Check if structure is being monitored, otherwise, ignore
+        try:
+            metrics_to_retrieve = BDWATCHDOG_METRICS[structure_subtype]
+            metrics_to_generate = GUARDIAN_METRICS[structure_subtype]
+            tag = TAGS[structure_subtype]
+        except KeyError:
+            # Default is container
+            metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS
+            metrics_to_generate = GUARDIAN_CONTAINER_METRICS
+            tag = &#34;host&#34;
+
+        # Remote database operation
+        usages = self.opentsdb_handler.get_structure_timeseries({tag: structure[&#34;name&#34;]}, window_difference,
+                                                                window_delay,
+                                                                metrics_to_retrieve, metrics_to_generate)
+
+        # Skip this structure if all the usage metrics are unavailable
+        if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+            log_warning(&#34;structure: {0} has no usage data&#34;.format(structure[&#34;name&#34;]), self.debug)
+            return
+
+        resources = structure[&#34;resources&#34;]
+
+        # Remote database operation
+        limits = self.couchdb_handler.get_limits(structure)
+        limits_resources = limits[&#34;resources&#34;]
+
+        if not limits_resources:
+            log_warning(&#34;structure: {0} has no limits&#34;.format(structure[&#34;name&#34;]), self.debug)
+            return
+
+        # TODO FIX This only applies to containers, currently not used for applications
+        if structure_subtype == &#34;container&#34;:
+            resources_to_adjust = GUARDABLE_RESOURCES #[&#34;cpu&#34;, &#34;mem&#34;]
+            # resources_to_adjust = []
+            limits[&#34;resources&#34;] = self.adjust_container_state(resources, limits_resources, resources_to_adjust)
+
+            # Remote database operation
+            self.couchdb_handler.update_limit(limits)
+
+        self.process_serverless_structure(myConfig, structure, usages, limits_resources, rules)
+
+    except Exception as e:
+        log_error(
+            &#34;error with structure: {0} {1} {2}&#34;.format(structure[&#34;name&#34;], str(e), str(traceback.format_exc())),
+            self.debug)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="src.Guardian" href="index.html">src.Guardian</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="src.Guardian.Guardian.main" href="#src.Guardian.Guardian.main">main</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="src.Guardian.Guardian.Guardian" href="#src.Guardian.Guardian.Guardian">Guardian</a></code></h4>
+<ul class="">
+<li><code><a title="src.Guardian.Guardian.Guardian.adjust_amount" href="#src.Guardian.Guardian.Guardian.adjust_amount">adjust_amount</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.adjust_container_state" href="#src.Guardian.Guardian.Guardian.adjust_container_state">adjust_container_state</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.check_invalid_container_state" href="#src.Guardian.Guardian.Guardian.check_invalid_container_state">check_invalid_container_state</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.check_invalid_values" href="#src.Guardian.Guardian.Guardian.check_invalid_values">check_invalid_values</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.check_unset_values" href="#src.Guardian.Guardian.Guardian.check_unset_values">check_unset_values</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.generate_event" href="#src.Guardian.Guardian.Guardian.generate_event">generate_event</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.generate_request" href="#src.Guardian.Guardian.Guardian.generate_request">generate_request</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_amount_from_fit_reduction" href="#src.Guardian.Guardian.Guardian.get_amount_from_fit_reduction">get_amount_from_fit_reduction</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling" href="#src.Guardian.Guardian.Guardian.get_amount_from_proportional_energy_rescaling">get_amount_from_proportional_energy_rescaling</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_container_energy_str" href="#src.Guardian.Guardian.Guardian.get_container_energy_str">get_container_energy_str</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.get_resource_summary" href="#src.Guardian.Guardian.Guardian.get_resource_summary">get_resource_summary</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.guard" href="#src.Guardian.Guardian.Guardian.guard">guard</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.guard_structures" href="#src.Guardian.Guardian.Guardian.guard_structures">guard_structures</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.is_application" href="#src.Guardian.Guardian.Guardian.is_application">is_application</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.is_container" href="#src.Guardian.Guardian.Guardian.is_container">is_container</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.match_rules_and_events" href="#src.Guardian.Guardian.Guardian.match_rules_and_events">match_rules_and_events</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.match_usages_and_limits" href="#src.Guardian.Guardian.Guardian.match_usages_and_limits">match_usages_and_limits</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.print_structure_info" href="#src.Guardian.Guardian.Guardian.print_structure_info">print_structure_info</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.process_serverless_structure" href="#src.Guardian.Guardian.Guardian.process_serverless_structure">process_serverless_structure</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.reduce_structure_events" href="#src.Guardian.Guardian.Guardian.reduce_structure_events">reduce_structure_events</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.rule_triggers_event" href="#src.Guardian.Guardian.Guardian.rule_triggers_event">rule_triggers_event</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.serverless" href="#src.Guardian.Guardian.Guardian.serverless">serverless</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.sort_events" href="#src.Guardian.Guardian.Guardian.sort_events">sort_events</a></code></li>
+<li><code><a title="src.Guardian.Guardian.Guardian.try_get_value" href="#src.Guardian.Guardian.Guardian.try_get_value">try_get_value</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<!--Grid row-->
+<div class="row">
+<div class="footer_image">
+<a href="http://gac.udc.es/english/">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/logotipoingles.png"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<a href="http://www.mineco.gob.es">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/mineco.jpg"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+<div class="footer_image">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/feder.jpg"
+class="img-fluid" alt="">
+</div>
+<div class="footer_image">
+<a href="http://www.udc.es/index.html?language=en">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/footer/03_Simbolo_logo_cor.png"
+class="img-fluid" alt="">
+<div class="mask rgba-white-light"></div>
+</a>
+</div>
+</div>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad()</script>
+</body>
+</html>

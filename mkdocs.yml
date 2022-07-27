@@ -1,12 +1,12 @@
 site_name: Serverless Containers documentation
 nav:
     - Introduction: index.md
-    - Use case: use_case.md
+    - Serverless policy: serverless_policy.md
+    - Energy policy: energy_policy.md
     - Architecture: architecture.md
     - Deployment: deployment.md
-    - Quickstart: quickstart.md
-    - Configuration: configuration.md
     - Sponsors: sponsors.md
+    - Orchestrator's API: orchestrator_api.md
     - Homepage (external): http://bdwatchdog.dec.udc.es/serverless/index.html
     - Source code (external): code/src/index.html
 
@@ -24,7 +24,7 @@ repo_name: 'JonatanEnes/ServerlessContainers'
 repo_url: 'https://github.com/JonatanEnes/ServerlessContainers'
 
 # Copyright
-copyright: 'Copyright &copy; 2018 - 2020 Jonatan Enes'
+copyright: 'Copyright &copy; 2018 - 2022 Jonatan Enes'
 
 markdown_extensions:
   - attr_list
