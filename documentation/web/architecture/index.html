@@ -14,7 +14,7 @@
     
     
       
-        <title>Orchestrator's API - Serverless Containers documentation</title>
+        <title>Architecture - Serverless Containers documentation</title>
       
     
     
@@ -61,7 +61,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#services" class="md-skip">
+        <a href="#microservice-architecture" class="md-skip">
           Skip to content
         </a>
       
@@ -93,7 +93,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Orchestrator's API
+              Architecture
             
           </span>
         </div>
@@ -236,7 +236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../energy_policy.md" class="md-nav__link">
+      <a href="../energy_policy/" class="md-nav__link">
         Energy policy
       </a>
     </li>
@@ -249,11 +249,76 @@
 
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../architecture/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Architecture
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Architecture
       </a>
+      
+        
+
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#microservice-architecture" class="md-nav__link">
+    Microservice architecture
+  </a>
+  
+    <nav class="md-nav" aria-label="Microservice architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#passive-microservices" class="md-nav__link">
+    Passive Microservices
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#active-microservices" class="md-nav__link">
+    Active Microservices
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-microservices" class="md-nav__link">
+    Other Microservices
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -294,77 +359,11 @@
 
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Orchestrator's API
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../orchestrator_api/" class="md-nav__link">
         Orchestrator's API
       </a>
-      
-        
-
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#services" class="md-nav__link">
-    Services
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#rules" class="md-nav__link">
-    Rules
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#structures" class="md-nav__link">
-    Structures
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#users" class="md-nav__link">
-    Users
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#others" class="md-nav__link">
-    Others
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -425,37 +424,36 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#services" class="md-nav__link">
-    Services
+  <a href="#microservice-architecture" class="md-nav__link">
+    Microservice architecture
+  </a>
+  
+    <nav class="md-nav" aria-label="Microservice architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#passive-microservices" class="md-nav__link">
+    Passive Microservices
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#rules" class="md-nav__link">
-    Rules
+        
+          <li class="md-nav__item">
+  <a href="#active-microservices" class="md-nav__link">
+    Active Microservices
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#structures" class="md-nav__link">
-    Structures
+        
+          <li class="md-nav__item">
+  <a href="#other-microservices" class="md-nav__link">
+    Other Microservices
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#users" class="md-nav__link">
-    Users
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#others" class="md-nav__link">
-    Others
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -471,59 +469,111 @@
             <article class="md-content__inner md-typeset">
               
                 
-                  <a href="https://github.com/JonatanEnes/ServerlessContainers/edit/master/docs/orchestrator_api.md" title="Edit this page" class="md-content__button md-icon">
+                  <a href="https://github.com/JonatanEnes/ServerlessContainers/edit/master/docs/architecture.md" title="Edit this page" class="md-content__button md-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25z"/></svg>
                   </a>
                 
                 
-                  <h1>Orchestrator's API</h1>
+                  <h1>Architecture</h1>
                 
-                <h2 id="services">Services</h2>
+                <p>This framework has been designed using a microservice approach in order
+to ease its development as well as to create specialized units that can 
+be reused or improved in isolation. In addition, by using this development 
+technique it is also possible to implement a framework that inherently 
+presents an internal parallelism that is useful when dealing with 
+scenarios that require responsiveness, such as is the case with 
+real-time and on-demand resource scaling.</p>
+<p>The next image shows a high-level diagram of the scenario on which the 
+framework is deployed:</p>
+<p><img alt="architecture" src="../img/architecture/scenario_diagram.svg" /></p>
 <ul>
-<li>/service/ ['GET']</li>
-<li>/service/&lt;service_name> ['GET', 'PUT']</li>
-<li>/service/&lt;service_name>/&lt;key> ['PUT']</li>
+<li>
+<p>The framework's <strong>inputs</strong>, there are two: </p>
+<ul>
+<li>[1] the actions that control the framework's behavior, both performed 
+ by a user or by another program through the framework's API.</li>
+<li>[2] the resource monitoring time series, currently provided by an 
+external framework (<a href="http://bdwatchdog.dec.udc.es/monitoring/index.html">BDWatchdog</a>), 
+that are used in the policy decision for the resource scaling operations.</li>
 </ul>
-<h2 id="rules">Rules</h2>
-<ul>
-<li>/rule/ ['GET']</li>
-<li>/rule/&lt;rule_name> ['GET']</li>
-<li>/rule/&lt;rule_name>/activate ['PUT']</li>
-<li>/rule/&lt;rule_name>/deactivate ['PUT']</li>
-<li>/rule/&lt;rule_name>/amount ['PUT']</li>
-<li>/rule/&lt;rule_name>/policy ['PUT']</li>
-<li>/rule/&lt;rule_name>/events_required ['PUT']</li>
+</li>
+<li>
+<p>The <strong><em>Serverless Containers framework</em></strong> [3], 
+that groups several microservices, some of which are placed on the 
+controlled hosts. The microservices' inner workings are further 
+specified next.</p>
+</li>
+<li>
+<p>The <strong>controlled infrastructure</strong> [4], which usually 
+consists of several hosts running one or several containers each. 
+Currently, only the containers backed by the cgroups file system are 
+supported by design and, more specifically, Linux Containers (LXC) have 
+been used and thus have been proven to work with this framework. </p>
+</li>
 </ul>
-<h2 id="structures">Structures</h2>
+<h2 id="microservice-architecture">Microservice architecture</h2>
+<p>As previously stated, the design followed to create the architecture of 
+this framework uses several microservices that communicate and exchange 
+information. The following image shows a high-level diagram of the 
+microservices layout:</p>
+<p><img alt="design" src="../img/architecture/design_diagram.svg" /></p>
+<p>As it can be seen, the microservices can be separated into <strong>active</strong> and 
+<strong>passive</strong> ones, with the difference being that the passive ones focus on 
+feedback operations to keep the framework continuously updated on the
+infrastructure's state, while the active ones use such information 
+to scale the container's resource limits accordingly and as needed. </p>
+<h3 id="passive-microservices">Passive Microservices</h3>
+<p>The passive microservices are needed to continuously keep the central 
+database (State Database) updated with all the metadata that tracks the 
+state of the infrastructure, from the number of containers and their 
+thresholds to the allocated amounts of resources.</p>
+<p>Some passive microservices are used to create aggregate data for 
+entities such as applications (i.e., representing a group of containers)
+or to persist temporary information into a persistent database.</p>
 <ul>
-<li>/structure/ ['GET']</li>
-<li>/structure/&lt;structure_name> ['GET']</li>
-<li>/structure/&lt;structure_name>/resources ['GET']</li>
-<li>/structure/&lt;structure_name>/resources/&lt;resource> ['GET']</li>
-<li>/structure/&lt;structure_name>/resources/&lt;resource>/&lt;parameter> ['GET', 'PUT']</li>
-<li>/structure/&lt;structure_name>/guard ['PUT']</li>
-<li>/structure/&lt;structure_name>/unguard ['PUT']</li>
-<li>/structure/&lt;structure_name>/resources/&lt;resource>/guard ['PUT']</li>
-<li>/structure/&lt;structure_name>/resources/&lt;resource>/unguard ['PUT']</li>
-<li>/structure/&lt;structure_name>/resources/guard ['PUT']</li>
-<li>/structure/&lt;structure_name>/resources/unguard ['PUT']</li>
-<li>/structure/&lt;structure_name>/limits ['GET']</li>
-<li>/structure/&lt;structure_name>/limits/&lt;resource> ['GET']</li>
-<li>/structure/&lt;structure_name>/limits/&lt;resource>/boundary ['PUT']</li>
-<li>/structure/container/&lt;structure_name>/&lt;app_name> ['PUT', 'DELETE']</li>
-<li>/structure/container/&lt;structure_name> ['PUT', 'DELETE']</li>
-<li>/structure/host/&lt;structure_name> ['PUT', 'DELETE']</li>
-<li>/structure/apps/&lt;structure_name> ['PUT', 'DELETE']</li>
+<li><strong>Structure Snapshoter</strong>: Continuously polls the actually applied 
+limits of the containers and writes that information into the State 
+Database.</li>
+<li><strong>Database Snapshoter</strong>: Forwards the information temporarily stored 
+on the State Database to a persistent database, thus creating time series. </li>
+<li><strong>Refeeder Snapshoter</strong>: Aggregates and creates new metadata from 
+existing one (e.g., allocated amount of CPU for an application composed 
+of 3 containers).</li>
 </ul>
-<h2 id="users">Users</h2>
+<p><img alt="design" src="../img/architecture/passive_services.svg" /></p>
+<h3 id="active-microservices">Active Microservices</h3>
+<p>The active microservices are the actual ones that perform the scaling
+of the resources via changing the container resource limits on the 
+underlying cgroups file system through a coordinated chain of events.
+The events that trigger these changes are specified according to the 
+policy used.</p>
+<p>More specific functionalities of the microservices are described next:</p>
 <ul>
-<li>/user/ ['GET']</li>
-<li>/user/&lt;user_name> ['GET']</li>
-<li>/user/&lt;user_name>/energy/max ['PUT']</li>
+<li>
+<p><strong>Guardian</strong>: Working with time windows, it matches the real resource 
+usages of the containers, as provided with the external resource monitoring, 
+with the container limits stored on the State Database. As a result of the matches 
+it generates scaling requests. Mainly used with the serverless policy.</p>
+</li>
+<li>
+<p><strong>Scaler</strong>: Polls the State Database looking for requests to be applied to the containers.</p>
+</li>
 </ul>
-<h2 id="others">Others</h2>
+<p><img alt="design" src="../img/architecture/active_services.svg" /></p>
+<h3 id="other-microservices">Other Microservices</h3>
+<p>Some microservices have an auxiliary role and are used both by active and 
+passive microservices.</p>
 <ul>
-<li>"/heartbeat ['GET']</li>
+<li>
+<p><strong>Orchestrator</strong>: Exposes an API that can be used both by humans or other programs 
+to configure the framework.</p>
+</li>
+<li>
+<p><strong>Container Scaler</strong>: This microservice has to be deployed on every 
+infrastructure node whose hosted containers are to be scaled by any policy. 
+This service is able to read and write the cgroups file system to perform 
+the actual resource limit scaling operations.</p>
+</li>
 </ul>
                 
               
@@ -544,7 +594,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer">
       
         
-        <a href="../sponsors/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Sponsors" rel="prev">
+        <a href="../energy_policy/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Energy policy" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12z"/></svg>
           </div>
@@ -553,20 +603,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Sponsors
+              Energy policy
             </div>
           </div>
         </a>
       
       
         
-        <a href="../code/src/" class="md-footer__link md-footer__link--next" aria-label="Next: Source code (external)" rel="next">
+        <a href="../deployment/" class="md-footer__link md-footer__link--next" aria-label="Next: Deployment" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Source code (external)
+              Deployment
             </div>
           </div>
           <div class="md-footer__button md-icon">
