@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.NodeRescaler.NodeRescaler API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -54,7 +57,6 @@ padding: 1%;
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see &lt;http://www.gnu.org/licenses/&gt;.
 
-
 import json
 
 from flask import Flask
@@ -69,7 +71,7 @@ from functools import wraps
 
 node_resource_manager = None
 
-app = Flask(__name__)
+node_rescaler = Flask(__name__)
 
 
 def initialize_LXD(f):
@@ -87,7 +89,7 @@ def initialize_LXD(f):
     return wrap
 
 
-@app.route(&#34;/container/&#34;, methods=[&#39;GET&#39;])
+@node_rescaler.route(&#34;/container/&#34;, methods=[&#39;GET&#39;])
 @initialize_LXD
 def get_containers_resources():
     try:
@@ -101,7 +103,7 @@ def get_containers_resources():
         return jsonify(node_resource_manager.get_all_nodes())
 
 
-@app.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;PUT&#39;])
+@node_rescaler.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;PUT&#39;])
 @initialize_LXD
 def set_container_resources(container_name):
     if container_name != &#34;&#34;:
@@ -119,7 +121,7 @@ def set_container_resources(container_name):
         abort(400)
 
 
-@app.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;GET&#39;])
+@node_rescaler.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;GET&#39;])
 @initialize_LXD
 def get_container_resources(container_name):
     if container_name != &#34;&#34;:
@@ -132,7 +134,7 @@ def get_container_resources(container_name):
         return jsonify(node_resource_manager.get_all_nodes())
 
 
-@app.route(&#34;/heartbeat&#34;, methods=[&#39;GET&#39;])
+@node_rescaler.route(&#34;/heartbeat&#34;, methods=[&#39;GET&#39;])
 def heartbeat():
     return Response(json.dumps({&#34;status&#34;: &#34;alive&#34;}), status=200, mimetype=&#39;application/json&#39;)
 
@@ -140,7 +142,7 @@ def heartbeat():
 if __name__ == &#34;__main__&#34;:
     node_resource_manager = LXDContainerManager()
     WSGIRequestHandler.protocol_version = &#34;HTTP/1.1&#34;
-    app.run(host=&#39;0.0.0.0&#39;, port=8000)</code></pre>
+    node_rescaler.run(host=&#39;0.0.0.0&#39;, port=8000)</code></pre>
 </details>
 </section>
 <section>
@@ -159,7 +161,7 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">@app.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;GET&#39;])
+<pre><code class="python">@node_rescaler.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;GET&#39;])
 @initialize_LXD
 def get_container_resources(container_name):
     if container_name != &#34;&#34;:
@@ -181,7 +183,7 @@ def get_container_resources(container_name):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">@app.route(&#34;/container/&#34;, methods=[&#39;GET&#39;])
+<pre><code class="python">@node_rescaler.route(&#34;/container/&#34;, methods=[&#39;GET&#39;])
 @initialize_LXD
 def get_containers_resources():
     try:
@@ -204,7 +206,7 @@ def get_containers_resources():
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">@app.route(&#34;/heartbeat&#34;, methods=[&#39;GET&#39;])
+<pre><code class="python">@node_rescaler.route(&#34;/heartbeat&#34;, methods=[&#39;GET&#39;])
 def heartbeat():
     return Response(json.dumps({&#34;status&#34;: &#34;alive&#34;}), status=200, mimetype=&#39;application/json&#39;)</code></pre>
 </details>
@@ -242,7 +244,7 @@ def heartbeat():
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">@app.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;PUT&#39;])
+<pre><code class="python">@node_rescaler.route(&#34;/container/&lt;container_name&gt;&#34;, methods=[&#39;PUT&#39;])
 @initialize_LXD
 def set_container_resources(container_name):
     if container_name != &#34;&#34;:
@@ -266,7 +268,9 @@ def set_container_resources(container_name):
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -318,7 +322,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

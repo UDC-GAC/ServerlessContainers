@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.Guardian.testGuardian API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -59,17 +62,19 @@ import random
 import unittest
 import time
 
-from test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower, \
+from src.test.documents.rules import cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower, \
     CpuRescaleUp, energy_exceeded_upper, CpuRescaleDown, MemRescaleUp, MemRescaleDown, EnergyRescaleUp, \
     EnergyRescaleDown, energy_dropped_lower
-from test.documents.services import guardian_service as guardian
-from src.Guardian.Guardian import CPU_SHARES_PER_WATT, NOT_AVAILABLE_STRING
+from src.test.documents.services import guardian_service as guardian
+from src.Guardian.Guardian import NOT_AVAILABLE_STRING
 from src.MyUtils import MyUtils
-from src.MyUtils.MyUtils import generate_event_name
+from src.MyUtils.MyUtils import generate_event_name, MyConfig
 from unittest import TestCase
 from src.Guardian import Guardian
 from src.StateDatabase.couchdb import CouchDBServer
 from src.StateDatabase.opentsdb import OpenTSDBServer
+
+CPU_SHARES_PER_WATT = Guardian.CONFIG_DEFAULT_VALUES[&#34;CPU_SHARES_PER_WATT&#34;]
 
 
 class GuardianTest(TestCase):
@@ -161,6 +166,8 @@ class GuardianTest(TestCase):
 
             )
             return resources_dict, limits_dict
+
+        self.guardian.guardable_resources = [&#34;cpu&#34;, &#34;mem&#34;]
 
         # State should be valid
         resources, limits = get_valid_state()
@@ -340,23 +347,6 @@ class GuardianTest(TestCase):
         TestCase.assertEqual(self, first=10,
                              second=self.guardian.adjust_amount(10, structure_resources, structure_limits))
 
-    def test_get_amount_from_percentage_reduction(self):
-        resource = &#34;mem&#34;
-        structure = {&#34;resources&#34;: {&#34;mem&#34;: {&#34;max&#34;: 4096, &#34;min&#34;: 280, &#34;current&#34;: 2000}}}
-        usages = {&#34;structure.mem.usage&#34;: 700}
-
-        TestCase.assertEqual(self, first=-260,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 20))
-        TestCase.assertEqual(self, first=-520,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 40))
-
-        TestCase.assertEqual(self, first=-650,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 50))
-
-        # Should max out at 50%
-        TestCase.assertEqual(self, first=-650,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 70))
-
     def test_get_amount_from_proportional_energy_rescaling(self):
         resource = &#34;energy&#34;
 
@@ -367,6 +357,7 @@ class GuardianTest(TestCase):
                                  second=self.guardian.get_amount_from_proportional_energy_rescaling(structure,
                                                                                                     resource))
 
+        self.guardian.cpu_shares_per_watt = CPU_SHARES_PER_WATT
         structure = {&#34;resources&#34;: {&#34;energy&#34;: {&#34;max&#34;: 60, &#34;min&#34;: 10, &#34;usage&#34;: 30}}}
         check()
         structure = {&#34;resources&#34;: {&#34;energy&#34;: {&#34;max&#34;: 60, &#34;min&#34;: 10, &#34;usage&#34;: 80}}}
@@ -402,6 +393,8 @@ class GuardianTest(TestCase):
         rules = [mem_exceeded_upper, mem_dropped_lower]
         structure_name = &#34;node99&#34;
 
+        self.guardian.guardable_resources = [&#34;mem&#34;]
+
         resources = dict(
             mem=dict(max=8192, current=4096, min=256, guard=True),
         )
@@ -412,7 +405,8 @@ class GuardianTest(TestCase):
         usages = {&#34;structure.mem.usage&#34;: 1536}
 
         # No events expected
-        TestCase.assertEqual(self, [],
+        TestCase.assertEqual(self,
+                             first=[],
                              second=self.guardian.match_usages_and_limits(structure_name, rules, usages, limits,
                                                                           resources))
 
@@ -483,6 +477,8 @@ class GuardianTest(TestCase):
         for rule in event_rules + rescaling_rules:
             rule[&#34;active&#34;] = True
 
+        self.guardian.guardable_resources = [&#34;cpu&#34;, &#34;mem&#34;]
+
         for tuple in [(&#34;cpu&#34;, CpuRescaleDown, -50), (&#34;mem&#34;, MemRescaleDown, -50), (&#34;cpu&#34;, CpuRescaleUp, 100),
                       (&#34;mem&#34;, MemRescaleUp, 2034)]:
 
@@ -499,9 +495,7 @@ class GuardianTest(TestCase):
                                                                 structure[&#34;resources&#34;])
             events = self.guardian.reduce_structure_events(events)
 
-            generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules,
-                                                                                        events, limits,
-                                                                                        usages)
+            generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules, events, limits, usages)
 
             expected_events_to_remove = dict()
             event_to_remove_name = MyUtils.generate_event_name(events[resource][&#34;events&#34;], resource)
@@ -529,7 +523,7 @@ class GuardianServelerssIntegrationTest(TestCase):
                 self.couchdb.remove_database(database_name)
             self.couchdb.create_database(database_name)
 
-        self.couchdb = CouchDBServer(&#34;localhost&#34;, &#34;5984&#34;)
+        self.couchdb = CouchDBServer(couchdb_url=&#34;localhost&#34;, couchdbdb_port=&#34;5984&#34;)
         self.opentsdb = OpenTSDBServer(&#34;localhost&#34;, &#34;4242&#34;)
 
         initialize_database(&#34;services&#34;, &#34;services-test&#34;)
@@ -548,42 +542,32 @@ class GuardianServelerssIntegrationTest(TestCase):
     def test_serverless(self):
         guardian_service = guardian
         testing_node_name = &#34;testingNode{0}&#34;.format(str(random.randint(0, 10)))
-        structure = {&#34;guard&#34;: True, &#34;guard_policy&#34;: &#34;serverless&#34;, &#34;host&#34;: &#34;c14-13&#34;, &#34;host_rescaler_ip&#34;: &#34;c14-13&#34;,
-                     &#34;host_rescaler_port&#34;: &#34;8000&#34;,
+        structure = {&#34;guard&#34;: True, &#34;guard_policy&#34;: &#34;serverless&#34;, &#34;host&#34;: &#34;bogus&#34;, &#34;host_rescaler_ip&#34;: &#34;bogus&#34;,
+                     &#34;host_rescaler_port&#34;: &#34;bogus&#34;,
                      &#34;resources&#34;: {
                          &#34;cpu&#34;: {
                              &#34;current&#34;: 140,
                              &#34;guard&#34;: True,
                              &#34;max&#34;: 200,
                              &#34;min&#34;: 50
-                         },
-                         &#34;energy&#34;: {
-                             &#34;guard&#34;: True,
-                             &#34;max&#34;: 20,
-                             &#34;min&#34;: 0,
-                             &#34;usage&#34;: 2.34
-                         },
-                         &#34;mem&#34;: {
-                             &#34;current&#34;: 3072,
-                             &#34;guard&#34;: True,
-                             &#34;max&#34;: 10240,
-                             &#34;min&#34;: 512
                          }
                      }, &#34;subtype&#34;: &#34;container&#34;, &#34;type&#34;: &#34;structure&#34;, &#34;name&#34;: testing_node_name}
 
-        limits = {&#34;type&#34;: &#34;limit&#34;, &#34;resources&#34;: {&#34;cpu&#34;: {&#34;upper&#34;: 120, &#34;lower&#34;: 80, &#34;boundary&#34;: 20},
-                                                 &#34;mem&#34;: {&#34;upper&#34;: 2048, &#34;lower&#34;: 1024, &#34;boundary&#34;: 1024},
-                                                 &#34;energy&#34;: {&#34;upper&#34;: 20, &#34;lower&#34;: 10, &#34;boundary&#34;: 10}
-                                                 }, &#34;name&#34;: testing_node_name}
+        limits = {&#34;type&#34;: &#34;limit&#34;, &#34;resources&#34;: {&#34;cpu&#34;: {&#34;upper&#34;: 120, &#34;lower&#34;: 80, &#34;boundary&#34;: 20}}, &#34;name&#34;: testing_node_name}
 
-        event_rules = [cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower]
-        rescaling_rules = [CpuRescaleUp, CpuRescaleDown, MemRescaleUp, MemRescaleDown]
+        self.guardian.guardable_resources = [&#34;cpu&#34;]
+
+        event_rules = [cpu_exceeded_upper, cpu_dropped_lower]
+        rescaling_rules = [CpuRescaleUp, CpuRescaleDown]
         for rule in event_rules + rescaling_rules:
             rule[&#34;active&#34;] = True
 
         guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] = 20
         guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] = 100 + random.randint(0, 100)
         guardian_service[&#34;config&#34;][&#34;EVENT_TIMEOUT&#34;] = 100
+
+        myConfig = MyConfig({})
+        myConfig.set_config(guardian_service[&#34;config&#34;])
 
         # Add the guardian service, a structure
         self.couchdb.add_service(guardian_service)
@@ -592,13 +576,13 @@ class GuardianServelerssIntegrationTest(TestCase):
 
         # Check that without usage data, nothing is donde
         structure[&#34;guard&#34;] = True
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
         # Check that without limits, nothing is done
         structure[&#34;guard&#34;] = True
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
@@ -607,15 +591,15 @@ class GuardianServelerssIntegrationTest(TestCase):
         for rule in event_rules + rescaling_rules:
             self.couchdb.add_rule(rule)
 
-        time.sleep(2)  # Let the documents be persisted
+        time.sleep(1)  # Let the documents be persisted
 
         # Unguard the structure and check that nothing happens
         del (structure[&#34;guard&#34;])
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
         structure[&#34;guard&#34;] = False
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
         structure[&#34;guard&#34;] = True
@@ -623,11 +607,10 @@ class GuardianServelerssIntegrationTest(TestCase):
         # Inject some fake usage data for the structure
         # User cpu is LOWER than the upper limit -&gt; nothing happens
         base_cpu_doc = {&#34;timestamp&#34;: 0, &#34;metric&#34;: &#34;proc.cpu.user&#34;, &#34;value&#34;: 0, &#34;tags&#34;: {&#34;host&#34;: testing_node_name}}
-        time_seconds_ago = time.time() - (
-                guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;])
+        time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;)
         fake_docs = list()
         usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;lower&#34;]
-        for i in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]):
+        for i in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)):
             doc = dict(base_cpu_doc)
             doc[&#34;timestamp&#34;] = time_seconds_ago + i
             doc[&#34;value&#34;] = usage + i
@@ -635,24 +618,28 @@ class GuardianServelerssIntegrationTest(TestCase):
         success, error = self.opentsdb.send_json_documents(fake_docs)
         self.assertTrue(success)
 
-        time.sleep(2)  # Let the time series database persist the new metrics
+        time.sleep(1)  # Let the time series database persist the new metrics
+
+        # Remove any previous event or request
+        self.couchdb.delete_events(self.couchdb.get_events(structure))
+        self.couchdb.delete_requests(self.couchdb.get_requests(structure))
 
         # CPU usage is normal so nothing should happen
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
         # Move the guardian back in time
-        guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] += 50
+        myConfig.set_value(&#34;WINDOW_DELAY&#34;, myConfig.get_value(&#34;WINDOW_DELAY&#34;) + 50)
+        guardian_service[&#34;config&#34;] = myConfig.get_config()
         self.couchdb.update_service(guardian_service)
 
         # User cpu is HIGHER than the upper limit -&gt; 1 cpu bottleneck event should be generated
         base_cpu_doc = {&#34;timestamp&#34;: 0, &#34;metric&#34;: &#34;proc.cpu.user&#34;, &#34;value&#34;: 0, &#34;tags&#34;: {&#34;host&#34;: testing_node_name}}
-        time_seconds_ago = time.time() - (
-                guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;]) - 5
+        time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;) - 5
         fake_docs = list()
         usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;]
-        for i in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + 5):
+        for i in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) + 5):
             doc = dict(base_cpu_doc)
             doc[&#34;timestamp&#34;] = time_seconds_ago + i
             doc[&#34;value&#34;] = usage + i
@@ -660,7 +647,7 @@ class GuardianServelerssIntegrationTest(TestCase):
         success, error = self.opentsdb.send_json_documents(fake_docs)
         self.assertTrue(success)
         time.sleep(2)  # Let the time series database persist the new metrics
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         time.sleep(1)  # Let the documents be persisted
         events = self.couchdb.get_events(structure)
         TestCase.assertEqual(self, first=1, second=len(events))
@@ -668,8 +655,9 @@ class GuardianServelerssIntegrationTest(TestCase):
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
         self.couchdb.delete_num_events_by_structure(structure, &#34;CpuBottleneck&#34;, 1)
 
-        # Move the guardian back in time
-        guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] += 200
+        # Move the guardian further back in time
+        myConfig.set_value(&#34;WINDOW_DELAY&#34;, myConfig.get_value(&#34;WINDOW_DELAY&#34;) + 200)
+        guardian_service[&#34;config&#34;] = myConfig.get_config()
         self.couchdb.update_service(guardian_service)
 
         # Simulate the generation of a request for cpu and memory by making the guardian go through all the time windows
@@ -677,30 +665,28 @@ class GuardianServelerssIntegrationTest(TestCase):
         for i in range(num_needed_events):
             fake_docs = list()
             usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;]
-            time_seconds_ago = time.time() - (
-                    guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;])
-            for j in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]):
+            time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;)
+            for j in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)):
                 doc = dict(base_cpu_doc)
                 doc[&#34;timestamp&#34;] = time_seconds_ago + j
                 doc[&#34;value&#34;] = usage + j
                 fake_docs.append(doc)
             success, error = self.opentsdb.send_json_documents(fake_docs)
             self.assertTrue(success)
-            time.sleep(1)  # Let the time series database persist the new metrics
-            self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure,
-                                     self.couchdb.get_rules())
-            # time.sleep(1)  # Let the documents be persisted
+            time.sleep(2)  # Let the time series database persist the new metrics
+            self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
+            time.sleep(1)  # Let the documents be persisted
             if i + 1 &lt; num_needed_events:
                 events = self.couchdb.get_events(structure)
                 TestCase.assertEqual(self, first=i + 1, second=len(events))
 
-            # Move the guardian forward in time
+            # Move the guardian forward in time close to real time
+            myConfig.set_value(&#34;WINDOW_DELAY&#34;, 0)
             guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] -= guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]
             self.couchdb.update_service(guardian_service)
 
-        # The majority of events should have been removed when the request was generated
+        # The events should have been removed when the request was generated
         events = self.couchdb.get_events(structure)
-        # TestCase.assertTrue(self, len(events) &lt; num_needed_events)
         TestCase.assertEqual(self, first=0, second=len(events))
 
         # 1 requests should have been generated
@@ -778,7 +764,7 @@ not have a method with the specified name.</p></section>
                 self.couchdb.remove_database(database_name)
             self.couchdb.create_database(database_name)
 
-        self.couchdb = CouchDBServer(&#34;localhost&#34;, &#34;5984&#34;)
+        self.couchdb = CouchDBServer(couchdb_url=&#34;localhost&#34;, couchdbdb_port=&#34;5984&#34;)
         self.opentsdb = OpenTSDBServer(&#34;localhost&#34;, &#34;4242&#34;)
 
         initialize_database(&#34;services&#34;, &#34;services-test&#34;)
@@ -797,42 +783,32 @@ not have a method with the specified name.</p></section>
     def test_serverless(self):
         guardian_service = guardian
         testing_node_name = &#34;testingNode{0}&#34;.format(str(random.randint(0, 10)))
-        structure = {&#34;guard&#34;: True, &#34;guard_policy&#34;: &#34;serverless&#34;, &#34;host&#34;: &#34;c14-13&#34;, &#34;host_rescaler_ip&#34;: &#34;c14-13&#34;,
-                     &#34;host_rescaler_port&#34;: &#34;8000&#34;,
+        structure = {&#34;guard&#34;: True, &#34;guard_policy&#34;: &#34;serverless&#34;, &#34;host&#34;: &#34;bogus&#34;, &#34;host_rescaler_ip&#34;: &#34;bogus&#34;,
+                     &#34;host_rescaler_port&#34;: &#34;bogus&#34;,
                      &#34;resources&#34;: {
                          &#34;cpu&#34;: {
                              &#34;current&#34;: 140,
                              &#34;guard&#34;: True,
                              &#34;max&#34;: 200,
                              &#34;min&#34;: 50
-                         },
-                         &#34;energy&#34;: {
-                             &#34;guard&#34;: True,
-                             &#34;max&#34;: 20,
-                             &#34;min&#34;: 0,
-                             &#34;usage&#34;: 2.34
-                         },
-                         &#34;mem&#34;: {
-                             &#34;current&#34;: 3072,
-                             &#34;guard&#34;: True,
-                             &#34;max&#34;: 10240,
-                             &#34;min&#34;: 512
                          }
                      }, &#34;subtype&#34;: &#34;container&#34;, &#34;type&#34;: &#34;structure&#34;, &#34;name&#34;: testing_node_name}
 
-        limits = {&#34;type&#34;: &#34;limit&#34;, &#34;resources&#34;: {&#34;cpu&#34;: {&#34;upper&#34;: 120, &#34;lower&#34;: 80, &#34;boundary&#34;: 20},
-                                                 &#34;mem&#34;: {&#34;upper&#34;: 2048, &#34;lower&#34;: 1024, &#34;boundary&#34;: 1024},
-                                                 &#34;energy&#34;: {&#34;upper&#34;: 20, &#34;lower&#34;: 10, &#34;boundary&#34;: 10}
-                                                 }, &#34;name&#34;: testing_node_name}
+        limits = {&#34;type&#34;: &#34;limit&#34;, &#34;resources&#34;: {&#34;cpu&#34;: {&#34;upper&#34;: 120, &#34;lower&#34;: 80, &#34;boundary&#34;: 20}}, &#34;name&#34;: testing_node_name}
 
-        event_rules = [cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower]
-        rescaling_rules = [CpuRescaleUp, CpuRescaleDown, MemRescaleUp, MemRescaleDown]
+        self.guardian.guardable_resources = [&#34;cpu&#34;]
+
+        event_rules = [cpu_exceeded_upper, cpu_dropped_lower]
+        rescaling_rules = [CpuRescaleUp, CpuRescaleDown]
         for rule in event_rules + rescaling_rules:
             rule[&#34;active&#34;] = True
 
         guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] = 20
         guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] = 100 + random.randint(0, 100)
         guardian_service[&#34;config&#34;][&#34;EVENT_TIMEOUT&#34;] = 100
+
+        myConfig = MyConfig({})
+        myConfig.set_config(guardian_service[&#34;config&#34;])
 
         # Add the guardian service, a structure
         self.couchdb.add_service(guardian_service)
@@ -841,13 +817,13 @@ not have a method with the specified name.</p></section>
 
         # Check that without usage data, nothing is donde
         structure[&#34;guard&#34;] = True
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
         # Check that without limits, nothing is done
         structure[&#34;guard&#34;] = True
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
@@ -856,15 +832,15 @@ not have a method with the specified name.</p></section>
         for rule in event_rules + rescaling_rules:
             self.couchdb.add_rule(rule)
 
-        time.sleep(2)  # Let the documents be persisted
+        time.sleep(1)  # Let the documents be persisted
 
         # Unguard the structure and check that nothing happens
         del (structure[&#34;guard&#34;])
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
         structure[&#34;guard&#34;] = False
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
         structure[&#34;guard&#34;] = True
@@ -872,11 +848,10 @@ not have a method with the specified name.</p></section>
         # Inject some fake usage data for the structure
         # User cpu is LOWER than the upper limit -&gt; nothing happens
         base_cpu_doc = {&#34;timestamp&#34;: 0, &#34;metric&#34;: &#34;proc.cpu.user&#34;, &#34;value&#34;: 0, &#34;tags&#34;: {&#34;host&#34;: testing_node_name}}
-        time_seconds_ago = time.time() - (
-                guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;])
+        time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;)
         fake_docs = list()
         usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;lower&#34;]
-        for i in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]):
+        for i in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)):
             doc = dict(base_cpu_doc)
             doc[&#34;timestamp&#34;] = time_seconds_ago + i
             doc[&#34;value&#34;] = usage + i
@@ -884,24 +859,28 @@ not have a method with the specified name.</p></section>
         success, error = self.opentsdb.send_json_documents(fake_docs)
         self.assertTrue(success)
 
-        time.sleep(2)  # Let the time series database persist the new metrics
+        time.sleep(1)  # Let the time series database persist the new metrics
+
+        # Remove any previous event or request
+        self.couchdb.delete_events(self.couchdb.get_events(structure))
+        self.couchdb.delete_requests(self.couchdb.get_requests(structure))
 
         # CPU usage is normal so nothing should happen
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
         # Move the guardian back in time
-        guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] += 50
+        myConfig.set_value(&#34;WINDOW_DELAY&#34;, myConfig.get_value(&#34;WINDOW_DELAY&#34;) + 50)
+        guardian_service[&#34;config&#34;] = myConfig.get_config()
         self.couchdb.update_service(guardian_service)
 
         # User cpu is HIGHER than the upper limit -&gt; 1 cpu bottleneck event should be generated
         base_cpu_doc = {&#34;timestamp&#34;: 0, &#34;metric&#34;: &#34;proc.cpu.user&#34;, &#34;value&#34;: 0, &#34;tags&#34;: {&#34;host&#34;: testing_node_name}}
-        time_seconds_ago = time.time() - (
-                guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;]) - 5
+        time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;) - 5
         fake_docs = list()
         usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;]
-        for i in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + 5):
+        for i in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) + 5):
             doc = dict(base_cpu_doc)
             doc[&#34;timestamp&#34;] = time_seconds_ago + i
             doc[&#34;value&#34;] = usage + i
@@ -909,7 +888,7 @@ not have a method with the specified name.</p></section>
         success, error = self.opentsdb.send_json_documents(fake_docs)
         self.assertTrue(success)
         time.sleep(2)  # Let the time series database persist the new metrics
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
         time.sleep(1)  # Let the documents be persisted
         events = self.couchdb.get_events(structure)
         TestCase.assertEqual(self, first=1, second=len(events))
@@ -917,8 +896,9 @@ not have a method with the specified name.</p></section>
         TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
         self.couchdb.delete_num_events_by_structure(structure, &#34;CpuBottleneck&#34;, 1)
 
-        # Move the guardian back in time
-        guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] += 200
+        # Move the guardian further back in time
+        myConfig.set_value(&#34;WINDOW_DELAY&#34;, myConfig.get_value(&#34;WINDOW_DELAY&#34;) + 200)
+        guardian_service[&#34;config&#34;] = myConfig.get_config()
         self.couchdb.update_service(guardian_service)
 
         # Simulate the generation of a request for cpu and memory by making the guardian go through all the time windows
@@ -926,30 +906,28 @@ not have a method with the specified name.</p></section>
         for i in range(num_needed_events):
             fake_docs = list()
             usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;]
-            time_seconds_ago = time.time() - (
-                    guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;])
-            for j in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]):
+            time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;)
+            for j in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)):
                 doc = dict(base_cpu_doc)
                 doc[&#34;timestamp&#34;] = time_seconds_ago + j
                 doc[&#34;value&#34;] = usage + j
                 fake_docs.append(doc)
             success, error = self.opentsdb.send_json_documents(fake_docs)
             self.assertTrue(success)
-            time.sleep(1)  # Let the time series database persist the new metrics
-            self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure,
-                                     self.couchdb.get_rules())
-            # time.sleep(1)  # Let the documents be persisted
+            time.sleep(2)  # Let the time series database persist the new metrics
+            self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
+            time.sleep(1)  # Let the documents be persisted
             if i + 1 &lt; num_needed_events:
                 events = self.couchdb.get_events(structure)
                 TestCase.assertEqual(self, first=i + 1, second=len(events))
 
-            # Move the guardian forward in time
+            # Move the guardian forward in time close to real time
+            myConfig.set_value(&#34;WINDOW_DELAY&#34;, 0)
             guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] -= guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]
             self.couchdb.update_service(guardian_service)
 
-        # The majority of events should have been removed when the request was generated
+        # The events should have been removed when the request was generated
         events = self.couchdb.get_events(structure)
-        # TestCase.assertTrue(self, len(events) &lt; num_needed_events)
         TestCase.assertEqual(self, first=0, second=len(events))
 
         # 1 requests should have been generated
@@ -979,7 +957,7 @@ not have a method with the specified name.</p></section>
             self.couchdb.remove_database(database_name)
         self.couchdb.create_database(database_name)
 
-    self.couchdb = CouchDBServer(&#34;localhost&#34;, &#34;5984&#34;)
+    self.couchdb = CouchDBServer(couchdb_url=&#34;localhost&#34;, couchdbdb_port=&#34;5984&#34;)
     self.opentsdb = OpenTSDBServer(&#34;localhost&#34;, &#34;4242&#34;)
 
     initialize_database(&#34;services&#34;, &#34;services-test&#34;)
@@ -1028,42 +1006,32 @@ not have a method with the specified name.</p></section>
 <pre><code class="python">def test_serverless(self):
     guardian_service = guardian
     testing_node_name = &#34;testingNode{0}&#34;.format(str(random.randint(0, 10)))
-    structure = {&#34;guard&#34;: True, &#34;guard_policy&#34;: &#34;serverless&#34;, &#34;host&#34;: &#34;c14-13&#34;, &#34;host_rescaler_ip&#34;: &#34;c14-13&#34;,
-                 &#34;host_rescaler_port&#34;: &#34;8000&#34;,
+    structure = {&#34;guard&#34;: True, &#34;guard_policy&#34;: &#34;serverless&#34;, &#34;host&#34;: &#34;bogus&#34;, &#34;host_rescaler_ip&#34;: &#34;bogus&#34;,
+                 &#34;host_rescaler_port&#34;: &#34;bogus&#34;,
                  &#34;resources&#34;: {
                      &#34;cpu&#34;: {
                          &#34;current&#34;: 140,
                          &#34;guard&#34;: True,
                          &#34;max&#34;: 200,
                          &#34;min&#34;: 50
-                     },
-                     &#34;energy&#34;: {
-                         &#34;guard&#34;: True,
-                         &#34;max&#34;: 20,
-                         &#34;min&#34;: 0,
-                         &#34;usage&#34;: 2.34
-                     },
-                     &#34;mem&#34;: {
-                         &#34;current&#34;: 3072,
-                         &#34;guard&#34;: True,
-                         &#34;max&#34;: 10240,
-                         &#34;min&#34;: 512
                      }
                  }, &#34;subtype&#34;: &#34;container&#34;, &#34;type&#34;: &#34;structure&#34;, &#34;name&#34;: testing_node_name}
 
-    limits = {&#34;type&#34;: &#34;limit&#34;, &#34;resources&#34;: {&#34;cpu&#34;: {&#34;upper&#34;: 120, &#34;lower&#34;: 80, &#34;boundary&#34;: 20},
-                                             &#34;mem&#34;: {&#34;upper&#34;: 2048, &#34;lower&#34;: 1024, &#34;boundary&#34;: 1024},
-                                             &#34;energy&#34;: {&#34;upper&#34;: 20, &#34;lower&#34;: 10, &#34;boundary&#34;: 10}
-                                             }, &#34;name&#34;: testing_node_name}
+    limits = {&#34;type&#34;: &#34;limit&#34;, &#34;resources&#34;: {&#34;cpu&#34;: {&#34;upper&#34;: 120, &#34;lower&#34;: 80, &#34;boundary&#34;: 20}}, &#34;name&#34;: testing_node_name}
 
-    event_rules = [cpu_exceeded_upper, cpu_dropped_lower, mem_exceeded_upper, mem_dropped_lower]
-    rescaling_rules = [CpuRescaleUp, CpuRescaleDown, MemRescaleUp, MemRescaleDown]
+    self.guardian.guardable_resources = [&#34;cpu&#34;]
+
+    event_rules = [cpu_exceeded_upper, cpu_dropped_lower]
+    rescaling_rules = [CpuRescaleUp, CpuRescaleDown]
     for rule in event_rules + rescaling_rules:
         rule[&#34;active&#34;] = True
 
     guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] = 20
     guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] = 100 + random.randint(0, 100)
     guardian_service[&#34;config&#34;][&#34;EVENT_TIMEOUT&#34;] = 100
+
+    myConfig = MyConfig({})
+    myConfig.set_config(guardian_service[&#34;config&#34;])
 
     # Add the guardian service, a structure
     self.couchdb.add_service(guardian_service)
@@ -1072,13 +1040,13 @@ not have a method with the specified name.</p></section>
 
     # Check that without usage data, nothing is donde
     structure[&#34;guard&#34;] = True
-    self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+    self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
     # Check that without limits, nothing is done
     structure[&#34;guard&#34;] = True
-    self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+    self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
@@ -1087,15 +1055,15 @@ not have a method with the specified name.</p></section>
     for rule in event_rules + rescaling_rules:
         self.couchdb.add_rule(rule)
 
-    time.sleep(2)  # Let the documents be persisted
+    time.sleep(1)  # Let the documents be persisted
 
     # Unguard the structure and check that nothing happens
     del (structure[&#34;guard&#34;])
-    self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+    self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
     structure[&#34;guard&#34;] = False
-    self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+    self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
     structure[&#34;guard&#34;] = True
@@ -1103,11 +1071,10 @@ not have a method with the specified name.</p></section>
     # Inject some fake usage data for the structure
     # User cpu is LOWER than the upper limit -&gt; nothing happens
     base_cpu_doc = {&#34;timestamp&#34;: 0, &#34;metric&#34;: &#34;proc.cpu.user&#34;, &#34;value&#34;: 0, &#34;tags&#34;: {&#34;host&#34;: testing_node_name}}
-    time_seconds_ago = time.time() - (
-            guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;])
+    time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;)
     fake_docs = list()
     usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;lower&#34;]
-    for i in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]):
+    for i in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)):
         doc = dict(base_cpu_doc)
         doc[&#34;timestamp&#34;] = time_seconds_ago + i
         doc[&#34;value&#34;] = usage + i
@@ -1115,24 +1082,28 @@ not have a method with the specified name.</p></section>
     success, error = self.opentsdb.send_json_documents(fake_docs)
     self.assertTrue(success)
 
-    time.sleep(2)  # Let the time series database persist the new metrics
+    time.sleep(1)  # Let the time series database persist the new metrics
+
+    # Remove any previous event or request
+    self.couchdb.delete_events(self.couchdb.get_events(structure))
+    self.couchdb.delete_requests(self.couchdb.get_requests(structure))
 
     # CPU usage is normal so nothing should happen
-    self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+    self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
 
     # Move the guardian back in time
-    guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] += 50
+    myConfig.set_value(&#34;WINDOW_DELAY&#34;, myConfig.get_value(&#34;WINDOW_DELAY&#34;) + 50)
+    guardian_service[&#34;config&#34;] = myConfig.get_config()
     self.couchdb.update_service(guardian_service)
 
     # User cpu is HIGHER than the upper limit -&gt; 1 cpu bottleneck event should be generated
     base_cpu_doc = {&#34;timestamp&#34;: 0, &#34;metric&#34;: &#34;proc.cpu.user&#34;, &#34;value&#34;: 0, &#34;tags&#34;: {&#34;host&#34;: testing_node_name}}
-    time_seconds_ago = time.time() - (
-            guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;]) - 5
+    time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;) - 5
     fake_docs = list()
     usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;]
-    for i in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + 5):
+    for i in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) + 5):
         doc = dict(base_cpu_doc)
         doc[&#34;timestamp&#34;] = time_seconds_ago + i
         doc[&#34;value&#34;] = usage + i
@@ -1140,7 +1111,7 @@ not have a method with the specified name.</p></section>
     success, error = self.opentsdb.send_json_documents(fake_docs)
     self.assertTrue(success)
     time.sleep(2)  # Let the time series database persist the new metrics
-    self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure, self.couchdb.get_rules())
+    self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
     time.sleep(1)  # Let the documents be persisted
     events = self.couchdb.get_events(structure)
     TestCase.assertEqual(self, first=1, second=len(events))
@@ -1148,8 +1119,9 @@ not have a method with the specified name.</p></section>
     TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
     self.couchdb.delete_num_events_by_structure(structure, &#34;CpuBottleneck&#34;, 1)
 
-    # Move the guardian back in time
-    guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] += 200
+    # Move the guardian further back in time
+    myConfig.set_value(&#34;WINDOW_DELAY&#34;, myConfig.get_value(&#34;WINDOW_DELAY&#34;) + 200)
+    guardian_service[&#34;config&#34;] = myConfig.get_config()
     self.couchdb.update_service(guardian_service)
 
     # Simulate the generation of a request for cpu and memory by making the guardian go through all the time windows
@@ -1157,30 +1129,28 @@ not have a method with the specified name.</p></section>
     for i in range(num_needed_events):
         fake_docs = list()
         usage = limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;]
-        time_seconds_ago = time.time() - (
-                guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;] + guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;])
-        for j in range(guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]):
+        time_seconds_ago = time.time() - myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;) - myConfig.get_value(&#34;WINDOW_DELAY&#34;)
+        for j in range(myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)):
             doc = dict(base_cpu_doc)
             doc[&#34;timestamp&#34;] = time_seconds_ago + j
             doc[&#34;value&#34;] = usage + j
             fake_docs.append(doc)
         success, error = self.opentsdb.send_json_documents(fake_docs)
         self.assertTrue(success)
-        time.sleep(1)  # Let the time series database persist the new metrics
-        self.guardian.serverless(self.couchdb.get_service(&#34;guardian&#34;)[&#34;config&#34;], structure,
-                                 self.couchdb.get_rules())
-        # time.sleep(1)  # Let the documents be persisted
+        time.sleep(2)  # Let the time series database persist the new metrics
+        self.guardian.serverless(myConfig, structure, self.couchdb.get_rules())
+        time.sleep(1)  # Let the documents be persisted
         if i + 1 &lt; num_needed_events:
             events = self.couchdb.get_events(structure)
             TestCase.assertEqual(self, first=i + 1, second=len(events))
 
-        # Move the guardian forward in time
+        # Move the guardian forward in time close to real time
+        myConfig.set_value(&#34;WINDOW_DELAY&#34;, 0)
         guardian_service[&#34;config&#34;][&#34;WINDOW_DELAY&#34;] -= guardian_service[&#34;config&#34;][&#34;WINDOW_TIMELAPSE&#34;]
         self.couchdb.update_service(guardian_service)
 
-    # The majority of events should have been removed when the request was generated
+    # The events should have been removed when the request was generated
     events = self.couchdb.get_events(structure)
-    # TestCase.assertTrue(self, len(events) &lt; num_needed_events)
     TestCase.assertEqual(self, first=0, second=len(events))
 
     # 1 requests should have been generated
@@ -1318,6 +1288,8 @@ not have a method with the specified name.</p></section>
             )
             return resources_dict, limits_dict
 
+        self.guardian.guardable_resources = [&#34;cpu&#34;, &#34;mem&#34;]
+
         # State should be valid
         resources, limits = get_valid_state()
         TestCase.assertEqual(self, first=limits,
@@ -1496,23 +1468,6 @@ not have a method with the specified name.</p></section>
         TestCase.assertEqual(self, first=10,
                              second=self.guardian.adjust_amount(10, structure_resources, structure_limits))
 
-    def test_get_amount_from_percentage_reduction(self):
-        resource = &#34;mem&#34;
-        structure = {&#34;resources&#34;: {&#34;mem&#34;: {&#34;max&#34;: 4096, &#34;min&#34;: 280, &#34;current&#34;: 2000}}}
-        usages = {&#34;structure.mem.usage&#34;: 700}
-
-        TestCase.assertEqual(self, first=-260,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 20))
-        TestCase.assertEqual(self, first=-520,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 40))
-
-        TestCase.assertEqual(self, first=-650,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 50))
-
-        # Should max out at 50%
-        TestCase.assertEqual(self, first=-650,
-                             second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 70))
-
     def test_get_amount_from_proportional_energy_rescaling(self):
         resource = &#34;energy&#34;
 
@@ -1523,6 +1478,7 @@ not have a method with the specified name.</p></section>
                                  second=self.guardian.get_amount_from_proportional_energy_rescaling(structure,
                                                                                                     resource))
 
+        self.guardian.cpu_shares_per_watt = CPU_SHARES_PER_WATT
         structure = {&#34;resources&#34;: {&#34;energy&#34;: {&#34;max&#34;: 60, &#34;min&#34;: 10, &#34;usage&#34;: 30}}}
         check()
         structure = {&#34;resources&#34;: {&#34;energy&#34;: {&#34;max&#34;: 60, &#34;min&#34;: 10, &#34;usage&#34;: 80}}}
@@ -1558,6 +1514,8 @@ not have a method with the specified name.</p></section>
         rules = [mem_exceeded_upper, mem_dropped_lower]
         structure_name = &#34;node99&#34;
 
+        self.guardian.guardable_resources = [&#34;mem&#34;]
+
         resources = dict(
             mem=dict(max=8192, current=4096, min=256, guard=True),
         )
@@ -1568,7 +1526,8 @@ not have a method with the specified name.</p></section>
         usages = {&#34;structure.mem.usage&#34;: 1536}
 
         # No events expected
-        TestCase.assertEqual(self, [],
+        TestCase.assertEqual(self,
+                             first=[],
                              second=self.guardian.match_usages_and_limits(structure_name, rules, usages, limits,
                                                                           resources))
 
@@ -1639,6 +1598,8 @@ not have a method with the specified name.</p></section>
         for rule in event_rules + rescaling_rules:
             rule[&#34;active&#34;] = True
 
+        self.guardian.guardable_resources = [&#34;cpu&#34;, &#34;mem&#34;]
+
         for tuple in [(&#34;cpu&#34;, CpuRescaleDown, -50), (&#34;mem&#34;, MemRescaleDown, -50), (&#34;cpu&#34;, CpuRescaleUp, 100),
                       (&#34;mem&#34;, MemRescaleUp, 2034)]:
 
@@ -1655,9 +1616,7 @@ not have a method with the specified name.</p></section>
                                                                 structure[&#34;resources&#34;])
             events = self.guardian.reduce_structure_events(events)
 
-            generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules,
-                                                                                        events, limits,
-                                                                                        usages)
+            generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules, events, limits, usages)
 
             expected_events_to_remove = dict()
             event_to_remove_name = MyUtils.generate_event_name(events[resource][&#34;events&#34;], resource)
@@ -1804,6 +1763,8 @@ not have a method with the specified name.</p></section>
         )
         return resources_dict, limits_dict
 
+    self.guardian.guardable_resources = [&#34;cpu&#34;, &#34;mem&#34;]
+
     # State should be valid
     resources, limits = get_valid_state()
     TestCase.assertEqual(self, first=limits,
@@ -1916,33 +1877,6 @@ not have a method with the specified name.</p></section>
                          second=-550)</code></pre>
 </details>
 </dd>
-<dt id="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction"><code class="name flex">
-<span>def <span class="ident">test_get_amount_from_percentage_reduction</span></span>(<span>self)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def test_get_amount_from_percentage_reduction(self):
-    resource = &#34;mem&#34;
-    structure = {&#34;resources&#34;: {&#34;mem&#34;: {&#34;max&#34;: 4096, &#34;min&#34;: 280, &#34;current&#34;: 2000}}}
-    usages = {&#34;structure.mem.usage&#34;: 700}
-
-    TestCase.assertEqual(self, first=-260,
-                         second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 20))
-    TestCase.assertEqual(self, first=-520,
-                         second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 40))
-
-    TestCase.assertEqual(self, first=-650,
-                         second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 50))
-
-    # Should max out at 50%
-    TestCase.assertEqual(self, first=-650,
-                         second=self.guardian.get_amount_from_percentage_reduction(structure, usages, resource, 70))</code></pre>
-</details>
-</dd>
 <dt id="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling"><code class="name flex">
 <span>def <span class="ident">test_get_amount_from_proportional_energy_rescaling</span></span>(<span>self)</span>
 </code></dt>
@@ -1962,6 +1896,7 @@ not have a method with the specified name.</p></section>
                              second=self.guardian.get_amount_from_proportional_energy_rescaling(structure,
                                                                                                 resource))
 
+    self.guardian.cpu_shares_per_watt = CPU_SHARES_PER_WATT
     structure = {&#34;resources&#34;: {&#34;energy&#34;: {&#34;max&#34;: 60, &#34;min&#34;: 10, &#34;usage&#34;: 30}}}
     check()
     structure = {&#34;resources&#34;: {&#34;energy&#34;: {&#34;max&#34;: 60, &#34;min&#34;: 10, &#34;usage&#34;: 80}}}
@@ -2085,7 +2020,17 @@ not have a method with the specified name.</p></section>
         # Upper too far away to current
         limits[resource][&#34;upper&#34;] = resources[resource][&#34;current&#34;] - limits[resource][&#34;boundary&#34;] * 2
         with self.assertRaises(ValueError):
-            self.guardian.check_invalid_container_state(resources, limits, resource)</code></pre>
+            self.guardian.check_invalid_container_state(resources, limits, resource)
+
+        # resources, limits = get_valid_state()
+        # # Lower too close to upper
+        # limits[resource][&#34;lower&#34;] = limits[resource][&#34;upper&#34;] - limits[resource][&#34;boundary&#34;] / 2
+        # with self.assertRaises(ValueError):
+        #     guardian.invalid_container_state(resources, limits)
+        # # Lower too far away to upper
+        # limits[resource][&#34;lower&#34;] = limits[resource][&#34;upper&#34;] - limits[resource][&#34;boundary&#34;] * 2
+        # with self.assertRaises(ValueError):
+        #     guardian.invalid_container_state(resources, limits)</code></pre>
 </details>
 </dd>
 <dt id="src.Guardian.testGuardian.GuardianTest.test_match_rules_and_events"><code class="name flex">
@@ -2146,6 +2091,8 @@ not have a method with the specified name.</p></section>
     for rule in event_rules + rescaling_rules:
         rule[&#34;active&#34;] = True
 
+    self.guardian.guardable_resources = [&#34;cpu&#34;, &#34;mem&#34;]
+
     for tuple in [(&#34;cpu&#34;, CpuRescaleDown, -50), (&#34;mem&#34;, MemRescaleDown, -50), (&#34;cpu&#34;, CpuRescaleUp, 100),
                   (&#34;mem&#34;, MemRescaleUp, 2034)]:
 
@@ -2162,9 +2109,7 @@ not have a method with the specified name.</p></section>
                                                             structure[&#34;resources&#34;])
         events = self.guardian.reduce_structure_events(events)
 
-        generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules,
-                                                                                    events, limits,
-                                                                                    usages)
+        generated_requests, events_to_remove = self.guardian.match_rules_and_events(structure, rescaling_rules, events, limits, usages)
 
         expected_events_to_remove = dict()
         event_to_remove_name = MyUtils.generate_event_name(events[resource][&#34;events&#34;], resource)
@@ -2197,6 +2142,8 @@ not have a method with the specified name.</p></section>
     rules = [mem_exceeded_upper, mem_dropped_lower]
     structure_name = &#34;node99&#34;
 
+    self.guardian.guardable_resources = [&#34;mem&#34;]
+
     resources = dict(
         mem=dict(max=8192, current=4096, min=256, guard=True),
     )
@@ -2207,7 +2154,8 @@ not have a method with the specified name.</p></section>
     usages = {&#34;structure.mem.usage&#34;: 1536}
 
     # No events expected
-    TestCase.assertEqual(self, [],
+    TestCase.assertEqual(self,
+                         first=[],
                          second=self.guardian.match_usages_and_limits(structure_name, rules, usages, limits,
                                                                       resources))
 
@@ -2273,7 +2221,9 @@ not have a method with the specified name.</p></section>
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -2306,7 +2256,6 @@ not have a method with the specified name.</p></section>
 <li><code><a title="src.Guardian.testGuardian.GuardianTest.test_filter_old_events" href="#src.Guardian.testGuardian.GuardianTest.test_filter_old_events">test_filter_old_events</a></code></li>
 <li><code><a title="src.Guardian.testGuardian.GuardianTest.test_generate_event_name" href="#src.Guardian.testGuardian.GuardianTest.test_generate_event_name">test_generate_event_name</a></code></li>
 <li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction" href="#src.Guardian.testGuardian.GuardianTest.test_get_amount_from_fit_reduction">test_get_amount_from_fit_reduction</a></code></li>
-<li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction" href="#src.Guardian.testGuardian.GuardianTest.test_get_amount_from_percentage_reduction">test_get_amount_from_percentage_reduction</a></code></li>
 <li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling" href="#src.Guardian.testGuardian.GuardianTest.test_get_amount_from_proportional_energy_rescaling">test_get_amount_from_proportional_energy_rescaling</a></code></li>
 <li><code><a title="src.Guardian.testGuardian.GuardianTest.test_get_container_resources_str" href="#src.Guardian.testGuardian.GuardianTest.test_get_container_resources_str">test_get_container_resources_str</a></code></li>
 <li><code><a title="src.Guardian.testGuardian.GuardianTest.test_invalid_container_state" href="#src.Guardian.testGuardian.GuardianTest.test_invalid_container_state">test_invalid_container_state</a></code></li>
@@ -2350,7 +2299,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.Snapshoters.StructuresSnapshoter API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -59,19 +62,16 @@ from __future__ import print_function
 
 from threading import Thread
 import requests
-import json
 import time
 import traceback
 import logging
 
 import src.StateDatabase.couchdb as couchDB
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_time_now_string, update_structure, get_host_containers, get_structures, copy_structure_base
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, \
+    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning
 
 db_handler = couchDB.CouchDBServer()
 rescaler_http_session = requests.Session()
-RESOURCES = [&#34;cpu&#34;] # TODO this should be configurable
-#RESOURCES = [&#34;cpu&#34;, &#34;mem&#34;]
 translate_map = {
     &#34;cpu&#34;: {&#34;metric&#34;: &#34;structure.cpu.current&#34;, &#34;limit_label&#34;: &#34;effective_cpu_limit&#34;},
     &#34;mem&#34;: {&#34;metric&#34;: &#34;structure.mem.current&#34;, &#34;limit_label&#34;: &#34;mem_limit&#34;},
@@ -79,44 +79,34 @@ translate_map = {
     &#34;net&#34;: {&#34;metric&#34;: &#34;structure.net.current&#34;, &#34;limit_label&#34;: &#34;net_limit&#34;}
 }
 SERVICE_NAME = &#34;structures_snapshoter&#34;
-CONFIG_DEFAULT_VALUES = {&#34;POLLING_FREQUENCY&#34;: 10, &#34;DEBUG&#34;: True, &#34;PERSIST_APPS&#34;: True, &#34;ACTIVE&#34;: True}
+CONFIG_DEFAULT_VALUES = {&#34;POLLING_FREQUENCY&#34;: 5, &#34;DEBUG&#34;: True, &#34;PERSIST_APPS&#34;: True, &#34;RESOURCES_PERSISTED&#34;: [&#34;cpu&#34;, &#34;mem&#34;], &#34;ACTIVE&#34;: True}
 MAX_FAIL_NUM = 5
 debug = True
 
 
-def generate_timeseries(container_name, resources):
-    timestamp = int(time.time())
-
-    for resource in RESOURCES:
-        value = resources[resource][translate_map[resource][&#34;limit_label&#34;]]
-        metric = translate_map[resource][&#34;metric&#34;]
-        timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags=dict(host=container_name))
-
-        print(json.dumps(timeseries))
-
-
 def update_container_current_values(container_name, resources):
-    if not resources:
-        log_error(&#34;Unable to get resource info for container {0}&#34;.format(container_name), debug)
-
     # Remote database operation
     database_structure = db_handler.get_structure(container_name)
-    new_structure = copy_structure_base(database_structure)
-    new_structure[&#34;resources&#34;] = dict()
-    for resource in RESOURCES:
-        if resource not in new_structure:
-            new_structure[&#34;resources&#34;][resource] = dict()
+    structure = database_structure.copy()
+
+    if not &#34;resources&#34; in structure:
+        structure[&#34;resources&#34;] = dict()
+
+    for resource in resources_persisted:
+
+        if resource not in structure[&#34;resources&#34;]:
+            structure[&#34;resources&#34;][resource] = dict()
 
         if resource not in resources or not resources[resource]:
-            log_error(&#34;Unable to get info for resource {0} for container {1}&#34;.format(resource, container_name),
-                      debug)
-            new_structure[&#34;resources&#34;][resource][&#34;current&#34;] = 0
+            log_error(&#34;Unable to get info for resource {0} for container {1}&#34;.format(resource, container_name), debug)
+            structure[&#34;resources&#34;][resource][&#34;current&#34;] = 0
         else:
-            new_structure[&#34;resources&#34;][resource][&#34;current&#34;] = resources[resource][
-                translate_map[resource][&#34;limit_label&#34;]]
+            structure[&#34;resources&#34;][resource][&#34;current&#34;] = resources[resource][translate_map[resource][&#34;limit_label&#34;]]
+
+        structure[&#34;resources&#34;][resource][&#34;current&#34;] = int(structure[&#34;resources&#34;][resource][&#34;current&#34;])
 
     # Remote database operation
-    update_structure(new_structure, db_handler, debug, max_tries=3)
+    update_structure(structure, db_handler, debug)
 
 
 def thread_persist_container(container, container_resources_dict):
@@ -146,7 +136,12 @@ def persist_containers(container_resources_dict):
     for container in containers:
         # Check that the document has been properly initialized, otherwise it might be overwritten with just
         # the &#34;current&#34; value without possibility of correcting it
-        if &#34;cpu&#34; not in container[&#34;resources&#34;] or &#34;max&#34; not in container[&#34;resources&#34;][&#34;cpu&#34;]:
+        skip = False
+        for resource in resources_persisted:
+            if resource not in container[&#34;resources&#34;] or &#34;max&#34; not in container[&#34;resources&#34;][resource]:
+                log_error(&#34;Container {0} has not a proper config for the resource {1}&#34;.format(container[&#34;name&#34;], resource), debug)
+                skip = True
+        if skip:
             continue
 
         process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
@@ -159,54 +154,47 @@ def persist_containers(container_resources_dict):
 
 def persist_applications(container_resources_dict):
     # Try to get the applications, if unavailable, return
-    # Remote database operation
     applications = get_structures(db_handler, debug, subtype=&#34;application&#34;)
     if not applications:
         return
 
     # Generate the applications current resource values
     for app in applications:
-        for resource in RESOURCES:
-            app[&#34;resources&#34;][resource][&#34;current&#34;] = 0
+        for resource in resources_persisted:
+            if resource not in app[&#34;resources&#34;]:
+                log_error(&#34;Application {0} is missing info of resource {1}&#34;.format(app[&#34;name&#34;], resource), debug)
+            else:
+                app[&#34;resources&#34;][resource][&#34;current&#34;] = 0
 
         application_containers = app[&#34;containers&#34;]
         for container_name in application_containers:
 
             if container_name not in container_resources_dict:
-                log_error(
-                    &#34;Container info {0} is missing for app : {1}&#34;.format(container_name, app[&#34;name&#34;])
-                    + &#34; app info will not be totally accurate&#34;, debug)
+                log_error(&#34;Container info {0} is missing for app : {1}, app info will not be totally accurate&#34;.format(
+                    container_name, app[&#34;name&#34;]), debug)
                 continue
 
-            for resource in RESOURCES:
+            for resource in resources_persisted:
                 try:
-                    current_resource_label = translate_map[resource][&#34;limit_label&#34;]
                     container_resources = container_resources_dict[container_name][&#34;resources&#34;]
-
                     if resource not in container_resources or not container_resources[resource]:
-                        log_error(
-                            &#34;Unable to get info for resource {0} for container {1} when computing {2} resources&#34;.format(
-                                resource, container_name, app[&#34;name&#34;]), debug)
+                        log_error(&#34;Unable to get info for resource {0} for container {1} when computing app {2} resources&#34;.format(
+                            resource, container_name, app[&#34;name&#34;]), debug)
                     else:
+                        current_resource_label = translate_map[resource][&#34;limit_label&#34;]
                         app[&#34;resources&#34;][resource][&#34;current&#34;] += container_resources[resource][current_resource_label]
                 except KeyError:
                     if &#34;name&#34; in container_resources_dict[container_name] and &#34;name&#34; in app:
-                        log_error(
-                            &#34;Container info {0} is missing for app : {1} and resource {2} resource,&#34;.format(
-                                container_name, app[&#34;name&#34;], resource)
-                            + &#34; app info will not be totally accurate&#34;, debug)
-                    else:
-                        log_error(&#34;Error with app or container info&#34;, debug)
-                        # TODO this error should be more self-explanatory
+                        log_error(&#34;Container info {0} is missing for app: {1} and resource {2} resource,&#34;.format(
+                            container_name, app[&#34;name&#34;], resource) + &#34; app info will not be totally accurate&#34;, debug)
 
         # Remote database operation
         update_structure(app, db_handler, debug)
 
 
-def fill_container_dict(diff_hosts, containers):
+def fill_container_dict(hosts_info, containers):
     def host_info_request(h, d):
-        host_containers = get_host_containers(
-            h[&#34;host_rescaler_ip&#34;], h[&#34;host_rescaler_port&#34;], rescaler_http_session, debug)
+        host_containers = get_host_containers(h[&#34;host_rescaler_ip&#34;], h[&#34;host_rescaler_port&#34;], rescaler_http_session, debug)
         for container_name in host_containers:
             if container_name in container_list_names:
                 d[container_name] = host_containers[container_name]
@@ -214,8 +202,8 @@ def fill_container_dict(diff_hosts, containers):
     container_list_names = [c[&#34;name&#34;] for c in containers]
     container_info = dict()
     threads = list()
-    for hostname in diff_hosts:
-        host = diff_hosts[hostname]
+    for hostname in hosts_info:
+        host = hosts_info[hostname]
         t = Thread(target=host_info_request, args=(host, container_info,))
         t.start()
         threads.append(t)
@@ -233,86 +221,115 @@ def get_container_resources_dict():
         return
 
     # Get all the different hosts of the containers
-    diff_hosts = dict()
+    hosts_info = dict()
     for container in containers:
-        container_host = container[&#34;host&#34;]
-        if container_host not in diff_hosts:
-            diff_hosts[container_host] = dict()
-            diff_hosts[container_host][&#34;host_rescaler_ip&#34;] = container[&#34;host_rescaler_ip&#34;]
-            diff_hosts[container_host][&#34;host_rescaler_port&#34;] = container[&#34;host_rescaler_port&#34;]
+        host = container[&#34;host&#34;]
+        if host not in hosts_info:
+            hosts_info[host] = dict()
+            hosts_info[host][&#34;host_rescaler_ip&#34;] = container[&#34;host_rescaler_ip&#34;]
+            hosts_info[host][&#34;host_rescaler_port&#34;] = container[&#34;host_rescaler_port&#34;]
 
     # For each host, retrieve its containers and persist the ones we look for
-    # time0 = time.time()
-    container_resources_dict = fill_container_dict(diff_hosts, containers)
-    # time1 = time.time()
+    container_info = fill_container_dict(hosts_info, containers)
 
-    container_resources_dictV2 = dict()
+    container_resources_dict = dict()
     for container in containers:
         container_name = container[&#34;name&#34;]
-        container_resources_dictV2[container_name] = container
-        container_resources_dictV2[container_name][&#34;resources&#34;] = container_resources_dict[container_name]
+        if container_name not in container_info:
+            log_warning(&#34;Container info for {0} not found, check that it is really living in its supposed host &#39;{1}&#39;, and that &#34;
+                        &#34;the host is alive and with the Node Scaler service running&#34;.format(container_name, container[&#34;host&#34;]), debug)
+            continue
+        container_resources_dict[container_name] = container
+        container_resources_dict[container_name][&#34;resources&#34;] = container_info[container_name]
 
-    # p0 = time1 - time0
-    # MyUtils.log_info(&#34;It took {0} seconds to get containers from hosts (LXD)&#34;.format(str(&#34;%.2f&#34; % p0)), debug)
-
-    return container_resources_dictV2
+    return container_resources_dict
 
 
 def persist_thread():
     t0 = time.time()
     container_resources_dict = get_container_resources_dict()
-    # t1 = time.time()
+    t1 = time.time()
     persist_applications(container_resources_dict)
-    # t2 = time.time()
+    t2 = time.time()
     persist_containers(container_resources_dict)
     t3 = time.time()
 
-    p0 = t3 - t0
-    # p1 = t2 - t1
-    # p2 = t3 - t2
-    # MyUtils.log_info(&#34;It took {0} seconds to get container info&#34;.format(str(&#34;%.2f&#34; % p0)), debug)
-    # MyUtils.log_info(&#34;It took {0} seconds to snapshot application&#34;.format(str(&#34;%.2f&#34; % p1)), debug)
-    log_info(&#34;It took {0} seconds to snapshot containers&#34;.format(str(&#34;%.2f&#34; % p0)), debug)
+    log_info(&#34;It took {0} seconds to get container info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
+    log_info(&#34;It took {0} seconds to snapshot applications&#34;.format(str(&#34;%.2f&#34; % (t2 - t1))), debug)
+    log_info(&#34;It took {0} seconds to snapshot containers&#34;.format(str(&#34;%.2f&#34; % (t3 - t2))), debug)
+
+
+def invalid_conf(config):
+    # TODO Tiis code is duplicated on the structures and database snapshoters
+    for key, num in [(&#34;POLLING_FREQUENCY&#34;, config.get_value(&#34;POLLING_FREQUENCY&#34;))]:
+        if num &lt; 3:
+            return True, &#34;Configuration item &#39;{0}&#39; with a value of &#39;{1}&#39; is likely invalid&#34;.format(key, num)
+    return False, &#34;&#34;
 
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
 
+    global resources_persisted
     global debug
+
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
 
     while True:
+        log_info(&#34;----------------------&#34;, debug)
+        log_info(&#34;Starting Epoch&#34;, debug)
+        t0 = time.time()
+
         # Get service info
-        service = get_service(db_handler, SERVICE_NAME) # Remote database operation
+        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        beat(db_handler, SERVICE_NAME) # Remote database operation
+        beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
         myConfig.set_config(service[&#34;config&#34;])
-        polling_frequency = myConfig.get_config_value(&#34;POLLING_FREQUENCY&#34;)
-        debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+        polling_frequency = myConfig.get_value(&#34;POLLING_FREQUENCY&#34;)
+        debug = myConfig.get_value(&#34;DEBUG&#34;)
+        resources_persisted = myConfig.get_value(&#34;RESOURCES_PERSISTED&#34;)
+        SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
+        log_info(&#34;Going to snapshot resources: {0}&#34;.format(resources_persisted), debug)
 
-        SERVICE_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
+        log_info(&#34;Config is as follows:&#34;, debug)
+        log_info(&#34;.............................................&#34;, debug)
+        log_info(&#34;Polling frequency -&gt; {0}&#34;.format(polling_frequency), debug)
+        log_info(&#34;Resources to be snapshoter are -&gt; {0}&#34;.format(resources_persisted), debug)
+        log_info(&#34;.............................................&#34;, debug)
+
+        ## CHECK INVALID CONFIG ##
+        # TODO This code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency &lt; 3:
+                log_error(&#34;Polling frequency is too short, replacing with DEFAULT value &#39;{0}&#39;&#34;.format(CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]
+
+            log_info(&#34;----------------------\n&#34;, debug)
+            time.sleep(polling_frequency)
+            continue
+
         thread = None
         if SERVICE_IS_ACTIVATED:
             thread = Thread(target=persist_thread, args=())
             thread.start()
-            log_info(&#34;Structures snapshoted at {0}&#34;.format(get_time_now_string()), debug)
         else:
-            log_info(&#34;Structure snapshoter is not activated&#34;, debug)
+            log_warning(&#34;Structure snapshoter is not activated, will not do anything&#34;, debug)
 
         time.sleep(polling_frequency)
 
-        if thread and thread.is_alive():
-            delay_start = time.time()
-            log_warning(
-                &#34;Previous thread didn&#39;t finish before next poll is due, with polling time of {0} seconds, at {1}&#34;.format(
-                    str(polling_frequency), get_time_now_string()), debug)
-            log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, debug)
-            thread.join()
-            delay_end = time.time()
-            log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)), debug)
+        wait_operation_thread(thread, debug)
+
+        t1 = time.time()
+        time_proc = &#34;%.2f&#34; % (t1 - t0 - polling_frequency)
+        time_total = &#34;%.2f&#34; % (t1 - t0)
+        log_info(&#34;Epoch processed in {0} seconds ({1} processing and {2} sleeping)&#34;.format(time_total, time_proc, str(polling_frequency)), debug)
+        log_info(&#34;----------------------\n&#34;, debug)
 
 
 def main():
@@ -334,7 +351,7 @@ if __name__ == &#34;__main__&#34;:
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="src.Snapshoters.StructuresSnapshoter.fill_container_dict"><code class="name flex">
-<span>def <span class="ident">fill_container_dict</span></span>(<span>diff_hosts, containers)</span>
+<span>def <span class="ident">fill_container_dict</span></span>(<span>hosts_info, containers)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -342,10 +359,9 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def fill_container_dict(diff_hosts, containers):
+<pre><code class="python">def fill_container_dict(hosts_info, containers):
     def host_info_request(h, d):
-        host_containers = get_host_containers(
-            h[&#34;host_rescaler_ip&#34;], h[&#34;host_rescaler_port&#34;], rescaler_http_session, debug)
+        host_containers = get_host_containers(h[&#34;host_rescaler_ip&#34;], h[&#34;host_rescaler_port&#34;], rescaler_http_session, debug)
         for container_name in host_containers:
             if container_name in container_list_names:
                 d[container_name] = host_containers[container_name]
@@ -353,8 +369,8 @@ if __name__ == &#34;__main__&#34;:
     container_list_names = [c[&#34;name&#34;] for c in containers]
     container_info = dict()
     threads = list()
-    for hostname in diff_hosts:
-        host = diff_hosts[hostname]
+    for hostname in hosts_info:
+        host = hosts_info[hostname]
         t = Thread(target=host_info_request, args=(host, container_info,))
         t.start()
         threads.append(t)
@@ -363,26 +379,6 @@ if __name__ == &#34;__main__&#34;:
         t.join()
 
     return container_info</code></pre>
-</details>
-</dd>
-<dt id="src.Snapshoters.StructuresSnapshoter.generate_timeseries"><code class="name flex">
-<span>def <span class="ident">generate_timeseries</span></span>(<span>container_name, resources)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def generate_timeseries(container_name, resources):
-    timestamp = int(time.time())
-
-    for resource in RESOURCES:
-        value = resources[resource][translate_map[resource][&#34;limit_label&#34;]]
-        metric = translate_map[resource][&#34;metric&#34;]
-        timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags=dict(host=container_name))
-
-        print(json.dumps(timeseries))</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.StructuresSnapshoter.get_container_resources_dict"><code class="name flex">
@@ -401,29 +397,45 @@ if __name__ == &#34;__main__&#34;:
         return
 
     # Get all the different hosts of the containers
-    diff_hosts = dict()
+    hosts_info = dict()
     for container in containers:
-        container_host = container[&#34;host&#34;]
-        if container_host not in diff_hosts:
-            diff_hosts[container_host] = dict()
-            diff_hosts[container_host][&#34;host_rescaler_ip&#34;] = container[&#34;host_rescaler_ip&#34;]
-            diff_hosts[container_host][&#34;host_rescaler_port&#34;] = container[&#34;host_rescaler_port&#34;]
+        host = container[&#34;host&#34;]
+        if host not in hosts_info:
+            hosts_info[host] = dict()
+            hosts_info[host][&#34;host_rescaler_ip&#34;] = container[&#34;host_rescaler_ip&#34;]
+            hosts_info[host][&#34;host_rescaler_port&#34;] = container[&#34;host_rescaler_port&#34;]
 
     # For each host, retrieve its containers and persist the ones we look for
-    # time0 = time.time()
-    container_resources_dict = fill_container_dict(diff_hosts, containers)
-    # time1 = time.time()
+    container_info = fill_container_dict(hosts_info, containers)
 
-    container_resources_dictV2 = dict()
+    container_resources_dict = dict()
     for container in containers:
         container_name = container[&#34;name&#34;]
-        container_resources_dictV2[container_name] = container
-        container_resources_dictV2[container_name][&#34;resources&#34;] = container_resources_dict[container_name]
+        if container_name not in container_info:
+            log_warning(&#34;Container info for {0} not found, check that it is really living in its supposed host &#39;{1}&#39;, and that &#34;
+                        &#34;the host is alive and with the Node Scaler service running&#34;.format(container_name, container[&#34;host&#34;]), debug)
+            continue
+        container_resources_dict[container_name] = container
+        container_resources_dict[container_name][&#34;resources&#34;] = container_info[container_name]
 
-    # p0 = time1 - time0
-    # MyUtils.log_info(&#34;It took {0} seconds to get containers from hosts (LXD)&#34;.format(str(&#34;%.2f&#34; % p0)), debug)
-
-    return container_resources_dictV2</code></pre>
+    return container_resources_dict</code></pre>
+</details>
+</dd>
+<dt id="src.Snapshoters.StructuresSnapshoter.invalid_conf"><code class="name flex">
+<span>def <span class="ident">invalid_conf</span></span>(<span>config)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def invalid_conf(config):
+    # TODO Tiis code is duplicated on the structures and database snapshoters
+    for key, num in [(&#34;POLLING_FREQUENCY&#34;, config.get_value(&#34;POLLING_FREQUENCY&#34;))]:
+        if num &lt; 3:
+            return True, &#34;Configuration item &#39;{0}&#39; with a value of &#39;{1}&#39; is likely invalid&#34;.format(key, num)
+    return False, &#34;&#34;</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.StructuresSnapshoter.main"><code class="name flex">
@@ -454,41 +466,66 @@ if __name__ == &#34;__main__&#34;:
 <pre><code class="python">def persist():
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
 
+    global resources_persisted
     global debug
+
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
 
     while True:
+        log_info(&#34;----------------------&#34;, debug)
+        log_info(&#34;Starting Epoch&#34;, debug)
+        t0 = time.time()
+
         # Get service info
-        service = get_service(db_handler, SERVICE_NAME) # Remote database operation
+        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        beat(db_handler, SERVICE_NAME) # Remote database operation
+        beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
         myConfig.set_config(service[&#34;config&#34;])
-        polling_frequency = myConfig.get_config_value(&#34;POLLING_FREQUENCY&#34;)
-        debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+        polling_frequency = myConfig.get_value(&#34;POLLING_FREQUENCY&#34;)
+        debug = myConfig.get_value(&#34;DEBUG&#34;)
+        resources_persisted = myConfig.get_value(&#34;RESOURCES_PERSISTED&#34;)
+        SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
+        log_info(&#34;Going to snapshot resources: {0}&#34;.format(resources_persisted), debug)
 
-        SERVICE_IS_ACTIVATED = myConfig.get_config_value(&#34;ACTIVE&#34;)
+        log_info(&#34;Config is as follows:&#34;, debug)
+        log_info(&#34;.............................................&#34;, debug)
+        log_info(&#34;Polling frequency -&gt; {0}&#34;.format(polling_frequency), debug)
+        log_info(&#34;Resources to be snapshoter are -&gt; {0}&#34;.format(resources_persisted), debug)
+        log_info(&#34;.............................................&#34;, debug)
+
+        ## CHECK INVALID CONFIG ##
+        # TODO This code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency &lt; 3:
+                log_error(&#34;Polling frequency is too short, replacing with DEFAULT value &#39;{0}&#39;&#34;.format(CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]
+
+            log_info(&#34;----------------------\n&#34;, debug)
+            time.sleep(polling_frequency)
+            continue
+
         thread = None
         if SERVICE_IS_ACTIVATED:
             thread = Thread(target=persist_thread, args=())
             thread.start()
-            log_info(&#34;Structures snapshoted at {0}&#34;.format(get_time_now_string()), debug)
         else:
-            log_info(&#34;Structure snapshoter is not activated&#34;, debug)
+            log_warning(&#34;Structure snapshoter is not activated, will not do anything&#34;, debug)
 
         time.sleep(polling_frequency)
 
-        if thread and thread.isAlive():
-            delay_start = time.time()
-            log_warning(
-                &#34;Previous thread didn&#39;t finish before next poll is due, with polling time of {0} seconds, at {1}&#34;.format(
-                    str(polling_frequency), get_time_now_string()), debug)
-            log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, debug)
-            thread.join()
-            delay_end = time.time()
-            log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)), debug)</code></pre>
+        wait_operation_thread(thread, debug)
+
+        t1 = time.time()
+        time_proc = &#34;%.2f&#34; % (t1 - t0 - polling_frequency)
+        time_total = &#34;%.2f&#34; % (t1 - t0)
+        log_info(&#34;Epoch processed in {0} seconds ({1} processing and {2} sleeping)&#34;.format(time_total, time_proc, str(polling_frequency)), debug)
+        log_info(&#34;----------------------\n&#34;, debug)</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.StructuresSnapshoter.persist_applications"><code class="name flex">
@@ -502,45 +539,39 @@ if __name__ == &#34;__main__&#34;:
 </summary>
 <pre><code class="python">def persist_applications(container_resources_dict):
     # Try to get the applications, if unavailable, return
-    # Remote database operation
     applications = get_structures(db_handler, debug, subtype=&#34;application&#34;)
     if not applications:
         return
 
     # Generate the applications current resource values
     for app in applications:
-        for resource in RESOURCES:
-            app[&#34;resources&#34;][resource][&#34;current&#34;] = 0
+        for resource in resources_persisted:
+            if resource not in app[&#34;resources&#34;]:
+                log_error(&#34;Application {0} is missing info of resource {1}&#34;.format(app[&#34;name&#34;], resource), debug)
+            else:
+                app[&#34;resources&#34;][resource][&#34;current&#34;] = 0
 
         application_containers = app[&#34;containers&#34;]
         for container_name in application_containers:
 
             if container_name not in container_resources_dict:
-                log_error(
-                    &#34;Container info {0} is missing for app : {1}&#34;.format(container_name, app[&#34;name&#34;])
-                    + &#34; app info will not be totally accurate&#34;, debug)
+                log_error(&#34;Container info {0} is missing for app : {1}, app info will not be totally accurate&#34;.format(
+                    container_name, app[&#34;name&#34;]), debug)
                 continue
 
-            for resource in RESOURCES:
+            for resource in resources_persisted:
                 try:
-                    current_resource_label = translate_map[resource][&#34;limit_label&#34;]
                     container_resources = container_resources_dict[container_name][&#34;resources&#34;]
-
                     if resource not in container_resources or not container_resources[resource]:
-                        log_error(
-                            &#34;Unable to get info for resource {0} for container {1} when computing {2} resources&#34;.format(
-                                resource, container_name, app[&#34;name&#34;]), debug)
+                        log_error(&#34;Unable to get info for resource {0} for container {1} when computing app {2} resources&#34;.format(
+                            resource, container_name, app[&#34;name&#34;]), debug)
                     else:
+                        current_resource_label = translate_map[resource][&#34;limit_label&#34;]
                         app[&#34;resources&#34;][resource][&#34;current&#34;] += container_resources[resource][current_resource_label]
                 except KeyError:
                     if &#34;name&#34; in container_resources_dict[container_name] and &#34;name&#34; in app:
-                        log_error(
-                            &#34;Container info {0} is missing for app : {1} and resource {2} resource,&#34;.format(
-                                container_name, app[&#34;name&#34;], resource)
-                            + &#34; app info will not be totally accurate&#34;, debug)
-                    else:
-                        log_error(&#34;Error with app or container info&#34;, debug)
-                        # TODO this error should be more self-explanatory
+                        log_error(&#34;Container info {0} is missing for app: {1} and resource {2} resource,&#34;.format(
+                            container_name, app[&#34;name&#34;], resource) + &#34; app info will not be totally accurate&#34;, debug)
 
         # Remote database operation
         update_structure(app, db_handler, debug)</code></pre>
@@ -567,7 +598,12 @@ if __name__ == &#34;__main__&#34;:
     for container in containers:
         # Check that the document has been properly initialized, otherwise it might be overwritten with just
         # the &#34;current&#34; value without possibility of correcting it
-        if &#34;cpu&#34; not in container[&#34;resources&#34;] or &#34;max&#34; not in container[&#34;resources&#34;][&#34;cpu&#34;]:
+        skip = False
+        for resource in resources_persisted:
+            if resource not in container[&#34;resources&#34;] or &#34;max&#34; not in container[&#34;resources&#34;][resource]:
+                log_error(&#34;Container {0} has not a proper config for the resource {1}&#34;.format(container[&#34;name&#34;], resource), debug)
+                skip = True
+        if skip:
             continue
 
         process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
@@ -590,18 +626,15 @@ if __name__ == &#34;__main__&#34;:
 <pre><code class="python">def persist_thread():
     t0 = time.time()
     container_resources_dict = get_container_resources_dict()
-    # t1 = time.time()
+    t1 = time.time()
     persist_applications(container_resources_dict)
-    # t2 = time.time()
+    t2 = time.time()
     persist_containers(container_resources_dict)
     t3 = time.time()
 
-    p0 = t3 - t0
-    # p1 = t2 - t1
-    # p2 = t3 - t2
-    # MyUtils.log_info(&#34;It took {0} seconds to get container info&#34;.format(str(&#34;%.2f&#34; % p0)), debug)
-    # MyUtils.log_info(&#34;It took {0} seconds to snapshot application&#34;.format(str(&#34;%.2f&#34; % p1)), debug)
-    log_info(&#34;It took {0} seconds to snapshot containers&#34;.format(str(&#34;%.2f&#34; % p0)), debug)</code></pre>
+    log_info(&#34;It took {0} seconds to get container info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0))), debug)
+    log_info(&#34;It took {0} seconds to snapshot applications&#34;.format(str(&#34;%.2f&#34; % (t2 - t1))), debug)
+    log_info(&#34;It took {0} seconds to snapshot containers&#34;.format(str(&#34;%.2f&#34; % (t3 - t2))), debug)</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.StructuresSnapshoter.thread_persist_container"><code class="name flex">
@@ -638,27 +671,28 @@ if __name__ == &#34;__main__&#34;:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def update_container_current_values(container_name, resources):
-    if not resources:
-        log_error(&#34;Unable to get resource info for container {0}&#34;.format(container_name), debug)
-
     # Remote database operation
     database_structure = db_handler.get_structure(container_name)
-    new_structure = copy_structure_base(database_structure)
-    new_structure[&#34;resources&#34;] = dict()
-    for resource in RESOURCES:
-        if resource not in new_structure:
-            new_structure[&#34;resources&#34;][resource] = dict()
+    structure = database_structure.copy()
+
+    if not &#34;resources&#34; in structure:
+        structure[&#34;resources&#34;] = dict()
+
+    for resource in resources_persisted:
+
+        if resource not in structure[&#34;resources&#34;]:
+            structure[&#34;resources&#34;][resource] = dict()
 
         if resource not in resources or not resources[resource]:
-            log_error(&#34;Unable to get info for resource {0} for container {1}&#34;.format(resource, container_name),
-                      debug)
-            new_structure[&#34;resources&#34;][resource][&#34;current&#34;] = 0
+            log_error(&#34;Unable to get info for resource {0} for container {1}&#34;.format(resource, container_name), debug)
+            structure[&#34;resources&#34;][resource][&#34;current&#34;] = 0
         else:
-            new_structure[&#34;resources&#34;][resource][&#34;current&#34;] = resources[resource][
-                translate_map[resource][&#34;limit_label&#34;]]
+            structure[&#34;resources&#34;][resource][&#34;current&#34;] = resources[resource][translate_map[resource][&#34;limit_label&#34;]]
+
+        structure[&#34;resources&#34;][resource][&#34;current&#34;] = int(structure[&#34;resources&#34;][resource][&#34;current&#34;])
 
     # Remote database operation
-    update_structure(new_structure, db_handler, debug, max_tries=3)</code></pre>
+    update_structure(structure, db_handler, debug)</code></pre>
 </details>
 </dd>
 </dl>
@@ -667,7 +701,9 @@ if __name__ == &#34;__main__&#34;:
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -681,8 +717,8 @@ if __name__ == &#34;__main__&#34;:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="src.Snapshoters.StructuresSnapshoter.fill_container_dict" href="#src.Snapshoters.StructuresSnapshoter.fill_container_dict">fill_container_dict</a></code></li>
-<li><code><a title="src.Snapshoters.StructuresSnapshoter.generate_timeseries" href="#src.Snapshoters.StructuresSnapshoter.generate_timeseries">generate_timeseries</a></code></li>
 <li><code><a title="src.Snapshoters.StructuresSnapshoter.get_container_resources_dict" href="#src.Snapshoters.StructuresSnapshoter.get_container_resources_dict">get_container_resources_dict</a></code></li>
+<li><code><a title="src.Snapshoters.StructuresSnapshoter.invalid_conf" href="#src.Snapshoters.StructuresSnapshoter.invalid_conf">invalid_conf</a></code></li>
 <li><code><a title="src.Snapshoters.StructuresSnapshoter.main" href="#src.Snapshoters.StructuresSnapshoter.main">main</a></code></li>
 <li><code><a title="src.Snapshoters.StructuresSnapshoter.persist" href="#src.Snapshoters.StructuresSnapshoter.persist">persist</a></code></li>
 <li><code><a title="src.Snapshoters.StructuresSnapshoter.persist_applications" href="#src.Snapshoters.StructuresSnapshoter.persist_applications">persist_applications</a></code></li>
@@ -724,7 +760,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

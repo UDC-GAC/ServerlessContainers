@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.Refeeder.Refeeder API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -63,14 +66,12 @@ import time
 import traceback
 import logging
 
-import src.MyUtils.MyUtils as MyUtils
-import src.StateDatabase.couchdb as couchDB
-import src.StateDatabase.opentsdb as OpenTSDB
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, update_structure, \
+    end_epoch, start_epoch
+import src.StateDatabase.couchdb as couchdb
+import src.StateDatabase.opentsdb as bdwatchdog
 from src.ReBalancer.Utils import get_user_apps
-
-bdwatchdog = OpenTSDB.OpenTSDBServer()
-NO_METRIC_DATA_DEFAULT_VALUE = bdwatchdog.NO_METRIC_DATA_DEFAULT_VALUE
-db_handler = couchDB.CouchDBServer()
 
 BDWATCHDOG_METRICS = [&#39;proc.cpu.user&#39;, &#39;proc.cpu.kernel&#39;, &#39;proc.mem.resident&#39;, &#39;proc.disk.writes.mb&#39;,
                       &#39;proc.disk.reads.mb&#39;, &#39;proc.net.tcp.in.mb&#39;, &#39;proc.net.tcp.out.mb&#39;, &#39;sys.cpu.energy&#39;]
@@ -86,160 +87,165 @@ REFEEDER_APPLICATION_METRICS = {&#39;cpu&#39;: [&#39;proc.cpu.user&#39;, &#39;pr
                                 # &#39;net&#39;: [&#39;proc.net.tcp.in.mb&#39;, &#39;proc.net.tcp.out.mb&#39;],
                                 &#39;energy&#39;: [&#34;sys.cpu.energy&#34;]}
 
-CONFIG_DEFAULT_VALUES = {&#34;POLLING_FREQUENCY&#34;: 10, &#34;WINDOW_TIMELAPSE&#34;: 10, &#34;WINDOW_DELAY&#34;: 15, &#34;DEBUG&#34;: True}
-SERVICE_NAME = &#34;refeeder&#34;
-debug = True
-NOT_AVAILABLE_STRING = &#34;n/a&#34;
+CONFIG_DEFAULT_VALUES = {&#34;WINDOW_TIMELAPSE&#34;: 10, &#34;WINDOW_DELAY&#34;: 20, &#34;GENERATED_METRICS&#34;: [&#34;cpu&#34;, &#34;mem&#34;], &#34;DEBUG&#34;: True}
 
-# Default values
-window_difference = 10
-window_delay = 15
 host_info_cache = dict()
 
-REFEED_ENERGY = True
+SERVICE_NAME = &#34;refeeder&#34;
 
+class ReFeeder:
+    &#34;&#34;&#34; ReFeeder class that implements all the logic for this service&#34;&#34;&#34;
 
-def merge(output_dict, input_dict):
-    for key in input_dict:
-        if key in output_dict:
-            output_dict[key] = output_dict[key] + input_dict[key]
-        else:
-            output_dict[key] = input_dict[key]
-    return output_dict
+    def __init__(self):
+        self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
+        self.couchdb_handler = couchdb.CouchDBServer()
+        self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.debug = True
+        self.config = {}
 
-
-def get_container_usages(container_name):
-    global window_difference
-    global window_delay
-    try:
-        container_info = bdwatchdog.get_structure_timeseries({&#34;host&#34;: container_name}, window_difference, window_delay,
-                                                             BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS)
-
-        for metric in REFEEDER_APPLICATION_METRICS:
-            if container_info[metric] == NO_METRIC_DATA_DEFAULT_VALUE:
-                MyUtils.log_error(&#34;No metric info for {0} in container {1}&#34;.format(metric, container_name), debug=True)
-
-
-    except requests.ConnectionError as e:
-        MyUtils.log_error(&#34;Connection error: {0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
-        raise e
-    return container_info
-
-
-def generate_application_metrics(application):
-    global window_difference
-    global window_delay
-    application_info = dict()
-    for c in application[&#34;containers&#34;]:
-        container_info = get_container_usages(c)
-        application_info = merge(application_info, container_info)
-
-    for resource in application_info:
-        application[&#34;resources&#34;][resource][&#34;usage&#34;] = application_info[resource]
-
-    return application
-
-
-def refeed_applications(applications):
-    for application in applications:
-        application = generate_application_metrics(application)
-        MyUtils.update_structure(application, db_handler, debug)
-
-
-def refeed_user_used_energy(applications, users, db_handler, debug):
-    for user in users:
-        if &#34;cpu&#34; not in user:
-            user[&#34;cpu&#34;] = {}
-        if &#34;energy&#34; not in user:
-            user[&#34;energy&#34;] = {}
-        total_user = {&#34;cpu&#34;: 0, &#34;energy&#34;: 0}
-        total_user_current_cpu = 0
-        user_apps = get_user_apps(applications, user)
-        for app in user_apps:
-            for resource in [&#34;energy&#34;, &#34;cpu&#34;]:
-                if &#34;usage&#34; in app[&#34;resources&#34;][resource] and app[&#34;resources&#34;][resource][&#34;usage&#34;]:
-                    total_user[resource] += app[&#34;resources&#34;][resource][&#34;usage&#34;]
-                else:
-                    MyUtils.log_error(&#34;Application {0} of user {1} has no used {2} field or value&#34;.format(
-                        app[&#34;name&#34;], user[&#34;name&#34;], resource), debug)
-
-            if &#34;current&#34; in app[&#34;resources&#34;][&#34;cpu&#34;] and app[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]:
-                total_user_current_cpu += app[&#34;resources&#34;][resource][&#34;current&#34;]
+    def merge(self, output_dict, input_dict):
+        for key in input_dict:
+            if key in output_dict:
+                output_dict[key] = output_dict[key] + input_dict[key]
             else:
-                MyUtils.log_error(&#34;Application {0} of user {1} has no current cpu field or value&#34;.format(
-                    app[&#34;name&#34;], user[&#34;name&#34;]), debug)
+                output_dict[key] = input_dict[key]
+        return output_dict
 
-        user[&#34;energy&#34;][&#34;used&#34;] = total_user[&#34;energy&#34;]
-        user[&#34;cpu&#34;][&#34;usage&#34;] = total_user[&#34;cpu&#34;]
-        user[&#34;cpu&#34;][&#34;current&#34;] = total_user_current_cpu
-        db_handler.update_user(user)
-        MyUtils.log_info(&#34;Updated energy consumed by user {0}&#34;.format(user[&#34;name&#34;]), debug)
+    def get_container_usages(self, container_name):
+        try:
+            container_info = self.opentsdb_handler.get_structure_timeseries({&#34;host&#34;: container_name},
+                                                                            self.window_difference,
+                                                                            self.window_delay,
+                                                                            BDWATCHDOG_METRICS,
+                                                                            REFEEDER_APPLICATION_METRICS)
 
-
-def refeed_thread():
-    # Process and measure time
-    epoch_start = time.time()
-
-    applications = MyUtils.get_structures(db_handler, debug, subtype=&#34;application&#34;)
-    if applications:
-        refeed_applications(applications)
-
-    users = db_handler.get_users()
-    if users:
-        refeed_user_used_energy(applications, users, db_handler, debug)
-
-    epoch_end = time.time()
-    processing_time = epoch_end - epoch_start
-    MyUtils.log_info(&#34;It took {0} seconds to refeed&#34;.format(str(&#34;%.2f&#34; % processing_time)), debug)
+            for metric in REFEEDER_APPLICATION_METRICS:
+                if metric not in CONFIG_DEFAULT_VALUES[&#34;GENERATED_METRICS&#34;]:
+                    continue
+                if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+                    log_warning(&#34;No metric info for {0} in container {1}&#34;.format(metric, container_name), debug=True)
 
 
-def refeed():
-    logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
-    global debug
-    global host_info_cache
-    global window_difference
-    global window_delay
-    while True:
-        # Get service info
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        except requests.ConnectionError as e:
+            log_error(&#34;Connection error: {0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+            raise e
+        return container_info
 
-        # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)
+    def generate_application_metrics(self, application):
+        application_info = dict()
+        for c in application[&#34;containers&#34;]:
+            container_info = self.get_container_usages(c)
+            application_info = self.merge(application_info, container_info)
 
-        # CONFIG
-        config = service[&#34;config&#34;]
-        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+        for resource in application_info:
+            if resource in application[&#34;resources&#34;]:
+                application[&#34;resources&#34;][resource][&#34;usage&#34;] = application_info[resource]
+            else:
+                log_warning(&#34;No resource {0} info for application {1}&#34;.format(resource, application[&#34;name&#34;]), debug=True)
 
-        # Data retrieving, slow
-        host_info_cache = dict()
-        containers = MyUtils.get_structures(db_handler, debug, subtype=&#34;container&#34;)
-        if not containers:
-            # As no container info is available, no application information will be able to be generated
-            continue
+        return application
 
-        thread = Thread(target=refeed_thread, args=())
-        thread.start()
-        MyUtils.log_info(&#34;Refeed processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
-        time.sleep(window_difference)
+    def refeed_applications(self, applications):
+        for application in applications:
+            application = self.generate_application_metrics(application)
+            update_structure(application, self.couchdb_handler, self.debug)
 
-        if thread.is_alive():
-            delay_start = time.time()
-            MyUtils.log_warning(
-                &#34;Previous thread didn&#39;t finish before next poll is due, with window time of {0} seconds, at {1}&#34;.format(
-                    str(window_difference), MyUtils.get_time_now_string()), debug)
-            MyUtils.log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, debug)
-            thread.join()
-            delay_end = time.time()
-            MyUtils.log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)), debug)
+    def refeed_user_used_energy(self, applications, users, db_handler, debug):
+        for user in users:
+            if &#34;cpu&#34; not in user:
+                user[&#34;cpu&#34;] = {}
+            if &#34;energy&#34; not in user:
+                user[&#34;energy&#34;] = {}
+            total_user = {&#34;cpu&#34;: 0, &#34;energy&#34;: 0}
+            total_user_current_cpu = 0
+            user_apps = get_user_apps(applications, user)
+            for app in user_apps:
+                for resource in [&#34;energy&#34;, &#34;cpu&#34;]:
+                    if &#34;usage&#34; in app[&#34;resources&#34;][resource] and app[&#34;resources&#34;][resource][&#34;usage&#34;]:
+                        total_user[resource] += app[&#34;resources&#34;][resource][&#34;usage&#34;]
+                    else:
+                        log_error(&#34;Application {0} of user {1} has no used {2} field or value&#34;.format(
+                            app[&#34;name&#34;], user[&#34;name&#34;], resource), debug)
+
+                if &#34;current&#34; in app[&#34;resources&#34;][&#34;cpu&#34;] and app[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]:
+                    total_user_current_cpu += app[&#34;resources&#34;][resource][&#34;current&#34;]
+                else:
+                    log_error(&#34;Application {0} of user {1} has no current cpu field or value&#34;.format(
+                        app[&#34;name&#34;], user[&#34;name&#34;]), debug)
+
+            user[&#34;energy&#34;][&#34;used&#34;] = total_user[&#34;energy&#34;]
+            user[&#34;cpu&#34;][&#34;usage&#34;] = total_user[&#34;cpu&#34;]
+            user[&#34;cpu&#34;][&#34;current&#34;] = total_user_current_cpu
+            db_handler.update_user(user)
+            log_info(&#34;Updated energy consumed by user {0}&#34;.format(user[&#34;name&#34;]), debug)
+
+    def refeed_thread(self, ):
+        applications = get_structures(self.couchdb_handler, self.debug, subtype=&#34;application&#34;)
+        if applications:
+            self.refeed_applications(applications)
+
+        # users = db_handler.get_users()
+        # if users:
+        #     refeed_user_used_energy(applications, users, db_handler, debug)
+
+    def refeed(self, ):
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+
+        while True:
+            # Get service info
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
+
+            # Heartbeat
+            beat(self.couchdb_handler, SERVICE_NAME)
+
+            # CONFIG
+            myConfig.set_config(service[&#34;config&#34;])
+            self.debug = myConfig.get_value(&#34;DEBUG&#34;)
+            debug = self.debug
+            self.window_difference = myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)
+            self.window_delay = myConfig.get_value(&#34;WINDOW_DELAY&#34;)
+            SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
+
+            t0 = start_epoch(self.debug)
+
+            log_info(&#34;Config is as follows:&#34;, debug)
+            log_info(&#34;.............................................&#34;, debug)
+            log_info(&#34;Time window lapse -&gt; {0}&#34;.format(self.window_difference), debug)
+            log_info(&#34;Delay -&gt; {0}&#34;.format(self.window_delay), debug)
+            log_info(&#34;.............................................&#34;, debug)
+
+            thread = None
+            if SERVICE_IS_ACTIVATED:
+                # Remote database operation
+                host_info_cache = dict()
+                containers = get_structures(self.couchdb_handler, debug, subtype=&#34;container&#34;)
+                if not containers:
+                    # As no container info is available, no application information will be able to be generated
+                    log_info(&#34;No structures to process&#34;, debug)
+                    time.sleep(self.window_difference)
+                    end_epoch(self.debug, self.window_difference, t0)
+                    continue
+                else:
+                    thread = Thread(target=self.refeed_thread, args=())
+                    thread.start()
+            else:
+                log_warning(&#34;Refeeder is not activated&#34;, debug)
+
+            time.sleep(self.window_difference)
+
+            wait_operation_thread(thread, debug)
+            log_info(&#34;Refeed processed&#34;, debug)
+
+            end_epoch(self.debug, self.window_difference, t0)
 
 
 def main():
     try:
-        refeed()
+        refeeder = ReFeeder()
+        refeeder.refeed()
     except Exception as e:
-        MyUtils.log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == &#34;__main__&#34;:
@@ -253,56 +259,6 @@ if __name__ == &#34;__main__&#34;:
 <section>
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
-<dt id="src.Refeeder.Refeeder.generate_application_metrics"><code class="name flex">
-<span>def <span class="ident">generate_application_metrics</span></span>(<span>application)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def generate_application_metrics(application):
-    global window_difference
-    global window_delay
-    application_info = dict()
-    for c in application[&#34;containers&#34;]:
-        container_info = get_container_usages(c)
-        application_info = merge(application_info, container_info)
-
-    for resource in application_info:
-        application[&#34;resources&#34;][resource][&#34;usage&#34;] = application_info[resource]
-
-    return application</code></pre>
-</details>
-</dd>
-<dt id="src.Refeeder.Refeeder.get_container_usages"><code class="name flex">
-<span>def <span class="ident">get_container_usages</span></span>(<span>container_name)</span>
-</code></dt>
-<dd>
-<section class="desc"></section>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def get_container_usages(container_name):
-    global window_difference
-    global window_delay
-    try:
-        container_info = bdwatchdog.get_structure_timeseries({&#34;host&#34;: container_name}, window_difference, window_delay,
-                                                             BDWATCHDOG_METRICS, REFEEDER_APPLICATION_METRICS)
-
-        for metric in REFEEDER_APPLICATION_METRICS:
-            if container_info[metric] == NO_METRIC_DATA_DEFAULT_VALUE:
-                MyUtils.log_error(&#34;No metric info for {0} in container {1}&#34;.format(metric, container_name), debug=True)
-
-
-    except requests.ConnectionError as e:
-        MyUtils.log_error(&#34;Connection error: {0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
-        raise e
-    return container_info</code></pre>
-</details>
-</dd>
 <dt id="src.Refeeder.Refeeder.main"><code class="name flex">
 <span>def <span class="ident">main</span></span>(<span>)</span>
 </code></dt>
@@ -314,13 +270,176 @@ if __name__ == &#34;__main__&#34;:
 </summary>
 <pre><code class="python">def main():
     try:
-        refeed()
+        refeeder = ReFeeder()
+        refeeder.refeed()
     except Exception as e:
-        MyUtils.log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
 </details>
 </dd>
-<dt id="src.Refeeder.Refeeder.merge"><code class="name flex">
-<span>def <span class="ident">merge</span></span>(<span>output_dict, input_dict)</span>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="src.Refeeder.Refeeder.ReFeeder"><code class="flex name class">
+<span>class <span class="ident">ReFeeder</span></span>
+</code></dt>
+<dd>
+<section class="desc"><p>ReFeeder class that implements all the logic for this service</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ReFeeder:
+    &#34;&#34;&#34; ReFeeder class that implements all the logic for this service&#34;&#34;&#34;
+
+    def __init__(self):
+        self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
+        self.couchdb_handler = couchdb.CouchDBServer()
+        self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.debug = True
+        self.config = {}
+
+    def merge(self, output_dict, input_dict):
+        for key in input_dict:
+            if key in output_dict:
+                output_dict[key] = output_dict[key] + input_dict[key]
+            else:
+                output_dict[key] = input_dict[key]
+        return output_dict
+
+    def get_container_usages(self, container_name):
+        try:
+            container_info = self.opentsdb_handler.get_structure_timeseries({&#34;host&#34;: container_name},
+                                                                            self.window_difference,
+                                                                            self.window_delay,
+                                                                            BDWATCHDOG_METRICS,
+                                                                            REFEEDER_APPLICATION_METRICS)
+
+            for metric in REFEEDER_APPLICATION_METRICS:
+                if metric not in CONFIG_DEFAULT_VALUES[&#34;GENERATED_METRICS&#34;]:
+                    continue
+                if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+                    log_warning(&#34;No metric info for {0} in container {1}&#34;.format(metric, container_name), debug=True)
+
+
+        except requests.ConnectionError as e:
+            log_error(&#34;Connection error: {0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+            raise e
+        return container_info
+
+    def generate_application_metrics(self, application):
+        application_info = dict()
+        for c in application[&#34;containers&#34;]:
+            container_info = self.get_container_usages(c)
+            application_info = self.merge(application_info, container_info)
+
+        for resource in application_info:
+            if resource in application[&#34;resources&#34;]:
+                application[&#34;resources&#34;][resource][&#34;usage&#34;] = application_info[resource]
+            else:
+                log_warning(&#34;No resource {0} info for application {1}&#34;.format(resource, application[&#34;name&#34;]), debug=True)
+
+        return application
+
+    def refeed_applications(self, applications):
+        for application in applications:
+            application = self.generate_application_metrics(application)
+            update_structure(application, self.couchdb_handler, self.debug)
+
+    def refeed_user_used_energy(self, applications, users, db_handler, debug):
+        for user in users:
+            if &#34;cpu&#34; not in user:
+                user[&#34;cpu&#34;] = {}
+            if &#34;energy&#34; not in user:
+                user[&#34;energy&#34;] = {}
+            total_user = {&#34;cpu&#34;: 0, &#34;energy&#34;: 0}
+            total_user_current_cpu = 0
+            user_apps = get_user_apps(applications, user)
+            for app in user_apps:
+                for resource in [&#34;energy&#34;, &#34;cpu&#34;]:
+                    if &#34;usage&#34; in app[&#34;resources&#34;][resource] and app[&#34;resources&#34;][resource][&#34;usage&#34;]:
+                        total_user[resource] += app[&#34;resources&#34;][resource][&#34;usage&#34;]
+                    else:
+                        log_error(&#34;Application {0} of user {1} has no used {2} field or value&#34;.format(
+                            app[&#34;name&#34;], user[&#34;name&#34;], resource), debug)
+
+                if &#34;current&#34; in app[&#34;resources&#34;][&#34;cpu&#34;] and app[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]:
+                    total_user_current_cpu += app[&#34;resources&#34;][resource][&#34;current&#34;]
+                else:
+                    log_error(&#34;Application {0} of user {1} has no current cpu field or value&#34;.format(
+                        app[&#34;name&#34;], user[&#34;name&#34;]), debug)
+
+            user[&#34;energy&#34;][&#34;used&#34;] = total_user[&#34;energy&#34;]
+            user[&#34;cpu&#34;][&#34;usage&#34;] = total_user[&#34;cpu&#34;]
+            user[&#34;cpu&#34;][&#34;current&#34;] = total_user_current_cpu
+            db_handler.update_user(user)
+            log_info(&#34;Updated energy consumed by user {0}&#34;.format(user[&#34;name&#34;]), debug)
+
+    def refeed_thread(self, ):
+        applications = get_structures(self.couchdb_handler, self.debug, subtype=&#34;application&#34;)
+        if applications:
+            self.refeed_applications(applications)
+
+        # users = db_handler.get_users()
+        # if users:
+        #     refeed_user_used_energy(applications, users, db_handler, debug)
+
+    def refeed(self, ):
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+
+        while True:
+            # Get service info
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
+
+            # Heartbeat
+            beat(self.couchdb_handler, SERVICE_NAME)
+
+            # CONFIG
+            myConfig.set_config(service[&#34;config&#34;])
+            self.debug = myConfig.get_value(&#34;DEBUG&#34;)
+            debug = self.debug
+            self.window_difference = myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)
+            self.window_delay = myConfig.get_value(&#34;WINDOW_DELAY&#34;)
+            SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
+
+            t0 = start_epoch(self.debug)
+
+            log_info(&#34;Config is as follows:&#34;, debug)
+            log_info(&#34;.............................................&#34;, debug)
+            log_info(&#34;Time window lapse -&gt; {0}&#34;.format(self.window_difference), debug)
+            log_info(&#34;Delay -&gt; {0}&#34;.format(self.window_delay), debug)
+            log_info(&#34;.............................................&#34;, debug)
+
+            thread = None
+            if SERVICE_IS_ACTIVATED:
+                # Remote database operation
+                host_info_cache = dict()
+                containers = get_structures(self.couchdb_handler, debug, subtype=&#34;container&#34;)
+                if not containers:
+                    # As no container info is available, no application information will be able to be generated
+                    log_info(&#34;No structures to process&#34;, debug)
+                    time.sleep(self.window_difference)
+                    end_epoch(self.debug, self.window_difference, t0)
+                    continue
+                else:
+                    thread = Thread(target=self.refeed_thread, args=())
+                    thread.start()
+            else:
+                log_warning(&#34;Refeeder is not activated&#34;, debug)
+
+            time.sleep(self.window_difference)
+
+            wait_operation_thread(thread, debug)
+            log_info(&#34;Refeed processed&#34;, debug)
+
+            end_epoch(self.debug, self.window_difference, t0)</code></pre>
+</details>
+<h3>Methods</h3>
+<dl>
+<dt id="src.Refeeder.Refeeder.ReFeeder.generate_application_metrics"><code class="name flex">
+<span>def <span class="ident">generate_application_metrics</span></span>(<span>self, application)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -328,7 +447,61 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def merge(output_dict, input_dict):
+<pre><code class="python">def generate_application_metrics(self, application):
+    application_info = dict()
+    for c in application[&#34;containers&#34;]:
+        container_info = self.get_container_usages(c)
+        application_info = self.merge(application_info, container_info)
+
+    for resource in application_info:
+        if resource in application[&#34;resources&#34;]:
+            application[&#34;resources&#34;][resource][&#34;usage&#34;] = application_info[resource]
+        else:
+            log_warning(&#34;No resource {0} info for application {1}&#34;.format(resource, application[&#34;name&#34;]), debug=True)
+
+    return application</code></pre>
+</details>
+</dd>
+<dt id="src.Refeeder.Refeeder.ReFeeder.get_container_usages"><code class="name flex">
+<span>def <span class="ident">get_container_usages</span></span>(<span>self, container_name)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_container_usages(self, container_name):
+    try:
+        container_info = self.opentsdb_handler.get_structure_timeseries({&#34;host&#34;: container_name},
+                                                                        self.window_difference,
+                                                                        self.window_delay,
+                                                                        BDWATCHDOG_METRICS,
+                                                                        REFEEDER_APPLICATION_METRICS)
+
+        for metric in REFEEDER_APPLICATION_METRICS:
+            if metric not in CONFIG_DEFAULT_VALUES[&#34;GENERATED_METRICS&#34;]:
+                continue
+            if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+                log_warning(&#34;No metric info for {0} in container {1}&#34;.format(metric, container_name), debug=True)
+
+
+    except requests.ConnectionError as e:
+        log_error(&#34;Connection error: {0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+        raise e
+    return container_info</code></pre>
+</details>
+</dd>
+<dt id="src.Refeeder.Refeeder.ReFeeder.merge"><code class="name flex">
+<span>def <span class="ident">merge</span></span>(<span>self, output_dict, input_dict)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def merge(self, output_dict, input_dict):
     for key in input_dict:
         if key in output_dict:
             output_dict[key] = output_dict[key] + input_dict[key]
@@ -337,8 +510,8 @@ if __name__ == &#34;__main__&#34;:
     return output_dict</code></pre>
 </details>
 </dd>
-<dt id="src.Refeeder.Refeeder.refeed"><code class="name flex">
-<span>def <span class="ident">refeed</span></span>(<span>)</span>
+<dt id="src.Refeeder.Refeeder.ReFeeder.refeed"><code class="name flex">
+<span>def <span class="ident">refeed</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -346,50 +519,60 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def refeed():
+<pre><code class="python">def refeed(self, ):
+    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
-    global debug
-    global host_info_cache
-    global window_difference
-    global window_delay
+
     while True:
         # Get service info
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)
+        service = get_service(self.couchdb_handler, SERVICE_NAME)
 
         # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)
+        beat(self.couchdb_handler, SERVICE_NAME)
 
         # CONFIG
-        config = service[&#34;config&#34;]
-        window_difference = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        window_delay = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
-        debug = MyUtils.get_config_value(config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+        myConfig.set_config(service[&#34;config&#34;])
+        self.debug = myConfig.get_value(&#34;DEBUG&#34;)
+        debug = self.debug
+        self.window_difference = myConfig.get_value(&#34;WINDOW_TIMELAPSE&#34;)
+        self.window_delay = myConfig.get_value(&#34;WINDOW_DELAY&#34;)
+        SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
 
-        # Data retrieving, slow
-        host_info_cache = dict()
-        containers = MyUtils.get_structures(db_handler, debug, subtype=&#34;container&#34;)
-        if not containers:
-            # As no container info is available, no application information will be able to be generated
-            continue
+        t0 = start_epoch(self.debug)
 
-        thread = Thread(target=refeed_thread, args=())
-        thread.start()
-        MyUtils.log_info(&#34;Refeed processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
-        time.sleep(window_difference)
+        log_info(&#34;Config is as follows:&#34;, debug)
+        log_info(&#34;.............................................&#34;, debug)
+        log_info(&#34;Time window lapse -&gt; {0}&#34;.format(self.window_difference), debug)
+        log_info(&#34;Delay -&gt; {0}&#34;.format(self.window_delay), debug)
+        log_info(&#34;.............................................&#34;, debug)
 
-        if thread.is_alive():
-            delay_start = time.time()
-            MyUtils.log_warning(
-                &#34;Previous thread didn&#39;t finish before next poll is due, with window time of {0} seconds, at {1}&#34;.format(
-                    str(window_difference), MyUtils.get_time_now_string()), debug)
-            MyUtils.log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, debug)
-            thread.join()
-            delay_end = time.time()
-            MyUtils.log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)), debug)</code></pre>
+        thread = None
+        if SERVICE_IS_ACTIVATED:
+            # Remote database operation
+            host_info_cache = dict()
+            containers = get_structures(self.couchdb_handler, debug, subtype=&#34;container&#34;)
+            if not containers:
+                # As no container info is available, no application information will be able to be generated
+                log_info(&#34;No structures to process&#34;, debug)
+                time.sleep(self.window_difference)
+                end_epoch(self.debug, self.window_difference, t0)
+                continue
+            else:
+                thread = Thread(target=self.refeed_thread, args=())
+                thread.start()
+        else:
+            log_warning(&#34;Refeeder is not activated&#34;, debug)
+
+        time.sleep(self.window_difference)
+
+        wait_operation_thread(thread, debug)
+        log_info(&#34;Refeed processed&#34;, debug)
+
+        end_epoch(self.debug, self.window_difference, t0)</code></pre>
 </details>
 </dd>
-<dt id="src.Refeeder.Refeeder.refeed_applications"><code class="name flex">
-<span>def <span class="ident">refeed_applications</span></span>(<span>applications)</span>
+<dt id="src.Refeeder.Refeeder.ReFeeder.refeed_applications"><code class="name flex">
+<span>def <span class="ident">refeed_applications</span></span>(<span>self, applications)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -397,14 +580,14 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def refeed_applications(applications):
+<pre><code class="python">def refeed_applications(self, applications):
     for application in applications:
-        application = generate_application_metrics(application)
-        MyUtils.update_structure(application, db_handler, debug)</code></pre>
+        application = self.generate_application_metrics(application)
+        update_structure(application, self.couchdb_handler, self.debug)</code></pre>
 </details>
 </dd>
-<dt id="src.Refeeder.Refeeder.refeed_thread"><code class="name flex">
-<span>def <span class="ident">refeed_thread</span></span>(<span>)</span>
+<dt id="src.Refeeder.Refeeder.ReFeeder.refeed_thread"><code class="name flex">
+<span>def <span class="ident">refeed_thread</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -412,25 +595,18 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def refeed_thread():
-    # Process and measure time
-    epoch_start = time.time()
-
-    applications = MyUtils.get_structures(db_handler, debug, subtype=&#34;application&#34;)
+<pre><code class="python">def refeed_thread(self, ):
+    applications = get_structures(self.couchdb_handler, self.debug, subtype=&#34;application&#34;)
     if applications:
-        refeed_applications(applications)
+        self.refeed_applications(applications)
 
-    users = db_handler.get_users()
-    if users:
-        refeed_user_used_energy(applications, users, db_handler, debug)
-
-    epoch_end = time.time()
-    processing_time = epoch_end - epoch_start
-    MyUtils.log_info(&#34;It took {0} seconds to refeed&#34;.format(str(&#34;%.2f&#34; % processing_time)), debug)</code></pre>
+    # users = db_handler.get_users()
+    # if users:
+    #     refeed_user_used_energy(applications, users, db_handler, debug)</code></pre>
 </details>
 </dd>
-<dt id="src.Refeeder.Refeeder.refeed_user_used_energy"><code class="name flex">
-<span>def <span class="ident">refeed_user_used_energy</span></span>(<span>applications, users, db_handler, debug)</span>
+<dt id="src.Refeeder.Refeeder.ReFeeder.refeed_user_used_energy"><code class="name flex">
+<span>def <span class="ident">refeed_user_used_energy</span></span>(<span>self, applications, users, db_handler, debug)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -438,7 +614,7 @@ if __name__ == &#34;__main__&#34;:
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def refeed_user_used_energy(applications, users, db_handler, debug):
+<pre><code class="python">def refeed_user_used_energy(self, applications, users, db_handler, debug):
     for user in users:
         if &#34;cpu&#34; not in user:
             user[&#34;cpu&#34;] = {}
@@ -452,29 +628,31 @@ if __name__ == &#34;__main__&#34;:
                 if &#34;usage&#34; in app[&#34;resources&#34;][resource] and app[&#34;resources&#34;][resource][&#34;usage&#34;]:
                     total_user[resource] += app[&#34;resources&#34;][resource][&#34;usage&#34;]
                 else:
-                    MyUtils.log_error(&#34;Application {0} of user {1} has no used {2} field or value&#34;.format(
+                    log_error(&#34;Application {0} of user {1} has no used {2} field or value&#34;.format(
                         app[&#34;name&#34;], user[&#34;name&#34;], resource), debug)
 
             if &#34;current&#34; in app[&#34;resources&#34;][&#34;cpu&#34;] and app[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]:
                 total_user_current_cpu += app[&#34;resources&#34;][resource][&#34;current&#34;]
             else:
-                MyUtils.log_error(&#34;Application {0} of user {1} has no current cpu field or value&#34;.format(
+                log_error(&#34;Application {0} of user {1} has no current cpu field or value&#34;.format(
                     app[&#34;name&#34;], user[&#34;name&#34;]), debug)
 
         user[&#34;energy&#34;][&#34;used&#34;] = total_user[&#34;energy&#34;]
         user[&#34;cpu&#34;][&#34;usage&#34;] = total_user[&#34;cpu&#34;]
         user[&#34;cpu&#34;][&#34;current&#34;] = total_user_current_cpu
         db_handler.update_user(user)
-        MyUtils.log_info(&#34;Updated energy consumed by user {0}&#34;.format(user[&#34;name&#34;]), debug)</code></pre>
+        log_info(&#34;Updated energy consumed by user {0}&#34;.format(user[&#34;name&#34;]), debug)</code></pre>
 </details>
 </dd>
 </dl>
-</section>
-<section>
+</dd>
+</dl>
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -487,14 +665,23 @@ if __name__ == &#34;__main__&#34;:
 </li>
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
-<li><code><a title="src.Refeeder.Refeeder.generate_application_metrics" href="#src.Refeeder.Refeeder.generate_application_metrics">generate_application_metrics</a></code></li>
-<li><code><a title="src.Refeeder.Refeeder.get_container_usages" href="#src.Refeeder.Refeeder.get_container_usages">get_container_usages</a></code></li>
 <li><code><a title="src.Refeeder.Refeeder.main" href="#src.Refeeder.Refeeder.main">main</a></code></li>
-<li><code><a title="src.Refeeder.Refeeder.merge" href="#src.Refeeder.Refeeder.merge">merge</a></code></li>
-<li><code><a title="src.Refeeder.Refeeder.refeed" href="#src.Refeeder.Refeeder.refeed">refeed</a></code></li>
-<li><code><a title="src.Refeeder.Refeeder.refeed_applications" href="#src.Refeeder.Refeeder.refeed_applications">refeed_applications</a></code></li>
-<li><code><a title="src.Refeeder.Refeeder.refeed_thread" href="#src.Refeeder.Refeeder.refeed_thread">refeed_thread</a></code></li>
-<li><code><a title="src.Refeeder.Refeeder.refeed_user_used_energy" href="#src.Refeeder.Refeeder.refeed_user_used_energy">refeed_user_used_energy</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="src.Refeeder.Refeeder.ReFeeder" href="#src.Refeeder.Refeeder.ReFeeder">ReFeeder</a></code></h4>
+<ul class="">
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.generate_application_metrics" href="#src.Refeeder.Refeeder.ReFeeder.generate_application_metrics">generate_application_metrics</a></code></li>
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.get_container_usages" href="#src.Refeeder.Refeeder.ReFeeder.get_container_usages">get_container_usages</a></code></li>
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.merge" href="#src.Refeeder.Refeeder.ReFeeder.merge">merge</a></code></li>
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.refeed" href="#src.Refeeder.Refeeder.ReFeeder.refeed">refeed</a></code></li>
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.refeed_applications" href="#src.Refeeder.Refeeder.ReFeeder.refeed_applications">refeed_applications</a></code></li>
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.refeed_thread" href="#src.Refeeder.Refeeder.ReFeeder.refeed_thread">refeed_thread</a></code></li>
+<li><code><a title="src.Refeeder.Refeeder.ReFeeder.refeed_user_used_energy" href="#src.Refeeder.Refeeder.ReFeeder.refeed_user_used_energy">refeed_user_used_energy</a></code></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -529,7 +716,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

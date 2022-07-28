@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.StateDatabase.testcouchDB API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -59,9 +62,9 @@ from unittest import TestCase
 
 from src.StateDatabase.couchdb import CouchDBServer
 from src.Guardian.Guardian import Guardian
-from test.documents.limits import base_limits
-from test.documents.rules import cpu_exceeded_upper, CpuRescaleUp
-from test.documents.structures import base_container
+from src.test.documents.limits import base_limits
+from src.test.documents.rules import cpu_exceeded_upper, CpuRescaleUp
+from src.test.documents.structures import base_container
 
 
 class DocumentTest(TestCase):
@@ -75,15 +78,15 @@ class DocumentTest(TestCase):
         self.__database = database_test_name
 
     def tearDown(self):
-        self.handler.remove_database(self.__database)
-        self.handler.close_connection()
+        self.couchdb.remove_database(self.__database)
+        self.couchdb.close_connection()
 
     def setUp(self):
-        self.handler = CouchDBServer(self.__server_address, self.__server_port)
-        self.handler.set_database_name(self.__database_type, self.__database)
-        if self.handler.database_exists(self.__database):
-            self.handler.remove_database(self.__database)
-        self.handler.create_database(self.__database)
+        self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+        self.couchdb.set_database_name(self.__database_type, self.__database)
+        if self.couchdb.database_exists(self.__database):
+            self.couchdb.remove_database(self.__database)
+        self.couchdb.create_database(self.__database)
         self.guardian = Guardian()
 
 
@@ -112,12 +115,12 @@ class StructureTest(DocumentTest):
     def testStructures(self):
         structure = dict(base_container)
         with self.assertRaises(ValueError):
-            self.handler.get_structure(structure[&#34;name&#34;])
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_structures()))
+            self.couchdb.get_structure(structure[&#34;name&#34;])
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_structures()))
 
-        self.handler.add_structure(structure)
-        retrieved_structure = self.handler.get_structure(structure[&#34;name&#34;])
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+        self.couchdb.add_structure(structure)
+        retrieved_structure = self.couchdb.get_structure(structure[&#34;name&#34;])
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
         TestCase.assertTrue(self, self.compare_structures(structure, retrieved_structure))
 
         modified_structure = retrieved_structure
@@ -125,9 +128,9 @@ class StructureTest(DocumentTest):
         modified_structure[&#34;guard_policy&#34;] = False
         modified_structure[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;] += 100
 
-        TestCase.assertTrue(self, self.handler.update_structure(modified_structure))
-        retrieved_structure = self.handler.get_structure(structure[&#34;name&#34;])
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+        TestCase.assertTrue(self, self.couchdb.update_structure(modified_structure))
+        retrieved_structure = self.couchdb.get_structure(structure[&#34;name&#34;])
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
         TestCase.assertTrue(self, self.compare_structures(modified_structure, retrieved_structure))
 
 
@@ -155,21 +158,21 @@ class LimitsTest(DocumentTest):
         structure = dict(base_container)
 
         with self.assertRaises(ValueError):
-            self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_all_limits()))
+            self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_all_limits()))
 
-        self.handler.add_limit(limits)
+        self.couchdb.add_limit(limits)
 
-        retrieved_limits = self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+        retrieved_limits = self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
         TestCase.assertTrue(self, self.compare_limits(limits, retrieved_limits))
 
         modified_limits = retrieved_limits
         modified_limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;] += 100
 
-        TestCase.assertTrue(self, self.handler.update_limit(modified_limits))
-        retrieved_limits = self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+        TestCase.assertTrue(self, self.couchdb.update_limit(modified_limits))
+        retrieved_limits = self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
         TestCase.assertTrue(self, self.compare_limits(modified_limits, retrieved_limits))
 
 
@@ -178,22 +181,22 @@ class EventsAndRequestsTest(DocumentTest):
     __server_port = &#34;5984&#34;
 
     def tearDown(self):
-        self.handler.remove_database(&#34;events-test&#34;)
-        self.handler.remove_database(&#34;requests-test&#34;)
-        self.handler.close_connection()
+        self.couchdb.remove_database(&#34;events-test&#34;)
+        self.couchdb.remove_database(&#34;requests-test&#34;)
+        self.couchdb.close_connection()
 
     def setUp(self):
-        self.handler = CouchDBServer(self.__server_address, self.__server_port)
-        self.handler.set_database_name(&#34;events&#34;, &#34;events-test&#34;)
-        self.handler.set_database_name(&#34;requests&#34;, &#34;requests-test&#34;)
+        self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+        self.couchdb.set_database_name(&#34;events&#34;, &#34;events-test&#34;)
+        self.couchdb.set_database_name(&#34;requests&#34;, &#34;requests-test&#34;)
 
-        if self.handler.database_exists(&#34;events-test&#34;):
-            self.handler.remove_database(&#34;events-test&#34;)
-        self.handler.create_database(&#34;events-test&#34;)
+        if self.couchdb.database_exists(&#34;events-test&#34;):
+            self.couchdb.remove_database(&#34;events-test&#34;)
+        self.couchdb.create_database(&#34;events-test&#34;)
 
-        if self.handler.database_exists(&#34;requests-test&#34;):
-            self.handler.remove_database(&#34;requests-test&#34;)
-        self.handler.create_database(&#34;requests-test&#34;)
+        if self.couchdb.database_exists(&#34;requests-test&#34;):
+            self.couchdb.remove_database(&#34;requests-test&#34;)
+        self.couchdb.create_database(&#34;requests-test&#34;)
 
         self.guardian = Guardian()
 
@@ -241,6 +244,8 @@ class EventsAndRequestsTest(DocumentTest):
 
         resource, rescale_rule, amount = &#34;cpu&#34;, CpuRescaleUp, 100
 
+        self.guardian.guardable_resources = [&#34;cpu&#34;]
+
         usages[&#34;structure.&#34; + resource + &#34;.usage&#34;] = limits[&#34;resources&#34;][resource][&#34;lower&#34;] + amount
         events = list()
 
@@ -256,18 +261,45 @@ class EventsAndRequestsTest(DocumentTest):
                                                                                     limits[&#34;resources&#34;],
                                                                                     usages)
 
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
-        self.handler.add_events(events)
-        TestCase.assertEqual(self, first=num_needed_events, second=len(self.handler.get_events(structure)))
-        self.handler.delete_events(self.handler.get_events(structure))
-        self.handler.compact_database(&#34;events-test&#34;)
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
+        self.couchdb.add_events(events)
+        TestCase.assertEqual(self, first=num_needed_events, second=len(self.couchdb.get_events(structure)))
+        self.couchdb.delete_events(self.couchdb.get_events(structure))
+        self.couchdb.compact_database(&#34;events-test&#34;)
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
 
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))
-        self.handler.add_requests(generated_requests)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_requests(structure)))
-        self.handler.delete_request(self.handler.get_requests(structure)[0])
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))</code></pre>
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
+        self.couchdb.add_requests(generated_requests)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_requests(structure)))
+        self.couchdb.delete_request(self.couchdb.get_requests(structure)[0])
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
+
+class BenchmarkTest(DocumentTest):
+    __database = &#34;structures-test&#34;
+    __database_type = &#34;structures&#34;
+
+    def setUp(self):
+        super().set_database(self.__database_type, self.__database)
+        super().setUp()
+
+
+    def testBenchmarkWithStructures(self):
+        N_DOCS = 100
+
+        structure = dict(base_container)
+        for i in range(N_DOCS):
+            c_name = &#34;struct{0}&#34;.format(i)
+            structure[&#34;name&#34;] = c_name
+            self.couchdb.add_structure(structure)
+            cont_limits = base_limits.copy()
+            cont_limits[&#34;name&#34;] = c_name
+            self.couchdb.add_limit(cont_limits)
+
+        for i in range(N_DOCS):
+            c_name = &#34;struct{0}&#34;.format(i)
+            retrieved_structure = self.couchdb.get_structure(c_name)
+            self.couchdb.get_limits(retrieved_structure)
+            self.couchdb.delete_structure(retrieved_structure)</code></pre>
 </details>
 </section>
 <section>
@@ -279,6 +311,116 @@ class EventsAndRequestsTest(DocumentTest):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
+<dt id="src.StateDatabase.testcouchDB.BenchmarkTest"><code class="flex name class">
+<span>class <span class="ident">BenchmarkTest</span></span>
+<span>(</span><span>methodName='runTest')</span>
+</code></dt>
+<dd>
+<section class="desc"><p>A class whose instances are single test cases.</p>
+<p>By default, the test code itself should be placed in a method named
+'runTest'.</p>
+<p>If the fixture may be used for many test cases, create as
+many test methods as are needed. When instantiating such a TestCase
+subclass, specify in the constructor arguments the name of the test method
+that the instance is to execute.</p>
+<p>Test authors should subclass TestCase for their own tests. Construction
+and deconstruction of the test's environment ('fixture') can be
+implemented by overriding the 'setUp' and 'tearDown' methods respectively.</p>
+<p>If it is necessary to override the <strong>init</strong> method, the base class
+<strong>init</strong> method must always be called. It is important that subclasses
+should not change the signature of their <strong>init</strong> method, since instances
+of the classes are instantiated automatically by parts of the framework
+in order to be run.</p>
+<p>When subclassing TestCase, you can set these attributes:
+* failureException: determines which exception will be raised when
+the instance's assertion methods fail; test methods raising this
+exception will be deemed to have 'failed' rather than 'errored'.
+* longMessage: determines whether long messages (including repr of
+objects used in assert methods) will be printed on failure in <em>addition</em>
+to any explicit message passed.
+* maxDiff: sets the maximum length of a diff in failure messages
+by assert methods using difflib. It is looked up as an instance
+attribute so can be configured by individual tests if required.</p>
+<p>Create an instance of the class that will use the named test
+method when executed. Raises a ValueError if the instance does
+not have a method with the specified name.</p></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class BenchmarkTest(DocumentTest):
+    __database = &#34;structures-test&#34;
+    __database_type = &#34;structures&#34;
+
+    def setUp(self):
+        super().set_database(self.__database_type, self.__database)
+        super().setUp()
+
+
+    def testBenchmarkWithStructures(self):
+        N_DOCS = 100
+
+        structure = dict(base_container)
+        for i in range(N_DOCS):
+            c_name = &#34;struct{0}&#34;.format(i)
+            structure[&#34;name&#34;] = c_name
+            self.couchdb.add_structure(structure)
+            cont_limits = base_limits.copy()
+            cont_limits[&#34;name&#34;] = c_name
+            self.couchdb.add_limit(cont_limits)
+
+        for i in range(N_DOCS):
+            c_name = &#34;struct{0}&#34;.format(i)
+            retrieved_structure = self.couchdb.get_structure(c_name)
+            self.couchdb.get_limits(retrieved_structure)
+            self.couchdb.delete_structure(retrieved_structure)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="src.StateDatabase.testcouchDB.DocumentTest" href="#src.StateDatabase.testcouchDB.DocumentTest">DocumentTest</a></li>
+<li>unittest.case.TestCase</li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="src.StateDatabase.testcouchDB.BenchmarkTest.testBenchmarkWithStructures"><code class="name flex">
+<span>def <span class="ident">testBenchmarkWithStructures</span></span>(<span>self)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def testBenchmarkWithStructures(self):
+    N_DOCS = 100
+
+    structure = dict(base_container)
+    for i in range(N_DOCS):
+        c_name = &#34;struct{0}&#34;.format(i)
+        structure[&#34;name&#34;] = c_name
+        self.couchdb.add_structure(structure)
+        cont_limits = base_limits.copy()
+        cont_limits[&#34;name&#34;] = c_name
+        self.couchdb.add_limit(cont_limits)
+
+    for i in range(N_DOCS):
+        c_name = &#34;struct{0}&#34;.format(i)
+        retrieved_structure = self.couchdb.get_structure(c_name)
+        self.couchdb.get_limits(retrieved_structure)
+        self.couchdb.delete_structure(retrieved_structure)</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="src.StateDatabase.testcouchDB.DocumentTest" href="#src.StateDatabase.testcouchDB.DocumentTest">DocumentTest</a></b></code>:
+<ul class="hlist">
+<li><code><a title="src.StateDatabase.testcouchDB.DocumentTest.setUp" href="#src.StateDatabase.testcouchDB.DocumentTest.setUp">setUp</a></code></li>
+<li><code><a title="src.StateDatabase.testcouchDB.DocumentTest.tearDown" href="#src.StateDatabase.testcouchDB.DocumentTest.tearDown">tearDown</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
 <dt id="src.StateDatabase.testcouchDB.DocumentTest"><code class="flex name class">
 <span>class <span class="ident">DocumentTest</span></span>
 <span>(</span><span>methodName='runTest')</span>
@@ -327,15 +469,15 @@ not have a method with the specified name.</p></section>
         self.__database = database_test_name
 
     def tearDown(self):
-        self.handler.remove_database(self.__database)
-        self.handler.close_connection()
+        self.couchdb.remove_database(self.__database)
+        self.couchdb.close_connection()
 
     def setUp(self):
-        self.handler = CouchDBServer(self.__server_address, self.__server_port)
-        self.handler.set_database_name(self.__database_type, self.__database)
-        if self.handler.database_exists(self.__database):
-            self.handler.remove_database(self.__database)
-        self.handler.create_database(self.__database)
+        self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+        self.couchdb.set_database_name(self.__database_type, self.__database)
+        if self.couchdb.database_exists(self.__database):
+            self.couchdb.remove_database(self.__database)
+        self.couchdb.create_database(self.__database)
         self.guardian = Guardian()</code></pre>
 </details>
 <h3>Ancestors</h3>
@@ -344,6 +486,7 @@ not have a method with the specified name.</p></section>
 </ul>
 <h3>Subclasses</h3>
 <ul class="hlist">
+<li><a title="src.StateDatabase.testcouchDB.BenchmarkTest" href="#src.StateDatabase.testcouchDB.BenchmarkTest">BenchmarkTest</a></li>
 <li><a title="src.StateDatabase.testcouchDB.EventsAndRequestsTest" href="#src.StateDatabase.testcouchDB.EventsAndRequestsTest">EventsAndRequestsTest</a></li>
 <li><a title="src.StateDatabase.testcouchDB.LimitsTest" href="#src.StateDatabase.testcouchDB.LimitsTest">LimitsTest</a></li>
 <li><a title="src.StateDatabase.testcouchDB.StructureTest" href="#src.StateDatabase.testcouchDB.StructureTest">StructureTest</a></li>
@@ -360,11 +503,11 @@ not have a method with the specified name.</p></section>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def setUp(self):
-    self.handler = CouchDBServer(self.__server_address, self.__server_port)
-    self.handler.set_database_name(self.__database_type, self.__database)
-    if self.handler.database_exists(self.__database):
-        self.handler.remove_database(self.__database)
-    self.handler.create_database(self.__database)
+    self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+    self.couchdb.set_database_name(self.__database_type, self.__database)
+    if self.couchdb.database_exists(self.__database):
+        self.couchdb.remove_database(self.__database)
+    self.couchdb.create_database(self.__database)
     self.guardian = Guardian()</code></pre>
 </details>
 </dd>
@@ -392,8 +535,8 @@ not have a method with the specified name.</p></section>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def tearDown(self):
-    self.handler.remove_database(self.__database)
-    self.handler.close_connection()</code></pre>
+    self.couchdb.remove_database(self.__database)
+    self.couchdb.close_connection()</code></pre>
 </details>
 </dd>
 </dl>
@@ -440,22 +583,22 @@ not have a method with the specified name.</p></section>
     __server_port = &#34;5984&#34;
 
     def tearDown(self):
-        self.handler.remove_database(&#34;events-test&#34;)
-        self.handler.remove_database(&#34;requests-test&#34;)
-        self.handler.close_connection()
+        self.couchdb.remove_database(&#34;events-test&#34;)
+        self.couchdb.remove_database(&#34;requests-test&#34;)
+        self.couchdb.close_connection()
 
     def setUp(self):
-        self.handler = CouchDBServer(self.__server_address, self.__server_port)
-        self.handler.set_database_name(&#34;events&#34;, &#34;events-test&#34;)
-        self.handler.set_database_name(&#34;requests&#34;, &#34;requests-test&#34;)
+        self.couchdb = CouchDBServer(self.__server_address, self.__server_port)
+        self.couchdb.set_database_name(&#34;events&#34;, &#34;events-test&#34;)
+        self.couchdb.set_database_name(&#34;requests&#34;, &#34;requests-test&#34;)
 
-        if self.handler.database_exists(&#34;events-test&#34;):
-            self.handler.remove_database(&#34;events-test&#34;)
-        self.handler.create_database(&#34;events-test&#34;)
+        if self.couchdb.database_exists(&#34;events-test&#34;):
+            self.couchdb.remove_database(&#34;events-test&#34;)
+        self.couchdb.create_database(&#34;events-test&#34;)
 
-        if self.handler.database_exists(&#34;requests-test&#34;):
-            self.handler.remove_database(&#34;requests-test&#34;)
-        self.handler.create_database(&#34;requests-test&#34;)
+        if self.couchdb.database_exists(&#34;requests-test&#34;):
+            self.couchdb.remove_database(&#34;requests-test&#34;)
+        self.couchdb.create_database(&#34;requests-test&#34;)
 
         self.guardian = Guardian()
 
@@ -503,6 +646,8 @@ not have a method with the specified name.</p></section>
 
         resource, rescale_rule, amount = &#34;cpu&#34;, CpuRescaleUp, 100
 
+        self.guardian.guardable_resources = [&#34;cpu&#34;]
+
         usages[&#34;structure.&#34; + resource + &#34;.usage&#34;] = limits[&#34;resources&#34;][resource][&#34;lower&#34;] + amount
         events = list()
 
@@ -518,18 +663,18 @@ not have a method with the specified name.</p></section>
                                                                                     limits[&#34;resources&#34;],
                                                                                     usages)
 
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
-        self.handler.add_events(events)
-        TestCase.assertEqual(self, first=num_needed_events, second=len(self.handler.get_events(structure)))
-        self.handler.delete_events(self.handler.get_events(structure))
-        self.handler.compact_database(&#34;events-test&#34;)
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
+        self.couchdb.add_events(events)
+        TestCase.assertEqual(self, first=num_needed_events, second=len(self.couchdb.get_events(structure)))
+        self.couchdb.delete_events(self.couchdb.get_events(structure))
+        self.couchdb.compact_database(&#34;events-test&#34;)
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
 
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))
-        self.handler.add_requests(generated_requests)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_requests(structure)))
-        self.handler.delete_request(self.handler.get_requests(structure)[0])
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))</code></pre>
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
+        self.couchdb.add_requests(generated_requests)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_requests(structure)))
+        self.couchdb.delete_request(self.couchdb.get_requests(structure)[0])
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -591,6 +736,8 @@ not have a method with the specified name.</p></section>
 
     resource, rescale_rule, amount = &#34;cpu&#34;, CpuRescaleUp, 100
 
+    self.guardian.guardable_resources = [&#34;cpu&#34;]
+
     usages[&#34;structure.&#34; + resource + &#34;.usage&#34;] = limits[&#34;resources&#34;][resource][&#34;lower&#34;] + amount
     events = list()
 
@@ -606,18 +753,18 @@ not have a method with the specified name.</p></section>
                                                                                 limits[&#34;resources&#34;],
                                                                                 usages)
 
-    TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
-    self.handler.add_events(events)
-    TestCase.assertEqual(self, first=num_needed_events, second=len(self.handler.get_events(structure)))
-    self.handler.delete_events(self.handler.get_events(structure))
-    self.handler.compact_database(&#34;events-test&#34;)
-    TestCase.assertEqual(self, first=0, second=len(self.handler.get_events(structure)))
+    TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
+    self.couchdb.add_events(events)
+    TestCase.assertEqual(self, first=num_needed_events, second=len(self.couchdb.get_events(structure)))
+    self.couchdb.delete_events(self.couchdb.get_events(structure))
+    self.couchdb.compact_database(&#34;events-test&#34;)
+    TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_events(structure)))
 
-    TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))
-    self.handler.add_requests(generated_requests)
-    TestCase.assertEqual(self, first=1, second=len(self.handler.get_requests(structure)))
-    self.handler.delete_request(self.handler.get_requests(structure)[0])
-    TestCase.assertEqual(self, first=0, second=len(self.handler.get_requests(structure)))</code></pre>
+    TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))
+    self.couchdb.add_requests(generated_requests)
+    TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_requests(structure)))
+    self.couchdb.delete_request(self.couchdb.get_requests(structure)[0])
+    TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_requests(structure)))</code></pre>
 </details>
 </dd>
 </dl>
@@ -692,21 +839,21 @@ not have a method with the specified name.</p></section>
         structure = dict(base_container)
 
         with self.assertRaises(ValueError):
-            self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_all_limits()))
+            self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_all_limits()))
 
-        self.handler.add_limit(limits)
+        self.couchdb.add_limit(limits)
 
-        retrieved_limits = self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+        retrieved_limits = self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
         TestCase.assertTrue(self, self.compare_limits(limits, retrieved_limits))
 
         modified_limits = retrieved_limits
         modified_limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;] += 100
 
-        TestCase.assertTrue(self, self.handler.update_limit(modified_limits))
-        retrieved_limits = self.handler.get_limits(structure)
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+        TestCase.assertTrue(self, self.couchdb.update_limit(modified_limits))
+        retrieved_limits = self.couchdb.get_limits(structure)
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
         TestCase.assertTrue(self, self.compare_limits(modified_limits, retrieved_limits))</code></pre>
 </details>
 <h3>Ancestors</h3>
@@ -751,21 +898,21 @@ not have a method with the specified name.</p></section>
     structure = dict(base_container)
 
     with self.assertRaises(ValueError):
-        self.handler.get_limits(structure)
-    TestCase.assertEqual(self, first=0, second=len(self.handler.get_all_limits()))
+        self.couchdb.get_limits(structure)
+    TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_all_limits()))
 
-    self.handler.add_limit(limits)
+    self.couchdb.add_limit(limits)
 
-    retrieved_limits = self.handler.get_limits(structure)
-    TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+    retrieved_limits = self.couchdb.get_limits(structure)
+    TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
     TestCase.assertTrue(self, self.compare_limits(limits, retrieved_limits))
 
     modified_limits = retrieved_limits
     modified_limits[&#34;resources&#34;][&#34;cpu&#34;][&#34;upper&#34;] += 100
 
-    TestCase.assertTrue(self, self.handler.update_limit(modified_limits))
-    retrieved_limits = self.handler.get_limits(structure)
-    TestCase.assertEqual(self, first=1, second=len(self.handler.get_all_limits()))
+    TestCase.assertTrue(self, self.couchdb.update_limit(modified_limits))
+    retrieved_limits = self.couchdb.get_limits(structure)
+    TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_all_limits()))
     TestCase.assertTrue(self, self.compare_limits(modified_limits, retrieved_limits))</code></pre>
 </details>
 </dd>
@@ -842,12 +989,12 @@ not have a method with the specified name.</p></section>
     def testStructures(self):
         structure = dict(base_container)
         with self.assertRaises(ValueError):
-            self.handler.get_structure(structure[&#34;name&#34;])
-        TestCase.assertEqual(self, first=0, second=len(self.handler.get_structures()))
+            self.couchdb.get_structure(structure[&#34;name&#34;])
+        TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_structures()))
 
-        self.handler.add_structure(structure)
-        retrieved_structure = self.handler.get_structure(structure[&#34;name&#34;])
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+        self.couchdb.add_structure(structure)
+        retrieved_structure = self.couchdb.get_structure(structure[&#34;name&#34;])
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
         TestCase.assertTrue(self, self.compare_structures(structure, retrieved_structure))
 
         modified_structure = retrieved_structure
@@ -855,9 +1002,9 @@ not have a method with the specified name.</p></section>
         modified_structure[&#34;guard_policy&#34;] = False
         modified_structure[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;] += 100
 
-        TestCase.assertTrue(self, self.handler.update_structure(modified_structure))
-        retrieved_structure = self.handler.get_structure(structure[&#34;name&#34;])
-        TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+        TestCase.assertTrue(self, self.couchdb.update_structure(modified_structure))
+        retrieved_structure = self.couchdb.get_structure(structure[&#34;name&#34;])
+        TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
         TestCase.assertTrue(self, self.compare_structures(modified_structure, retrieved_structure))</code></pre>
 </details>
 <h3>Ancestors</h3>
@@ -903,12 +1050,12 @@ not have a method with the specified name.</p></section>
 <pre><code class="python">def testStructures(self):
     structure = dict(base_container)
     with self.assertRaises(ValueError):
-        self.handler.get_structure(structure[&#34;name&#34;])
-    TestCase.assertEqual(self, first=0, second=len(self.handler.get_structures()))
+        self.couchdb.get_structure(structure[&#34;name&#34;])
+    TestCase.assertEqual(self, first=0, second=len(self.couchdb.get_structures()))
 
-    self.handler.add_structure(structure)
-    retrieved_structure = self.handler.get_structure(structure[&#34;name&#34;])
-    TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+    self.couchdb.add_structure(structure)
+    retrieved_structure = self.couchdb.get_structure(structure[&#34;name&#34;])
+    TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
     TestCase.assertTrue(self, self.compare_structures(structure, retrieved_structure))
 
     modified_structure = retrieved_structure
@@ -916,9 +1063,9 @@ not have a method with the specified name.</p></section>
     modified_structure[&#34;guard_policy&#34;] = False
     modified_structure[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;] += 100
 
-    TestCase.assertTrue(self, self.handler.update_structure(modified_structure))
-    retrieved_structure = self.handler.get_structure(structure[&#34;name&#34;])
-    TestCase.assertEqual(self, first=1, second=len(self.handler.get_structures()))
+    TestCase.assertTrue(self, self.couchdb.update_structure(modified_structure))
+    retrieved_structure = self.couchdb.get_structure(structure[&#34;name&#34;])
+    TestCase.assertEqual(self, first=1, second=len(self.couchdb.get_structures()))
     TestCase.assertTrue(self, self.compare_structures(modified_structure, retrieved_structure))</code></pre>
 </details>
 </dd>
@@ -937,7 +1084,9 @@ not have a method with the specified name.</p></section>
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -950,6 +1099,12 @@ not have a method with the specified name.</p></section>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
+<li>
+<h4><code><a title="src.StateDatabase.testcouchDB.BenchmarkTest" href="#src.StateDatabase.testcouchDB.BenchmarkTest">BenchmarkTest</a></code></h4>
+<ul class="">
+<li><code><a title="src.StateDatabase.testcouchDB.BenchmarkTest.testBenchmarkWithStructures" href="#src.StateDatabase.testcouchDB.BenchmarkTest.testBenchmarkWithStructures">testBenchmarkWithStructures</a></code></li>
+</ul>
+</li>
 <li>
 <h4><code><a title="src.StateDatabase.testcouchDB.DocumentTest" href="#src.StateDatabase.testcouchDB.DocumentTest">DocumentTest</a></code></h4>
 <ul class="">
@@ -1012,7 +1167,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

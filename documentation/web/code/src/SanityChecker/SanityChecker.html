@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.SanityChecker.SanityChecker API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -62,6 +65,7 @@ import time
 import traceback
 import logging
 
+import src.Guardian.Guardian
 import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.couchdb as couchDB
 
@@ -93,17 +97,17 @@ def check_unstable_configuration():
         MyUtils.log_info(&#34;Checking for invalid configuration&#34;, debug)
         service = MyUtils.get_service(db_handler, &#34;guardian&#34;)
         guardian_configuration = service[&#34;config&#34;]
-        event_timeout = MyUtils.get_config_value(guardian_configuration, CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
-        window_timelapse = MyUtils.get_config_value(guardian_configuration, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
+        event_timeout = MyUtils.get_config_value(guardian_configuration, src.Guardian.Guardian.CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
+        window_timelapse = MyUtils.get_config_value(guardian_configuration, src.Guardian.Guardian.CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
 
         rules = db_handler.get_rules()
         for rule in rules:
             if &#34;generates&#34; in rule and rule[&#34;generates&#34;] == &#34;requests&#34; and rule[&#34;active&#34;]:
                 event_count = int(rule[&#34;events_to_remove&#34;])
-                event_window_time_to_trigger = window_timelapse * (event_count + 1)
+                event_window_time_to_trigger = window_timelapse * (event_count)
                 # Leave a slight buffer time to account for window times skewness
                 if event_window_time_to_trigger &gt; event_timeout:
-                    MyUtils.log_warning(
+                    MyUtils.log_error(
                         &#34;Rule: &#39;{0}&#39; could never be activated -&gt; guardian event timeout: &#39;{1}&#39;, number of events&#34;.format(
                             rule[&#34;name&#34;], str(event_timeout)) +
                         &#34; required to trigger the rule: &#39;{0}&#39; and guardian polling time: &#39;{1}&#39;&#34;.format(
@@ -128,7 +132,7 @@ def check_sanity():
         compact_databases()
         check_unstable_configuration()
         # check_core_mapping()
-        MyUtils.log_info(&#34;Sanity checked at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
+        MyUtils.log_info(&#34;Sanity checked&#34;, debug)
 
         time_waited = 0
         heartbeat_delay = 10  # seconds
@@ -182,7 +186,7 @@ if __name__ == &#34;__main__&#34;:
         compact_databases()
         check_unstable_configuration()
         # check_core_mapping()
-        MyUtils.log_info(&#34;Sanity checked at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
+        MyUtils.log_info(&#34;Sanity checked&#34;, debug)
 
         time_waited = 0
         heartbeat_delay = 10  # seconds
@@ -208,17 +212,17 @@ if __name__ == &#34;__main__&#34;:
         MyUtils.log_info(&#34;Checking for invalid configuration&#34;, debug)
         service = MyUtils.get_service(db_handler, &#34;guardian&#34;)
         guardian_configuration = service[&#34;config&#34;]
-        event_timeout = MyUtils.get_config_value(guardian_configuration, CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
-        window_timelapse = MyUtils.get_config_value(guardian_configuration, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
+        event_timeout = MyUtils.get_config_value(guardian_configuration, src.Guardian.Guardian.CONFIG_DEFAULT_VALUES, &#34;EVENT_TIMEOUT&#34;)
+        window_timelapse = MyUtils.get_config_value(guardian_configuration, src.Guardian.Guardian.CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
 
         rules = db_handler.get_rules()
         for rule in rules:
             if &#34;generates&#34; in rule and rule[&#34;generates&#34;] == &#34;requests&#34; and rule[&#34;active&#34;]:
                 event_count = int(rule[&#34;events_to_remove&#34;])
-                event_window_time_to_trigger = window_timelapse * (event_count + 1)
+                event_window_time_to_trigger = window_timelapse * (event_count)
                 # Leave a slight buffer time to account for window times skewness
                 if event_window_time_to_trigger &gt; event_timeout:
-                    MyUtils.log_warning(
+                    MyUtils.log_error(
                         &#34;Rule: &#39;{0}&#39; could never be activated -&gt; guardian event timeout: &#39;{1}&#39;, number of events&#34;.format(
                             rule[&#34;name&#34;], str(event_timeout)) +
                         &#34; required to trigger the rule: &#39;{0}&#39; and guardian polling time: &#39;{1}&#39;&#34;.format(
@@ -274,7 +278,9 @@ if __name__ == &#34;__main__&#34;:
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -325,7 +331,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

@@ -1,3 +1,6 @@
+{% import 'macros.md' as includes %}
+{% from 'macros.md' import input_img %}
+
 ![Logo](img/logo.png){: style="max-width:25%; margin-left: 35%"}
 
 # Introduction

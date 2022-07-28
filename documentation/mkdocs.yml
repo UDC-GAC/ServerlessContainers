@@ -1,4 +1,4 @@
-site_name: Serverless Containers documentation
+site_name: Serverless Containers docs
 nav:
     - Introduction: index.md
     - Serverless policy: serverless_policy.md
@@ -28,3 +28,10 @@ copyright: 'Copyright &copy; 2018 - 2022 Jonatan Enes'
 
 markdown_extensions:
   - attr_list
+
+plugins:
+  - macros
+  - include-markdown
+
+extra_css:
+  - stylesheets/style.css

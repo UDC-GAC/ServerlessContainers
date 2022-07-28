@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.ReBalancer.ContainerReBalancer API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -60,7 +63,7 @@ import traceback
 import requests
 from json_logic import jsonLogic
 
-from src.MyUtils import MyUtils
+from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
@@ -90,8 +93,8 @@ class ContainerRebalancer:
     #     return request
 
     def __get_container_usages(self, container):
-        window_difference = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        window_delay = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+        window_difference = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
 
         try:
             # Remote database operation
@@ -103,14 +106,13 @@ class ContainerRebalancer:
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.__NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                MyUtils.log_warning(&#34;container: {0} has no usage data&#34;.format(container[&#34;name&#34;]), self.__debug)
+                log_warning(&#34;container: {0} has no usage data&#34;.format(container[&#34;name&#34;]), self.__debug)
                 return None
 
             return usages
         except Exception as e:
-            MyUtils.log_error(
-                &#34;error with structure: {0} {1} {2}&#34;.format(container[&#34;name&#34;], str(e), str(traceback.format_exc())),
-                self.__debug)
+            log_error(&#34;error with structure: {0} {1} {2}&#34;.format(container[&#34;name&#34;], str(e), str(traceback.format_exc())),
+                      self.__debug)
 
             return None
 
@@ -127,9 +129,8 @@ class ContainerRebalancer:
                 containers_with_resource_usages.append(container)
         return containers_with_resource_usages
 
-    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
-        # Filter the containers between donors and receivers, according to usage and rules
-        donors, receivers = list(), list()
+    def __get_container_donors(self, containers):
+        donors = list()
         for container in containers:
             try:
                 data = {&#34;cpu&#34;: {&#34;structure&#34;: {&#34;cpu&#34;: {
@@ -144,103 +145,198 @@ class ContainerRebalancer:
             rule_low_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_low&#34;)
             if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
                 donors.append(container)
+        return donors
+
+    def __get_container_receivers(self, containers):
+        receivers = list()
+        for container in containers:
+            try:
+                data = {&#34;cpu&#34;: {&#34;structure&#34;: {&#34;cpu&#34;: {
+                    &#34;usage&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;],
+                    &#34;min&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
+                    &#34;max&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;],
+                    &#34;current&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]}}}}
+            except KeyError:
+                continue
 
             # containers that have a bottleneck (receivers)
             rule_high_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_high&#34;)
             if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
                 receivers.append(container)
+        return receivers
+
+
+    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
+        # Filter the containers between donors and receivers, according to usage and rules
+        donors = self.__get_container_donors(containers)
+        receivers = self.__get_container_receivers(containers)
+
+        log_info(&#34;Nodes that will give: {0}&#34;.format(str([c[&#34;name&#34;] for c in donors])), self.__debug)
+        log_info(&#34;Nodes that will receive:  {0}&#34;.format(str([c[&#34;name&#34;] for c in receivers])), self.__debug)
 
         if not receivers:
-            MyUtils.log_info(&#34;No containers in need of rebalancing for {0}&#34;.format(app_name), self.__debug)
+            log_info(&#34;No containers in need of rebalancing for {0}&#34;.format(app_name), self.__debug)
             return
         else:
             # Order the containers from lower to upper current CPU limit
-            containers_to_give = sorted(receivers, key=lambda c: c[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;])
+            receivers = sorted(receivers, key=lambda c: c[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;])
 
-        # MyUtils.log_info(&#34;Nodes to steal from {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_steal])), self.debug)
-        # MyUtils.log_info(&#34;Nodes to give to {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_give])), self.debug)
-
-        # Steal resources from the low-usage containers
-        shuffling_tuples = list()
+        # Steal resources from the low-usage containers (givers), create &#39;slices&#39; of resources
+        donor_slices = list()
+        id = 0
         for container in donors:
-            # Ensure that this request will be successfully processed, otherwise we are &#39;giving&#39; away
-            # extra resources
+            # Ensure that this request will be successfully processed, otherwise we are &#39;giving&#39; away extra resources
+            current_value = container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
+            min_value = container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;]
+            usage_value = container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]
+            stolen_amount = 0.5 * (current_value - max(min_value,  usage_value))
 
-            stolen_amount = 0.7 * \
-                            (container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;] - max(container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
-                                                                            container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]))
-            shuffling_tuples.append((container, stolen_amount))
-        shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
+            slice_amount = 25
+            acum = 0
+            while acum + slice_amount &lt; stolen_amount:
+                donor_slices.append((container, slice_amount, id))
+                acum += slice_amount
+                id += 1
+
+            # Remaining
+            if acum &lt; stolen_amount:
+                donor_slices.append((container, int(stolen_amount-acum), id))
+                acum += slice_amount
+                id += 1
+
+        donor_slices = sorted(donor_slices, key=lambda c: c[1])
+        print(&#34;Donor slices are&#34;)
+        for c in donor_slices:
+            print(c[0][&#34;name&#34;], c[1])
+
+        # Remove those donors that are of no use (there are no possible receivers for them)
+        viable_donors = list()
+        for c in donor_slices:
+            viable = False
+            for r in receivers:
+                if r[&#34;host&#34;] == c[0][&#34;host&#34;]:
+                    viable = True
+                    break
+            if viable:
+                viable_donors.append(c)
+        print(&#34;VIABLE donor slices are&#34;)
+        for c in viable_donors:
+            print(c[0][&#34;name&#34;], c[1], c[2])
+        donor_slices = viable_donors
 
         # Give the resources to the bottlenecked containers
-        for receiver in containers_to_give:
+        requests = dict()
+        while donor_slices:
+            print(&#34;Donor slices are&#34;)
+            for c in donor_slices:
+                print(c[0][&#34;name&#34;], c[1], c[2])
 
-            if shuffling_tuples:
-                donor, amount_to_scale = shuffling_tuples.pop(0)
-            else:
-                MyUtils.log_info(&#34;No more donors, container {0} left out&#34;.format(receiver[&#34;name&#34;]), self.__debug)
-                continue
+            for receiver in receivers:
+                # Look for a donor container on the same host
+                amount_to_scale, donor, id = None, None, None
+                for c, amount, i in donor_slices:
+                    if c[&#34;host&#34;] == receiver[&#34;host&#34;]:
+                        amount_to_scale = amount
+                        donor = c
+                        id = i
+                        break
 
-            scalable_amount = receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;] - receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
-            # If this container can&#39;t be scaled anymore, skip
-            if scalable_amount == 0:
-                continue
+                if not amount_to_scale:
+                    log_info(&#34;No more donors on its host, container {0} left out&#34;.format(receiver[&#34;name&#34;]), self.__debug)
+                    continue
 
-            # Trim the amount to scale if needed
-            if amount_to_scale &gt; scalable_amount:
-                amount_to_scale = scalable_amount
+                # Remove this slice from the list
+                donor_slices = list(filter(lambda x: x[2] != id, donor_slices))
 
-            # Create the pair of scaling requests
-            # TODO This should use Guardians method to generate requests
-            request = dict(
-                type=&#34;request&#34;,
-                resource=&#34;cpu&#34;,
-                amount=int(amount_to_scale),
-                structure=receiver[&#34;name&#34;],
-                action=&#34;CpuRescaleUp&#34;,
-                timestamp=int(time.time()),
-                structure_type=&#34;container&#34;,
-                host=receiver[&#34;host&#34;],
-                host_rescaler_ip=receiver[&#34;host_rescaler_ip&#34;],
-                host_rescaler_port=receiver[&#34;host_rescaler_port&#34;]
-            )
-            self.__couchdb_handler.add_request(request)
-            # TODO This should use Guardians method to generate requests
-            request = dict(
-                type=&#34;request&#34;,
-                resource=&#34;cpu&#34;,
-                amount=int(-amount_to_scale),
-                structure=donor[&#34;name&#34;],
-                action=&#34;CpuRescaleDown&#34;,
-                timestamp=int(time.time()),
-                structure_type=&#34;container&#34;,
-                host=donor[&#34;host&#34;],
-                host_rescaler_ip=donor[&#34;host_rescaler_ip&#34;],
-                host_rescaler_port=donor[&#34;host_rescaler_port&#34;]
-            )
-            self.__couchdb_handler.add_request(request)
+                max_receiver_amount = receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;] - receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
+                # If this container can&#39;t be scaled anymore, skip
+                if max_receiver_amount == 0:
+                    continue
 
-            MyUtils.log_info(
-                &#34;Resource swap between {0}(donor) and {1}(receiver)&#34;.format(donor[&#34;name&#34;], receiver[&#34;name&#34;]),
-                self.__debug)
+                # Trim the amount to scale if needed
+                if amount_to_scale &gt; max_receiver_amount:
+                    amount_to_scale = max_receiver_amount
+
+                # Create the pair of scaling requests
+                # TODO This should use Guardians method to generate requests
+                request = dict(
+                    type=&#34;request&#34;,
+                    resource=&#34;cpu&#34;,
+                    amount=int(amount_to_scale),
+                    structure=receiver[&#34;name&#34;],
+                    action=&#34;CpuRescaleUp&#34;,
+                    timestamp=int(time.time()),
+                    structure_type=&#34;container&#34;,
+                    host=receiver[&#34;host&#34;],
+                    host_rescaler_ip=receiver[&#34;host_rescaler_ip&#34;],
+                    host_rescaler_port=receiver[&#34;host_rescaler_port&#34;]
+                )
+
+                if receiver[&#34;name&#34;] not in requests:
+                    requests[receiver[&#34;name&#34;]] = list()
+                requests[receiver[&#34;name&#34;]].append(request)
+
+                # TODO This should use Guardians method to generate requests
+                request = dict(
+                    type=&#34;request&#34;,
+                    resource=&#34;cpu&#34;,
+                    amount=int(-amount_to_scale),
+                    structure=donor[&#34;name&#34;],
+                    action=&#34;CpuRescaleDown&#34;,
+                    timestamp=int(time.time()),
+                    structure_type=&#34;container&#34;,
+                    host=donor[&#34;host&#34;],
+                    host_rescaler_ip=donor[&#34;host_rescaler_ip&#34;],
+                    host_rescaler_port=donor[&#34;host_rescaler_port&#34;]
+                )
+
+                if donor[&#34;name&#34;] not in requests:
+                    requests[donor[&#34;name&#34;]] = list()
+                requests[donor[&#34;name&#34;]].append(request)
+                log_info(&#34;Resource swap between {0}(donor) and {1}(receiver)&#34;.format(donor[&#34;name&#34;], receiver[&#34;name&#34;]), self.__debug)
+
+        log_info(&#34;No more donors&#34;, self.__debug)
+
+        final_requests = list()
+        for container in requests:
+            # Copy the first request as the base request
+            flat_request = dict(requests[container][0])
+            flat_request[&#34;amount&#34;] = 0
+            for request in requests[container]:
+                flat_request[&#34;amount&#34;] += request[&#34;amount&#34;]
+            final_requests.append(flat_request)
+
+        log_info(&#34;REQUESTS ARE:&#34;, self.__debug)
+        for c in requests.values():
+            for r in c:
+                print(r)
+
+        # TODO
+        # Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed but not the scaling up, and shares will be lost
+
+        log_info(&#34;FINAL REQUESTS ARE:&#34;, self.__debug)
+        for r in final_requests:
+            print(r)
+            self.__couchdb_handler.add_request(r)
+
 
     def __app_containers_can_be_rebalanced(self, application):
         return app_can_be_rebalanced(application, &#34;container&#34;, self.__couchdb_handler)
 
     def rebalance_containers(self, config):
         self.__config = config
-        self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+        self.__debug = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
 
-        MyUtils.log_info(&#34;_______________&#34;, self.__debug)
-        MyUtils.log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
+        log_info(&#34;_______________&#34;, self.__debug)
+        log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
 
         # Get the containers and applications
         try:
-            applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
-            containers = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
+            applications = get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
+            containers = get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
         except requests.exceptions.HTTPError as e:
-            MyUtils.log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
-            MyUtils.log_error(str(e), self.__debug)
+            log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
+            log_error(str(e), self.__debug)
             return
 
         # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
@@ -272,10 +368,10 @@ class ContainerRebalancer:
         # Rebalance applications
         for app in rebalanceable_apps:
             app_name = app[&#34;name&#34;]
-            MyUtils.log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
+            log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
             self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
 
-        MyUtils.log_info(&#34;_______________&#34;, self.__debug)</code></pre>
+        log_info(&#34;_______________&#34;, self.__debug)</code></pre>
 </details>
 </section>
 <section>
@@ -316,8 +412,8 @@ class ContainerRebalancer:
     #     return request
 
     def __get_container_usages(self, container):
-        window_difference = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
-        window_delay = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
+        window_difference = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_TIMELAPSE&#34;)
+        window_delay = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;WINDOW_DELAY&#34;)
 
         try:
             # Remote database operation
@@ -329,14 +425,13 @@ class ContainerRebalancer:
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.__NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                MyUtils.log_warning(&#34;container: {0} has no usage data&#34;.format(container[&#34;name&#34;]), self.__debug)
+                log_warning(&#34;container: {0} has no usage data&#34;.format(container[&#34;name&#34;]), self.__debug)
                 return None
 
             return usages
         except Exception as e:
-            MyUtils.log_error(
-                &#34;error with structure: {0} {1} {2}&#34;.format(container[&#34;name&#34;], str(e), str(traceback.format_exc())),
-                self.__debug)
+            log_error(&#34;error with structure: {0} {1} {2}&#34;.format(container[&#34;name&#34;], str(e), str(traceback.format_exc())),
+                      self.__debug)
 
             return None
 
@@ -353,9 +448,8 @@ class ContainerRebalancer:
                 containers_with_resource_usages.append(container)
         return containers_with_resource_usages
 
-    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
-        # Filter the containers between donors and receivers, according to usage and rules
-        donors, receivers = list(), list()
+    def __get_container_donors(self, containers):
+        donors = list()
         for container in containers:
             try:
                 data = {&#34;cpu&#34;: {&#34;structure&#34;: {&#34;cpu&#34;: {
@@ -370,103 +464,198 @@ class ContainerRebalancer:
             rule_low_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_low&#34;)
             if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
                 donors.append(container)
+        return donors
+
+    def __get_container_receivers(self, containers):
+        receivers = list()
+        for container in containers:
+            try:
+                data = {&#34;cpu&#34;: {&#34;structure&#34;: {&#34;cpu&#34;: {
+                    &#34;usage&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;],
+                    &#34;min&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
+                    &#34;max&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;],
+                    &#34;current&#34;: container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]}}}}
+            except KeyError:
+                continue
 
             # containers that have a bottleneck (receivers)
             rule_high_usage = self.__couchdb_handler.get_rule(&#34;cpu_usage_high&#34;)
             if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
                 receivers.append(container)
+        return receivers
+
+
+    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
+        # Filter the containers between donors and receivers, according to usage and rules
+        donors = self.__get_container_donors(containers)
+        receivers = self.__get_container_receivers(containers)
+
+        log_info(&#34;Nodes that will give: {0}&#34;.format(str([c[&#34;name&#34;] for c in donors])), self.__debug)
+        log_info(&#34;Nodes that will receive:  {0}&#34;.format(str([c[&#34;name&#34;] for c in receivers])), self.__debug)
 
         if not receivers:
-            MyUtils.log_info(&#34;No containers in need of rebalancing for {0}&#34;.format(app_name), self.__debug)
+            log_info(&#34;No containers in need of rebalancing for {0}&#34;.format(app_name), self.__debug)
             return
         else:
             # Order the containers from lower to upper current CPU limit
-            containers_to_give = sorted(receivers, key=lambda c: c[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;])
+            receivers = sorted(receivers, key=lambda c: c[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;])
 
-        # MyUtils.log_info(&#34;Nodes to steal from {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_steal])), self.debug)
-        # MyUtils.log_info(&#34;Nodes to give to {0}&#34;.format(str([c[&#34;name&#34;] for c in containers_to_give])), self.debug)
-
-        # Steal resources from the low-usage containers
-        shuffling_tuples = list()
+        # Steal resources from the low-usage containers (givers), create &#39;slices&#39; of resources
+        donor_slices = list()
+        id = 0
         for container in donors:
-            # Ensure that this request will be successfully processed, otherwise we are &#39;giving&#39; away
-            # extra resources
+            # Ensure that this request will be successfully processed, otherwise we are &#39;giving&#39; away extra resources
+            current_value = container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
+            min_value = container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;]
+            usage_value = container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]
+            stolen_amount = 0.5 * (current_value - max(min_value,  usage_value))
 
-            stolen_amount = 0.7 * \
-                            (container[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;] - max(container[&#34;resources&#34;][&#34;cpu&#34;][&#34;min&#34;],
-                                                                            container[&#34;resources&#34;][&#34;cpu&#34;][&#34;usage&#34;]))
-            shuffling_tuples.append((container, stolen_amount))
-        shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
+            slice_amount = 25
+            acum = 0
+            while acum + slice_amount &lt; stolen_amount:
+                donor_slices.append((container, slice_amount, id))
+                acum += slice_amount
+                id += 1
+
+            # Remaining
+            if acum &lt; stolen_amount:
+                donor_slices.append((container, int(stolen_amount-acum), id))
+                acum += slice_amount
+                id += 1
+
+        donor_slices = sorted(donor_slices, key=lambda c: c[1])
+        print(&#34;Donor slices are&#34;)
+        for c in donor_slices:
+            print(c[0][&#34;name&#34;], c[1])
+
+        # Remove those donors that are of no use (there are no possible receivers for them)
+        viable_donors = list()
+        for c in donor_slices:
+            viable = False
+            for r in receivers:
+                if r[&#34;host&#34;] == c[0][&#34;host&#34;]:
+                    viable = True
+                    break
+            if viable:
+                viable_donors.append(c)
+        print(&#34;VIABLE donor slices are&#34;)
+        for c in viable_donors:
+            print(c[0][&#34;name&#34;], c[1], c[2])
+        donor_slices = viable_donors
 
         # Give the resources to the bottlenecked containers
-        for receiver in containers_to_give:
+        requests = dict()
+        while donor_slices:
+            print(&#34;Donor slices are&#34;)
+            for c in donor_slices:
+                print(c[0][&#34;name&#34;], c[1], c[2])
 
-            if shuffling_tuples:
-                donor, amount_to_scale = shuffling_tuples.pop(0)
-            else:
-                MyUtils.log_info(&#34;No more donors, container {0} left out&#34;.format(receiver[&#34;name&#34;]), self.__debug)
-                continue
+            for receiver in receivers:
+                # Look for a donor container on the same host
+                amount_to_scale, donor, id = None, None, None
+                for c, amount, i in donor_slices:
+                    if c[&#34;host&#34;] == receiver[&#34;host&#34;]:
+                        amount_to_scale = amount
+                        donor = c
+                        id = i
+                        break
 
-            scalable_amount = receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;] - receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
-            # If this container can&#39;t be scaled anymore, skip
-            if scalable_amount == 0:
-                continue
+                if not amount_to_scale:
+                    log_info(&#34;No more donors on its host, container {0} left out&#34;.format(receiver[&#34;name&#34;]), self.__debug)
+                    continue
 
-            # Trim the amount to scale if needed
-            if amount_to_scale &gt; scalable_amount:
-                amount_to_scale = scalable_amount
+                # Remove this slice from the list
+                donor_slices = list(filter(lambda x: x[2] != id, donor_slices))
 
-            # Create the pair of scaling requests
-            # TODO This should use Guardians method to generate requests
-            request = dict(
-                type=&#34;request&#34;,
-                resource=&#34;cpu&#34;,
-                amount=int(amount_to_scale),
-                structure=receiver[&#34;name&#34;],
-                action=&#34;CpuRescaleUp&#34;,
-                timestamp=int(time.time()),
-                structure_type=&#34;container&#34;,
-                host=receiver[&#34;host&#34;],
-                host_rescaler_ip=receiver[&#34;host_rescaler_ip&#34;],
-                host_rescaler_port=receiver[&#34;host_rescaler_port&#34;]
-            )
-            self.__couchdb_handler.add_request(request)
-            # TODO This should use Guardians method to generate requests
-            request = dict(
-                type=&#34;request&#34;,
-                resource=&#34;cpu&#34;,
-                amount=int(-amount_to_scale),
-                structure=donor[&#34;name&#34;],
-                action=&#34;CpuRescaleDown&#34;,
-                timestamp=int(time.time()),
-                structure_type=&#34;container&#34;,
-                host=donor[&#34;host&#34;],
-                host_rescaler_ip=donor[&#34;host_rescaler_ip&#34;],
-                host_rescaler_port=donor[&#34;host_rescaler_port&#34;]
-            )
-            self.__couchdb_handler.add_request(request)
+                max_receiver_amount = receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;max&#34;] - receiver[&#34;resources&#34;][&#34;cpu&#34;][&#34;current&#34;]
+                # If this container can&#39;t be scaled anymore, skip
+                if max_receiver_amount == 0:
+                    continue
 
-            MyUtils.log_info(
-                &#34;Resource swap between {0}(donor) and {1}(receiver)&#34;.format(donor[&#34;name&#34;], receiver[&#34;name&#34;]),
-                self.__debug)
+                # Trim the amount to scale if needed
+                if amount_to_scale &gt; max_receiver_amount:
+                    amount_to_scale = max_receiver_amount
+
+                # Create the pair of scaling requests
+                # TODO This should use Guardians method to generate requests
+                request = dict(
+                    type=&#34;request&#34;,
+                    resource=&#34;cpu&#34;,
+                    amount=int(amount_to_scale),
+                    structure=receiver[&#34;name&#34;],
+                    action=&#34;CpuRescaleUp&#34;,
+                    timestamp=int(time.time()),
+                    structure_type=&#34;container&#34;,
+                    host=receiver[&#34;host&#34;],
+                    host_rescaler_ip=receiver[&#34;host_rescaler_ip&#34;],
+                    host_rescaler_port=receiver[&#34;host_rescaler_port&#34;]
+                )
+
+                if receiver[&#34;name&#34;] not in requests:
+                    requests[receiver[&#34;name&#34;]] = list()
+                requests[receiver[&#34;name&#34;]].append(request)
+
+                # TODO This should use Guardians method to generate requests
+                request = dict(
+                    type=&#34;request&#34;,
+                    resource=&#34;cpu&#34;,
+                    amount=int(-amount_to_scale),
+                    structure=donor[&#34;name&#34;],
+                    action=&#34;CpuRescaleDown&#34;,
+                    timestamp=int(time.time()),
+                    structure_type=&#34;container&#34;,
+                    host=donor[&#34;host&#34;],
+                    host_rescaler_ip=donor[&#34;host_rescaler_ip&#34;],
+                    host_rescaler_port=donor[&#34;host_rescaler_port&#34;]
+                )
+
+                if donor[&#34;name&#34;] not in requests:
+                    requests[donor[&#34;name&#34;]] = list()
+                requests[donor[&#34;name&#34;]].append(request)
+                log_info(&#34;Resource swap between {0}(donor) and {1}(receiver)&#34;.format(donor[&#34;name&#34;], receiver[&#34;name&#34;]), self.__debug)
+
+        log_info(&#34;No more donors&#34;, self.__debug)
+
+        final_requests = list()
+        for container in requests:
+            # Copy the first request as the base request
+            flat_request = dict(requests[container][0])
+            flat_request[&#34;amount&#34;] = 0
+            for request in requests[container]:
+                flat_request[&#34;amount&#34;] += request[&#34;amount&#34;]
+            final_requests.append(flat_request)
+
+        log_info(&#34;REQUESTS ARE:&#34;, self.__debug)
+        for c in requests.values():
+            for r in c:
+                print(r)
+
+        # TODO
+        # Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed but not the scaling up, and shares will be lost
+
+        log_info(&#34;FINAL REQUESTS ARE:&#34;, self.__debug)
+        for r in final_requests:
+            print(r)
+            self.__couchdb_handler.add_request(r)
+
 
     def __app_containers_can_be_rebalanced(self, application):
         return app_can_be_rebalanced(application, &#34;container&#34;, self.__couchdb_handler)
 
     def rebalance_containers(self, config):
         self.__config = config
-        self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+        self.__debug = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
 
-        MyUtils.log_info(&#34;_______________&#34;, self.__debug)
-        MyUtils.log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
+        log_info(&#34;_______________&#34;, self.__debug)
+        log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
 
         # Get the containers and applications
         try:
-            applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
-            containers = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
+            applications = get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
+            containers = get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
         except requests.exceptions.HTTPError as e:
-            MyUtils.log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
-            MyUtils.log_error(str(e), self.__debug)
+            log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
+            log_error(str(e), self.__debug)
             return
 
         # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
@@ -498,10 +687,10 @@ class ContainerRebalancer:
         # Rebalance applications
         for app in rebalanceable_apps:
             app_name = app[&#34;name&#34;]
-            MyUtils.log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
+            log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
             self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
 
-        MyUtils.log_info(&#34;_______________&#34;, self.__debug)</code></pre>
+        log_info(&#34;_______________&#34;, self.__debug)</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -516,18 +705,18 @@ class ContainerRebalancer:
 </summary>
 <pre><code class="python">def rebalance_containers(self, config):
     self.__config = config
-    self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
+    self.__debug = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, &#34;DEBUG&#34;)
 
-    MyUtils.log_info(&#34;_______________&#34;, self.__debug)
-    MyUtils.log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
+    log_info(&#34;_______________&#34;, self.__debug)
+    log_info(&#34;Performing CONTAINER CPU Balancing&#34;, self.__debug)
 
     # Get the containers and applications
     try:
-        applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
-        containers = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
+        applications = get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;application&#34;)
+        containers = get_structures(self.__couchdb_handler, self.__debug, subtype=&#34;container&#34;)
     except requests.exceptions.HTTPError as e:
-        MyUtils.log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
-        MyUtils.log_error(str(e), self.__debug)
+        log_error(&#34;Couldn&#39;t get applications&#34;, self.__debug)
+        log_error(str(e), self.__debug)
         return
 
     # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
@@ -559,10 +748,10 @@ class ContainerRebalancer:
     # Rebalance applications
     for app in rebalanceable_apps:
         app_name = app[&#34;name&#34;]
-        MyUtils.log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
+        log_info(&#34;Going to rebalance {0} now&#34;.format(app_name), self.__debug)
         self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
 
-    MyUtils.log_info(&#34;_______________&#34;, self.__debug)</code></pre>
+    log_info(&#34;_______________&#34;, self.__debug)</code></pre>
 </details>
 </dd>
 </dl>
@@ -571,7 +760,9 @@ class ContainerRebalancer:
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -624,7 +815,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

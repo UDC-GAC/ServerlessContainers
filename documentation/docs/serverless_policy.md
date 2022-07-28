@@ -1,3 +1,6 @@
+{% import 'macros.md' as includes %}
+{% from 'macros.md' import input_img %}
+
 This framework is used to **scale** the **resources** of a **container**, 
 or a group of containers, both **dynamically and in real time**, so that 
 the limits placed on such resources can evolve over time. If we want to
@@ -59,7 +62,7 @@ resources** are billed.
 In order to better see how this policy achieves its goal, we can study an 
 example of several scaling operations taking place on a time window.
 
-![Time series](img/use_case/timeseries.svg)
+{{ input_img("use_case/timeseries.svg") }}
 
 First, in the image it can be seen that there are:
 
@@ -116,7 +119,7 @@ Because of these reasons it is important to define a key ratio, the
 used and the allocated resources. The next image shows the previously 
 used time window but with areas as the focus of the study.
 
-![Areas](img/use_case/integrals.svg)
+{{ input_img("use_case/integrals.svg") }}
 
 We can see that there are three areas:
 
@@ -138,10 +141,6 @@ performing instantaneous scaling operation, would have a ratio of 100%
 (best-case scenario), while the ratio exposed by not performing any 
 scaling operation, such as with the traditional instance, would be 
 the worst-case scenario.
-
-
-
-
 
 
 ## Quickstart
@@ -186,7 +185,7 @@ To make sure that the containers are accessible to the service, you can
 open a web browser and point to the host's IP and the '8000' port and 
 '/container' path. You should see something similar to:
 
-![container scaler API output](img/quickstart/ContainerScaler.png) 
+{{ input_img("quickstart/ContainerScaler.png") }}
 
 As you can see, the memory, disks and network resources are also 
 reported, but they will be ignored on this guide.
@@ -255,7 +254,7 @@ which the Orchestrator was started, the port '5000' and the path
 '/structure/cont0' (to see the cont0 structure document). You should see
 something similar to:
 
-![orchestrator API output container 0](img/quickstart/OrchestratorCont0.png) 
+{{ input_img("quickstart/OrchestratorCont0.png") }}
 
 As you can see, the container is registered with resource limits of 50 
 and 200 for the minimum and maximum values, respectively. It can also 
@@ -351,7 +350,7 @@ is under control.
 operation is carried out, leaving the allocated resources to the 
 theoretical minimum (minimum + 2 x boundary).
 
-![container example](img/quickstart/scaling_examples.svg) 
+{{ input_img("quickstart/scaling_examples.png") }}
 
 The behavior exposed on the image can be configured and tuned with a few,
 critical parameters, as explained on the [Configuration](/configuration/) 
@@ -396,7 +395,7 @@ dimension**. To better approach these two dimensions, the first one
 is referred to as the **Responsiveness** of the framework, while the 
 second one is referred to as the **Benevolence**.
 
-![Configuration](img/configuration/configuration.svg) 
+{{ input_img("configuration/configuration.svg") }}
 
 ### Responsiveness
 
@@ -426,7 +425,7 @@ on the **B** scenario the application may be close to, or suffering a
 bottleneck, thus we may consider to shorten such times to avoid 
 execution overheads.
 
-![Responsiveness Configuration](img/configuration/configuration_responsiveness.svg)
+{{ input_img("configuration/configuration_responsiveness.svg") }}
 
 To tune the Responsiveness of the framework, the request-generating 
 Rules will have to be modified.
@@ -459,7 +458,7 @@ and lower boundaries (stable area).
 * 3) **Boundary amount**. This parameter is used combined with the 
 scaling down policy to define the final allocated resource limit.
 
-![Benevolence Configuration](img/configuration/configuration_benevolence.svg)
+{{ input_img("configuration/configuration_benevolence.svg") }}
 
 To tune the Benevolence of the framework, mainly the amount parameter of 
 the down-scaling Rules will have to be adapted.
@@ -529,8 +528,7 @@ important, although the framework has been designed to be robust and
 tend for a behavior akin to an eventual consistency. The next image 
 describes such relationships:
 
-![Time window analysis](img/configuration/time_window_analysis.svg)
-
+{{ input_img("configuration/time_window_analysis.svg") }}
 
 Nevertheless, both the *Guardian* and the *Scaler* time window 
 configuration may be worth mentioning:

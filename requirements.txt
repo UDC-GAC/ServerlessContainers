@@ -7,3 +7,4 @@ termcolor
 pytest
 pytest-cov
 coveralls
+pdoc3

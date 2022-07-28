@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.NodeRescaler.lxd_node_resource_manager API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -53,6 +56,7 @@ padding: 1%;
 #
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see &lt;http://www.gnu.org/licenses/&gt;.
+
 import os
 
 import urllib3
@@ -83,8 +87,8 @@ class LXDContainerManager:
 
     def read_keys(self):
         # TODO Improve key handling
-        self.LXD_CRT = &#39;/${HOME}/development/lxd.crt&#39;
-        self.LXD_KEY = &#39;/${HOME}/development/lxd.key&#39;
+        self.LXD_CRT = &#39;/${LXD_KEY_PATH}/${LXD_KEY_NAME}.crt&#39;
+        self.LXD_KEY = &#39;/${LXD_KEY_PATH}/${LXD_KEY_NAME}.key&#39;
         self.LXD_ENDPOINT = &#39;https://localhost:8443&#39;
 
     def __init__(self):
@@ -179,21 +183,22 @@ class LXDContainerManager:
                 mem_success, mem_resources = get_node_mem(node_name)
                 node_dict[DICT_MEM_LABEL] = mem_resources
 
-                disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
-                if type(disk_resources) == list and len(disk_resources) &gt; 0:
-                    node_dict[DICT_DISK_LABEL] = disk_resources[0]
-                elif disk_resources:
-                    node_dict[DICT_DISK_LABEL] = disk_resources
-                else:
-                    node_dict[DICT_DISK_LABEL] = []
-                # TODO support multiple disks
+                # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                # if type(disk_resources) == list and len(disk_resources) &gt; 0:
+                #     node_dict[DICT_DISK_LABEL] = disk_resources[0]
+                # elif disk_resources:
+                #     node_dict[DICT_DISK_LABEL] = disk_resources
+                # else:
+                #     node_dict[DICT_DISK_LABEL] = []
+                # # TODO support multiple disks
+                #
+                # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
+                # if net_resources:
+                #     node_dict[DICT_NET_LABEL] = net_resources[0]
+                # else:
+                #     node_dict[DICT_NET_LABEL] = []
+                # # TODO support multiple networks
 
-                net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
-                if net_resources:
-                    node_dict[DICT_NET_LABEL] = net_resources[0]
-                else:
-                    node_dict[DICT_NET_LABEL] = []
-                # TODO support multiple networks
                 return node_dict
             else:
                 # If container not running, skip
@@ -234,8 +239,8 @@ class LXDContainerManager:
 
     def read_keys(self):
         # TODO Improve key handling
-        self.LXD_CRT = &#39;/${HOME}/development/lxd.crt&#39;
-        self.LXD_KEY = &#39;/${HOME}/development/lxd.key&#39;
+        self.LXD_CRT = &#39;/${LXD_KEY_PATH}/${LXD_KEY_NAME}.crt&#39;
+        self.LXD_KEY = &#39;/${LXD_KEY_PATH}/${LXD_KEY_NAME}.key&#39;
         self.LXD_ENDPOINT = &#39;https://localhost:8443&#39;
 
     def __init__(self):
@@ -330,21 +335,22 @@ class LXDContainerManager:
                 mem_success, mem_resources = get_node_mem(node_name)
                 node_dict[DICT_MEM_LABEL] = mem_resources
 
-                disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
-                if type(disk_resources) == list and len(disk_resources) &gt; 0:
-                    node_dict[DICT_DISK_LABEL] = disk_resources[0]
-                elif disk_resources:
-                    node_dict[DICT_DISK_LABEL] = disk_resources
-                else:
-                    node_dict[DICT_DISK_LABEL] = []
-                # TODO support multiple disks
+                # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                # if type(disk_resources) == list and len(disk_resources) &gt; 0:
+                #     node_dict[DICT_DISK_LABEL] = disk_resources[0]
+                # elif disk_resources:
+                #     node_dict[DICT_DISK_LABEL] = disk_resources
+                # else:
+                #     node_dict[DICT_DISK_LABEL] = []
+                # # TODO support multiple disks
+                #
+                # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
+                # if net_resources:
+                #     node_dict[DICT_NET_LABEL] = net_resources[0]
+                # else:
+                #     node_dict[DICT_NET_LABEL] = []
+                # # TODO support multiple networks
 
-                net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
-                if net_resources:
-                    node_dict[DICT_NET_LABEL] = net_resources[0]
-                else:
-                    node_dict[DICT_NET_LABEL] = []
-                # TODO support multiple networks
                 return node_dict
             else:
                 # If container not running, skip
@@ -445,21 +451,22 @@ class LXDContainerManager:
             mem_success, mem_resources = get_node_mem(node_name)
             node_dict[DICT_MEM_LABEL] = mem_resources
 
-            disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
-            if type(disk_resources) == list and len(disk_resources) &gt; 0:
-                node_dict[DICT_DISK_LABEL] = disk_resources[0]
-            elif disk_resources:
-                node_dict[DICT_DISK_LABEL] = disk_resources
-            else:
-                node_dict[DICT_DISK_LABEL] = []
-            # TODO support multiple disks
+            # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+            # if type(disk_resources) == list and len(disk_resources) &gt; 0:
+            #     node_dict[DICT_DISK_LABEL] = disk_resources[0]
+            # elif disk_resources:
+            #     node_dict[DICT_DISK_LABEL] = disk_resources
+            # else:
+            #     node_dict[DICT_DISK_LABEL] = []
+            # # TODO support multiple disks
+            #
+            # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
+            # if net_resources:
+            #     node_dict[DICT_NET_LABEL] = net_resources[0]
+            # else:
+            #     node_dict[DICT_NET_LABEL] = []
+            # # TODO support multiple networks
 
-            net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
-            if net_resources:
-                node_dict[DICT_NET_LABEL] = net_resources[0]
-            else:
-                node_dict[DICT_NET_LABEL] = []
-            # TODO support multiple networks
             return node_dict
         else:
             # If container not running, skip
@@ -494,8 +501,8 @@ class LXDContainerManager:
 </summary>
 <pre><code class="python">def read_keys(self):
     # TODO Improve key handling
-    self.LXD_CRT = &#39;/${HOME}/development/lxd.crt&#39;
-    self.LXD_KEY = &#39;/${HOME}/development/lxd.key&#39;
+    self.LXD_CRT = &#39;/${LXD_KEY_PATH}/${LXD_KEY_NAME}.crt&#39;
+    self.LXD_KEY = &#39;/${LXD_KEY_PATH}/${LXD_KEY_NAME}.key&#39;
     self.LXD_ENDPOINT = &#39;https://localhost:8443&#39;</code></pre>
 </details>
 </dd>
@@ -561,7 +568,9 @@ class LXDContainerManager:
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -620,7 +629,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

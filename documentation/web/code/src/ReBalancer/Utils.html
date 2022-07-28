@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.ReBalancer.Utils API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -77,11 +80,12 @@ def get_user_apps(applications, user):
 
 def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
     try:
-        data = {&#34;energy&#34;:
-                    {&#34;structure&#34;:
-                         {&#34;energy&#34;:
-                              {&#34;usage&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;usage&#34;],
-                               &#34;max&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;max&#34;]}}},
+        data = {
+                # &#34;energy&#34;:
+                #     {&#34;structure&#34;:
+                #          {&#34;energy&#34;:
+                #               {&#34;usage&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;usage&#34;],
+                #                &#34;max&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;max&#34;]}}},
                 &#34;cpu&#34;:
                     {&#34;structure&#34;:
                          {&#34;cpu&#34;:
@@ -96,25 +100,25 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
         MyUtils.log_error(&#34;Invalid app rebalancing policy &#39;{0}&#39;&#34;.format(rebalancing_level), debug=True)
         return False
 
-    rule_low_usage = couchdb_handler.get_rule(&#34;energy_exceeded_upper&#34;)
-    if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
-        # Application is overusing energy
-        if rebalancing_level == &#34;container&#34;:
-            # Let the Guardian or the dynamic energy balancing deal with it
-            return False
-        elif rebalancing_level == &#34;application&#34;:
-            # It may be a receiver for dynamic energy rebalancing
-            return True
-
-    rule_high_usage = couchdb_handler.get_rule(&#34;energy_dropped_lower&#34;)
-    if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
-        # Application is underusing energy
-        if rebalancing_level == &#34;container&#34;:
-            # Let the Guardian or the dynamic energy balancing deal with it
-            return False
-            # It may be a donor for dynamic energy rebalancing
-        elif rebalancing_level == &#34;application&#34;:
-            return True
+    # rule_low_usage = couchdb_handler.get_rule(&#34;energy_exceeded_upper&#34;)
+    # if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
+    #     # Application is overusing energy
+    #     if rebalancing_level == &#34;container&#34;:
+    #         # Let the Guardian or the dynamic energy balancing deal with it
+    #         return False
+    #     elif rebalancing_level == &#34;application&#34;:
+    #         # It may be a receiver for dynamic energy rebalancing
+    #         return True
+    #
+    # rule_high_usage = couchdb_handler.get_rule(&#34;energy_dropped_lower&#34;)
+    # if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
+    #     # Application is underusing energy
+    #     if rebalancing_level == &#34;container&#34;:
+    #         # Let the Guardian or the dynamic energy balancing deal with it
+    #         return False
+    #         # It may be a donor for dynamic energy rebalancing
+    #     elif rebalancing_level == &#34;application&#34;:
+    #         return True
 
     # The application is in the middle area of energy utilization
     if rebalancing_level == &#34;container&#34;:
@@ -143,11 +147,12 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
 </summary>
 <pre><code class="python">def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
     try:
-        data = {&#34;energy&#34;:
-                    {&#34;structure&#34;:
-                         {&#34;energy&#34;:
-                              {&#34;usage&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;usage&#34;],
-                               &#34;max&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;max&#34;]}}},
+        data = {
+                # &#34;energy&#34;:
+                #     {&#34;structure&#34;:
+                #          {&#34;energy&#34;:
+                #               {&#34;usage&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;usage&#34;],
+                #                &#34;max&#34;: application[&#34;resources&#34;][&#34;energy&#34;][&#34;max&#34;]}}},
                 &#34;cpu&#34;:
                     {&#34;structure&#34;:
                          {&#34;cpu&#34;:
@@ -162,25 +167,25 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
         MyUtils.log_error(&#34;Invalid app rebalancing policy &#39;{0}&#39;&#34;.format(rebalancing_level), debug=True)
         return False
 
-    rule_low_usage = couchdb_handler.get_rule(&#34;energy_exceeded_upper&#34;)
-    if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
-        # Application is overusing energy
-        if rebalancing_level == &#34;container&#34;:
-            # Let the Guardian or the dynamic energy balancing deal with it
-            return False
-        elif rebalancing_level == &#34;application&#34;:
-            # It may be a receiver for dynamic energy rebalancing
-            return True
-
-    rule_high_usage = couchdb_handler.get_rule(&#34;energy_dropped_lower&#34;)
-    if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
-        # Application is underusing energy
-        if rebalancing_level == &#34;container&#34;:
-            # Let the Guardian or the dynamic energy balancing deal with it
-            return False
-            # It may be a donor for dynamic energy rebalancing
-        elif rebalancing_level == &#34;application&#34;:
-            return True
+    # rule_low_usage = couchdb_handler.get_rule(&#34;energy_exceeded_upper&#34;)
+    # if jsonLogic(rule_low_usage[&#34;rule&#34;], data):
+    #     # Application is overusing energy
+    #     if rebalancing_level == &#34;container&#34;:
+    #         # Let the Guardian or the dynamic energy balancing deal with it
+    #         return False
+    #     elif rebalancing_level == &#34;application&#34;:
+    #         # It may be a receiver for dynamic energy rebalancing
+    #         return True
+    #
+    # rule_high_usage = couchdb_handler.get_rule(&#34;energy_dropped_lower&#34;)
+    # if jsonLogic(rule_high_usage[&#34;rule&#34;], data):
+    #     # Application is underusing energy
+    #     if rebalancing_level == &#34;container&#34;:
+    #         # Let the Guardian or the dynamic energy balancing deal with it
+    #         return False
+    #         # It may be a donor for dynamic energy rebalancing
+    #     elif rebalancing_level == &#34;application&#34;:
+    #         return True
 
     # The application is in the middle area of energy utilization
     if rebalancing_level == &#34;container&#34;:
@@ -214,7 +219,9 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -263,7 +270,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

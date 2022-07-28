@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.StateDatabase.couchdb API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -151,12 +154,12 @@ class CouchDBServer:
 
     # PRIVATE CRUD METHODS #
 
-    def __delete_doc(self, database, docid, rev):
-        r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(docid), str(rev)))
-        if r.status_code != 200:
-            r.raise_for_status()
-        else:
-            return True
+    # def __delete_doc(self, database, docid, rev):
+    #     r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(docid), str(rev)))
+    #     if r.status_code != 200:
+    #         r.raise_for_status()
+    #     else:
+    #         return True
 
     def __add_doc(self, database, doc):
         r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
@@ -174,6 +177,26 @@ class CouchDBServer:
         else:
             return True
 
+    def __resilient_delete_doc(self, database, doc, max_tries=10):
+        time_backoff_milliseconds = 100
+        i = 0
+        while i &lt; max_tries:
+            i += 1
+            r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(doc[&#34;_id&#34;]), str(doc[&#34;_rev&#34;])))
+            if r.status_code == 200 or r.status_code == 201:
+                return True
+            elif r.status_code == 409:
+                # Conflict error, document may have been updated (e.g., heartbeat of services),
+                # update revision and retry after slightly random wait
+                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
+                if len(matches) &gt; 0:
+                    new_doc = matches[0]
+                    doc[&#34;_rev&#34;] = new_doc[&#34;_rev&#34;]
+            else:
+                r.raise_for_status()
+        return False
+
     def __delete_bulk_docs(self, database, docs):
         for doc in docs:
             doc[&#34;_deleted&#34;] = True
@@ -190,14 +213,14 @@ class CouchDBServer:
 
         return output_dict
 
-    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=500, max_tries=10):
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
         r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
                 # update revision and retry after slightly random wait
                 if 0 &lt;= previous_tries &lt; max_tries:
-                    time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
                     matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
                     if len(matches) &gt; 0:
                         new_doc = matches[0]
@@ -212,12 +235,35 @@ class CouchDBServer:
                     r.raise_for_status()
             elif r.status_code == 404:
                 # Database may have been reinitialized (deleted and recreated), wait and retry again
-                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
                 return self.__resilient_update_doc(database, doc, previous_tries + 1)
             else:
                 r.raise_for_status()
-        else:
-            return True
+        return False
+
+    # TODO This new method should work, test it in isolation and new commit
+    # def __resilient_update_doc(self, database, doc, max_tries=10):
+    #     time_backoff_milliseconds = 100
+    #     tries = 0
+    #     while tries &lt; max_tries:
+    #         r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
+    #         if r.status_code == 200 and r.status_code == 201:
+    #             return True
+    #         elif r.status_code == 409:
+    #             # Conflict error, document may have been updated (e.g., heartbeat of services),
+    #             # update revision and retry after slightly random wait
+    #             time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+    #             matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
+    #             if len(matches) &gt; 0:
+    #                 new_doc = matches[0]
+    #                 doc[&#34;_rev&#34;] = new_doc[&#34;_rev&#34;]
+    #                 doc = self.__merge(doc, new_doc)
+    #         elif r.status_code == 404:
+    #             # Database may have been reinitialized (deleted and recreated), wait a little bit longer and retry again
+    #             time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
+    #         else:
+    #             r.raise_for_status()
+    #     return False
 
     def __find_documents_by_matches(self, database, selectors):
         # TODO Implement pagination
@@ -255,7 +301,7 @@ class CouchDBServer:
             return self.__find_documents_by_matches(self.__structures_db_name, {&#34;subtype&#34;: subtype})
 
     def delete_structure(self, structure):
-        self.__delete_doc(self.__structures_db_name, structure[&#34;_id&#34;], structure[&#34;_rev&#34;])
+        self.__resilient_delete_doc(self.__structures_db_name, structure)
 
     def update_structure(self, structure, max_tries=10):
         return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
@@ -278,7 +324,7 @@ class CouchDBServer:
         self.__delete_bulk_docs(self.__events_db_name, events_to_delete)
 
     def delete_event(self, event):
-        self.__delete_doc(self.__events_db_name, event[&#34;_id&#34;], event[&#34;_rev&#34;])
+        self.__resilient_delete_doc(self.__events_db_name, event)
 
     def delete_events(self, events):
         self.__delete_bulk_docs(self.__events_db_name, events)
@@ -315,7 +361,7 @@ class CouchDBServer:
         self.__add_bulk_docs(self.__requests_db_name, reqs)
 
     def delete_request(self, request):
-        self.__delete_doc(self.__requests_db_name, request[&#34;_id&#34;], request[&#34;_rev&#34;])
+        self.__resilient_delete_doc(self.__requests_db_name, request)
 
     def delete_requests(self, requests):
         self.__delete_bulk_docs(self.__requests_db_name, requests)
@@ -360,7 +406,7 @@ class CouchDBServer:
         return self.__resilient_update_doc(self.__services_db_name, service)
 
     def delete_service(self, service):
-        return self.__delete_doc(self.__services_db_name, service[&#34;_id&#34;], service[&#34;_rev&#34;])</code></pre>
+        return self.__resilient_delete_doc(self.__services_db_name, service)</code></pre>
 </details>
 </section>
 <section>
@@ -472,12 +518,12 @@ class CouchDBServer:
 
     # PRIVATE CRUD METHODS #
 
-    def __delete_doc(self, database, docid, rev):
-        r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(docid), str(rev)))
-        if r.status_code != 200:
-            r.raise_for_status()
-        else:
-            return True
+    # def __delete_doc(self, database, docid, rev):
+    #     r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(docid), str(rev)))
+    #     if r.status_code != 200:
+    #         r.raise_for_status()
+    #     else:
+    #         return True
 
     def __add_doc(self, database, doc):
         r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
@@ -495,6 +541,26 @@ class CouchDBServer:
         else:
             return True
 
+    def __resilient_delete_doc(self, database, doc, max_tries=10):
+        time_backoff_milliseconds = 100
+        i = 0
+        while i &lt; max_tries:
+            i += 1
+            r = self.session.delete(&#34;{0}/{1}/{2}?rev={3}&#34;.format(self.server, database, str(doc[&#34;_id&#34;]), str(doc[&#34;_rev&#34;])))
+            if r.status_code == 200 or r.status_code == 201:
+                return True
+            elif r.status_code == 409:
+                # Conflict error, document may have been updated (e.g., heartbeat of services),
+                # update revision and retry after slightly random wait
+                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
+                if len(matches) &gt; 0:
+                    new_doc = matches[0]
+                    doc[&#34;_rev&#34;] = new_doc[&#34;_rev&#34;]
+            else:
+                r.raise_for_status()
+        return False
+
     def __delete_bulk_docs(self, database, docs):
         for doc in docs:
             doc[&#34;_deleted&#34;] = True
@@ -511,14 +577,14 @@ class CouchDBServer:
 
         return output_dict
 
-    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=500, max_tries=10):
+    def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
         r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
                 # update revision and retry after slightly random wait
                 if 0 &lt;= previous_tries &lt; max_tries:
-                    time.sleep((time_backoff_milliseconds + random.randint(1, 20)) / 1000)
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
                     matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
                     if len(matches) &gt; 0:
                         new_doc = matches[0]
@@ -533,12 +599,35 @@ class CouchDBServer:
                     r.raise_for_status()
             elif r.status_code == 404:
                 # Database may have been reinitialized (deleted and recreated), wait and retry again
-                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
                 return self.__resilient_update_doc(database, doc, previous_tries + 1)
             else:
                 r.raise_for_status()
-        else:
-            return True
+        return False
+
+    # TODO This new method should work, test it in isolation and new commit
+    # def __resilient_update_doc(self, database, doc, max_tries=10):
+    #     time_backoff_milliseconds = 100
+    #     tries = 0
+    #     while tries &lt; max_tries:
+    #         r = self.session.post(self.server + &#34;/&#34; + database, data=json.dumps(doc), headers=self.post_doc_headers)
+    #         if r.status_code == 200 and r.status_code == 201:
+    #             return True
+    #         elif r.status_code == 409:
+    #             # Conflict error, document may have been updated (e.g., heartbeat of services),
+    #             # update revision and retry after slightly random wait
+    #             time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+    #             matches = self.__find_documents_by_matches(database, {&#34;_id&#34;: doc[&#34;_id&#34;]})
+    #             if len(matches) &gt; 0:
+    #                 new_doc = matches[0]
+    #                 doc[&#34;_rev&#34;] = new_doc[&#34;_rev&#34;]
+    #                 doc = self.__merge(doc, new_doc)
+    #         elif r.status_code == 404:
+    #             # Database may have been reinitialized (deleted and recreated), wait a little bit longer and retry again
+    #             time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
+    #         else:
+    #             r.raise_for_status()
+    #     return False
 
     def __find_documents_by_matches(self, database, selectors):
         # TODO Implement pagination
@@ -576,7 +665,7 @@ class CouchDBServer:
             return self.__find_documents_by_matches(self.__structures_db_name, {&#34;subtype&#34;: subtype})
 
     def delete_structure(self, structure):
-        self.__delete_doc(self.__structures_db_name, structure[&#34;_id&#34;], structure[&#34;_rev&#34;])
+        self.__resilient_delete_doc(self.__structures_db_name, structure)
 
     def update_structure(self, structure, max_tries=10):
         return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
@@ -599,7 +688,7 @@ class CouchDBServer:
         self.__delete_bulk_docs(self.__events_db_name, events_to_delete)
 
     def delete_event(self, event):
-        self.__delete_doc(self.__events_db_name, event[&#34;_id&#34;], event[&#34;_rev&#34;])
+        self.__resilient_delete_doc(self.__events_db_name, event)
 
     def delete_events(self, events):
         self.__delete_bulk_docs(self.__events_db_name, events)
@@ -636,7 +725,7 @@ class CouchDBServer:
         self.__add_bulk_docs(self.__requests_db_name, reqs)
 
     def delete_request(self, request):
-        self.__delete_doc(self.__requests_db_name, request[&#34;_id&#34;], request[&#34;_rev&#34;])
+        self.__resilient_delete_doc(self.__requests_db_name, request)
 
     def delete_requests(self, requests):
         self.__delete_bulk_docs(self.__requests_db_name, requests)
@@ -681,7 +770,7 @@ class CouchDBServer:
         return self.__resilient_update_doc(self.__services_db_name, service)
 
     def delete_service(self, service):
-        return self.__delete_doc(self.__services_db_name, service[&#34;_id&#34;], service[&#34;_rev&#34;])</code></pre>
+        return self.__resilient_delete_doc(self.__services_db_name, service)</code></pre>
 </details>
 <h3>Class variables</h3>
 <dl>
@@ -880,7 +969,7 @@ class CouchDBServer:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def delete_event(self, event):
-    self.__delete_doc(self.__events_db_name, event[&#34;_id&#34;], event[&#34;_rev&#34;])</code></pre>
+    self.__resilient_delete_doc(self.__events_db_name, event)</code></pre>
 </details>
 </dd>
 <dt id="src.StateDatabase.couchdb.CouchDBServer.delete_events"><code class="name flex">
@@ -923,7 +1012,7 @@ class CouchDBServer:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def delete_request(self, request):
-    self.__delete_doc(self.__requests_db_name, request[&#34;_id&#34;], request[&#34;_rev&#34;])</code></pre>
+    self.__resilient_delete_doc(self.__requests_db_name, request)</code></pre>
 </details>
 </dd>
 <dt id="src.StateDatabase.couchdb.CouchDBServer.delete_requests"><code class="name flex">
@@ -949,7 +1038,7 @@ class CouchDBServer:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def delete_service(self, service):
-    return self.__delete_doc(self.__services_db_name, service[&#34;_id&#34;], service[&#34;_rev&#34;])</code></pre>
+    return self.__resilient_delete_doc(self.__services_db_name, service)</code></pre>
 </details>
 </dd>
 <dt id="src.StateDatabase.couchdb.CouchDBServer.delete_structure"><code class="name flex">
@@ -962,7 +1051,7 @@ class CouchDBServer:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def delete_structure(self, structure):
-    self.__delete_doc(self.__structures_db_name, structure[&#34;_id&#34;], structure[&#34;_rev&#34;])</code></pre>
+    self.__resilient_delete_doc(self.__structures_db_name, structure)</code></pre>
 </details>
 </dd>
 <dt id="src.StateDatabase.couchdb.CouchDBServer.get_all_limits"><code class="name flex">
@@ -1248,7 +1337,9 @@ class CouchDBServer:
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -1340,7 +1431,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

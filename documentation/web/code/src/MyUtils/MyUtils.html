@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.MyUtils.MyUtils API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -63,7 +66,7 @@ import logging
 import sys
 import requests
 import traceback
-
+from termcolor import colored
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -96,15 +99,20 @@ class MyConfig:
     def __init__(self, DEFAULTS_CONFIG):
         self.DEFAULTS_CONFIG = DEFAULTS_CONFIG
 
+    def get_config(self):
+        return self.config
+
     def set_config(self, config):
         self.config = config
 
-    def get_config_value(self, key):
+    def get_value(self, key):
         try:
             return self.config[key]
         except KeyError:
             return self.DEFAULTS_CONFIG[key]
 
+    def set_value(self, key, value):
+        self.config[key] = value
 
 # DON&#39;T NEED TO TEST
 def get_config_value(config, default_config, key):
@@ -118,26 +126,26 @@ def get_config_value(config, default_config, key):
 def log_info(message, debug):
     logging.info(message)
     if debug:
-        print(&#34;INFO: &#34; + message)
+        print(&#34;[{0}] INFO: {1}&#34;.format(get_time_now_string(), message))
 
 
 # DON&#39;T NEED TO TEST
 def log_warning(message, debug):
     logging.warning(message)
     if debug:
-        print(&#34;WARN: &#34; + message)
+        print(colored(&#34;[{0}] WARN: {1}&#34;.format(get_time_now_string(), message), &#34;yellow&#34;))
 
 
 # DON&#39;T NEED TO TEST
 def log_error(message, debug):
     logging.error(message)
     if debug:
-        eprint(&#34;ERROR: &#34; + message)
+        print(colored(&#34;[{0}] ERROR: {1}&#34;.format(get_time_now_string(), message), &#34;red&#34;))
 
 
 # DON&#39;T NEED TO TEST
 def get_time_now_string():
-    return str(time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()))
+    return str(time.strftime(&#34;%H:%M:%S&#34;, time.localtime()))
 
 
 def get_host_containers(container_host_ip, container_host_port, rescaler_http_session, debug):
@@ -233,15 +241,21 @@ def get_cpu_list(cpu_num_string):
 
 
 def copy_structure_base(structure):
-    keys_to_copy = [&#34;_id&#34;, &#34;type&#34;, &#34;subtype&#34;, &#34;name&#34;]
+    keys_to_copy = [&#34;_id&#34;, &#34;_rev&#34;, &#34;type&#34;, &#34;subtype&#34;, &#34;name&#34;]
     # TODO FIX, some structures types have specific fields, fix accordingly
-    if structure[&#34;subtype&#34;] is &#34;container&#34;:
+    if structure[&#34;subtype&#34;] == &#34;container&#34;:
         keys_to_copy.append(&#34;host&#34;)
     new_struct = dict()
     for key in keys_to_copy:
         new_struct[key] = structure[key]
     return new_struct
 
+
+def valid_resource(resource):
+    if resource not in [&#34;cpu&#34;, &#34;mem&#34;, &#34;disk&#34;, &#34;net&#34;, &#34;energy&#34;]:
+        return False
+    else:
+        return True
 
 # DON&#39;T NEED TO TEST
 def get_resource(structure, resource):
@@ -252,8 +266,7 @@ def get_resource(structure, resource):
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
-        log_info(&#34;Structure : &#34; + structure[&#34;subtype&#34;] + &#34; -&gt; &#34; + structure[&#34;name&#34;] + &#34; updated at time: &#34;
-                 + time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()), debug)
+        log_info(&#34;{0} {1} -&gt;  updated&#34;.format(structure[&#34;subtype&#34;].capitalize(), structure[&#34;name&#34;]), debug)
     except requests.exceptions.HTTPError:
         log_error(&#34;Error updating container &#34; + structure[&#34;name&#34;] + &#34; &#34; + traceback.format_exc(), debug)
 
@@ -261,8 +274,7 @@ def update_structure(structure, db_handler, debug, max_tries=10):
 def update_user(user, db_handler, debug, max_tries=10):
     try:
         db_handler.update_user(user, max_tries=max_tries)
-        log_info(&#34;User : &#34; + user[&#34;name&#34;] + &#34; updated at time: &#34; + time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()),
-                 debug)
+        log_info(&#34;User {0} -&gt;  updated&#34;.format(user[&#34;name&#34;]), debug)
     except requests.exceptions.HTTPError:
         log_error(&#34;Error updating user &#34; + user[&#34;name&#34;] + &#34; &#34; + traceback.format_exc(), debug)
 
@@ -274,6 +286,36 @@ def get_structures(db_handler, debug, subtype=&#34;application&#34;):
     except (requests.exceptions.HTTPError, ValueError):
         log_warning(&#34;Couldn&#39;t retrieve &#34; + subtype + &#34; info.&#34;, debug=debug)
         return None
+
+
+def start_epoch(debug):
+    log_info(&#34;----------------------&#34;, debug)
+    log_info(&#34;Starting Epoch&#34;, debug)
+    return time.time()
+
+def end_epoch(debug, window_difference, t0):
+    t1 = time.time()
+    time_proc = &#34;%.2f&#34; % (t1 - t0 - window_difference)
+    time_total = &#34;%.2f&#34; % (t1 - t0)
+    log_info(&#34;Epoch processed in {0} seconds ({1} processing and {2} sleeping)&#34;.format(time_total, time_proc, str(window_difference)), debug)
+    log_info(&#34;----------------------\n&#34;, debug)
+
+
+def wait_operation_thread(thread, debug):
+    &#34;&#34;&#34;This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
+    A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this
+    thread to finish.
+    Args:
+        thread (Python Thread): The thread that has spawned the basic threads that carry out operations as needed
+
+    &#34;&#34;&#34;
+    if thread and thread.is_alive():
+        log_warning(&#34;Previous thread didn&#39;t finish and next poll should start now&#34;, debug)
+        log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, debug)
+        delay_start = time.time()
+        thread.join()
+        delay_end = time.time()
+        log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)), debug)
 
 
 # TESTED
@@ -289,6 +331,13 @@ def generate_request_name(amount, resource):
     else:
         raise ValueError(&#34;Invalid amount&#34;)
 
+
+def structure_is_application(structure):
+    return structure[&#34;subtype&#34;] == &#34;application&#34;
+
+
+def structure_is_container(structure):
+    return structure[&#34;subtype&#34;] == &#34;container&#34;
 
 # TESTED
 def generate_event_name(event, resource):
@@ -315,7 +364,10 @@ def generate_event_name(event, resource):
     else:
         raise ValueError(&#34;Error generating event name&#34;)
 
-    return final_string</code></pre>
+    return final_string
+
+def generate_structure_usage_metric(resource):
+    return &#34;structure.{0}.usage&#34;.format(resource)</code></pre>
 </details>
 </section>
 <section>
@@ -348,14 +400,31 @@ def generate_event_name(event, resource):
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def copy_structure_base(structure):
-    keys_to_copy = [&#34;_id&#34;, &#34;type&#34;, &#34;subtype&#34;, &#34;name&#34;]
+    keys_to_copy = [&#34;_id&#34;, &#34;_rev&#34;, &#34;type&#34;, &#34;subtype&#34;, &#34;name&#34;]
     # TODO FIX, some structures types have specific fields, fix accordingly
-    if structure[&#34;subtype&#34;] is &#34;container&#34;:
+    if structure[&#34;subtype&#34;] == &#34;container&#34;:
         keys_to_copy.append(&#34;host&#34;)
     new_struct = dict()
     for key in keys_to_copy:
         new_struct[key] = structure[key]
     return new_struct</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.end_epoch"><code class="name flex">
+<span>def <span class="ident">end_epoch</span></span>(<span>debug, window_difference, t0)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def end_epoch(debug, window_difference, t0):
+    t1 = time.time()
+    time_proc = &#34;%.2f&#34; % (t1 - t0 - window_difference)
+    time_total = &#34;%.2f&#34; % (t1 - t0)
+    log_info(&#34;Epoch processed in {0} seconds ({1} processing and {2} sleeping)&#34;.format(time_total, time_proc, str(window_difference)), debug)
+    log_info(&#34;----------------------\n&#34;, debug)</code></pre>
 </details>
 </dd>
 <dt id="src.MyUtils.MyUtils.eprint"><code class="name flex">
@@ -427,6 +496,19 @@ def generate_event_name(event, resource):
         return resource.title() + &#34;RescaleUp&#34;
     else:
         raise ValueError(&#34;Invalid amount&#34;)</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.generate_structure_usage_metric"><code class="name flex">
+<span>def <span class="ident">generate_structure_usage_metric</span></span>(<span>resource)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def generate_structure_usage_metric(resource):
+    return &#34;structure.{0}.usage&#34;.format(resource)</code></pre>
 </details>
 </dd>
 <dt id="src.MyUtils.MyUtils.get_config_value"><code class="name flex">
@@ -597,7 +679,7 @@ def generate_event_name(event, resource):
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def get_time_now_string():
-    return str(time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()))</code></pre>
+    return str(time.strftime(&#34;%H:%M:%S&#34;, time.localtime()))</code></pre>
 </details>
 </dd>
 <dt id="src.MyUtils.MyUtils.log_error"><code class="name flex">
@@ -612,7 +694,7 @@ def generate_event_name(event, resource):
 <pre><code class="python">def log_error(message, debug):
     logging.error(message)
     if debug:
-        eprint(&#34;ERROR: &#34; + message)</code></pre>
+        print(colored(&#34;[{0}] ERROR: {1}&#34;.format(get_time_now_string(), message), &#34;red&#34;))</code></pre>
 </details>
 </dd>
 <dt id="src.MyUtils.MyUtils.log_info"><code class="name flex">
@@ -627,7 +709,7 @@ def generate_event_name(event, resource):
 <pre><code class="python">def log_info(message, debug):
     logging.info(message)
     if debug:
-        print(&#34;INFO: &#34; + message)</code></pre>
+        print(&#34;[{0}] INFO: {1}&#34;.format(get_time_now_string(), message))</code></pre>
 </details>
 </dd>
 <dt id="src.MyUtils.MyUtils.log_warning"><code class="name flex">
@@ -642,7 +724,7 @@ def generate_event_name(event, resource):
 <pre><code class="python">def log_warning(message, debug):
     logging.warning(message)
     if debug:
-        print(&#34;WARN: &#34; + message)</code></pre>
+        print(colored(&#34;[{0}] WARN: {1}&#34;.format(get_time_now_string(), message), &#34;yellow&#34;))</code></pre>
 </details>
 </dd>
 <dt id="src.MyUtils.MyUtils.register_service"><code class="name flex">
@@ -688,6 +770,47 @@ def generate_event_name(event, resource):
             raise e</code></pre>
 </details>
 </dd>
+<dt id="src.MyUtils.MyUtils.start_epoch"><code class="name flex">
+<span>def <span class="ident">start_epoch</span></span>(<span>debug)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def start_epoch(debug):
+    log_info(&#34;----------------------&#34;, debug)
+    log_info(&#34;Starting Epoch&#34;, debug)
+    return time.time()</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.structure_is_application"><code class="name flex">
+<span>def <span class="ident">structure_is_application</span></span>(<span>structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def structure_is_application(structure):
+    return structure[&#34;subtype&#34;] == &#34;application&#34;</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.structure_is_container"><code class="name flex">
+<span>def <span class="ident">structure_is_container</span></span>(<span>structure)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def structure_is_container(structure):
+    return structure[&#34;subtype&#34;] == &#34;container&#34;</code></pre>
+</details>
+</dd>
 <dt id="src.MyUtils.MyUtils.update_structure"><code class="name flex">
 <span>def <span class="ident">update_structure</span></span>(<span>structure, db_handler, debug, max_tries=10)</span>
 </code></dt>
@@ -700,8 +823,7 @@ def generate_event_name(event, resource):
 <pre><code class="python">def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
-        log_info(&#34;Structure : &#34; + structure[&#34;subtype&#34;] + &#34; -&gt; &#34; + structure[&#34;name&#34;] + &#34; updated at time: &#34;
-                 + time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()), debug)
+        log_info(&#34;{0} {1} -&gt;  updated&#34;.format(structure[&#34;subtype&#34;].capitalize(), structure[&#34;name&#34;]), debug)
     except requests.exceptions.HTTPError:
         log_error(&#34;Error updating container &#34; + structure[&#34;name&#34;] + &#34; &#34; + traceback.format_exc(), debug)</code></pre>
 </details>
@@ -718,10 +840,58 @@ def generate_event_name(event, resource):
 <pre><code class="python">def update_user(user, db_handler, debug, max_tries=10):
     try:
         db_handler.update_user(user, max_tries=max_tries)
-        log_info(&#34;User : &#34; + user[&#34;name&#34;] + &#34; updated at time: &#34; + time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()),
-                 debug)
+        log_info(&#34;User {0} -&gt;  updated&#34;.format(user[&#34;name&#34;]), debug)
     except requests.exceptions.HTTPError:
         log_error(&#34;Error updating user &#34; + user[&#34;name&#34;] + &#34; &#34; + traceback.format_exc(), debug)</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.valid_resource"><code class="name flex">
+<span>def <span class="ident">valid_resource</span></span>(<span>resource)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def valid_resource(resource):
+    if resource not in [&#34;cpu&#34;, &#34;mem&#34;, &#34;disk&#34;, &#34;net&#34;, &#34;energy&#34;]:
+        return False
+    else:
+        return True</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.wait_operation_thread"><code class="name flex">
+<span>def <span class="ident">wait_operation_thread</span></span>(<span>thread, debug)</span>
+</code></dt>
+<dd>
+<section class="desc"><p>This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
+A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this
+thread to finish.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>thread</code></strong> :&ensp;<code>Python Thread</code></dt>
+<dd>The thread that has spawned the basic threads that carry out operations as needed</dd>
+</dl></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def wait_operation_thread(thread, debug):
+    &#34;&#34;&#34;This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
+    A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this
+    thread to finish.
+    Args:
+        thread (Python Thread): The thread that has spawned the basic threads that carry out operations as needed
+
+    &#34;&#34;&#34;
+    if thread and thread.is_alive():
+        log_warning(&#34;Previous thread didn&#39;t finish and next poll should start now&#34;, debug)
+        log_warning(&#34;Going to wait until thread finishes before proceeding&#34;, debug)
+        delay_start = time.time()
+        thread.join()
+        delay_end = time.time()
+        log_warning(&#34;Resulting delay of: {0} seconds&#34;.format(str(delay_end - delay_start)), debug)</code></pre>
 </details>
 </dd>
 </dl>
@@ -746,14 +916,20 @@ def generate_event_name(event, resource):
     def __init__(self, DEFAULTS_CONFIG):
         self.DEFAULTS_CONFIG = DEFAULTS_CONFIG
 
+    def get_config(self):
+        return self.config
+
     def set_config(self, config):
         self.config = config
 
-    def get_config_value(self, key):
+    def get_value(self, key):
         try:
             return self.config[key]
         except KeyError:
-            return self.DEFAULTS_CONFIG[key]</code></pre>
+            return self.DEFAULTS_CONFIG[key]
+
+    def set_value(self, key, value):
+        self.config[key] = value</code></pre>
 </details>
 <h3>Class variables</h3>
 <dl>
@@ -768,8 +944,8 @@ def generate_event_name(event, resource):
 </dl>
 <h3>Methods</h3>
 <dl>
-<dt id="src.MyUtils.MyUtils.MyConfig.get_config_value"><code class="name flex">
-<span>def <span class="ident">get_config_value</span></span>(<span>self, key)</span>
+<dt id="src.MyUtils.MyUtils.MyConfig.get_config"><code class="name flex">
+<span>def <span class="ident">get_config</span></span>(<span>self)</span>
 </code></dt>
 <dd>
 <section class="desc"></section>
@@ -777,7 +953,20 @@ def generate_event_name(event, resource):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def get_config_value(self, key):
+<pre><code class="python">def get_config(self):
+    return self.config</code></pre>
+</details>
+</dd>
+<dt id="src.MyUtils.MyUtils.MyConfig.get_value"><code class="name flex">
+<span>def <span class="ident">get_value</span></span>(<span>self, key)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_value(self, key):
     try:
         return self.config[key]
     except KeyError:
@@ -797,13 +986,28 @@ def generate_event_name(event, resource):
     self.config = config</code></pre>
 </details>
 </dd>
+<dt id="src.MyUtils.MyUtils.MyConfig.set_value"><code class="name flex">
+<span>def <span class="ident">set_value</span></span>(<span>self, key, value)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_value(self, key, value):
+    self.config[key] = value</code></pre>
+</details>
+</dd>
 </dl>
 </dd>
 </dl>
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -818,9 +1022,11 @@ def generate_event_name(event, resource):
 <ul class="">
 <li><code><a title="src.MyUtils.MyUtils.beat" href="#src.MyUtils.MyUtils.beat">beat</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.copy_structure_base" href="#src.MyUtils.MyUtils.copy_structure_base">copy_structure_base</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.end_epoch" href="#src.MyUtils.MyUtils.end_epoch">end_epoch</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.eprint" href="#src.MyUtils.MyUtils.eprint">eprint</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.generate_event_name" href="#src.MyUtils.MyUtils.generate_event_name">generate_event_name</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.generate_request_name" href="#src.MyUtils.MyUtils.generate_request_name">generate_request_name</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.generate_structure_usage_metric" href="#src.MyUtils.MyUtils.generate_structure_usage_metric">generate_structure_usage_metric</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.get_config_value" href="#src.MyUtils.MyUtils.get_config_value">get_config_value</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.get_container_resources" href="#src.MyUtils.MyUtils.get_container_resources">get_container_resources</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.get_cpu_list" href="#src.MyUtils.MyUtils.get_cpu_list">get_cpu_list</a></code></li>
@@ -834,19 +1040,26 @@ def generate_event_name(event, resource):
 <li><code><a title="src.MyUtils.MyUtils.log_warning" href="#src.MyUtils.MyUtils.log_warning">log_warning</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.register_service" href="#src.MyUtils.MyUtils.register_service">register_service</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.resilient_beat" href="#src.MyUtils.MyUtils.resilient_beat">resilient_beat</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.start_epoch" href="#src.MyUtils.MyUtils.start_epoch">start_epoch</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.structure_is_application" href="#src.MyUtils.MyUtils.structure_is_application">structure_is_application</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.structure_is_container" href="#src.MyUtils.MyUtils.structure_is_container">structure_is_container</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.update_structure" href="#src.MyUtils.MyUtils.update_structure">update_structure</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.update_user" href="#src.MyUtils.MyUtils.update_user">update_user</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.valid_resource" href="#src.MyUtils.MyUtils.valid_resource">valid_resource</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.wait_operation_thread" href="#src.MyUtils.MyUtils.wait_operation_thread">wait_operation_thread</a></code></li>
 </ul>
 </li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
 <h4><code><a title="src.MyUtils.MyUtils.MyConfig" href="#src.MyUtils.MyUtils.MyConfig">MyConfig</a></code></h4>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="src.MyUtils.MyUtils.MyConfig.DEFAULTS_CONFIG" href="#src.MyUtils.MyUtils.MyConfig.DEFAULTS_CONFIG">DEFAULTS_CONFIG</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.MyConfig.config" href="#src.MyUtils.MyUtils.MyConfig.config">config</a></code></li>
-<li><code><a title="src.MyUtils.MyUtils.MyConfig.get_config_value" href="#src.MyUtils.MyUtils.MyConfig.get_config_value">get_config_value</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.MyConfig.get_config" href="#src.MyUtils.MyUtils.MyConfig.get_config">get_config</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.MyConfig.get_value" href="#src.MyUtils.MyUtils.MyConfig.get_value">get_value</a></code></li>
 <li><code><a title="src.MyUtils.MyUtils.MyConfig.set_config" href="#src.MyUtils.MyUtils.MyConfig.set_config">set_config</a></code></li>
+<li><code><a title="src.MyUtils.MyUtils.MyConfig.set_value" href="#src.MyUtils.MyUtils.MyConfig.set_value">set_value</a></code></li>
 </ul>
 </li>
 </ul>
@@ -883,7 +1096,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>

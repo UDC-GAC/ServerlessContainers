@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
-<meta name="generator" content="pdoc 0.8.1" />
+<meta name="generator" content="pdoc 0.10.0" />
 <title>src.Snapshoters.DatabaseSnapshoter API documentation</title>
 <meta name="description" content="" />
 <link href='https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.0/normalize.min.css' rel='stylesheet'>
@@ -32,9 +32,12 @@ padding: 1%;
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python"># Copyright (c) 2019 Universidade da Coruña
+<pre><code class="python">#!/usr/bin/python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 Universidade da Coruña
 # Authors:
-#     - Jonatan Enes [main](jonatan.enes@udc.es, jonatan.enes.alvarez@gmail.com)
+#     - Jonatan Enes [main](jonatan.enes@udc.es)
 #     - Roberto R. Expósito
 #     - Juan Touriño
 #
@@ -57,8 +60,6 @@ padding: 1%;
 
 from __future__ import print_function
 
-from threading import Thread
-
 import requests
 import json
 import time
@@ -67,12 +68,13 @@ import logging
 
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
-from src.MyUtils import MyUtils
-from src.MyUtils.MyUtils import MyConfig
+
+
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
-CONFIG_DEFAULT_VALUES = {&#34;POLLING_FREQUENCY&#34;: 10, &#34;DEBUG&#34;: True}
+CONFIG_DEFAULT_VALUES = {&#34;POLLING_FREQUENCY&#34;: 5, &#34;DEBUG&#34;: True, &#34;DOCUMENTS_PERSISTED&#34;: [&#34;limits&#34;, &#34;structures&#34;, &#34;users&#34;, &#34;configs&#34;] ,&#34;ACTIVE&#34;: True}
 OPENTSDB_STORED_VALUES_AS_NULL = 0
 SERVICE_NAME = &#34;database_snapshoter&#34;
 MAX_FAIL_NUM = 5
@@ -109,14 +111,13 @@ def translate_structure_doc_to_timeseries(doc):
                                           tags={&#34;structure&#34;: struct_name})
                         timeseries_list.append(timeseries)
                     else:
-                        MyUtils.log_error(
+                        log_error(
                             &#34;Error with document: {0}, doc metric {1} has null value &#39;{2}&#39;, assuming a value of &#39;{3}&#39;&#34;.format(
                                 str(doc), doc_metric, value, OPENTSDB_STORED_VALUES_AS_NULL), debug)
 
         return timeseries_list
     except (ValueError, KeyError) as e:
-        MyUtils.log_error(&#34;Error {0} {1} with document: {2} &#34;.format(str(e), str(traceback.format_exc()), str(doc)),
-                          debug)
+        log_error(&#34;Error {0} {1} with document: {2} &#34;.format(str(e), str(traceback.format_exc()), str(doc)), debug)
         raise
 
 
@@ -157,11 +158,14 @@ def get_configs():
     for service in filtered_services:
         for parameter in PERSIST_CONFIG_SERVICES_DOCS[service[&#34;name&#34;]]:
             database_key_name, timeseries_metric_name = parameter
-            timeseries = dict(metric=timeseries_metric_name,
-                              value=service[&#34;config&#34;][database_key_name],
-                              timestamp=int(time.time()),
-                              tags={&#34;service&#34;: service[&#34;name&#34;]})
-            docs.append(timeseries)
+            if  database_key_name in service[&#34;config&#34;]:
+                timeseries = dict(metric=timeseries_metric_name,
+                                  value=service[&#34;config&#34;][database_key_name],
+                                  timestamp=int(time.time()),
+                                  tags={&#34;service&#34;: service[&#34;name&#34;]})
+                docs.append(timeseries)
+            else:
+                log_warning(&#34;Missing config key &#39;{0}&#39; in service &#39;{1}&#39;&#34;.format(database_key_name, service[&#34;name&#34;]), debug)
     return docs
 
 
@@ -170,55 +174,103 @@ funct_map = {&#34;users&#34;: get_users,
              &#34;structures&#34;: get_structures,
              &#34;configs&#34;: get_configs}
 
-
-def persist_docs(funct):
-    t0 = time.time()
+def get_data(funct):
     docs = list()
     try:
         docs += funct_map[funct]()
     except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
         # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve {0} info, error {1}.&#34;.format(funct, str(e)), debug)
-    t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the {1} info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0)), funct), debug)
-    send_data(docs)
-
+        log_warning(&#34;Couldn&#39;t retrieve {0} info, error {1}.&#34;.format(funct, str(e)), debug)
+    return docs
 
 def send_data(docs):
+    num_sent_docs = 0
     if docs:
         # Remote database operation
         success, info = opentsdb_handler.send_json_documents(docs)
         if not success:
-            MyUtils.log_error(&#34;Couldn&#39;t properly post documents, error : {0}&#34;.format(json.dumps(info[&#34;error&#34;])),
-                              debug)
+            log_error(&#34;Couldn&#39;t properly post documents, error : {0}&#34;.format(json.dumps(info[&#34;error&#34;])), debug)
         else:
-            MyUtils.log_info(
-                &#34;Post was done at: {0} with {1} documents&#34;.format(time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()),
-                                                                  str(len(docs))), debug)
-    else:
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve any info.&#34;, debug)
+            num_sent_docs = len(docs)
+    return num_sent_docs
 
+def persist_docs(funct):
+
+    t0 = time.time()
+    docs = get_data(funct)
+    t1 = time.time()
+
+    if docs:
+        log_info(&#34;It took {0} seconds to get {1} info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0)), funct), debug)
+        num_docs = send_data(docs)
+        t2 = time.time()
+        if num_docs &gt; 0:
+            log_info(&#34;It took {0} seconds to send {1} info&#34;.format(str(&#34;%.2f&#34; % (t2 - t1)),funct), debug)
+            log_info(&#34;Post was done with {0} documents of &#39;{1}&#39;&#34;.format(str(num_docs), funct), debug)
+
+
+def invalid_conf(config):
+    # TODO THis code is duplicated on the structures and database snapshoters
+    for key, num in [(&#34;POLLING_FREQUENCY&#34;,config.get_value(&#34;POLLING_FREQUENCY&#34;))]:
+        if num &lt; 3:
+            return True, &#34;Configuration item &#39;{0}&#39; with a value of &#39;{1}&#39; is likely invalid&#34;.format(key, num)
+    return False, &#34;&#34;
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+
     global debug
+
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+
     while True:
+        log_info(&#34;----------------------&#34;, debug)
+        log_info(&#34;Starting Epoch&#34;, debug)
+        t0 = time.time()
+
         # Get service info
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)  # Remote database operation
+        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)  # Remote database operation
+        beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
         myConfig.set_config(service[&#34;config&#34;])
-        polling_frequency = myConfig.get_config_value(&#34;POLLING_FREQUENCY&#34;)
-        debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+        polling_frequency = myConfig.get_value(&#34;POLLING_FREQUENCY&#34;)
+        debug = myConfig.get_value(&#34;DEBUG&#34;)
+        documents_persisted = myConfig.get_value(&#34;DOCUMENTS_PERSISTED&#34;)
+        SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
 
-        for docType in [&#34;limits&#34;, &#34;structures&#34;, &#34;users&#34;, &#34;configs&#34;]:
-            persist_docs(docType)
+        log_info(&#34;Config is as follows:&#34;, debug)
+        log_info(&#34;.............................................&#34;, debug)
+        log_info(&#34;Polling frequency -&gt; {0}&#34;.format(polling_frequency), debug)
+        log_info(&#34;Documents to be persisted are -&gt; {0}&#34;.format(documents_persisted), debug)
+        log_info(&#34;.............................................&#34;, debug)
 
-        MyUtils.log_info(&#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
+        ## CHECK INVALID CONFIG ##
+        # TODO THis code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency &lt; 4:
+                log_error(&#34;Polling frequency is too short, replacing with DEFAULT value &#39;{0}&#39;&#34;.format(CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]
+
+            log_info(&#34;----------------------\n&#34;, debug)
+            time.sleep(polling_frequency)
+            continue
+
+        if SERVICE_IS_ACTIVATED:
+            for docType in documents_persisted:
+                persist_docs(docType)
+        else:
+            log_warning(&#34;Database snapshoter is not activated, will not do anything&#34;, debug)
+
+        t1 = time.time()
+        log_info(&#34;Epoch processed in {0} seconds &#34;.format(&#34;%.2f&#34; % (t1 - t0)), debug)
+        log_info(&#34;----------------------\n&#34;, debug)
+
         time.sleep(polling_frequency)
 
 
@@ -226,7 +278,7 @@ def main():
     try:
         persist()
     except Exception as e:
-        MyUtils.log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == &#34;__main__&#34;:
@@ -256,11 +308,33 @@ if __name__ == &#34;__main__&#34;:
     for service in filtered_services:
         for parameter in PERSIST_CONFIG_SERVICES_DOCS[service[&#34;name&#34;]]:
             database_key_name, timeseries_metric_name = parameter
-            timeseries = dict(metric=timeseries_metric_name,
-                              value=service[&#34;config&#34;][database_key_name],
-                              timestamp=int(time.time()),
-                              tags={&#34;service&#34;: service[&#34;name&#34;]})
-            docs.append(timeseries)
+            if  database_key_name in service[&#34;config&#34;]:
+                timeseries = dict(metric=timeseries_metric_name,
+                                  value=service[&#34;config&#34;][database_key_name],
+                                  timestamp=int(time.time()),
+                                  tags={&#34;service&#34;: service[&#34;name&#34;]})
+                docs.append(timeseries)
+            else:
+                log_warning(&#34;Missing config key &#39;{0}&#39; in service &#39;{1}&#39;&#34;.format(database_key_name, service[&#34;name&#34;]), debug)
+    return docs</code></pre>
+</details>
+</dd>
+<dt id="src.Snapshoters.DatabaseSnapshoter.get_data"><code class="name flex">
+<span>def <span class="ident">get_data</span></span>(<span>funct)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_data(funct):
+    docs = list()
+    try:
+        docs += funct_map[funct]()
+    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
+        # An error might have been thrown because database was recently updated or created
+        log_warning(&#34;Couldn&#39;t retrieve {0} info, error {1}.&#34;.format(funct, str(e)), debug)
     return docs</code></pre>
 </details>
 </dd>
@@ -321,6 +395,23 @@ if __name__ == &#34;__main__&#34;:
     return docs</code></pre>
 </details>
 </dd>
+<dt id="src.Snapshoters.DatabaseSnapshoter.invalid_conf"><code class="name flex">
+<span>def <span class="ident">invalid_conf</span></span>(<span>config)</span>
+</code></dt>
+<dd>
+<section class="desc"></section>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def invalid_conf(config):
+    # TODO THis code is duplicated on the structures and database snapshoters
+    for key, num in [(&#34;POLLING_FREQUENCY&#34;,config.get_value(&#34;POLLING_FREQUENCY&#34;))]:
+        if num &lt; 3:
+            return True, &#34;Configuration item &#39;{0}&#39; with a value of &#39;{1}&#39; is likely invalid&#34;.format(key, num)
+    return False, &#34;&#34;</code></pre>
+</details>
+</dd>
 <dt id="src.Snapshoters.DatabaseSnapshoter.main"><code class="name flex">
 <span>def <span class="ident">main</span></span>(<span>)</span>
 </code></dt>
@@ -334,7 +425,7 @@ if __name__ == &#34;__main__&#34;:
     try:
         persist()
     except Exception as e:
-        MyUtils.log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
+        log_error(&#34;{0} {1}&#34;.format(str(e), str(traceback.format_exc())), debug=True)</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.DatabaseSnapshoter.persist"><code class="name flex">
@@ -348,24 +439,59 @@ if __name__ == &#34;__main__&#34;:
 </summary>
 <pre><code class="python">def persist():
     logging.basicConfig(filename=SERVICE_NAME + &#39;.log&#39;, level=logging.INFO)
+
     global debug
+
     myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+
     while True:
+        log_info(&#34;----------------------&#34;, debug)
+        log_info(&#34;Starting Epoch&#34;, debug)
+        t0 = time.time()
+
         # Get service info
-        service = MyUtils.get_service(db_handler, SERVICE_NAME)  # Remote database operation
+        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
 
         # Heartbeat
-        MyUtils.beat(db_handler, SERVICE_NAME)  # Remote database operation
+        beat(db_handler, SERVICE_NAME)  # Remote database operation
 
         # CONFIG
         myConfig.set_config(service[&#34;config&#34;])
-        polling_frequency = myConfig.get_config_value(&#34;POLLING_FREQUENCY&#34;)
-        debug = myConfig.get_config_value(&#34;DEBUG&#34;)
+        polling_frequency = myConfig.get_value(&#34;POLLING_FREQUENCY&#34;)
+        debug = myConfig.get_value(&#34;DEBUG&#34;)
+        documents_persisted = myConfig.get_value(&#34;DOCUMENTS_PERSISTED&#34;)
+        SERVICE_IS_ACTIVATED = myConfig.get_value(&#34;ACTIVE&#34;)
 
-        for docType in [&#34;limits&#34;, &#34;structures&#34;, &#34;users&#34;, &#34;configs&#34;]:
-            persist_docs(docType)
+        log_info(&#34;Config is as follows:&#34;, debug)
+        log_info(&#34;.............................................&#34;, debug)
+        log_info(&#34;Polling frequency -&gt; {0}&#34;.format(polling_frequency), debug)
+        log_info(&#34;Documents to be persisted are -&gt; {0}&#34;.format(documents_persisted), debug)
+        log_info(&#34;.............................................&#34;, debug)
 
-        MyUtils.log_info(&#34;Epoch processed at {0}&#34;.format(MyUtils.get_time_now_string()), debug)
+        ## CHECK INVALID CONFIG ##
+        # TODO THis code is duplicated on the structures and database snapshoters
+        invalid, message = invalid_conf(myConfig)
+        if invalid:
+            log_error(message, debug)
+            time.sleep(polling_frequency)
+            if polling_frequency &lt; 4:
+                log_error(&#34;Polling frequency is too short, replacing with DEFAULT value &#39;{0}&#39;&#34;.format(CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]), debug)
+                polling_frequency = CONFIG_DEFAULT_VALUES[&#34;POLLING_FREQUENCY&#34;]
+
+            log_info(&#34;----------------------\n&#34;, debug)
+            time.sleep(polling_frequency)
+            continue
+
+        if SERVICE_IS_ACTIVATED:
+            for docType in documents_persisted:
+                persist_docs(docType)
+        else:
+            log_warning(&#34;Database snapshoter is not activated, will not do anything&#34;, debug)
+
+        t1 = time.time()
+        log_info(&#34;Epoch processed in {0} seconds &#34;.format(&#34;%.2f&#34; % (t1 - t0)), debug)
+        log_info(&#34;----------------------\n&#34;, debug)
+
         time.sleep(polling_frequency)</code></pre>
 </details>
 </dd>
@@ -379,16 +505,18 @@ if __name__ == &#34;__main__&#34;:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def persist_docs(funct):
+
     t0 = time.time()
-    docs = list()
-    try:
-        docs += funct_map[funct]()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve {0} info, error {1}.&#34;.format(funct, str(e)), debug)
+    docs = get_data(funct)
     t1 = time.time()
-    MyUtils.log_info(&#34;It took {0} seconds to get the {1} info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0)), funct), debug)
-    send_data(docs)</code></pre>
+
+    if docs:
+        log_info(&#34;It took {0} seconds to get {1} info&#34;.format(str(&#34;%.2f&#34; % (t1 - t0)), funct), debug)
+        num_docs = send_data(docs)
+        t2 = time.time()
+        if num_docs &gt; 0:
+            log_info(&#34;It took {0} seconds to send {1} info&#34;.format(str(&#34;%.2f&#34; % (t2 - t1)),funct), debug)
+            log_info(&#34;Post was done with {0} documents of &#39;{1}&#39;&#34;.format(str(num_docs), funct), debug)</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.DatabaseSnapshoter.send_data"><code class="name flex">
@@ -401,18 +529,15 @@ if __name__ == &#34;__main__&#34;:
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def send_data(docs):
+    num_sent_docs = 0
     if docs:
         # Remote database operation
         success, info = opentsdb_handler.send_json_documents(docs)
         if not success:
-            MyUtils.log_error(&#34;Couldn&#39;t properly post documents, error : {0}&#34;.format(json.dumps(info[&#34;error&#34;])),
-                              debug)
+            log_error(&#34;Couldn&#39;t properly post documents, error : {0}&#34;.format(json.dumps(info[&#34;error&#34;])), debug)
         else:
-            MyUtils.log_info(
-                &#34;Post was done at: {0} with {1} documents&#34;.format(time.strftime(&#34;%D %H:%M:%S&#34;, time.localtime()),
-                                                                  str(len(docs))), debug)
-    else:
-        MyUtils.log_warning(&#34;Couldn&#39;t retrieve any info.&#34;, debug)</code></pre>
+            num_sent_docs = len(docs)
+    return num_sent_docs</code></pre>
 </details>
 </dd>
 <dt id="src.Snapshoters.DatabaseSnapshoter.translate_structure_doc_to_timeseries"><code class="name flex">
@@ -440,14 +565,13 @@ if __name__ == &#34;__main__&#34;:
                                           tags={&#34;structure&#34;: struct_name})
                         timeseries_list.append(timeseries)
                     else:
-                        MyUtils.log_error(
+                        log_error(
                             &#34;Error with document: {0}, doc metric {1} has null value &#39;{2}&#39;, assuming a value of &#39;{3}&#39;&#34;.format(
                                 str(doc), doc_metric, value, OPENTSDB_STORED_VALUES_AS_NULL), debug)
 
         return timeseries_list
     except (ValueError, KeyError) as e:
-        MyUtils.log_error(&#34;Error {0} {1} with document: {2} &#34;.format(str(e), str(traceback.format_exc()), str(doc)),
-                          debug)
+        log_error(&#34;Error {0} {1} with document: {2} &#34;.format(str(e), str(traceback.format_exc()), str(doc)), debug)
         raise</code></pre>
 </details>
 </dd>
@@ -457,7 +581,9 @@ if __name__ == &#34;__main__&#34;:
 </section>
 </article>
 <nav id="sidebar">
-<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/docs_web/index.html"><img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/></a>
+<a href="http://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/index.html">
+<img src="https://s3-eu-west-1.amazonaws.com/jonatan.enes.udc/serverless_containers_website/logo_serverless.png" style="height:100px;"/>
+</a>
 <h1>Index</h1>
 <div class="toc">
 <ul></ul>
@@ -471,9 +597,11 @@ if __name__ == &#34;__main__&#34;:
 <li><h3><a href="#header-functions">Functions</a></h3>
 <ul class="">
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.get_configs" href="#src.Snapshoters.DatabaseSnapshoter.get_configs">get_configs</a></code></li>
+<li><code><a title="src.Snapshoters.DatabaseSnapshoter.get_data" href="#src.Snapshoters.DatabaseSnapshoter.get_data">get_data</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.get_limits" href="#src.Snapshoters.DatabaseSnapshoter.get_limits">get_limits</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.get_structures" href="#src.Snapshoters.DatabaseSnapshoter.get_structures">get_structures</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.get_users" href="#src.Snapshoters.DatabaseSnapshoter.get_users">get_users</a></code></li>
+<li><code><a title="src.Snapshoters.DatabaseSnapshoter.invalid_conf" href="#src.Snapshoters.DatabaseSnapshoter.invalid_conf">invalid_conf</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.main" href="#src.Snapshoters.DatabaseSnapshoter.main">main</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist" href="#src.Snapshoters.DatabaseSnapshoter.persist">persist</a></code></li>
 <li><code><a title="src.Snapshoters.DatabaseSnapshoter.persist_docs" href="#src.Snapshoters.DatabaseSnapshoter.persist_docs">persist_docs</a></code></li>
@@ -513,7 +641,7 @@ class="img-fluid" alt="">
 </a>
 </div>
 </div>
-<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.8.1</a>.</p>
+<p>Generated by <a href="https://pdoc3.github.io/pdoc"><cite>pdoc</cite> 0.10.0</a>.</p>
 </footer>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
 <script>hljs.initHighlightingOnLoad()</script>
