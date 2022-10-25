@@ -28,7 +28,8 @@ import random
 import time
 import requests
 import json
-
+import yaml
+import os
 
 class CouchDBServer:
     post_doc_headers = {'content-type': 'application/json'}
@@ -45,10 +46,18 @@ class CouchDBServer:
     __DATABASE_TIMEOUT = 10
 
     def __init__(self, couchdb_url=None, couchdbdb_port=None):
+
+        rescaling_path = os.environ['RESCALING_PATH']
+        config_file = rescaling_path + "../services_config.yml"
+        with open(config_file, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+
         if not couchdb_url:
-            couchdb_url = self.__COUCHDB_URL
+            #couchdb_url = self.__COUCHDB_URL
+            couchdb_url = config['COUCHDB_URL']
         if not couchdbdb_port:
-            couchdbdb_port = self.__COUCHDB_PORT
+            #couchdbdb_port = self.__COUCHDB_PORT
+            couchdbdb_port = config['COUCHDB_PORT']
         else:
             try:
                 couchdbdb_port = int(couchdbdb_port)

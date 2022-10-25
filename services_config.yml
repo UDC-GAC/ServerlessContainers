@@ -1,0 +1,11 @@
+## Orchestrator
+ORCHESTRATOR_URL: "orchestrator"
+ORCHESTRATOR_PORT: 5000
+
+# CouchDB
+COUCHDB_URL: "couchdb"
+COUCHDB_PORT: 5984
+
+# OpenTSDB:
+OPENTSDB_URL: "opentsdb"
+OPENTSDB_PORT: 4242

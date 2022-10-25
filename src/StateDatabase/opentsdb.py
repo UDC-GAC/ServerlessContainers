@@ -29,6 +29,8 @@ import json
 import requests
 import gzip
 import io
+import yaml
+import os
 
 from requests import ReadTimeout
 
@@ -40,10 +42,18 @@ class OpenTSDBServer:
     __TIMEOUT = 5
 
     def __init__(self, opentsdb_url=None, opentsdb_port=None):
+
+        rescaling_path = os.environ['RESCALING_PATH']
+        config_file = rescaling_path + "../services_config.yml"
+        with open(config_file, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+
         if not opentsdb_url:
-            opentsdb_url = self.__OPENTSDB_URL
+            #opentsdb_url = self.__OPENTSDB_URL
+            opentsdb_url = config['OPENTSDB_URL']
         if not opentsdb_port:
-            opentsdb_port = self.__OPENTSDB_PORT
+            #opentsdb_port = self.__OPENTSDB_PORT
+            opentsdb_port = config['OPENTSDB_PORT']
         else:
             try:
                 opentsdb_port = int(opentsdb_port)

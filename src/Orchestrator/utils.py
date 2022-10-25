@@ -39,5 +39,6 @@ def get_db():
     global COUCHDB_URL
     """Opens a new database connection if there is none yet for the current application context."""
     if not hasattr(g, 'db_handler'):
-        g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
+        #g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
+        g.db_handler = couchDB.CouchDBServer()
     return g.db_handler
