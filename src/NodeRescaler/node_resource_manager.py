@@ -29,6 +29,17 @@ import subprocess
 
 CGROUP_PATH = "/sys/fs/cgroup"
 
+def get_cgroup_file_path(container_id, resource, cgroup_file, container_engine):
+    if container_engine == "lxc":
+        container_name = container_id
+        return "/".join([CGROUP_PATH, resource, "lxc.payload.{0}".format(container_name), cgroup_file])
+
+    elif container_engine == "apptainer":
+        container_pid = container_id
+        return "/".join([CGROUP_PATH, resource, "system.slice", "apptainer-{0}.scope".format(container_pid), cgroup_file])
+
+    else:
+        raise Exception("Error: a non-valid container engine was specified")
 
 def read_cgroup_file_value(file_path):
     # Read only 1 line for these files as they are 'virtual' files
@@ -66,9 +77,10 @@ TICKS_PER_CPU_PERCENTAGE = 1000
 MAX_TICKS_PER_CPU = 100000
 
 
-def get_node_cpus(container_name):
+def get_node_cpus(container_id, container_engine):
     # Get info from cgroups cpuacct subsystem
-    cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_name), "cpu.cfs_quota_us"])
+    #cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_id), "cpu.cfs_quota_us"])
+    cpu_accounting_path = get_cgroup_file_path(container_id, "cpuacct", "cpu.cfs_quota_us", container_engine)
     op = read_cgroup_file_value(cpu_accounting_path)
     if op["success"]:
         cpu_limit = int(op["data"])
@@ -79,7 +91,8 @@ def get_node_cpus(container_name):
         return False, op
 
     # Get info from cgroups cpuset subsystem
-    cpus_path = "/".join([CGROUP_PATH, "cpuset", "lxc.payload.{0}".format(container_name), "cpuset.cpus"])
+    #cpus_path = "/".join([CGROUP_PATH, "cpuset", "lxc.payload.{0}".format(container_id), "cpuset.cpus"])
+    cpus_path = get_cgroup_file_path(container_id, "cpuset", "cpuset.cpus", container_engine)
     op = read_cgroup_file_value(cpus_path)
     if op["success"]:
         cpus = op["data"]
@@ -117,12 +130,14 @@ def get_node_cpus(container_name):
     return True, final_dict
 
 
-def set_node_cpus(container_name, cpu_resource):
+def set_node_cpus(container_id, cpu_resource, container_engine):
     applied_changes = dict()
 
     if CPU_LIMIT_ALLOWANCE_LABEL in cpu_resource:
-        cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_name), "cpu.cfs_quota_us"])
-        cpu_quota_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_name), "cpu.cfs_period_us"])
+        #cpu_accounting_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_id), "cpu.cfs_quota_us"])
+        #cpu_quota_path = "/".join([CGROUP_PATH, "cpuacct", "lxc.payload.{0}".format(container_id), "cpu.cfs_period_us"])
+        cpu_accounting_path = get_cgroup_file_path(container_id, "cpuacct", "cpu.cfs_quota_us", container_engine)
+        cpu_quota_path = get_cgroup_file_path(container_id, "cpuacct", "cpu.cfs_period_us", container_engine)
 
         try:
             if cpu_resource[CPU_LIMIT_ALLOWANCE_LABEL] == "-1":
@@ -154,7 +169,8 @@ def set_node_cpus(container_name, cpu_resource):
 
     if CPU_LIMIT_CPUS_LABEL in cpu_resource:
         # container.config["limits.cpu"] = cpu_resource[CPU_LIMIT_CPUS_LABEL]
-        cpu_cpuset_path = "/".join([CGROUP_PATH, "cpuset", "lxc.payload.{0}".format(container_name), "cpuset.cpus"])
+        #cpu_cpuset_path = "/".join([CGROUP_PATH, "cpuset", "lxc.payload.{0}".format(container_id), "cpuset.cpus"])
+        cpu_cpuset_path = get_cgroup_file_path(container_id, "cpuset", "cpuset.cpus", container_engine)
 
         op = write_cgroup_file_value(cpu_cpuset_path, str(cpu_resource[CPU_LIMIT_CPUS_LABEL]))
         if not op["success"]:
@@ -173,9 +189,10 @@ MEM_LIMIT_LABEL = "mem_limit"
 LOWER_LIMIT_MEGABYTES = 64
 
 
-def get_node_mem(container_name):
+def get_node_mem(container_id, container_engine):
     final_dict = dict()
-    memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc.payload.{0}".format(container_name), "memory.limit_in_bytes"])
+    #memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc.payload.{0}".format(container_id), "memory.limit_in_bytes"])
+    memory_limit_path = get_cgroup_file_path(container_id, "memory", "memory.limit_in_bytes", container_engine)
 
     op = read_cgroup_file_value(memory_limit_path)
     if op["success"]:
@@ -195,7 +212,7 @@ def get_node_mem(container_name):
     return True, final_dict
 
 
-def set_node_mem(container_name, mem_resource):
+def set_node_mem(container_id, mem_resource, container_engine):
     # Assume an integer for megabytes, add the M and set to cgroups
     if MEM_LIMIT_LABEL in mem_resource:
         value = int(mem_resource[MEM_LIMIT_LABEL])
@@ -210,11 +227,12 @@ def set_node_mem(container_name, mem_resource):
             value_megabytes = str(value) + 'M'
 
         # Set the swap first to the same amount of memory due to centos not allowing less memory than swap
-        # swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_name, "memory.memsw.limit_in_bytes"])
-        memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc.payload.{0}".format(container_name), "memory.limit_in_bytes"])
+        # swap_limit_path = "/".join([CGROUP_PATH, "memory", "lxc", container_id, "memory.memsw.limit_in_bytes"])
+        #memory_limit_path = "/".join([CGROUP_PATH, "memory", "lxc.payload.{0}".format(container_id), "memory.limit_in_bytes"])
+        memory_limit_path = get_cgroup_file_path(container_id, "memory", "memory.limit_in_bytes", container_engine)
 
         # Get the current memory limit in megabytes, that should be equal to the swap space
-        success, current_mem_value = get_node_mem(container_name)
+        success, current_mem_value = get_node_mem(container_id, container_engine)
         current_mem_value = current_mem_value[MEM_LIMIT_LABEL]
         if current_mem_value < value_megabytes_integer:
             # If we are to lower the amount, first memory, then swap
@@ -284,10 +302,13 @@ def get_device_major_minor_raw_device(device_path):
         return None
 
 
-def get_node_disk_limits(container_name):
-    blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc.payload.{0}".format(container_name)])
-    devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
-    devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
+def get_node_disk_limits(container_id, container_engine):
+    #blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc.payload.{0}".format(container_id)])
+    #devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
+    #devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
+    devices_read_limit_path = get_cgroup_file_path(container_id, "blkio", "blkio.throttle.read_bps_device", container_engine)
+    devices_write_limit_path = get_cgroup_file_path(container_id, "blkio", "blkio.throttle.write_bps_device", container_engine)
+
     devices_read_limits = dict()
     devices_write_limits = dict()
 
@@ -312,7 +333,7 @@ def get_node_disk_limits(container_name):
     return devices_read_limits, devices_write_limits
 
 
-def set_node_disk(container_name, disk_resource):
+def set_node_disk(container_id, disk_resource, container_engine):
     major = disk_resource["major"]
     minor = disk_resource["minor"]
 
@@ -320,10 +341,11 @@ def set_node_disk(container_name, disk_resource):
         limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
         try:
             # TODO FIX the path issue
+            # TODO and use function to differentiate between container engines
             # set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
             set_bandwidth_script_path = "/".join([os.getcwd()])
             set_disk_bandwidth = subprocess.Popen(
-                ["/bin/bash", "{0}/set_bandwidth.sh".format(set_bandwidth_script_path), container_name,
+                ["/bin/bash", "{0}/set_bandwidth.sh".format(set_bandwidth_script_path), container_id,
                  "{0}:{1}".format(major, minor),
                  limit_write], stderr=subprocess.PIPE)
             out, err = set_disk_bandwidth.communicate()
@@ -335,7 +357,7 @@ def set_node_disk(container_name, disk_resource):
         except subprocess.CalledProcessError as e:
             return False, {"error": str(e)}
 
-    # blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_name])
+    # blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_id])
     # if DISK_READ_LIMIT_LABEL in disk_resource:
     #     limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
     #     devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
@@ -377,10 +399,10 @@ def get_device_major_minor(device_path):
     return None
 
 
-def get_node_disks(container_name, devices):
+def get_node_disks(container_id, devices):
     SKIP_DISKS = ["bdev", "development", "production", "root"]
     retrieved_disks = list()
-    limits_read, limits_write = get_node_disk_limits(container_name)
+    limits_read, limits_write = get_node_disk_limits(container_id)
     for device in devices.keys():
         # TODO FIX, ignored devices should be obtained from a file
         if device in SKIP_DISKS:
@@ -389,7 +411,7 @@ def get_node_disks(container_name, devices):
         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
 
         if not device_path:
-            print("Disk {0} not found for container {1}".format(device, container_name))
+            print("Disk {0} not found for container {1}".format(device, container_id))
             continue
 
         try:

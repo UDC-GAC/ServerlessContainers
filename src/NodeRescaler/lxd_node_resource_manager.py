@@ -57,7 +57,10 @@ class LXDContainerManager:
         self.LXD_KEY = '/${LXD_KEY_PATH}/${LXD_KEY_NAME}.key'
         self.LXD_ENDPOINT = 'https://localhost:8443'
 
-    def __init__(self):
+    def __init__(self, cgroups_version):
+        # TODO add support for lxc with cgroups v2
+        self.container_engine = "lxc"
+        self.cgroups_version = cgroups_version
         self.read_keys()
         # TODO Deal with error if key does not exist
         self.client = Client(
@@ -98,15 +101,15 @@ class LXDContainerManager:
                     node_dict = dict()
                     (cpu_success, mem_success, disk_success, net_success) = (True, True, True, True)
                     if DICT_CPU_LABEL in resources:
-                        cpu_success, cpu_resources = set_node_cpus(node_name, resources[DICT_CPU_LABEL])
+                        cpu_success, cpu_resources = set_node_cpus(node_name, resources[DICT_CPU_LABEL], self.container_engine)
                         node_dict[DICT_CPU_LABEL] = cpu_resources
 
                     if DICT_MEM_LABEL in resources:
-                        mem_success, mem_resources = set_node_mem(node_name, resources[DICT_MEM_LABEL])
+                        mem_success, mem_resources = set_node_mem(node_name, resources[DICT_MEM_LABEL], self.container_engine)
                         node_dict[DICT_MEM_LABEL] = mem_resources
 
                     if DICT_DISK_LABEL in resources:
-                        disk_success, disk_resource = set_node_disk(node_name, resources[DICT_DISK_LABEL])
+                        disk_success, disk_resource = set_node_disk(node_name, resources[DICT_DISK_LABEL], self.container_engine)
                         node_dict[DICT_DISK_LABEL] = disk_resource
                         # disks_changed = list()
                         # for disk in resources[DICT_DISK_LABEL]:
@@ -143,10 +146,10 @@ class LXDContainerManager:
             if container.status == "Running":
                 node_dict = dict()
 
-                cpu_success, cpu_resources = get_node_cpus(node_name)
+                cpu_success, cpu_resources = get_node_cpus(node_name, self.container_engine)
                 node_dict[DICT_CPU_LABEL] = cpu_resources
 
-                mem_success, mem_resources = get_node_mem(node_name)
+                mem_success, mem_resources = get_node_mem(node_name, self.container_engine)
                 node_dict[DICT_MEM_LABEL] = mem_resources
 
                 # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent

@@ -1,3 +1,9 @@
+## Container engine (lxc or apptainer at the moment)
+CONTAINER_ENGINE: "lxc"
+
+## Cgroups version: v1 (Lecacy or Hybrid mode) or v2 (Unified mode)
+CGROUPS_VERSION: "v1"
+
 ## Orchestrator
 ORCHESTRATOR_URL: "orchestrator"
 ORCHESTRATOR_PORT: 5000
