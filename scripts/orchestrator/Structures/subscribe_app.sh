@@ -19,7 +19,11 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
       "mem": {"max": 24576, "min": 512,  "guard": false}
     },
     "guard": false,
-    "subtype": "application"
+    "subtype": "application",
+    "files_dir": "",
+    "install_script": "",
+    "start_script": "",
+    "stop_script": ""
   },
   "limits":
   {

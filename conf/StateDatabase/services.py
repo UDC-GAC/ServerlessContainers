@@ -9,7 +9,9 @@ guardian = dict(
     heartbeat="",
     config=dict(
         ACTIVE=False,
-        DEBUG=True
+        DEBUG=True,
+        EVENT_TIMEOUT=120,
+        WINDOW_DELAY=20
     )
 )
 

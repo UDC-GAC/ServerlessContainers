@@ -308,8 +308,8 @@ def subscribe_container_to_app(structure_name, app_name):
 
     # Look for any application that hosts this container, to make sure it is not already subscribed
     apps = get_db().get_structures(subtype="application")
-    for app in apps:
-        if cont_name in app["containers"]:
+    for application in apps:
+        if cont_name in application["containers"]:
             return abort(400, {"message": "Container '{0}' already subscribed in app '{1}'".format(cont_name, app_name)})
 
     app["containers"].append(cont_name)
@@ -624,7 +624,7 @@ def subscribe_app(structure_name):
 
     # Check that all the needed data is present on the request
     app = {}
-    for key in ["name", "guard", "subtype", "resources"]:
+    for key in ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script"]:
         if key not in req_app:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
