@@ -484,7 +484,7 @@ def subscribe_container(structure_name):
     for core in host_cpu_list:
         if core_map[core]["free"] >= pending_shares:
             core_map[core]["free"] -= pending_shares
-            core_map[core][cont_name] += pending_shares
+            core_map[core][cont_name] = pending_shares
             pending_shares = 0
             used_cores.append(core)
             break

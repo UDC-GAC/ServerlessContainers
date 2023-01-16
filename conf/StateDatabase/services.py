@@ -11,7 +11,8 @@ guardian = dict(
         ACTIVE=False,
         DEBUG=True,
         EVENT_TIMEOUT=120,
-        WINDOW_DELAY=20
+        WINDOW_DELAY=20,
+        WINDOW_TIMELAPSE=10
     )
 )
 
@@ -21,7 +22,9 @@ scaler = dict(
     heartbeat="",
     config=dict(
         ACTIVE=False,
-        DEBUG=True
+        DEBUG=True,
+        REQUEST_TIMEOUT=60,
+        POLLING_FREQUENCY=5
     )
 )
 
