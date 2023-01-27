@@ -594,7 +594,7 @@ def subscribe_host(structure_name):
     # Check that this supposed host exists and that it reports this container
     try:
         host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
-        if not host_containers:
+        if host_containers == None:
             raise RuntimeError()
     except Exception:
         return abort(400, {"message": "Could not connect to this host, is it up and has its node scaler up?"})
