@@ -374,6 +374,10 @@ def desubscribe_container(structure_name):
     # Delete the document for this structure
     get_db().delete_structure(structure)
 
+    # Delete the limits for this structure
+    limits = get_db().get_limits(structure)
+    get_db().delete_limit(limits)
+
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
 
@@ -539,8 +543,16 @@ def subscribe_container(structure_name):
 
 
     get_db().add_structure(container)
-    get_db().add_limit(limits)
     get_db().update_structure(host)
+
+    # Check if limits already exist
+    try:
+        existing_limit = get_db().get_limits(container)
+        existing_limit['resources'] = limits['resources']
+        get_db().update_limit(existing_limit)
+    except ValueError:
+        # Limits do not exist yet
+        get_db().add_limit(limits)
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
@@ -679,7 +691,15 @@ def subscribe_app(structure_name):
     limits["name"] = app["name"]
 
     get_db().add_structure(app)
-    get_db().add_limit(limits)
+
+    # Check if limits already exist
+    try:
+        existing_limit = get_db().get_limits(app)
+        existing_limit['resources'] = limits['resources']
+        get_db().update_limit(existing_limit)
+    except ValueError:
+        # Limits do not exist yet
+        get_db().add_limit(limits)
 
     return jsonify(201)
 
@@ -690,5 +710,9 @@ def desubscribe_app(structure_name):
 
     # Delete the document for this structure
     get_db().delete_structure(app)
+
+    # Delete the limits for this structure
+    limits = get_db().get_limits(app)
+    get_db().delete_limit(limits)
 
     return jsonify(201)

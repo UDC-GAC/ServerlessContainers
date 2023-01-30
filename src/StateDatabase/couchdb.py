@@ -319,6 +319,9 @@ class CouchDBServer:
         else:
             return limits[0]
 
+    def delete_limit(self, limit):
+        self.__resilient_delete_doc(self.__limits_db_name, limit)
+
     def update_limit(self, limit):
         return self.__resilient_update_doc(self.__limits_db_name, limit)
 
