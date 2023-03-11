@@ -67,16 +67,17 @@ DICT_NET_LABEL = "net"
 
 class SingularityContainerManager:
 
-    def __init__(self, cgroups_version):
+    def __init__(self, singularity_command_alias, cgroups_version):
         self.userid = os.getuid()
         self.container_engine = "apptainer"
+        self.singularity_command_alias = singularity_command_alias
         self.cgroups_version = cgroups_version
 
     def __get_singularity_instances(self):
         if self.cgroups_version == "v1":
-            process = subprocess.Popen(["sudo", "singularity", "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            process = subprocess.Popen(["singularity", "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
         parsed = json.loads(stdout)
@@ -85,9 +86,9 @@ class SingularityContainerManager:
 
     def __get_singularity_instance_by_name(self, instance_name):
         if self.cgroups_version == "v1":
-            process = subprocess.Popen(["sudo", "singularity", "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            process = subprocess.Popen(["singularity", "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
         parsed = json.loads(stdout)

@@ -52,12 +52,13 @@ def initialize_ContainerEngine(f):
             config = yaml.load(cf, Loader=yaml.FullLoader)
 
         container_engine = config['CONTAINER_ENGINE']
+        singularity_command_alias = config['SINGULARITY_COMMAND_ALIAS']
         cgroups_version = config['CGROUPS_VERSION']
 
         if container_engine == "lxc":
             initialize_LXD(cgroups_version)
         elif container_engine == "apptainer":
-            initialize_Singularity(cgroups_version)
+            initialize_Singularity(singularity_command_alias, cgroups_version)
         else:
             raise Exception("Error: a non-valid container engine was specified")
 
@@ -65,11 +66,11 @@ def initialize_ContainerEngine(f):
 
     return wrap
 
-def initialize_Singularity(cgroups_version):
+def initialize_Singularity(singularity_command_alias, cgroups_version):
 
     global node_resource_manager
     if not node_resource_manager:
-        node_resource_manager = SingularityContainerManager(cgroups_version)
+        node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version)
         if not node_resource_manager:
             raise Exception("Could not instantiate Singularity Manager")
     else:
@@ -146,12 +147,13 @@ if __name__ == "__main__":
         config = yaml.load(cf, Loader=yaml.FullLoader)
 
     container_engine = config['CONTAINER_ENGINE']
+    singularity_command_alias = config['SINGULARITY_COMMAND_ALIAS']
     cgroups_version = config['CGROUPS_VERSION']
 
     if container_engine == "lxc":
         node_resource_manager = LXDContainerManager(cgroups_version)
     elif container_engine == "apptainer":
-        node_resource_manager = SingularityContainerManager(cgroups_version)
+        node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version)
     else:
         raise Exception("Error: a non-valid container engine was specified")
 
