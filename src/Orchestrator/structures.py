@@ -369,6 +369,28 @@ def desubscribe_container(structure_name):
     # MEM
     host["resources"]["mem"]["free"] += structure["resources"]["mem"]["current"]
 
+    # Decrease disk load
+    if 'disk' in structure["resources"]:
+        disk_name = structure["resources"]["disk"]["name"]
+        if "disks" not in host["resources"]:
+            return abort(400, {"message": "Host does not have disks"})
+        else:
+            disks = host["resources"]["disks"]
+            i = 0
+            new_disk_load = None
+            for disk in disks:
+                if disk["name"] == disk_name:
+                    new_disk_load = disk["load"]
+                    break
+                i -= 1
+            if new_disk_load == None:
+                return abort(400, {"message": "Host does not have requested disk"})
+            if new_disk_load < 0:
+                return abort(400, {"message": "Host disk can't have negative load"})
+            else:
+                new_disk_load -= 1
+                host["resources"]["disks"][i]["load"] = new_disk_load
+
     get_db().update_structure(host)
 
     # Delete the document for this structure
@@ -413,6 +435,15 @@ def subscribe_container(structure_name):
             else:
                 container["resources"]["cpu"][key] = req_cont["resources"]["cpu"][key]
                 container["resources"]["mem"][key] = req_cont["resources"]["mem"][key]
+
+        if 'disk' in req_cont["resources"]:
+            disk = req_cont["resources"]["disk"]
+            container["resources"]["disk"] = {}
+            for key in ["name", "path"]:
+                if key not in disk:
+                    return abort(400, {"message": "Missing disk resource information"})
+                else:
+                    container["resources"]["disk"][key] = disk[key]
 
     # Check that the endpoint requested container name matches with the one in the request
     if container["name"] != structure_name:
@@ -541,6 +572,25 @@ def subscribe_container(structure_name):
 
     Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
 
+    # Increase disk load
+    if 'disk' in req_cont["resources"]:
+        disk_name = req_cont["resources"]["disk"]["name"]
+        if "disks" not in host["resources"]:
+            return abort(400, {"message": "Host does not have disks"})
+        else:
+            disks = host["resources"]["disks"]
+            i = 0
+            new_disk_load = None
+            for disk in disks:
+                if disk["name"] == disk_name:
+                    new_disk_load = disk["load"]
+                    break
+                i += 1
+            if new_disk_load == None:
+                return abort(400, {"message": "Host does not have requested disk"})
+            else:
+                new_disk_load += 1
+                host["resources"]["disks"][i]["load"] = new_disk_load
 
     get_db().add_structure(container)
     get_db().update_structure(host)
@@ -592,6 +642,18 @@ def subscribe_host(structure_name):
         for n in range(0, int(host["resources"]["cpu"]["max"] / 100)):
             host["resources"]["cpu"]["core_usage_mapping"][n] = {"free": 100}
 
+        if 'disks' in data["resources"]:
+            disks = data["resources"]["disks"]
+            host["resources"]["disks"] = []
+            for disk in disks:
+                new_disk = {}
+                for key in ["name", "type", "load", "path"]:
+                    if key not in disk:
+                        return abort(400, {"message": "Missing disk resource information"})
+                    else:
+                        new_disk[key] = disk[key]
+                host["resources"]["disks"].append(new_disk)
+
     if host["name"] != structure_name:
         return abort(400, {"message": "Name mismatch".format(key)})
 
@@ -636,7 +698,7 @@ def subscribe_app(structure_name):
 
     # Check that all the needed data is present on the request
     app = {}
-    for key in ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script"]:
+    for key in ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]:
         if key not in req_app:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
