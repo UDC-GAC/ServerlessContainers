@@ -1,0 +1,14 @@
+{
+  "hosts": [
+    {
+      "name": "host0",
+      "containers": ["host0-cont0", "host0-cont1"]
+    }
+  ],
+  "apps": [
+    {
+      "name": "app1",
+      "containers": ["host0-cont0", "host0-cont1"]
+    }
+  ]
+}

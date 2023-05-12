@@ -4,31 +4,33 @@ scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
-apps=( app1 )
-nodes=( node0 node1 node2 node3 node4 node5 node6 node7 )
-resources=( cpu mem )
+apps=($(jq -r '.apps[].name' ${scriptDir}/layout.json))
+containers=$(jq -c '.hosts[].containers[]' ${scriptDir}/layout.json | tr -d '"')
+resources=( cpu )
 
 echo "Setting container resources to unguarded"
-for i in "${nodes[@]}"
-do
-    bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_unguarded.sh $i "${resources[@]}"
-done
+while read -r container; do
+    echo "Container name: $container"
+    bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_unguarded.sh ${container} "${resources[@]}"
+done <<< "$containers"
 
 echo "Setting container nodes to unguarded"
-for i in "${nodes[@]}"
-do
-	bash $ORCHESTRATOR_PATH/Structures/set_to_unguarded.sh $i
-done
+while read -r container; do
+    echo "Container name: $container"
+    bash $ORCHESTRATOR_PATH/Structures/set_to_unguarded.sh ${container}
+done <<< "$containers"
 
 echo "Setting applications resources to unguarded"
 for i in "${apps[@]}"
 do
+    echo "Application: '${i}'"
     bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_unguarded.sh $i "${resources[@]}"
 done
 
 echo "Setting applications to unguarded"
 for i in "${apps[@]}"
 do
+  echo "Application: '${i}'"
 	bash $ORCHESTRATOR_PATH/Structures/set_to_unguarded.sh $i
 done
 

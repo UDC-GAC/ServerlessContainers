@@ -4,7 +4,7 @@ scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
-apps=( app1 )
+apps=($(jq -r '.apps[].name' ${scriptDir}/layout.json))
 resources=( cpu )
 
 echo "Readjust Guardian configuration to the applications scenario"
