@@ -215,7 +215,7 @@ class Guardian:
         if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
             usage_value_string = NOT_AVAILABLE_STRING
         else:
-            usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
+            usage_value_string = str(int(usages_dict[translator_dict[resource_label]]))
 
         strings = list()
         for key, values in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits), ("min", metrics)]:

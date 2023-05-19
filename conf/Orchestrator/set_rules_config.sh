@@ -21,22 +21,21 @@ bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh ${PROFILE} MemRescaleUp
 bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh ${PROFILE} MemRescaleDown
 
 
-
 PROFILE="default"
-bash $ORCHESTRATOR_PATH/Rules/change_amount.sh ${PROFILE} CpuRescaleUp 50
+bash $ORCHESTRATOR_PATH/Rules/change_amount.sh ${PROFILE} CpuRescaleUp 75
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp up 2
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp down 2
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown up 0
-bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown down 4
+bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown down 8
 PROFILE="benevolent"
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh ${PROFILE} CpuRescaleUp 75
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp up 2
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp down 2
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown up 0
-bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown down 6
+bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown down 8
 PROFILE="strict"
-bash $ORCHESTRATOR_PATH/Rules/change_amount.sh ${PROFILE} CpuRescaleUp 50
-bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp up 2
+bash $ORCHESTRATOR_PATH/Rules/change_amount.sh ${PROFILE} CpuRescaleUp 25
+bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp up 6
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleUp down 0
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown up 2
 bash $ORCHESTRATOR_PATH/Rules/change_events_amount.sh ${PROFILE} CpuRescaleDown down 2
