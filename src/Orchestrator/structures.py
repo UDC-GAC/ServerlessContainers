@@ -227,6 +227,33 @@ def set_structure_multiple_resources_to_unguarded(structure_name):
     return set_structure_multiple_resources_to_guard_state(structure_name, resources, False)
 
 
+@structure_routes.route("/structure/<structure_name>/profile", methods=['PUT'])
+def set_structure_profile(structure_name):
+    put_done = False
+    def onetry():
+        structure = retrieve_structure(structure_name)
+        structure["profile"] = profile
+        get_db().update_structure(structure)
+        structure = retrieve_structure(structure_name)
+        put_done = structure["profile"] == profile
+        return put_done
+
+    try:
+        profile = request.json["profile"]
+    except KeyError:
+        return abort(400)
+
+    put_done = onetry()
+
+    tries = 1
+    while not put_done:
+        tries += 1
+        time.sleep(BACK_OFF_TIME_MS / 1000)
+        put_done = onetry()
+        if tries >= MAX_TRIES:
+            return abort(400, {"message": "MAX_TRIES updating database document"})
+    return jsonify(201)
+
 @structure_routes.route("/structure/<structure_name>/limits", methods=['GET'])
 def get_structure_limits(structure_name):
     try:

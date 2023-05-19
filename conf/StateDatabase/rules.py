@@ -189,7 +189,6 @@ MemRescaleDown = dict(
     profile="default"
 )
 
-
 # This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
 cpu_usage_low = dict(
     _id='cpu_usage_low',
@@ -254,15 +253,15 @@ if __name__ == "__main__":
     database = "rules"
     initializer_utils.remove_db(database)
     initializer_utils.create_db(database)
+    all_rules = [cpu_exceeded_upper, cpu_dropped_lower, CpuRescaleUp, CpuRescaleDown, mem_exceeded_upper,
+                 mem_dropped_lower, MemRescaleUp, MemRescaleDown, cpu_usage_high, cpu_usage_low]
+
     if handler.database_exists("rules"):
-        print("Adding 'rules' documents")
-        handler.add_rule(cpu_exceeded_upper)
-        handler.add_rule(cpu_dropped_lower)
-        handler.add_rule(CpuRescaleUp)
-        handler.add_rule(CpuRescaleDown)
-        handler.add_rule(mem_exceeded_upper)
-        handler.add_rule(mem_dropped_lower)
-        handler.add_rule(MemRescaleUp)
-        handler.add_rule(MemRescaleDown)
-        handler.add_rule(cpu_usage_high)
-        handler.add_rule(cpu_usage_low)
+        for profile in ["default", "benevolent", "strict"]:
+            print("Adding 'rules' documents with the '{0}' profile".format(profile))
+            for r in all_rules:
+                rule = r.copy()
+                print("Adding '{0}'".format(rule["name"]))
+                rule["profile"] = profile
+                rule["_id"] = "{0}_{1}".format(rule["_id"], rule["profile"])
+                handler.add_rule(rule)

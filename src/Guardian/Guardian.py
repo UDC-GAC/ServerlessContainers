@@ -550,21 +550,22 @@ class Guardian:
 
             # If it is 0, because there was a previous floating value between -1 and 1, set it to 0 so that it does not generate any Request
             if amount == 0:
-                log_warning("Amount generated for structure {0} with rule {1} is 0".format(structure["name"], rule["name"]), self.debug)
+                log_warning("Amount generated for structure {0} with rule {1} is 0, "
+                            "will not generate a request, but events will be removed".format(structure["name"], rule["name"]), self.debug)
+            else:
+                # If the resource is susceptible to check, ensure that it does not surpass any limit
+                new_amount = amount
+                if resource_label not in NON_ADJUSTABLE_RESOURCES:
+                    structure_resources = structure["resources"][resource_label]
+                    structure_limits = limits[resource_label]
+                    new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
+                    if new_amount != amount:
+                        log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
+                            structure["name"], rule["name"], amount, new_amount), self.debug)
 
-            # If the resource is susceptible to check, ensure that it does not surpass any limit
-            new_amount = amount
-            if resource_label not in NON_ADJUSTABLE_RESOURCES:
-                structure_resources = structure["resources"][resource_label]
-                structure_limits = limits[resource_label]
-                new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
-                if new_amount != amount:
-                    log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
-                        structure["name"], rule["name"], amount, new_amount), self.debug)
-
-            # Generate the request and append it
-            request = self.generate_request(structure, new_amount, resource_label)
-            generated_requests.append(request)
+                # Generate the request and append it
+                request = self.generate_request(structure, new_amount, resource_label)
+                generated_requests.append(request)
 
             # Remove the events that triggered the request
             event_name = generate_event_name(events[resource_label]["events"], resource_label)
@@ -637,6 +638,8 @@ class Guardian:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
     def serverless(self, structure, rules):
+        # for r in rules:
+        #     print("Using rule '{0}' for structure '{1}'".format(r["_id"], structure["name"]))
         structure_subtype = structure["subtype"]
 
         # Check if structure is guarded
@@ -701,12 +704,34 @@ class Guardian:
         except Exception as e:
             log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
 
+    @staticmethod
+    def classify_rules(rules):
+        rules_per_profile = dict()
+        for r in rules:
+            if r["profile"] not in rules_per_profile:
+                rules_per_profile[r["profile"]] = [r]
+            else:
+                rules_per_profile[r["profile"]].append(r)
+        return rules_per_profile
+
     def guard_structures(self, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
+        rules_per_profile = self.classify_rules(rules)
 
         threads = []
         for structure in structures:
+            if "profile" not in structure:
+                rules = rules_per_profile["default"]
+                log_warning("Structure '{0}' has not any profile associated, "
+                            "using 'default' profile".format(structure["name"]), self.debug)
+            else:
+                if structure["profile"] not in rules_per_profile:
+                    log_warning("Profile '{0}' as used in structure '{1}' has not any rule associated with it, "
+                                "using 'default' profile".format(structure["profile"],structure["name"]), self.debug)
+                    rules = rules_per_profile["default"]
+                else:
+                    rules = rules_per_profile[structure["profile"]]
             thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
                             args=(structure, rules,))
             thread.start()

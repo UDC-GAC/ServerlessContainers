@@ -15,7 +15,7 @@ while read -r container; do
     bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $container cpu 20
 
     echo "mem"
-    bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $container mem 2048
+    bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $container mem 8192
     bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh $container mem 350
     bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $container mem 512
 done <<< "$containers"

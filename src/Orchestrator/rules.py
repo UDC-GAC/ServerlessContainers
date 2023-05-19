@@ -43,7 +43,7 @@ def retrieve_rule(profile, rule_name):
 
 @rules_routes.route("/rule/<profile>/<rule_name>", methods=['GET'])
 def get_rule(profile, rule_name):
-    retrieve_rule(profile, rule_name)
+    return jsonify(retrieve_rule(profile, rule_name))
 
 
 @rules_routes.route("/rule/<profile>", methods=['GET'])
@@ -159,7 +159,7 @@ def change_policy_rule(profile, rule_name):
 
 
 @rules_routes.route("/rule/<profile>/<rule_name>/events_required", methods=['PUT'])
-def change_event_up_amount(profile, rule_name):
+def change_events_required_amount(profile, rule_name):
     put_done = False
     tries = 0
     try:
@@ -188,7 +188,7 @@ def change_event_up_amount(profile, rule_name):
             first_key = list(part.keys())[0]
             first_val = part[first_key]
             rule_part = first_val[0]["var"]
-            rule_amount = first_val[1]
+            # rule_amount = first_val[1]
 
             if event_type == "up":
                 if rule_part == "events.scale.up":
@@ -199,11 +199,12 @@ def change_event_up_amount(profile, rule_name):
             if event_type == "down":
                 if rule_part == "events.scale.down":
                     rule["rule"]["and"][list_rules_entry][first_key][1] = new_amount
-                    rule["events_to_remove"] = new_amount
-
                     correct_key = first_key
                     break
             list_rules_entry += 1
+
+        if event_type == rule["rescale_type"]:
+            rule["events_to_remove"] = new_amount
 
         get_db().update_rule(rule)
 
