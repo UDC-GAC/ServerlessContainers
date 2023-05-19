@@ -34,16 +34,24 @@ from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 rules_routes = Blueprint('rules', __name__)
 
 
-def retrieve_rule(rule_name):
+def retrieve_rule(profile, rule_name):
     try:
-        return get_db().get_rule(rule_name)
+        return get_db().get_rule(profile, rule_name)
     except ValueError:
         return abort(404)
 
 
-@rules_routes.route("/rule/<rule_name>", methods=['GET'])
-def get_rule(rule_name):
-    return jsonify(retrieve_rule(rule_name))
+@rules_routes.route("/rule/<profile>/<rule_name>", methods=['GET'])
+def get_rule(profile, rule_name):
+    retrieve_rule(profile, rule_name)
+
+
+@rules_routes.route("/rule/<profile>", methods=['GET'])
+def get_profile_rules(profile):
+    try:
+        return jsonify(get_db().get_profile_rules(profile))
+    except ValueError:
+        return abort(404)
 
 
 @rules_routes.route("/rule/", methods=['GET'])
@@ -51,18 +59,18 @@ def get_rules():
     return jsonify(get_db().get_rules())
 
 
-@rules_routes.route("/rule/<rule_name>/activate", methods=['PUT'])
-def activate_rule(rule_name):
-    rule = retrieve_rule(rule_name)
+@rules_routes.route("/rule/<profile>/<rule_name>/activate", methods=['PUT'])
+def activate_rule(profile, rule_name):
+    rule = retrieve_rule(profile, rule_name)
     put_done = rule["active"]
 
     tries = 0
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
         rule["active"] = True
         get_db().update_rule(rule)
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
         put_done = rule["active"]
@@ -71,29 +79,29 @@ def activate_rule(rule_name):
     return jsonify(201)
 
 
-@rules_routes.route("/rule/<rule_name>/deactivate", methods=['PUT'])
-def deactivate_rule(rule_name):
-    rule = retrieve_rule(rule_name)
+@rules_routes.route("/rule/<profile>/<rule_name>/deactivate", methods=['PUT'])
+def deactivate_rule(profile, rule_name):
+    rule = retrieve_rule(profile, rule_name)
     put_done = not rule["active"]
 
     tries = 0
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
         rule["active"] = False
         get_db().update_rule(rule)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
         put_done = not rule["active"]
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
 
-@rules_routes.route("/rule/<rule_name>/amount", methods=['PUT'])
-def change_amount_rule(rule_name):
-    rule = retrieve_rule(rule_name)
+@rules_routes.route("/rule/<profile>/<rule_name>/amount", methods=['PUT'])
+def change_amount_rule(profile, rule_name):
+    rule = retrieve_rule(profile, rule_name)
 
     if rule["generates"] != "requests" or rule["rescale_type"] != "up":
         return abort(400, {"message": "This rule can't have its amount changed"})
@@ -103,28 +111,28 @@ def change_amount_rule(rule_name):
     except KeyError:
         return abort(400)
 
-    rule = retrieve_rule(rule_name)
+    rule = retrieve_rule(profile, rule_name)
     put_done = rule["amount"] == amount
 
     tries = 0
 
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
         rule["amount"] = amount
         get_db().update_rule(rule)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
         put_done = rule["amount"] == amount
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
 
-@rules_routes.route("/rule/<rule_name>/policy", methods=['PUT'])
-def change_policy_rule(rule_name):
-    rule = retrieve_rule(rule_name)
+@rules_routes.route("/rule/<profile>/<rule_name>/policy", methods=['PUT'])
+def change_policy_rule(profile, rule_name):
+    rule = retrieve_rule(profile, rule_name)
 
     if rule["generates"] != "requests" or rule["rescale_type"] != "up":
         return abort(400, {"message": "This rule can't have its policy changed"})
@@ -138,21 +146,20 @@ def change_policy_rule(rule_name):
     else:
         while not put_done:
             tries += 1
-            rule = retrieve_rule(rule_name)
+            rule = retrieve_rule(profile, rule_name)
             rule["rescale_policy"] = rescale_policy
             get_db().update_rule(rule)
 
             time.sleep(BACK_OFF_TIME_MS / 1000)
-            rule = retrieve_rule(rule_name)
+            rule = retrieve_rule(profile, rule_name)
             put_done = rule["rescale_policy"] == rescale_policy
             if tries >= MAX_TRIES:
                 return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
 
-
-@rules_routes.route("/rule/<rule_name>/events_required", methods=['PUT'])
-def change_event_up_amount(rule_name):
+@rules_routes.route("/rule/<profile>/<rule_name>/events_required", methods=['PUT'])
+def change_event_up_amount(profile, rule_name):
     put_done = False
     tries = 0
     try:
@@ -166,13 +173,13 @@ def change_event_up_amount(rule_name):
     except KeyError:
         return abort(400, {"message": "Invalid amount"})
 
-    rule = retrieve_rule(rule_name)
+    rule = retrieve_rule(profile, rule_name)
     if rule["rescale_type"] not in ["down", "up"]:
         return abort(400, {"message": "Can't apply this change to this rule"})
 
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
 
         correct_key = None
         list_rules_entry = 0
@@ -202,7 +209,7 @@ def change_event_up_amount(rule_name):
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
-        rule = retrieve_rule(rule_name)
+        rule = retrieve_rule(profile, rule_name)
         put_done = rule["rule"]["and"][list_rules_entry][correct_key][1] == new_amount
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})

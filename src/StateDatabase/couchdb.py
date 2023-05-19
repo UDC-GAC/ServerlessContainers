@@ -31,6 +31,7 @@ import json
 import yaml
 import os
 
+
 class CouchDBServer:
     post_doc_headers = {'content-type': 'application/json'}
     __COUCHDB_URL = "couchdb"
@@ -53,10 +54,10 @@ class CouchDBServer:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
         if not couchdb_url:
-            #couchdb_url = self.__COUCHDB_URL
+            # couchdb_url = self.__COUCHDB_URL
             couchdb_url = config['COUCHDB_URL']
         if not couchdbdb_port:
-            #couchdbdb_port = self.__COUCHDB_PORT
+            # couchdbdb_port = self.__COUCHDB_PORT
             couchdbdb_port = config['COUCHDB_PORT']
         else:
             try:
@@ -157,7 +158,8 @@ class CouchDBServer:
         i = 0
         while i < max_tries:
             i += 1
-            r = self.session.delete("{0}/{1}/{2}?rev={3}".format(self.server, database, str(doc["_id"]), str(doc["_rev"])))
+            r = self.session.delete(
+                "{0}/{1}/{2}?rev={3}".format(self.server, database, str(doc["_id"]), str(doc["_rev"])))
             if r.status_code == 200 or r.status_code == 201:
                 return True
             elif r.status_code == 409:
@@ -348,8 +350,19 @@ class CouchDBServer:
     def add_rule(self, rule):
         return self.__add_doc(self.__rules_db_name, rule)
 
-    def get_rule(self, rule_name):
-        return self.__find_document_by_name(self.__rules_db_name, rule_name)
+    def get_rule(self, profile, rule_name):
+        rules = self.__find_documents_by_matches(self.__rules_db_name, {"profile": profile, "name": rule_name})
+        if not rules:
+            raise ValueError("No rules found with the profile '{0}' and name '{1}'".format(profile, rule_name))
+        else:
+            return rules[0]
+
+    def get_profile_rules(self, profile):
+        rules = self.__find_documents_by_matches(self.__rules_db_name, {"profile": profile})
+        if not rules:
+            raise ValueError("No rules found with the profile '{0}'".format(profile))
+        else:
+            return rules
 
     def get_rules(self):
         return self.__get_all_database_docs(self.__rules_db_name)

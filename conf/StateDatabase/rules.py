@@ -22,7 +22,8 @@ cpu_exceeded_upper = dict(
         }),
     generates="events",
     action={"events": {"scale": {"up": 1}}},
-    active=True
+    active=True,
+    profile="default"
 )
 
 cpu_dropped_lower = dict(
@@ -43,7 +44,8 @@ cpu_dropped_lower = dict(
                 {"var": "cpu.structure.cpu.min"}]}]}),
     generates="events",
     action={"events": {"scale": {"down": 1}}},
-    active=True
+    active=True,
+    profile="default"
 )
 
 # Avoid hysteresis by only rescaling when X underuse events and no bottlenecks are detected, or viceversa
@@ -67,7 +69,8 @@ CpuRescaleUp = dict(
     amount=75,
     rescale_policy="amount",
     rescale_type="up",
-    active=True
+    active=True,
+    profile="default"
 )
 
 CpuRescaleDown = dict(
@@ -90,6 +93,7 @@ CpuRescaleDown = dict(
     rescale_policy="fit_to_usage",
     rescale_type="down",
     active=True,
+    profile="default"
 )
 mem_exceeded_upper = dict(
     _id='mem_exceeded_upper',
@@ -112,7 +116,8 @@ mem_exceeded_upper = dict(
         }),
     generates="events",
     action={"events": {"scale": {"up": 1}}},
-    active=True
+    active=True,
+    profile="default"
 )
 
 mem_dropped_lower = dict(
@@ -133,7 +138,8 @@ mem_dropped_lower = dict(
                 {"var": "mem.structure.mem.min"}]}]}),
     generates="events",
     action={"events": {"scale": {"down": 1}}},
-    active=True
+    active=True,
+    profile="default"
 )
 
 MemRescaleUp = dict(
@@ -156,7 +162,8 @@ MemRescaleUp = dict(
     amount=256,
     rescale_policy="amount",
     rescale_type="up",
-    active=True
+    active=True,
+    profile="default"
 )
 
 MemRescaleDown = dict(
@@ -178,7 +185,8 @@ MemRescaleDown = dict(
     action={"requests": ["MemRescaleDown"]},
     rescale_policy="fit_to_usage",
     rescale_type="down",
-    active=True
+    active=True,
+    profile="default"
 )
 
 
@@ -206,8 +214,9 @@ cpu_usage_low = dict(
             ]}
         ]}
     ),
-    active=False,
     generates="",
+    active=False,
+    profile="default"
 )
 
 # This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
@@ -234,8 +243,9 @@ cpu_usage_high = dict(
             ]}
         ]}
     ),
-    active=False,
     generates="",
+    active=False,
+    profile="default"
 )
 
 if __name__ == "__main__":
