@@ -21,12 +21,6 @@ bash ${scriptDir}/Orchestrator/subscribe_containers.sh
 echo "Subscribing the apps"
 bash ${scriptDir}/Orchestrator/subscribe_apps.sh
 
-echo "Subscribing the containers to the apps"
-bash ${scriptDir}/Orchestrator/subscribe_containers_to_apps.sh
-
-echo "Configuring the structures"
-bash ${scriptDir}/Orchestrator/set_structures_config.sh
-
 echo "Setting everything to untreated"
 bash ${scriptDir}/Orchestrator/set_system_to_untreated.sh
 

@@ -4,7 +4,7 @@ scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
-containers=$(jq -c '.hosts[].containers[]' ${scriptDir}/layout.json | tr -d '"')
+containers=$(jq -c '.containers[].name' ${scriptDir}/layout.json | tr -d '"')
 resources=( cpu mem )
 
 echo "Deactivate the Guardian and Scaler service"
@@ -42,9 +42,9 @@ bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh default MemRescaleUp
 bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh default MemRescaleDown
 echo "Set the correct amounts"
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default CpuRescaleUp 75
-bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default CpuRescaleUp amount
+bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default CpuRescaleUp proportional # amount
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default MemRescaleUp 256
-bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default MemRescaleUp amount
+bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default MemRescaleUp proportional # amount
 
 echo "Deactivate ReBalancer services"
 bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh

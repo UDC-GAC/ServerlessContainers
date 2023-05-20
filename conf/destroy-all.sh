@@ -6,6 +6,13 @@ python3 ${scriptDir}/StateDatabase/other_tables.py
 python3 ${scriptDir}/StateDatabase/rules.py
 python3 ${scriptDir}/StateDatabase/services.py
 
+echo "Removing apps"
+
+
+echo "Removing containers"
+
+
+echo "Removing hosts"
 
 
 

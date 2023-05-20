@@ -5,8 +5,8 @@ source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
 apps=($(jq -r '.apps[].name' ${scriptDir}/layout.json))
-containers=$(jq -c '.hosts[].containers[]' ${scriptDir}/layout.json | tr -d '"')
-resources=( cpu )
+containers=$(jq -c '.containers[].name' ${scriptDir}/layout.json | tr -d '"')
+resources=( cpu mem )
 
 echo "Setting container resources to unguarded"
 while read -r container; do
@@ -34,14 +34,13 @@ do
 	bash $ORCHESTRATOR_PATH/Structures/set_to_unguarded.sh $i
 done
 
-echo "Deactivate StructureSnapshoter, DatabaseSnapshoter, Guardian and Scaler services"
-#bash $ORCHESTRATOR_PATH/StructuresSnapshoter/deactivate.sh
-#bash $ORCHESTRATOR_PATH/DatabaseSnapshoter/deactivate.sh
+echo "Deactivate Guardian, Scaler and ReBalancer services"
 bash $ORCHESTRATOR_PATH/Guardian/deactivate.sh
 bash $ORCHESTRATOR_PATH/Scaler/deactivate.sh
+bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh
 
 echo "Deactivate rules"
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleUp
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh CpuRescaleDown
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh MemRescaleUp
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh MemRescaleDown
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh default CpuRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh default CpuRescaleDown
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh default MemRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh default MemRescaleDown
