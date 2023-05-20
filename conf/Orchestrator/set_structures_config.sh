@@ -24,9 +24,9 @@ for i in "${apps[@]}"
 do
   echo "Setting app $i"
   echo "cpu"
-  bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $i cpu 1600
-  bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh $i cpu 200
-  bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $i cpu 200
+  bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $i cpu 400
+  bash $ORCHESTRATOR_PATH/Limits/set_new_boundary.sh $i cpu 50
+  bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_min.sh $i cpu 40
 
   echo "mem"
   bash $ORCHESTRATOR_PATH/Structures/set_structure_resource_max.sh $i mem 16384

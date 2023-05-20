@@ -522,8 +522,9 @@ class Guardian:
                     upper_limit = limits[resource_label]["upper"]
                     usage = usages[translator_dict[resource_label]]
                     ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
-                    amount = int(ratio * amount)
-                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
+                    # Do not allow to have a negative rescaling operation generated from Bottleneck events
+                    amount = max(int(ratio * amount), 0)
+                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2:.2f} | ratio {3:.2f} | amount {4}".format(
                         current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
                 else:
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
@@ -578,7 +579,7 @@ class Guardian:
     def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
         resources = container["resources"]
 
-        container_name_str = "@" + container["name"]
+        container_name_str = "@" + container["name"] + "({0})".format(container["profile"])
         resources_str = "| "
         for resource in self.guardable_resources:
             if container["resources"][resource]["guard"]:
@@ -589,7 +590,7 @@ class Guardian:
             ev.append(event["name"])
         for request in triggered_requests:
             req.append(request["action"])
-        triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
+        triggered_requests_and_events = "EVENTS {0} AND REQUESTS {1}".format(str(ev), str(req))
         log_info(
             " ".join([container_name_str, resources_str, triggered_requests_and_events]),
             self.debug)

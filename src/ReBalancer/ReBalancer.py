@@ -66,10 +66,11 @@ class ReBalancer:
             self.config = service["config"]
             self.debug = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "DEBUG")
             window_difference = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-
-            #self.userReBalancer.rebalance_users(self.config)
-            #self.applicationReBalancer.rebalance_applications(self.config)
-            self.containerRebalancer.rebalance_containers(self.config)
+            SERVICE_IS_ACTIVATED = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "ACTIVE")
+            if SERVICE_IS_ACTIVATED:
+                #self.userReBalancer.rebalance_users(self.config)
+                #self.applicationReBalancer.rebalance_applications(self.config)
+                self.containerRebalancer.rebalance_containers(self.config)
 
             MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)
 

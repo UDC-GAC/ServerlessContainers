@@ -202,7 +202,7 @@ cpu_usage_low = dict(
                     {"var": "cpu.structure.cpu.current"},
                     {"var": "cpu.structure.cpu.min"}]
                 },
-                25
+                20
             ]},
             {"<": [
                 {"/": [
@@ -231,7 +231,7 @@ cpu_usage_high = dict(
                     {"var": "cpu.structure.cpu.max"},
                     {"var": "cpu.structure.cpu.current"}]
                 },
-                25
+                20
             ]},
             {">": [
                 {"/": [
@@ -253,15 +253,24 @@ if __name__ == "__main__":
     database = "rules"
     initializer_utils.remove_db(database)
     initializer_utils.create_db(database)
-    all_rules = [cpu_exceeded_upper, cpu_dropped_lower, CpuRescaleUp, CpuRescaleDown, mem_exceeded_upper,
-                 mem_dropped_lower, MemRescaleUp, MemRescaleDown, cpu_usage_high, cpu_usage_low]
+    guardian_rules = [cpu_exceeded_upper, cpu_dropped_lower, CpuRescaleUp, CpuRescaleDown, mem_exceeded_upper,
+                 mem_dropped_lower, MemRescaleUp, MemRescaleDown]
+    rebalancer_rules = [cpu_usage_high, cpu_usage_low]
 
     if handler.database_exists("rules"):
         for profile in ["default", "benevolent", "strict"]:
             print("Adding 'rules' documents with the '{0}' profile".format(profile))
-            for r in all_rules:
+            for r in guardian_rules:
                 rule = r.copy()
                 print("Adding '{0}'".format(rule["name"]))
                 rule["profile"] = profile
                 rule["_id"] = "{0}_{1}".format(rule["_id"], rule["profile"])
                 handler.add_rule(rule)
+
+        print("Adding 'rules' documents with the '{0}' profile".format(profile))
+        for r in rebalancer_rules:
+            rule = r.copy()
+            print("Adding '{0}'".format(rule["name"]))
+            rule["profile"] = "default"
+            rule["_id"] = "{0}_{1}".format(rule["_id"], rule["profile"])
+            handler.add_rule(rule)

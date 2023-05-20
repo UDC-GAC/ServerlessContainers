@@ -38,6 +38,7 @@ BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel']
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel']}
 
+SWAP_SLICE_AMOUNT = 20
 
 class ContainerRebalancer:
     def __init__(self):
@@ -108,7 +109,7 @@ class ContainerRebalancer:
                 continue
 
             # containers that have low resource usage (donors)
-            rule_low_usage = self.__couchdb_handler.get_rule("cpu_usage_low")
+            rule_low_usage = self.__couchdb_handler.get_rule("default", "cpu_usage_low")
             if jsonLogic(rule_low_usage["rule"], data):
                 donors.append(container)
         return donors
@@ -126,7 +127,7 @@ class ContainerRebalancer:
                 continue
 
             # containers that have a bottleneck (receivers)
-            rule_high_usage = self.__couchdb_handler.get_rule("cpu_usage_high")
+            rule_high_usage = self.__couchdb_handler.get_rule("default", "cpu_usage_high")
             if jsonLogic(rule_high_usage["rule"], data):
                 receivers.append(container)
         return receivers
@@ -157,17 +158,16 @@ class ContainerRebalancer:
             usage_value = container["resources"]["cpu"]["usage"]
             stolen_amount = 0.5 * (current_value - max(min_value,  usage_value))
 
-            slice_amount = 25
             acum = 0
-            while acum + slice_amount < stolen_amount:
-                donor_slices.append((container, slice_amount, id))
-                acum += slice_amount
+            while acum + SWAP_SLICE_AMOUNT < stolen_amount:
+                donor_slices.append((container, SWAP_SLICE_AMOUNT, id))
+                acum += SWAP_SLICE_AMOUNT
                 id += 1
 
             # Remaining
             if acum < stolen_amount:
                 donor_slices.append((container, int(stolen_amount-acum), id))
-                acum += slice_amount
+                acum += SWAP_SLICE_AMOUNT
                 id += 1
 
         donor_slices = sorted(donor_slices, key=lambda c: c[1])
