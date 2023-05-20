@@ -521,11 +521,11 @@ class Guardian:
                     amount = rule["amount"]
                     current_resource_limit = structure["resources"][resource_label]["current"]
                     upper_limit = limits[resource_label]["upper"]
-                    usage = usages[translator_dict[resource_label]]
+                    usage = int(usages[translator_dict[resource_label]])
                     ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
                     # Do not allow to have a negative rescaling operation generated from Bottleneck events
                     amount = max(int(ratio * amount), 0)
-                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2:.2f} | ratio {3:.2f} | amount {4}".format(
+                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3:.2f} | amount {4}".format(
                         current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
                 else:
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)

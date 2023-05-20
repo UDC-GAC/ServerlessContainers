@@ -45,7 +45,7 @@ bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh default CpuRescaleDown
 bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh default MemRescaleUp
 bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh default MemRescaleDown
 echo "Set the correct amounts"
-bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default CpuRescaleUp 150
+bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default CpuRescaleUp 200
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default CpuRescaleUp proportional
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default MemRescaleUp 2048
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default MemRescaleUp proportional

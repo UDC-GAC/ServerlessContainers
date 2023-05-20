@@ -28,6 +28,7 @@ from json_logic import jsonLogic
 from src.MyUtils import MyUtils
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 20,
+                         "WINDOW_DELAY": 10,
                          "REBALANCE_USERS": False,
                          "DEBUG": True,
                          "ACTIVE": False,

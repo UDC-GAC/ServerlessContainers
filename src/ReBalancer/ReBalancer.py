@@ -30,7 +30,7 @@ import time
 import traceback
 import logging
 
-from src.MyUtils.MyUtils import log_info, log_warning, start_epoch, end_epoch
+from src.MyUtils.MyUtils import log_info, log_warning, start_epoch, end_epoch, MyConfig, get_service, beat
 import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -55,21 +55,22 @@ class ReBalancer:
         self.config = {}
 
     def rebalance(self, ):
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
-        myConfig = MyUtils.MyConfig(CONFIG_DEFAULT_VALUES)
 
         while True:
             # Get service info
-            service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)
+            service = get_service(self.couchdb_handler, SERVICE_NAME)
 
             # Heartbeat
-            MyUtils.beat(self.couchdb_handler, SERVICE_NAME)
+            beat(self.couchdb_handler, SERVICE_NAME)
 
             # CONFIG
             myConfig.set_config(service["config"])
             self.debug = myConfig.get_value("DEBUG")
             debug = self.debug
-            self.window_difference = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+            self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
+            self.window_delay = myConfig.get_value("WINDOW_DELAY")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
 
             t0 = start_epoch(self.debug)
@@ -77,12 +78,14 @@ class ReBalancer:
             log_info("Config is as follows:", debug)
             log_info(".............................................", debug)
             log_info("Window difference -> {0}".format(self.window_difference), debug)
+            log_info("Window delay -> {0}".format(self.window_delay), debug)
             log_info(".............................................", debug)
 
             if SERVICE_IS_ACTIVATED:
                 # self.userReBalancer.rebalance_users(self.config)
                 # self.applicationReBalancer.rebalance_applications(self.config)
-                self.containerRebalancer.rebalance_containers(self.config)
+                self.containerRebalancer.set_conf(myConfig)
+                self.containerRebalancer.rebalance_containers(myConfig)
             else:
                 log_warning("Rebalancer is not activated", debug)
 

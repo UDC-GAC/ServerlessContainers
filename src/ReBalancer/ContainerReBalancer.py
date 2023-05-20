@@ -45,8 +45,12 @@ class ContainerRebalancer:
         self.__opentsdb_handler = opentsdb.OpenTSDBServer()
         self.__couchdb_handler = couchdb.CouchDBServer()
         self.__NO_METRIC_DATA_DEFAULT_VALUE = self.__opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.__debug = True
-        self.__config = {}
+
+    def set_conf(self, config):
+        self.__config = config
+        self.window_difference = config.get_value("WINDOW_TIMELAPSE")
+        self.window_delay = config.get_value("WINDOW_DELAY")
+        self.debug = config.get_value("DEBUG")
 
     # @staticmethod
     # def __generate_request(structure_name, amount, resource, action):
@@ -60,26 +64,24 @@ class ContainerRebalancer:
     #     return request
 
     def __get_container_usages(self, container):
-        window_difference = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-        window_delay = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
 
         try:
             # Remote database operation
             usages = self.__opentsdb_handler.get_structure_timeseries({"host": container["name"]},
-                                                                      window_difference,
-                                                                      window_delay,
+                                                                      self.window_difference,
+                                                                      self.window_delay,
                                                                       BDWATCHDOG_CONTAINER_METRICS,
                                                                       GUARDIAN_CONTAINER_METRICS)
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.__NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                log_warning("container: {0} has no usage data".format(container["name"]), self.__debug)
+                log_warning("container: {0} has no usage data".format(container["name"]), self.debug)
                 return None
 
             return usages
         except Exception as e:
             log_error("error with structure: {0} {1} {2}".format(container["name"], str(e), str(traceback.format_exc())),
-                      self.__debug)
+                      self.debug)
 
             return None
 
@@ -138,11 +140,11 @@ class ContainerRebalancer:
         donors = self.__get_container_donors(containers)
         receivers = self.__get_container_receivers(containers)
 
-        log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
-        log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
+        log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.debug)
+        log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.debug)
 
         if not receivers:
-            log_info("No containers in need of rebalancing for {0}".format(app_name), self.__debug)
+            log_info("No containers in need of rebalancing for {0}".format(app_name), self.debug)
             return
         else:
             # Order the containers from lower to upper current CPU limit
@@ -208,7 +210,7 @@ class ContainerRebalancer:
                         break
 
                 if not amount_to_scale:
-                    log_info("No more donors on its host, container {0} left out".format(receiver["name"]), self.__debug)
+                    log_info("No more donors on its host, container {0} left out".format(receiver["name"]), self.debug)
                     continue
 
                 # Remove this slice from the list
@@ -259,9 +261,9 @@ class ContainerRebalancer:
                 if donor["name"] not in requests:
                     requests[donor["name"]] = list()
                 requests[donor["name"]].append(request)
-                log_info("Resource swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]), self.__debug)
+                log_info("Resource swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]), self.debug)
 
-        log_info("No more donors", self.__debug)
+        log_info("No more donors", self.debug)
 
         final_requests = list()
         for container in requests:
@@ -272,7 +274,7 @@ class ContainerRebalancer:
                 flat_request["amount"] += request["amount"]
             final_requests.append(flat_request)
 
-        log_info("REQUESTS ARE:", self.__debug)
+        log_info("REQUESTS ARE:", self.debug)
         for c in requests.values():
             for r in c:
                 print(r)
@@ -280,7 +282,7 @@ class ContainerRebalancer:
         # TODO
         # Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed but not the scaling up, and shares will be lost
 
-        log_info("FINAL REQUESTS ARE:", self.__debug)
+        log_info("FINAL REQUESTS ARE:", self.debug)
         for r in final_requests:
             print(r)
             self.__couchdb_handler.add_request(r)
@@ -290,19 +292,16 @@ class ContainerRebalancer:
         return app_can_be_rebalanced(application, "container", self.__couchdb_handler)
 
     def rebalance_containers(self, config):
-        self.__config = config
-        self.__debug = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
-
-        log_info("_______________", self.__debug)
-        log_info("Performing CONTAINER CPU Balancing", self.__debug)
+        log_info("_______________", self.debug)
+        log_info("Performing CONTAINER CPU Balancing", self.debug)
 
         # Get the containers and applications
         try:
-            applications = get_structures(self.__couchdb_handler, self.__debug, subtype="application")
-            containers = get_structures(self.__couchdb_handler, self.__debug, subtype="container")
+            applications = get_structures(self.__couchdb_handler, self.debug, subtype="application")
+            containers = get_structures(self.__couchdb_handler, self.debug, subtype="container")
         except requests.exceptions.HTTPError as e:
-            log_error("Couldn't get applications", self.__debug)
-            log_error(str(e), self.__debug)
+            log_error("Couldn't get applications", self.debug)
+            log_error(str(e), self.debug)
             return
 
         # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
@@ -334,7 +333,7 @@ class ContainerRebalancer:
         # Rebalance applications
         for app in rebalanceable_apps:
             app_name = app["name"]
-            log_info("Going to rebalance {0} now".format(app_name), self.__debug)
+            log_info("Going to rebalance {0} now".format(app_name), self.debug)
             self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
 
-        log_info("_______________", self.__debug)
+        log_info("_______________", self.debug)
