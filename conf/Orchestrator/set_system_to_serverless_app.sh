@@ -24,7 +24,7 @@ for i in "${apps[@]}"
 do
   echo "Application name: $i"
   bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_guarded.sh $i "${resources[@]}"
-doneWINDOW_TIMELAPSE
+done
 
 echo "Setting applications to guarded"
 for i in "${apps[@]}"
