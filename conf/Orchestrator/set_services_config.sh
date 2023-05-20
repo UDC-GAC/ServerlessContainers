@@ -27,8 +27,7 @@ bash $ORCHESTRATOR_PATH/Refeeder/set_window_delay.sh 15
 
 echo "Configuring Rebalancer"
 bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh
-bash $ORCHESTRATOR_PATH/Rebalancer/set_window_delay.sh 10
-bash $ORCHESTRATOR_PATH/Rebalancer/set_window_timelapse.sh 10
+bash $ORCHESTRATOR_PATH/Rebalancer/set_window_timelapse.sh 20
 bash $ORCHESTRATOR_PATH/Rebalancer/set_energy_diff_percentage.sh 0.40
 bash $ORCHESTRATOR_PATH/Rebalancer/set_energy_stolen_percentage.sh 0.40
 bash $ORCHESTRATOR_PATH/Rebalancer/deactivate_user_balancing.sh

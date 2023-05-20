@@ -7,9 +7,10 @@ export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 containers=$(jq -c '.containers[].name' ${scriptDir}/layout.json | tr -d '"')
 resources=( cpu mem )
 
-echo "Deactivate the Guardian and Scaler service"
+echo "Deactivate the Guardian, Scaler and Rebalancer service"
 bash $ORCHESTRATOR_PATH/Scaler/deactivate.sh
 bash $ORCHESTRATOR_PATH/Guardian/deactivate.sh
+bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh
 
 echo "Readjust Guardian configuration to the containers scenario"
 bash $ORCHESTRATOR_PATH/Guardian/set_to_container.sh
@@ -45,6 +46,3 @@ bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default CpuRescaleUp 75
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default CpuRescaleUp proportional # amount
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default MemRescaleUp 256
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default MemRescaleUp proportional # amount
-
-echo "Deactivate ReBalancer services"
-bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh

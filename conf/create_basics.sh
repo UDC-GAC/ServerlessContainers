@@ -6,13 +6,8 @@ python3 ${scriptDir}/StateDatabase/other_tables.py
 python3 ${scriptDir}/StateDatabase/rules.py
 python3 ${scriptDir}/StateDatabase/services.py
 
-echo "Removing apps"
+echo "Configuring the services"
+bash ${scriptDir}/Orchestrator/set_services_config.sh
 
-
-echo "Removing containers"
-
-
-echo "Removing hosts"
-
-
-
+echo "Configuring the rules"
+bash ${scriptDir}/Orchestrator/set_rules_config.sh

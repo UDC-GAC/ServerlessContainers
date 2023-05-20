@@ -148,7 +148,7 @@ def persist_applications(container_resources_dict):
                             resource, container_name, app["name"]), debug)
                     else:
                         current_resource_label = translate_map[resource]["limit_label"]
-                        app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
+                        app["resources"][resource]["current"] +=  int(container_resources[resource][current_resource_label])
                 except KeyError:
                     if "name" in container_resources_dict[container_name] and "name" in app:
                         log_error("Container info {0} is missing for app: {1} and resource {2} resource,".format(

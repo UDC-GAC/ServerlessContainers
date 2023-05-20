@@ -27,10 +27,10 @@ from json_logic import jsonLogic
 
 from src.MyUtils import MyUtils
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 30,
-                         "WINDOW_DELAY": 10,
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 20,
                          "REBALANCE_USERS": False,
                          "DEBUG": True,
+                         "ACTIVE": False,
                          "ENERGY_DIFF_PERCENTAGE": 0.40,
                          "ENERGY_STOLEN_PERCENTAGE": 0.40
                          }

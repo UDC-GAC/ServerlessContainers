@@ -30,6 +30,7 @@ import time
 import traceback
 import logging
 
+from src.MyUtils.MyUtils import log_info, log_warning, start_epoch, end_epoch
 import src.MyUtils.MyUtils as MyUtils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -55,6 +56,8 @@ class ReBalancer:
 
     def rebalance(self, ):
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+        myConfig = MyUtils.MyConfig(CONFIG_DEFAULT_VALUES)
+
         while True:
             # Get service info
             service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)
@@ -63,19 +66,31 @@ class ReBalancer:
             MyUtils.beat(self.couchdb_handler, SERVICE_NAME)
 
             # CONFIG
-            self.config = service["config"]
-            self.debug = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "DEBUG")
-            window_difference = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-            SERVICE_IS_ACTIVATED = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "ACTIVE")
+            myConfig.set_config(service["config"])
+            self.debug = myConfig.get_value("DEBUG")
+            debug = self.debug
+            self.window_difference = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+            SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
+
+            t0 = start_epoch(self.debug)
+
+            log_info("Config is as follows:", debug)
+            log_info(".............................................", debug)
+            log_info("Window difference -> {0}".format(self.window_difference), debug)
+            log_info(".............................................", debug)
+
             if SERVICE_IS_ACTIVATED:
-                #self.userReBalancer.rebalance_users(self.config)
-                #self.applicationReBalancer.rebalance_applications(self.config)
+                # self.userReBalancer.rebalance_users(self.config)
+                # self.applicationReBalancer.rebalance_applications(self.config)
                 self.containerRebalancer.rebalance_containers(self.config)
+            else:
+                log_warning("Rebalancer is not activated", debug)
 
             MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)
 
-            time.sleep(window_difference)
+            time.sleep(self.window_difference)
 
+            end_epoch(t0, self.window_difference, t0)
 
 def main():
     try:

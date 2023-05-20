@@ -30,7 +30,7 @@
         "mem": {
           "max": 4192,
           "current": 2048,
-          "min": 512,
+          "min": 256,
           "boundary": 128
         }
       },
@@ -48,7 +48,7 @@
         "mem": {
           "max": 4192,
           "current": 2048,
-          "min": 512,
+          "min": 256,
           "boundary": 128
         }
       },
@@ -62,7 +62,7 @@
         "cpu": {
           "max": 400,
           "min": 40,
-          "boundary": 50
+          "boundary": 40
         },
         "mem": {
           "max": 8192,

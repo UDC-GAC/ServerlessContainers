@@ -176,6 +176,9 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
     put_done = True
     structure = retrieve_structure(structure_name)
     for resource in resources:
+        if "guard" not in structure["resources"][resource]:
+            put_done = False
+            break
         put_done = put_done and structure["resources"][resource]["guard"] == state
 
     tries = 0
@@ -435,18 +438,19 @@ def desubscribe_container(structure_name):
 
 @structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
 def subscribe_container(structure_name):
-    req_cont = request.json["container"]
-    req_limits = request.json["limits"]
+    req_cont = request.json
 
     node_scaler_session = requests.Session()
 
     # Check that all the needed data is present on the requestes container
     container = {}
-    for key in ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]:
+    for key in ["name", "host"]:
         if key not in req_cont:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
             container[key] = req_cont[key]
+
+    cont_name = container["name"]
 
     # Check that all the needed data for resources is present on the requested container
     container["resources"] = {}
@@ -456,7 +460,7 @@ def subscribe_container(structure_name):
         return abort(400, {"message": "Missing cpu or mem resource information"})
     else:
         container["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["max", "min", "current", "guard"]:
+        for key in ["max", "min", "current"]:
             if key not in req_cont["resources"]["cpu"] or key not in req_cont["resources"]["mem"]:
                 return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
             else:
@@ -473,7 +477,7 @@ def subscribe_container(structure_name):
                     container["resources"]["disk"][key] = disk[key]
 
     # Check that the endpoint requested container name matches with the one in the request
-    if container["name"] != structure_name:
+    if cont_name != structure_name:
         return abort(400, {"message": "Name mismatch".format(key)})
 
     # Check if the container already exists
@@ -486,36 +490,36 @@ def subscribe_container(structure_name):
 
     # Check that its supposed host exists and that it reports this container
     try:
-        get_db().get_structure(container["host"])
+        # Get the host info
+        host = get_db().get_structure(container["host"])
     except ValueError:
         return abort(400, {"message": "Container host does not exist".format(key)})
-    host_containers = get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
+    host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
 
     if container["name"] not in host_containers:
         return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
 
+    # Fill the required host info for the container
+    container["host_rescaler_ip"] = host["host_rescaler_ip"]
+    container["host_rescaler_port"] = host["host_rescaler_port"]
+
+    # Fill the remaining info about the container
     container["type"] = "structure"
+    container["subtype"] = "container"
 
     # Check that all the needed data for resources is present on the requested container LIMITS
-    limits = {}
-    if "resources" not in req_limits:
-        return abort(400, {"message": "Missing resource information for the limits"})
-    elif "cpu" not in req_limits["resources"] or "mem" not in req_limits["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information for the limits"})
+    limits = {"resources": {"cpu": {}, "mem": {}}}
+    if "boundary" not in req_cont["resources"]["cpu"] or "boundary" not in req_cont["resources"]["mem"]:
+        return abort(400, {"message": "Missing 'boundary' for cpu or mem resource".format(key)})
     else:
-        limits["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["boundary"]:
-            if key not in req_limits["resources"]["cpu"] or key not in req_limits["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                limits["resources"]["cpu"][key] = req_limits["resources"]["cpu"][key]
-                limits["resources"]["mem"][key] = req_limits["resources"]["mem"][key]
+        limits["resources"]["cpu"]["boundary"] = req_cont["resources"]["cpu"]["boundary"]
+        limits["resources"]["mem"]["boundary"] = req_cont["resources"]["mem"]["boundary"]
 
     limits["type"] = 'limit'
     limits["name"] = container["name"]
 
 
-    #### ALL looks good up to this point, proceed
+    # All looks good up to this point, proceed
 
     # Disable the Scaler as we will modify the core mapping of a host
     scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
@@ -523,10 +527,6 @@ def subscribe_container(structure_name):
     if previous_state:
         disable_scaler(scaler_service)
 
-    # Get the host info
-    cont_host = container["host"]
-    cont_name = container["name"]
-    host = get_db().get_structure(cont_host)
 
     # CPU
 
@@ -644,7 +644,7 @@ def subscribe_host(structure_name):
 
     # Check that all the needed data is present on the request
     host = {}
-    for key in ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]:
+    for key in ["name", "host", "host_rescaler_ip", "host_rescaler_port"]:
         if key not in data:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
@@ -682,7 +682,7 @@ def subscribe_host(structure_name):
                 host["resources"]["disks"].append(new_disk)
 
     if host["name"] != structure_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
+        return abort(400, {"message": "Name mismatch, {0} != {1}".format(host["name"], structure_name)})
 
     # Check if the host already exists
     try:
@@ -692,7 +692,7 @@ def subscribe_host(structure_name):
     except ValueError:
         pass
 
-    # Check that this supposed host exists and that it reports this container
+    # Check that this supposed host exists and that it reports containers
     try:
         host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
         if host_containers == None:
@@ -702,6 +702,7 @@ def subscribe_host(structure_name):
 
     # Host looks good, insert it into the database
     host["type"] = "structure"
+    host["subtype"] = "host"
 
     get_db().add_structure(host)
 
@@ -720,12 +721,11 @@ def desubscribe_host(structure_name):
 
 @structure_routes.route("/structure/apps/<structure_name>", methods=['PUT'])
 def subscribe_app(structure_name):
-    req_app = request.json["app"]
-    req_limits  = request.json["limits"]
+    req_app = request.json
 
     # Check that all the needed data is present on the request
     app = {}
-    for key in ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]:
+    for key in ["name", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]:
         if key not in req_app:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
@@ -739,7 +739,7 @@ def subscribe_app(structure_name):
         return abort(400, {"message": "Missing cpu or mem resource information"})
     else:
         app["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["max", "min", "guard"]:
+        for key in ["max", "min"]:
             if key not in req_app["resources"]["cpu"] or key not in req_app["resources"]["mem"]:
                 return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
             else:
@@ -757,24 +757,28 @@ def subscribe_app(structure_name):
     except ValueError:
         pass
 
-    #### ALL looks good up to this point, proceed
-    app["containers"] = list()
+    # Now proceed properly subscribing the containers as requested
+    if "containers" in req_app:
+        for c in req_app["containers"]:
+            try:
+                get_db().get_structure(c)
+            except ValueError:
+                return abort(400, {"message": "The container '{0}', which allegedly is a part of this app, does not exists".format(c)})
+        app["containers"] = req_app["containers"]
+    else:
+        app["containers"] = list()
+
+    # All looks good up to this point, proceed with the limits
     app["type"] = "structure"
+    app["subtype"] = "application"
 
     # Check that all the needed data for resources is present on the requested container LIMITS
-    limits = {}
-    if "resources" not in req_limits:
-        return abort(400, {"message": "Missing resource information for the limits"})
-    elif "cpu" not in req_limits["resources"] or "mem" not in req_limits["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information for the limits"})
+    limits = {"resources": {"cpu": {}, "mem": {}}}
+    if "boundary" not in req_app["resources"]["cpu"] or "boundary" not in req_app["resources"]["mem"]:
+        return abort(400, {"message": "Missing 'boundary' for cpu or mem resource".format(key)})
     else:
-        limits["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["boundary"]:
-            if key not in req_limits["resources"]["cpu"] or key not in req_limits["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                limits["resources"]["cpu"][key] = req_limits["resources"]["cpu"][key]
-                limits["resources"]["mem"][key] = req_limits["resources"]["mem"][key]
+        limits["resources"]["cpu"]["boundary"] = req_app["resources"]["cpu"]["boundary"]
+        limits["resources"]["mem"]["boundary"] = req_app["resources"]["mem"]["boundary"]
 
     limits["type"] = 'limit'
     limits["name"] = app["name"]
@@ -789,6 +793,8 @@ def subscribe_app(structure_name):
     except ValueError:
         # Limits do not exist yet
         get_db().add_limit(limits)
+
+
 
     return jsonify(201)
 

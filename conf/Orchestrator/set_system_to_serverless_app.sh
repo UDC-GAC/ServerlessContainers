@@ -7,9 +7,10 @@ export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 apps=($(jq -r '.apps[].name' ${scriptDir}/layout.json))
 resources=( cpu mem )
 
-echo "Deactivate the Guardian and Scaler service"
+echo "Deactivate the Guardian, Scaler and Rebalancer service"
 bash $ORCHESTRATOR_PATH/Scaler/deactivate.sh
 bash $ORCHESTRATOR_PATH/Guardian/deactivate.sh
+bash $ORCHESTRATOR_PATH/Rebalancer/deactivate.sh
 
 echo "Readjust Guardian configuration to the applications scenario"
 bash $ORCHESTRATOR_PATH/Guardian/set_to_application.sh
@@ -23,7 +24,7 @@ for i in "${apps[@]}"
 do
   echo "Application name: $i"
   bash $ORCHESTRATOR_PATH/Structures/set_many_resource_to_guarded.sh $i "${resources[@]}"
-done
+doneWINDOW_TIMELAPSE
 
 echo "Setting applications to guarded"
 for i in "${apps[@]}"
@@ -32,9 +33,10 @@ do
 	bash $ORCHESTRATOR_PATH/Structures/set_to_guarded.sh $i
 done
 
-echo "Activate Guardian and Scaler services"
+echo "Activate Guardian, Scaler and Rebalancer services"
 bash $ORCHESTRATOR_PATH/Guardian/activate.sh
 bash $ORCHESTRATOR_PATH/Scaler/activate.sh
+bash $ORCHESTRATOR_PATH/Rebalancer/activate.sh
 
 echo "Setting rule config"
 echo "Activate rules"
@@ -47,6 +49,3 @@ bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default CpuRescaleUp 150
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default CpuRescaleUp proportional
 bash $ORCHESTRATOR_PATH/Rules/change_amount.sh default MemRescaleUp 2048
 bash $ORCHESTRATOR_PATH/Rules/change_policy.sh default MemRescaleUp proportional
-
-echo "Activate ReBalancer services"
-bash $ORCHESTRATOR_PATH/Rebalancer/activate.sh

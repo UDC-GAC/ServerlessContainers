@@ -67,6 +67,7 @@ NOT_AVAILABLE_STRING = "n/a"
 
 NON_ADJUSTABLE_RESOURCES = ["energy"]
 
+DEFAULT_PROFILE = "default"
 
 class Guardian:
     """
@@ -579,7 +580,11 @@ class Guardian:
     def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
         resources = container["resources"]
 
-        container_name_str = "@" + container["name"] + "({0})".format(container["profile"])
+        if "profile" not in container:
+            container_profile = DEFAULT_PROFILE
+        else:
+            container_profile = container["profile"]
+        container_name_str = "@" + container["name"] + "({0})".format(container_profile)
         resources_str = "| "
         for resource in self.guardable_resources:
             if container["resources"][resource]["guard"]:
@@ -702,13 +707,15 @@ class Guardian:
 
             self.process_serverless_structure(structure, usages, limits_resources, rules)
 
-        except Exception as e:
-            log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
+        except Exception:
+            log_error("Error with structure {0}: {1}".format(structure["name"], str(traceback.format_exc())), self.debug)
 
     @staticmethod
     def classify_rules(rules):
         rules_per_profile = dict()
         for r in rules:
+            if "profile" not in r:
+                continue
             if r["profile"] not in rules_per_profile:
                 rules_per_profile[r["profile"]] = [r]
             else:
@@ -723,14 +730,14 @@ class Guardian:
         threads = []
         for structure in structures:
             if "profile" not in structure:
-                rules = rules_per_profile["default"]
+                rules = rules_per_profile[DEFAULT_PROFILE]
                 log_warning("Structure '{0}' has not any profile associated, "
                             "using 'default' profile".format(structure["name"]), self.debug)
             else:
                 if structure["profile"] not in rules_per_profile:
                     log_warning("Profile '{0}' as used in structure '{1}' has not any rule associated with it, "
-                                "using 'default' profile".format(structure["profile"],structure["name"]), self.debug)
-                    rules = rules_per_profile["default"]
+                                "using '{2}}' profile".format(structure["profile"],structure["name"], DEFAULT_PROFILE), self.debug)
+                    rules = rules_per_profile[DEFAULT_PROFILE]
                 else:
                     rules = rules_per_profile[structure["profile"]]
             thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
