@@ -153,7 +153,7 @@ class ReFeeder:
             user["cpu"]["used"] = 0
             user_apps = get_user_apps(applications, user)
             for app in user_apps:
-                if "cpu" in app["resources"] and "used" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
+                if "cpu" in app["resources"] and "usage" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
                     user["cpu"]["used"] += int(app["resources"]["cpu"]["usage"])
                 else:
                     log_error("Application {0} of user {1} has no usage field or value for cpu".format(
