@@ -29,10 +29,10 @@ from flask import jsonify
 from flask import request
 import time
 
-
 from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 users_routes = Blueprint('users', __name__)
+
 
 @users_routes.route("/user/", methods=['GET'])
 def get_users():
@@ -43,6 +43,57 @@ def get_users():
 def get_user(user_name):
     return jsonify(get_db().get_user(user_name))
 
+
+@users_routes.route("/user/<user_name>", methods=['PUT'])
+def subscribe_user(user_name):
+    req_user = request.json
+
+    # Check that all the needed data is present on the request
+    user = {}
+    for key in ["name"]:
+        if key not in req_user:
+            return abort(400, {"message": "Missing key '{0}'".format(key)})
+        else:
+            user[key] = req_user[key]
+
+    if user["name"] != user_name:
+        return abort(400, {"message": "Name mismatch".format(key)})
+
+    # Check if the user already exists
+    try:
+        user = get_db().get_user(user_name)
+        if user:
+            return abort(400, {"message": "User with this name already exists".format(key)})
+    except ValueError:
+        pass
+
+    if "applications" in req_user:
+        for app in req_user["applications"]:
+            try:
+                get_db().get_structure(app)
+            except ValueError:
+                return abort(400, {
+                    "message": "The application '{0}', which allegedly is a part of this user, does not exists".format(
+                        app)})
+        user["applications"] = req_user["applications"]
+    else:
+        user["applications"] = list()
+
+    # All looks good up to this point
+    user["type"] = "user"
+
+    get_db().add_user(user)
+
+    return jsonify(201)
+
+@users_routes.route("/user/<user_name>", methods=['DELETE'])
+def desubscribe_user(user_name):
+    user = get_db().get_user(user_name)
+
+    # Delete the document for this user
+    get_db().delete_user(user)
+
+    return jsonify(201)
 
 @users_routes.route("/user/<user_name>/energy/max", methods=['PUT'])
 def set_user_energy_max(user_name):

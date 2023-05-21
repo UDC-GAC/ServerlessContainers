@@ -40,7 +40,7 @@ CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 20,
 def get_user_apps(applications, user):
     user_apps = list()
     for app in applications:
-        if app["name"] in user["clusters"]:
+        if app["name"] in user["applications"]:
             user_apps.append(app)
     return user_apps
 

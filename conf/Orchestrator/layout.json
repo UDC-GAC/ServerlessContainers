@@ -80,5 +80,13 @@
         "host0-cont1"
       ]
     }
+  ],
+  "users": [
+    {
+      "name": "user1",
+      "applications": [
+        "app1"
+      ]
+    }
   ]
 }
