@@ -1,5 +1,5 @@
 json-logic-qubit==0.9.1
-requests==2.21.0
+requests==2.31.0
 #Flask==1.1.4
 Flask==2.2.2
 pylxd==2.2.8
