@@ -10,3 +10,5 @@ bash ${scriptDir}/Orchestrator/desubscribe_containers.sh
 echo "Removing hosts"
 bash ${scriptDir}/Orchestrator/desubscribe_hosts.sh
 
+echo "Removing users"
+bash ${scriptDir}/Orchestrator/desubscribe_users.sh

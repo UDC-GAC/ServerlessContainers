@@ -11,7 +11,7 @@ guardian = dict(
         ACTIVE=False,
         DEBUG=True,
         EVENT_TIMEOUT=120,
-        WINDOW_DELAY=20,
+        WINDOW_DELAY=12,
         WINDOW_TIMELAPSE=10
     )
 )

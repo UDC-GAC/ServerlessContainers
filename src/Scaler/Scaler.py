@@ -71,6 +71,7 @@ def set_container_resources(rescaler_http_session, container, resources, debug):
         return dict(r.json())
     else:
         log_error(str(json.dumps(r.json())), debug)
+        log_error(str("with data = {0}".format(json.dumps(resources))), debug)
         r.raise_for_status()
 
 

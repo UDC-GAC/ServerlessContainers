@@ -232,7 +232,7 @@ def get_resource(structure, resource):
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
-        log_info("{0} {1} ->  updated".format(structure["subtype"].capitalize(), structure["name"]), debug)
+        log_info("Updated {0} {1}".format(structure["subtype"].capitalize(), structure["name"]), debug)
     except requests.exceptions.HTTPError:
         log_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
 
@@ -240,7 +240,7 @@ def update_structure(structure, db_handler, debug, max_tries=10):
 def update_user(user, db_handler, debug, max_tries=10):
     try:
         db_handler.update_user(user, max_tries=max_tries)
-        log_info("User {0} ->  updated".format(user["name"]), debug)
+        log_info("Updated user {0}".format(user["name"]), debug)
     except requests.exceptions.HTTPError:
         log_error("Error updating user " + user["name"] + " " + traceback.format_exc(), debug)
 

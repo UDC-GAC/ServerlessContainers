@@ -165,10 +165,13 @@ class ReFeeder:
                     log_warning("Application {0} of user {1} has no current cpu field or value".format(
                         app["name"], user["name"]), self.debug)
 
+            # Added to accumulate the used cpu, to be used for the credit-based experiments
             if "acum" not in user["cpu"]:
                 user["cpu"]["acum"] = 0
-            user["cpu"]["acum"] += user["cpu"]["used"]
-            log_info("Updated cpu consumed by user {0}".format(user["name"]), self.debug)
+            user["cpu"]["acum"] += user["cpu"]["used"] * self.window_difference
+            ############################################
+
+            log_info("Updated User {0} (cpu)".format(user["name"]), self.debug)
 
     def refeed_user_energy(self, applications, users):
         for user in users:
@@ -181,10 +184,10 @@ class ReFeeder:
                         app["resources"]["energy"]["usage"]:
                     user["energy"]["used"] += int(app["resources"]["energy"]["usage"])
                 else:
-                    log_error("Application {0} of user {1} has no usage field or value for energy".format(
+                    log_warning("Application {0} of user {1} has no usage field or value for energy".format(
                         app["name"], user["name"]), self.debug)
 
-            log_info("Updated energy consumed by user {0}".format(user["name"]), self.debug)
+            log_info("Updated User {0} (energy)".format(user["name"]), self.debug)
 
     def refeed_thread(self, ):
         applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
