@@ -2,7 +2,7 @@
 import json
 import sys
 
-CONTAINERS_LIST = ["node0", "node1", "node2", "node3", "node4", "node5","node6","node7"]
+CONTAINERS_LIST = ["host0-cont0", "host0-cont1", "host0-cont2", "host0-cont3"]
 
 def get_metric(metric, tags):
     return {
@@ -14,10 +14,10 @@ def get_metric(metric, tags):
 def get_node_cpu(node):
     cont = dict()
     cont["metrics"] = list()
-    #cont["metrics"].append(get_metric("proc.cpu.user", "host={0}".format(node)))
-    #cont["metrics"].append(get_metric("proc.cpu.kernel", "host={0}".format(node)))
-    cont["metrics"].append(get_metric("sys.cpu.user", "host={0}".format(node)))
-    cont["metrics"].append(get_metric("sys.cpu.kernel", "host={0}".format(node)))
+    cont["metrics"].append(get_metric("proc.cpu.user", "host={0}".format(node)))
+    cont["metrics"].append(get_metric("proc.cpu.kernel", "host={0}".format(node)))
+    #cont["metrics"].append(get_metric("sys.cpu.user", "host={0}".format(node)))
+    #cont["metrics"].append(get_metric("sys.cpu.kernel", "host={0}".format(node)))
     cont["metrics"].append(get_metric("structure.cpu.max", "structure={0}".format(node)))
     cont["metrics"].append(get_metric("limit.cpu.upper", "structure={0}".format(node)))
     cont["metrics"].append(get_metric("structure.cpu.current", "structure={0}".format(node)))
