@@ -68,8 +68,17 @@ sanity_checker = dict(
     )
 )
 
-rebalancer  = dict(
+rebalancer = dict(
     name="rebalancer",
+    type="service",
+    heartbeat="",
+    config=dict(
+        DEBUG=True
+    )
+)
+
+credit_manager = dict(
+    name="credit_manager",
     type="service",
     heartbeat="",
     config=dict(
@@ -93,3 +102,4 @@ if __name__ == "__main__":
         handler.add_service(refeeder)
         handler.add_service(sanity_checker)
         handler.add_service(rebalancer)
+        handler.add_service(credit_manager)

@@ -57,7 +57,7 @@
   ],
   "apps": [
     {
-      "name": "app1",
+      "name": "app0",
       "resources": {
         "cpu": {
           "max": 400,
@@ -65,7 +65,7 @@
           "boundary": 40
         },
         "mem": {
-          "max": 8192,
+          "max": 4096,
           "min": 512,
           "boundary": 128
         }
@@ -79,10 +79,38 @@
         "host0-cont0",
         "host0-cont1"
       ]
+    },{
+      "name": "app1",
+      "resources": {
+        "cpu": {
+          "max": 400,
+          "min": 40,
+          "boundary": 40
+        },
+        "mem": {
+          "max": 4096,
+          "min": 512,
+          "boundary": 128
+        }
+      },
+      "files_dir": "",
+      "install_script": "",
+      "start_script": "",
+      "stop_script": "",
+      "app_jar": "",
+      "containers": [
+        "host0-cont2",
+        "host0-cont3"
+      ]
     }
   ],
   "users": [
     {
+      "name": "user0",
+      "applications": [
+        "app0"
+      ]
+    },{
       "name": "user1",
       "applications": [
         "app1"

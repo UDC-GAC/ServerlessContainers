@@ -53,7 +53,11 @@ REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
                                 # 'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
                                 'energy': ["sys.cpu.energy"]}
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10,
+                         "WINDOW_DELAY": 20,
+                         "GENERATED_METRICS": ["cpu", "mem"],
+                         "DEBUG": True
+                         }
 
 host_info_cache = dict()
 
@@ -164,12 +168,6 @@ class ReFeeder:
                 else:
                     log_warning("Application {0} of user {1} has no current cpu field or value".format(
                         app["name"], user["name"]), self.debug)
-
-            # Added to accumulate the used cpu, to be used for the credit-based experiments
-            if "acum" not in user["cpu"]:
-                user["cpu"]["acum"] = 0
-            user["cpu"]["acum"] += user["cpu"]["used"] * self.window_difference
-            ############################################
 
             log_info("Updated User {0} (cpu)".format(user["name"]), self.debug)
 

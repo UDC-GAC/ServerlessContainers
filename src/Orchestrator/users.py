@@ -82,9 +82,13 @@ def subscribe_user(user_name):
     # All looks good up to this point
     user["type"] = "user"
 
+    # Initialize accounting
+    user["accounting"] = {"active": True, "restricted": False, "cpu": {"consumed": 0, "credit": 0, "coins": 0}}
+
     get_db().add_user(user)
 
     return jsonify(201)
+
 
 @users_routes.route("/user/<user_name>", methods=['DELETE'])
 def desubscribe_user(user_name):
@@ -94,6 +98,7 @@ def desubscribe_user(user_name):
     get_db().delete_user(user)
 
     return jsonify(201)
+
 
 @users_routes.route("/user/<user_name>/energy/max", methods=['PUT'])
 def set_user_energy_max(user_name):
