@@ -383,7 +383,7 @@ class Guardian:
 
     @staticmethod
     def rule_triggers_event(rule, data, resources):
-        if rule["resource"] not in resources:
+        if rule["resource"] not in resources or "guard" not in resources[rule["resource"]]:
             return False
         else:
             return rule["active"] and \

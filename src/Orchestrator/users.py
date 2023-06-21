@@ -44,6 +44,39 @@ def get_user(user_name):
     return jsonify(get_db().get_user(user_name))
 
 
+@users_routes.route("/user/<user_name>/accounting/credit", methods=['GET'])
+def get_user_credit(user_name):
+    user = get_db().get_user(user_name)
+    return jsonify(user["accounting"]["cpu"]["credit"])
+
+@users_routes.route("/user/<user_name>/accounting/activate", methods=['PUT'])
+def activate_user_accounting(user_name):
+    user = get_db().get_user(user_name)
+    user["accounting"]["active"] = True
+    get_db().update_user(user)
+    return jsonify(201)
+
+@users_routes.route("/user/<user_name>/accounting/deactivate", methods=['PUT'])
+def deactivate_user_accounting(user_name):
+    user = get_db().get_user(user_name)
+    user["accounting"]["active"] = False
+    get_db().update_user(user)
+    return jsonify(201)
+
+@users_routes.route("/user/<user_name>/accounting/restrict", methods=['PUT'])
+def set_user_accounting_restricted(user_name):
+    user = get_db().get_user(user_name)
+    user["accounting"]["restricted"] = True
+    get_db().update_user(user)
+    return jsonify(201)
+
+@users_routes.route("/user/<user_name>/accounting/unrestrict", methods=['PUT'])
+def set_user_accounting_unrestricted(user_name):
+    user = get_db().get_user(user_name)
+    user["accounting"]["restricted"] = False
+    get_db().update_user(user)
+    return jsonify(201)
+
 @users_routes.route("/user/<user_name>", methods=['PUT'])
 def subscribe_user(user_name):
     req_user = request.json

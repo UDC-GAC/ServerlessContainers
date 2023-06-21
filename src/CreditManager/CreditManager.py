@@ -28,7 +28,6 @@ from __future__ import print_function
 
 import json
 from threading import Thread
-import requests
 import time
 import traceback
 import logging
@@ -46,7 +45,7 @@ CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10,
                          "GRIDCOIN_RPC_IP": "192.168.51.100",
                          "GRIDCOIN_RPC_PORT": "9090",
                          "GRIDCOIN_RPC_PASS": "Bt2oEfVgnMGqvB26UapLERmDu5bvULKr9SPvPBkMkMSV",
-                         "COINS_TO_CREDIT_RATIO": 600, # 600 credits per 1 GRC -> 1 vcore for 10 minutes
+                         "COINS_TO_CREDIT_RATIO": 600,  # 600 credits per 1 GRC -> 1 vcore for 10 minutes
                          "DEBUG": True}
 
 SERVICE_NAME = "credit_manager"
@@ -88,20 +87,23 @@ class CreditManager:
         return result
 
     def rebase_counters(self, user):
-        REBASE_RATIO = 0.1 # Used to module how often a rebase is carried out, 1 -> 1 coin per each fold
+        REBASE_RATIO = 0.1  # Used to module how often a rebase is carried out, 1 -> 1 coin per each fold
         REBASE_BLOCK = int(REBASE_RATIO * self.coins_credit_ratio)
         coins_per_fold = REBASE_RATIO * 1
-        num_folds = int(user["accounting"]["cpu"]["consumed"] / REBASE_BLOCK)
+        cpu_accounting = user["accounting"]["cpu"]
+        uname = user["name"]
+
+        num_folds = int(cpu_accounting["consumed"] / REBASE_BLOCK)
         if num_folds >= 1:
             coins_moved = num_folds * coins_per_fold
-            success = self.move_credit(user["name"], "sink", str(coins_moved))
+            success = self.move_credit(uname, "sink", str(coins_moved))
             if success:
-                user["accounting"]["cpu"]["consumed"] -= num_folds * REBASE_BLOCK
-                user["accounting"]["cpu"]["credit"] -= num_folds * REBASE_BLOCK
-                user["accounting"]["cpu"]["coins"] -= coins_moved
-                log_info("User {0} counters have been rebased".format(user["name"]), self.debug)
+                cpu_accounting["consumed"] = round(cpu_accounting["consumed"] - num_folds * REBASE_BLOCK, 2)
+                # cpu_accounting["credit"] -= num_folds * REBASE_BLOCK
+                # cpu_accounting["coins"] -= coins_moved
+                log_info("User {0} counters have been rebased".format(uname), self.debug)
             else:
-                log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(user["name"], "sink"), self.debug)
+                log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"), self.debug)
 
     def restrict_user(self, user):
         user["accounting"]["restricted"] = True
@@ -119,12 +121,12 @@ class CreditManager:
                 containers.append(cont_info)
 
                 amount = -1 * (cont_info["resources"]["cpu"]["current"] - cont_info["resources"]["cpu"]["min"])
-                request = guardian.generate_request(cont_info, amount, "cpu")
-                print(request)
-                requests.append(request)
+                if amount != 0:
+                    request = guardian.generate_request(cont_info, amount, "cpu")
+                    print(request)
+                    requests.append(request)
 
         self.couchdb_handler.add_requests(requests)
-
 
     def raise_restriction(self, user):
         user["accounting"]["restricted"] = False
@@ -149,16 +151,19 @@ class CreditManager:
         self.couchdb_handler.add_requests(requests)
 
     def check_credit(self, user):
-        if user["accounting"]["restricted"] and user["accounting"]["cpu"]["credit"] <= 0:
-            log_warning("User {0} is restricted, but still does not have enough credit".format(user["name"]), self.debug)
-        elif not user["accounting"]["restricted"] and user["accounting"]["cpu"]["credit"] <= 0:
-            log_warning("User {0} is not restricted, but does not have enough credit, restricting".format(user["name"]), self.debug)
+        user_name = user["name"]
+        user_restricted = user["accounting"]["restricted"]
+        user_credit = user["accounting"]["cpu"]["credit"]
+        if user_restricted and user_credit <= 0:
+            log_warning("User {0} is restricted, but still does not have enough credit".format(user_name), self.debug)
+        elif not user_restricted and user_credit <= 0:
+            log_warning("User {0} is not restricted, but does not have enough credit, restricting".format(user_name), self.debug)
             self.restrict_user(user)
-        elif user["accounting"]["restricted"] and user["accounting"]["cpu"]["credit"] > 0:
-            log_warning("User {0} is restricted, but has enough credit now, raising restriction".format(user["name"]), self.debug)
+        elif user_restricted and user_credit > 0:
+            log_warning("User {0} is restricted, but has enough credit now, raising restriction".format(user_name), self.debug)
             self.raise_restriction(user)
-        elif not user["accounting"]["restricted"] and user["accounting"]["cpu"]["credit"] > 0:
-            log_warning("User {0} is not restricted and has enough credit".format(user["name"]), self.debug)
+        elif not user_restricted and user_credit > 0:
+            log_warning("User {0} is not restricted and has enough credit".format(user_name), self.debug)
 
     def manage_thread(self, users):
         users_wallets = self.get_users_wallets()
@@ -174,11 +179,6 @@ class CreditManager:
                 log_warning("User {0} does not have a registered wallet", self.debug)
                 self.couchdb_handler.update_user(u)
                 continue
-
-            # # If the user is restricted, check again if it can be raised
-            # if u["accounting"]["restricted"]:
-            #     log_warning("User {0} is currently restricted".format(u["name"]), self.debug)
-            #     self.check_credit(u)
 
             # Refresh the information
             self.compute_consumed_cpu(u)
@@ -202,11 +202,10 @@ class CreditManager:
 
     def compute_consumed_cpu(self, user):
         cpu_threshold = self.thresholds["cpu"]
-        cpu_consumed = user["cpu"]["used"] / 100 # Convert shares to vcores
+        cpu_consumed = user["cpu"]["used"] / 100  # Convert shares to vcores
         if cpu_consumed > cpu_threshold:
             user["accounting"]["cpu"]["consumed"] += cpu_consumed * self.polling_frequency
             user["accounting"]["cpu"]["consumed"] = round(user["accounting"]["cpu"]["consumed"], 2)
-
 
     def manage(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
@@ -268,7 +267,6 @@ class CreditManager:
             log_info("Credit management processed", debug)
 
             end_epoch(self.debug, self.polling_frequency, t0)
-
 
 
 def main():
