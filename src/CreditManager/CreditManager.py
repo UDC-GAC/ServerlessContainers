@@ -144,9 +144,10 @@ class CreditManager:
                 containers.append(cont_info)
 
                 amount = int(0.5 * (cont_info["resources"]["cpu"]["max"] - cont_info["resources"]["cpu"]["current"]))
-                request = guardian.generate_request(cont_info, amount, "cpu")
-                print(request)
-                requests.append(request)
+                if amount > 0:
+                    request = guardian.generate_request(cont_info, amount, "cpu")
+                    print(request)
+                    requests.append(request)
 
         self.couchdb_handler.add_requests(requests)
 

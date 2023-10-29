@@ -99,7 +99,8 @@ def set_service_value(service_name, key):
             else:
                 value = int(value)
         except ValueError:
-            abort(400, {"message": "bad content"})
+            pass # Allow anything basically
+            #abort(400, {"message": "bad content"})
 
     # Check if it is really needed to carry out the operation
     service = retrieve_service(service_name)

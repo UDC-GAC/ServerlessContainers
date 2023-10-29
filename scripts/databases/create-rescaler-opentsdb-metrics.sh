@@ -58,5 +58,10 @@
 # USER
     ./build/tsdb mkmetric user.energy.used
     ./build/tsdb mkmetric user.energy.max
+
     ./build/tsdb mkmetric user.cpu.current
     ./build/tsdb mkmetric user.cpu.usage
+
+    ./build/tsdb mkmetric user.accounting.coins
+    ./build/tsdb mkmetric user.accounting.credit
+    ./build/tsdb mkmetric user.accounting.consumed

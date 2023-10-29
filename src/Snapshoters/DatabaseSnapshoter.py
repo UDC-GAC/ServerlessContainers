@@ -93,8 +93,20 @@ def get_users():
     for user in db_handler.get_users():
         timestamp = int(time.time())
         for submetric in ["used", "max", "usage", "current"]:
+            if submetric not in user["energy"]:
+                log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
+                continue
             timeseries = dict(metric="user.energy.{0}".format(submetric),
                               value=user["energy"][submetric],
+                              timestamp=timestamp,
+                              tags={"user": user["name"]})
+            docs.append(timeseries)
+        for submetric in ["credit", "consumed", "coins"]:
+            if submetric not in user["accounting"]["cpu"]:
+                log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
+                continue
+            timeseries = dict(metric="user.accounting.{0}".format(submetric),
+                              value=user["accounting"]["cpu"][submetric],
                               timestamp=timestamp,
                               tags={"user": user["name"]})
             docs.append(timeseries)
