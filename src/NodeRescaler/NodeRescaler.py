@@ -32,8 +32,6 @@ from flask import jsonify
 from flask import request
 from werkzeug.serving import WSGIRequestHandler
 
-from src.NodeRescaler.lxd_node_resource_manager import LXDContainerManager
-from src.NodeRescaler.singularity_node_resource_manager import SingularityContainerManager
 from functools import wraps
 
 import yaml
@@ -151,8 +149,10 @@ if __name__ == "__main__":
     cgroups_version = config['CGROUPS_VERSION']
 
     if container_engine == "lxc":
+        from src.NodeRescaler.lxd_node_resource_manager import LXDContainerManager
         node_resource_manager = LXDContainerManager(cgroups_version)
     elif container_engine == "apptainer":
+        from src.NodeRescaler.singularity_node_resource_manager import SingularityContainerManager
         node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version)
     else:
         raise Exception("Error: a non-valid container engine was specified")

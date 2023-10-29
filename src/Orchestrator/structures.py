@@ -467,6 +467,9 @@ def subscribe_container(structure_name):
                 container["resources"]["cpu"][key] = req_cont["resources"]["cpu"][key]
                 container["resources"]["mem"][key] = req_cont["resources"]["mem"][key]
 
+        container["resources"]["cpu"]["guard"] = False
+        container["resources"]["mem"]["guard"] = False
+
         if 'disk' in req_cont["resources"]:
             disk = req_cont["resources"]["disk"]
             container["resources"]["disk"] = {}
