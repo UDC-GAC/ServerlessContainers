@@ -8,3 +8,4 @@ pytest
 pytest-cov
 coveralls
 pdoc3
+pyyaml
