@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="server1" remoteFilesAllowedToDisappearOnAutoupload="false" showNewOnSourceInSync="false">
+  <component name="PublishConfigData" serverName="glados" remoteFilesAllowedToDisappearOnAutoupload="false" showNewOnSourceInSync="false">
     <serverData>
-      <paths name="server1">
+      <paths name="glados">
         <serverdata>
           <mappings>
-            <mapping deploy="/AutoServerlessWeb/ServerlessContainers" local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="ServerlessContainers" local="$PROJECT_DIR$" web="" />
+            <mapping deploy="BlockchainServerless" local="$PROJECT_DIR$/../BlockchainServerless" />
           </mappings>
           <excludedPaths>
             <excludedPath local="true" path="$PROJECT_DIR$/conf/Orchestrator/layout.json" />
@@ -13,6 +14,5 @@
         </serverdata>
       </paths>
     </serverData>
-    <option name="myAutoUpload" value="ALWAYS" />
   </component>
 </project>

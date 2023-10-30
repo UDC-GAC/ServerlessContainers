@@ -2,7 +2,7 @@
 <project version="4">
   <component name="SshConfigs">
     <configs>
-      <sshConfig authType="OPEN_SSH" host="server1" id="9017443b-ca45-44db-9a37-2c6aee1da023" port="22" nameFormat="DESCRIPTIVE" username="jonatan" useOpenSSHConfig="true" />
+      <sshConfig authType="OPEN_SSH" host="glados" id="9017443b-ca45-44db-9a37-2c6aee1da023" port="22" nameFormat="DESCRIPTIVE" username="jonatan" useOpenSSHConfig="true" />
     </configs>
   </component>
 </project>
