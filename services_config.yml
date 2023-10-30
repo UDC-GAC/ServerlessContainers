@@ -1,5 +1,5 @@
 ## Container engine (lxc or apptainer at the moment)
-CONTAINER_ENGINE: "lxc"
+CONTAINER_ENGINE: "apptainer"
 SINGULARITY_COMMAND_ALIAS: "apptainer" # singularity or apptainer (only relevant when using apptainer as container engine)
 
 ## Cgroups version: v1 (Lecacy or Hybrid mode) or v2 (Unified mode)

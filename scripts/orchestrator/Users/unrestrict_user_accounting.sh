@@ -9,4 +9,4 @@ then
       exit 1
 fi
 
-curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/user/${1}/accounting/unrestrict
+curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/user/${1}/accounting/restricted -d '{"value":"false"}'

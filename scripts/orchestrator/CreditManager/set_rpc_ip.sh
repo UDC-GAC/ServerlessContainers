@@ -9,4 +9,4 @@ then
       exit 1
 fi
 
-curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/service/credit_manager/GRIDCOIN_RPC_IP -d '{"value":"$1"}'
+curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/service/credit_manager/GRIDCOIN_RPC_IP -d '{"value":"'$1'"}'

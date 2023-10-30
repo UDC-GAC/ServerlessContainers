@@ -564,10 +564,14 @@ class Guardian:
                     if new_amount != amount:
                         log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
                             structure["name"], rule["name"], amount, new_amount), self.debug)
+                    if new_amount == 0:
+                        log_warning("Amount generated for structure {0} with rule {1} is 0, will not generate a request, "
+                                    "but events will be removed".format(structure["name"], rule["name"]), self.debug)
 
-                # Generate the request and append it
-                request = self.generate_request(structure, new_amount, resource_label)
-                generated_requests.append(request)
+                if new_amount != 0 :
+                    # Generate the request and append it
+                    request = self.generate_request(structure, new_amount, resource_label)
+                    generated_requests.append(request)
 
             # Remove the events that triggered the request
             event_name = generate_event_name(events[resource_label]["events"], resource_label)

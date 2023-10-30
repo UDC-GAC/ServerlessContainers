@@ -44,38 +44,52 @@ def get_user(user_name):
     return jsonify(get_db().get_user(user_name))
 
 
-@users_routes.route("/user/<user_name>/accounting/credit", methods=['GET'])
-def get_user_credit(user_name):
+@users_routes.route("/user/<user_name>/accounting/<key>", methods=['GET'])
+def get_accounting_value(user_name, key):
     user = get_db().get_user(user_name)
-    return jsonify(user["accounting"]["cpu"]["credit"])
+    return jsonify(user["accounting"][key])
 
-@users_routes.route("/user/<user_name>/accounting/activate", methods=['PUT'])
-def activate_user_accounting(user_name):
+
+@users_routes.route("/user/<user_name>/accounting/<key>", methods=['PUT'])
+def set_accounting_value(user_name, key):
+    data = request.json
+    if not data:
+        abort(400, {"message": "empty content"})
+
+    value = request.json["value"]
+
+    if not isinstance(value, (int, str)):
+        abort(400, {"message": "invalid content, resources must be a number or a string"})
+    elif value == "true" or value == "false":
+        value = value == "true"
+    else:
+        try:
+            value = float(value)
+        except ValueError:
+            abort(400, {"message": "bad content"})
+
     user = get_db().get_user(user_name)
-    user["accounting"]["active"] = True
-    get_db().update_user(user)
+    try:
+        bogus = user["accounting"][key]
+    except KeyError:
+        abort(404)
+
+    put_done = False
+    tries = 0
+    while not put_done:
+        tries += 1
+        user["accounting"][key] = value
+        get_db().update_user(user)
+
+        time.sleep(BACK_OFF_TIME_MS / 1000)
+        user = get_db().get_user(user_name)
+        put_done = user["accounting"][key] == value
+
+        if tries >= MAX_TRIES:
+            return abort(400, {"message": "MAX_TRIES updating database document"})
+
     return jsonify(201)
 
-@users_routes.route("/user/<user_name>/accounting/deactivate", methods=['PUT'])
-def deactivate_user_accounting(user_name):
-    user = get_db().get_user(user_name)
-    user["accounting"]["active"] = False
-    get_db().update_user(user)
-    return jsonify(201)
-
-@users_routes.route("/user/<user_name>/accounting/restrict", methods=['PUT'])
-def set_user_accounting_restricted(user_name):
-    user = get_db().get_user(user_name)
-    user["accounting"]["restricted"] = True
-    get_db().update_user(user)
-    return jsonify(201)
-
-@users_routes.route("/user/<user_name>/accounting/unrestrict", methods=['PUT'])
-def set_user_accounting_unrestricted(user_name):
-    user = get_db().get_user(user_name)
-    user["accounting"]["restricted"] = False
-    get_db().update_user(user)
-    return jsonify(201)
 
 @users_routes.route("/user/<user_name>", methods=['PUT'])
 def subscribe_user(user_name):
@@ -116,7 +130,7 @@ def subscribe_user(user_name):
     user["type"] = "user"
 
     # Initialize accounting
-    user["accounting"] = {"active": True, "restricted": False, "cpu": {"consumed": 0, "credit": 0, "coins": 0}}
+    user["accounting"] = {"active": True, "restricted": False, "consumed": 0, "credit": 0, "coins": 0, "min_balance": 2, "max_debt": -2}
 
     get_db().add_user(user)
 

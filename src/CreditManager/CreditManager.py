@@ -39,7 +39,7 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 import src.StateDatabase.couchdb as couchdb
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10,
-                         "ACUM_THRESHOLDS": {"cpu": 0.1},
+                         "THRESHOLD": 0.1,
                          "ACTIVE": True,
                          "GRIDCOIN_RPC_USER": "gridcoinrpc",
                          "GRIDCOIN_RPC_IP": "192.168.51.100",
@@ -90,17 +90,15 @@ class CreditManager:
         REBASE_RATIO = 0.1  # Used to module how often a rebase is carried out, 1 -> 1 coin per each fold
         REBASE_BLOCK = int(REBASE_RATIO * self.coins_credit_ratio)
         coins_per_fold = REBASE_RATIO * 1
-        cpu_accounting = user["accounting"]["cpu"]
+        accounting = user["accounting"]
         uname = user["name"]
 
-        num_folds = int(cpu_accounting["consumed"] / REBASE_BLOCK)
+        num_folds = int(accounting["consumed"] / REBASE_BLOCK)
         if num_folds >= 1:
             coins_moved = num_folds * coins_per_fold
             success = self.move_credit(uname, "sink", str(coins_moved))
             if success:
-                cpu_accounting["consumed"] = round(cpu_accounting["consumed"] - num_folds * REBASE_BLOCK, 2)
-                # cpu_accounting["credit"] -= num_folds * REBASE_BLOCK
-                # cpu_accounting["coins"] -= coins_moved
+                accounting["consumed"] = round(accounting["consumed"] - num_folds * REBASE_BLOCK, 2)
                 log_info("User {0} counters have been rebased".format(uname), self.debug)
             else:
                 log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"), self.debug)
@@ -154,7 +152,7 @@ class CreditManager:
     def check_credit(self, user):
         user_name = user["name"]
         user_restricted = user["accounting"]["restricted"]
-        user_credit = user["accounting"]["cpu"]["credit"]
+        user_credit = user["accounting"]["credit"]
         if user_restricted and user_credit <= 0:
             log_warning("User {0} is restricted, but still does not have enough credit".format(user_name), self.debug)
         elif not user_restricted and user_credit <= 0:
@@ -198,15 +196,14 @@ class CreditManager:
         if user_name not in users_credits:
             log_warning("User {0} does not have a wallet".format(user_name), self.debug)
         else:
-            user["accounting"]["cpu"]["credit"] = self.coins_credit_ratio * users_credits[user_name]
-            user["accounting"]["cpu"]["coins"] = users_credits[user_name]
+            user["accounting"]["credit"] = self.coins_credit_ratio * users_credits[user_name]
+            user["accounting"]["coins"] = users_credits[user_name]
 
     def compute_consumed_cpu(self, user):
-        cpu_threshold = self.thresholds["cpu"]
         cpu_consumed = user["cpu"]["used"] / 100  # Convert shares to vcores
-        if cpu_consumed > cpu_threshold:
-            user["accounting"]["cpu"]["consumed"] += cpu_consumed * self.polling_frequency
-            user["accounting"]["cpu"]["consumed"] = round(user["accounting"]["cpu"]["consumed"], 2)
+        if cpu_consumed > self.threshold:
+            user["accounting"]["consumed"] += cpu_consumed * self.polling_frequency
+            user["accounting"]["consumed"] = round(user["accounting"]["consumed"], 2)
 
     def manage(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
@@ -230,7 +227,7 @@ class CreditManager:
             self.grc_port = myConfig.get_value("GRIDCOIN_RPC_PORT")
             self.coins_credit_ratio = myConfig.get_value("COINS_TO_CREDIT_RATIO")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
-            self.thresholds = myConfig.get_value("ACUM_THRESHOLDS")
+            self.threshold = myConfig.get_value("THRESHOLD")
 
             t0 = start_epoch(self.debug)
 

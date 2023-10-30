@@ -102,11 +102,11 @@ def get_users():
                               tags={"user": user["name"]})
             docs.append(timeseries)
         for submetric in ["credit", "consumed", "coins"]:
-            if submetric not in user["accounting"]["cpu"]:
+            if submetric not in user["accounting"]:
                 log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
                 continue
             timeseries = dict(metric="user.accounting.{0}".format(submetric),
-                              value=user["accounting"]["cpu"][submetric],
+                              value=user["accounting"][submetric],
                               timestamp=timestamp,
                               tags={"user": user["name"]})
             docs.append(timeseries)

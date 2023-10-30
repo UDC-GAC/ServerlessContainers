@@ -139,6 +139,11 @@ class Scaler:
                 continue
 
             max_cpu_limit = database_resources["cpu"]["max"]
+
+            if container["name"] not in self.container_info_cache:
+                log_warning("Resource info from the Node Scaler is missing for container {0}, is it up?".format(container["name"]), self.debug)
+                continue
+
             real_resources = self.container_info_cache[container["name"]]["resources"]
             try:
                 current_cpu_limit = self.get_current_resource_value(real_resources, "cpu")
