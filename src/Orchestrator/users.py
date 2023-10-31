@@ -60,6 +60,8 @@ def set_accounting_value(user_name, key):
 
     if not isinstance(value, (int, str)):
         abort(400, {"message": "invalid content, resources must be a number or a string"})
+    elif "greedy" or "conservative":
+        pass
     elif value == "true" or value == "false":
         value = value == "true"
     else:
@@ -130,7 +132,16 @@ def subscribe_user(user_name):
     user["type"] = "user"
 
     # Initialize accounting
-    user["accounting"] = {"active": True, "restricted": False, "consumed": 0, "credit": 0, "coins": 0, "min_balance": 2, "max_debt": -2}
+    user["accounting"] = {
+        "active": True,
+        "restricted": False,
+        "consumed": 0,
+        "credit": 0,
+        "coins": 0,
+        "min_balance": 2,
+        "max_debt": -2,
+        "policy": "greedy" # conservative
+    }
 
     get_db().add_user(user)
 
