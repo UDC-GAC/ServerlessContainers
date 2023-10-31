@@ -40,6 +40,7 @@ import src.StateDatabase.couchdb as couchdb
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10,
                          "THRESHOLD": 0.1,
+                         "MIN_COIN_MOVEMENT": 0.1,
                          "ACTIVE": True,
                          "GRIDCOIN_RPC_USER": "gridcoinrpc",
                          "GRIDCOIN_RPC_IP": "192.168.51.100",
@@ -87,8 +88,8 @@ class CreditManager:
         return result
 
     def rebase_counters(self, user):
-        REBASE_RATIO = 0.1  # Used to module how often a rebase is carried out, 1 -> 1 coin per each fold
-        REBASE_BLOCK = int(REBASE_RATIO * self.coins_credit_ratio)
+        REBASE_RATIO = self.min_coin_movement  # Used to module how often a rebase is carried out, 1 -> 1 coin per each fold
+        REBASE_BLOCK = int(self.min_coin_movement * self.coins_credit_ratio)
         coins_per_fold = REBASE_RATIO * 1
         accounting = user["accounting"]
         uname = user["name"]
@@ -155,13 +156,13 @@ class CreditManager:
         user_credit = user["accounting"]["credit"]
         if user_restricted and user_credit <= 0:
             log_warning("User {0} is restricted, but still does not have enough credit".format(user_name), self.debug)
-        elif not user_restricted and user_credit <= 0:
+        elif not user_restricted and user_credit < 0:
             log_warning("User {0} is not restricted, but does not have enough credit, restricting".format(user_name), self.debug)
             self.restrict_user(user)
         elif user_restricted and user_credit > 0:
             log_warning("User {0} is restricted, but has enough credit now, raising restriction".format(user_name), self.debug)
             self.raise_restriction(user)
-        elif not user_restricted and user_credit > 0:
+        elif not user_restricted and user_credit >= 0:
             log_warning("User {0} is not restricted and has enough credit".format(user_name), self.debug)
 
     def manage_thread(self, users):
@@ -226,6 +227,7 @@ class CreditManager:
             self.grc_ip = myConfig.get_value("GRIDCOIN_RPC_IP")
             self.grc_port = myConfig.get_value("GRIDCOIN_RPC_PORT")
             self.coins_credit_ratio = myConfig.get_value("COINS_TO_CREDIT_RATIO")
+            self.min_coin_movement = myConfig.get_value("MIN_COIN_MOVEMENT")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
             self.threshold = myConfig.get_value("THRESHOLD")
 
@@ -238,6 +240,8 @@ class CreditManager:
             log_info("GRC password -> {0}".format(self.grc_pass), debug)
             log_info("GRC ip -> {0}".format(self.grc_ip), debug)
             log_info("GRC port -> {0}".format(self.grc_port), debug)
+            log_info("COINS to CREDIT ratio (vcore-s for 1 GRC) -> {0}".format(self.coins_credit_ratio), debug)
+            log_info("MIN GRC movement of (in GRC) -> {0}".format(self.min_coin_movement), debug)
             log_info(".............................................", debug)
 
             self.config_grc_connection()

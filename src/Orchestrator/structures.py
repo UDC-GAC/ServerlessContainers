@@ -467,8 +467,11 @@ def subscribe_container(structure_name):
                 container["resources"]["cpu"][key] = req_cont["resources"]["cpu"][key]
                 container["resources"]["mem"][key] = req_cont["resources"]["mem"][key]
 
-        container["resources"]["cpu"]["guard"] = False
-        container["resources"]["mem"]["guard"] = False
+        for res in ["cpu", "mem"]:
+            if "guard" not in req_cont["resources"][res]:
+                container["resources"][res]["guard"] = False
+            else:
+                container["resources"][res]["guard"] = req_cont["resources"][res]["guard"]
 
         if 'disk' in req_cont["resources"]:
             disk = req_cont["resources"]["disk"]
@@ -509,6 +512,10 @@ def subscribe_container(structure_name):
     # Fill the remaining info about the container
     container["type"] = "structure"
     container["subtype"] = "container"
+    if "guard" in req_cont:
+        container["guard"] = req_cont["guard"]
+    else:
+        container["guard"] = False
 
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {"cpu": {}, "mem": {}}}

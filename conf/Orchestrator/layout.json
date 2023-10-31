@@ -18,24 +18,7 @@
     }
   ],
   "containers": [
-    {
-      "name": "cont0",
-      "resources": {
-        "cpu": {
-          "max": 200,
-          "current": 200,
-          "min": 20,
-          "boundary": 20
-        },
-        "mem": {
-          "max": 4192,
-          "current": 2048,
-          "min": 256,
-          "boundary": 128
-        }
-      },
-      "host": "host0"
-    }
+
   ],
   "apps": [
     {
@@ -58,7 +41,6 @@
       "stop_script": "",
       "app_jar": "",
       "containers": [
-        "cont0"
       ]
     }
   ],
