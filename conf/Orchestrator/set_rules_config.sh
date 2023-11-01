@@ -5,8 +5,8 @@ source ${scriptDir}/../../set_pythonpath.sh
 export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
 PROFILE="default"
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh ${PROFILE} CpuRescaleUp
-bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh ${PROFILE} CpuRescaleDown
+bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh ${PROFILE} CpuRescaleUp
+bash $ORCHESTRATOR_PATH/Rules/activate_rule.sh ${PROFILE} CpuRescaleDown
 bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh ${PROFILE} MemRescaleUp
 bash $ORCHESTRATOR_PATH/Rules/deactivate_rule.sh ${PROFILE} MemRescaleDown
 PROFILE="benevolent"

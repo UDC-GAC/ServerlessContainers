@@ -40,13 +40,13 @@ import src.StateDatabase.couchdb as couchdb
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10,
                          "THRESHOLD": 0.1,
-                         "MIN_COIN_MOVEMENT": 0.1,
+                         "MIN_COIN_MOVEMENT": 0.5,
                          "ACTIVE": True,
                          "GRIDCOIN_RPC_USER": "gridcoinrpc",
                          "GRIDCOIN_RPC_IP": "192.168.51.100",
                          "GRIDCOIN_RPC_PORT": "9090",
                          "GRIDCOIN_RPC_PASS": "Bt2oEfVgnMGqvB26UapLERmDu5bvULKr9SPvPBkMkMSV",
-                         "COINS_TO_CREDIT_RATIO": 600,  # 600 credits per 1 GRC -> 1 vcore for 10 minutes
+                         "COINS_TO_CREDIT_RATIO": 60,  # 60 credits per 1 GRC -> 1 vcore for 1 minute
                          "DEBUG": True}
 
 SERVICE_NAME = "credit_manager"
@@ -94,12 +94,14 @@ class CreditManager:
         accounting = user["accounting"]
         uname = user["name"]
 
-        num_folds = int(accounting["consumed"] / REBASE_BLOCK)
+        num_folds = int(accounting["pending"] / REBASE_BLOCK)
         if num_folds >= 1:
             coins_moved = num_folds * coins_per_fold
             success = self.move_credit(uname, "sink", str(coins_moved))
             if success:
-                accounting["consumed"] = round(accounting["consumed"] - num_folds * REBASE_BLOCK, 2)
+                accounting["pending"] = round(accounting["pending"] - num_folds * REBASE_BLOCK, 2)
+                accounting["coins"] -= coins_moved
+                accounting["credit"] = self.coins_credit_ratio * accounting["coins"]
                 log_info("User {0} counters have been rebased".format(uname), self.debug)
             else:
                 log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"), self.debug)
@@ -172,13 +174,13 @@ class CreditManager:
             log_info("Processing User {0}".format(u["name"]), self.debug)
 
             # Refresh the info regarding credit and coins
-            if u["name"] in users_wallets:
-                log_info("User {0} has {1} GRC".format(u["name"], users_wallets[u["name"]]), self.debug)
-                self.compute_credit_cpu(u, users_wallets)
-            else:
+            if u["name"] not in users_wallets:
                 log_warning("User {0} does not have a registered wallet", self.debug)
                 self.couchdb_handler.update_user(u)
                 continue
+
+            log_info("User {0} has {1} GRC".format(u["name"], users_wallets[u["name"]]), self.debug)
+            self.compute_credit_cpu(u, users_wallets)
 
             # Refresh the information
             self.compute_consumed_cpu(u)
@@ -203,8 +205,8 @@ class CreditManager:
     def compute_consumed_cpu(self, user):
         cpu_consumed = user["cpu"]["used"] / 100  # Convert shares to vcores
         if cpu_consumed > self.threshold:
-            user["accounting"]["consumed"] += cpu_consumed * self.polling_frequency
-            user["accounting"]["consumed"] = round(user["accounting"]["consumed"], 2)
+            user["accounting"]["pending"] += cpu_consumed * self.polling_frequency
+            user["accounting"]["pending"] = round(user["accounting"]["pending"], 2)
 
     def manage(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)

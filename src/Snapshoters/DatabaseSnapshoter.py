@@ -40,7 +40,12 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"] ,"ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {
+    "POLLING_FREQUENCY": 5,
+    "DEBUG": True,
+    "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"],
+    "ACTIVE": True
+}
 OPENTSDB_STORED_VALUES_AS_NULL = 0
 SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
@@ -92,18 +97,22 @@ def get_users():
     # Remote database operation
     for user in db_handler.get_users():
         timestamp = int(time.time())
-        for submetric in ["used", "max", "usage", "current"]:
-            if submetric not in user["energy"]:
-                log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
-                continue
-            timeseries = dict(metric="user.energy.{0}".format(submetric),
-                              value=user["energy"][submetric],
-                              timestamp=timestamp,
-                              tags={"user": user["name"]})
-            docs.append(timeseries)
-        for submetric in ["credit", "consumed", "coins"]:
+
+        ## ENERGY ##
+        # for submetric in ["used", "max", "usage", "current"]:
+        #     if submetric not in user["energy"]:
+        #         log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
+        #         continue
+        #     timeseries = dict(metric="user.energy.{0}".format(submetric),
+        #                       value=user["energy"][submetric],
+        #                       timestamp=timestamp,
+        #                       tags={"user": user["name"]})
+        #     docs.append(timeseries)
+
+        # ACCOUNTING ##
+        for submetric in ["credit", "pending", "coins"]:
             if submetric not in user["accounting"]:
-                log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
+                log_warning("submetric {0} (accounting) not available for user {1}".format(submetric, user["name"]), debug)
                 continue
             timeseries = dict(metric="user.accounting.{0}".format(submetric),
                               value=user["accounting"][submetric],
@@ -136,7 +145,7 @@ def get_configs():
     for service in filtered_services:
         for parameter in PERSIST_CONFIG_SERVICES_DOCS[service["name"]]:
             database_key_name, timeseries_metric_name = parameter
-            if  database_key_name in service["config"]:
+            if database_key_name in service["config"]:
                 timeseries = dict(metric=timeseries_metric_name,
                                   value=service["config"][database_key_name],
                                   timestamp=int(time.time()),
@@ -226,7 +235,7 @@ def persist():
         log_info(".............................................", debug)
 
         ## CHECK INVALID CONFIG ##
-        # TODO THis code is duplicated on the structures and database snapshoters
+        # TODO This code is duplicated on the structures and database snapshoters
         invalid, message = invalid_conf(myConfig)
         if invalid:
             log_error(message, debug)
