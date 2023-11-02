@@ -101,23 +101,17 @@ class ReFeeder:
             raise e
         return container_info
 
-    def generate_application_metrics(self, application):
-        application_info = dict()
-        for c in application["containers"]:
-            container_info = self.get_container_usages(c)
-            application_info = self.merge(application_info, container_info)
-
-        for resource in application_info:
-            if resource in application["resources"]:
-                application["resources"][resource]["usage"] = application_info[resource]
-            else:
-                log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
-
-        return application
-
     def refeed_applications(self, applications):
         for application in applications:
-            application = self.generate_application_metrics(application)
+            application_usages = {"cpu": 0, "mem": 0}
+            for c in application["containers"]:
+                container_usages = self.get_container_usages(c)
+                application_usages = self.merge(application_usages, container_usages)
+            for resource in application_usages:
+                if resource in application["resources"]:
+                    application["resources"][resource]["usage"] = application_usages[resource]
+                else:
+                    log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
             update_structure(application, self.couchdb_handler, self.debug)
 
     # def refeed_user_cpu_energy(self, applications, users):
@@ -234,16 +228,18 @@ class ReFeeder:
             if SERVICE_IS_ACTIVATED:
                 # Remote database operation
                 host_info_cache = dict()
-                containers = get_structures(self.couchdb_handler, debug, subtype="container")
-                if not containers:
-                    # As no container info is available, no application information will be able to be generated
-                    log_info("No structures to process", debug)
-                    time.sleep(self.window_difference)
-                    end_epoch(self.debug, self.window_difference, t0)
-                    continue
-                else:
-                    thread = Thread(target=self.refeed_thread, args=())
-                    thread.start()
+                #containers = get_structures(self.couchdb_handler, debug, subtype="container")
+                thread = Thread(target=self.refeed_thread, args=())
+                thread.start()
+                # if not containers:
+                #     # As no container info is available, no application information will be able to be generated
+                #     log_info("No structures to process", debug)
+                #     time.sleep(self.window_difference)
+                #     end_epoch(self.debug, self.window_difference, t0)
+                #     continue
+                # else:
+                #     thread = Thread(target=self.refeed_thread, args=())
+                #     thread.start()
             else:
                 log_warning("Refeeder is not activated", debug)
 

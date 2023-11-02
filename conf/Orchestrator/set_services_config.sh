@@ -6,6 +6,7 @@ export ORCHESTRATOR_PATH=${SERVERLESS_PATH}/scripts/orchestrator
 
 echo "Configuring Guardian"
 bash $ORCHESTRATOR_PATH/Guardian/deactivate.sh
+bash $ORCHESTRATOR_PATH/Guardian/set_event_timeout.sh 80 # 120
 
 echo "Configuring Scaler"
 bash $ORCHESTRATOR_PATH/Scaler/deactivate.sh
