@@ -2,7 +2,7 @@
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source "${scriptDir}/../set_env.sh"
 
-if [ -z "$1" ]
+if [ -z "$2" ]
 then
       echo "2 Arguments are needed"
       echo "1 -> user in JSON format"

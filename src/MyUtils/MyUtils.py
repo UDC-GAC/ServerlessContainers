@@ -234,7 +234,7 @@ def update_structure(structure, db_handler, debug, max_tries=10):
         db_handler.update_structure(structure, max_tries=max_tries)
         log_info("Updated {0} {1}".format(structure["subtype"].capitalize(), structure["name"]), debug)
     except requests.exceptions.HTTPError:
-        log_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
+        log_error("Error updating structure " + structure["name"] + " " + traceback.format_exc(), debug)
 
 
 def update_user(user, db_handler, debug, max_tries=10):

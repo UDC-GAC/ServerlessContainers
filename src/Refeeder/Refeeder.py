@@ -33,7 +33,7 @@ import traceback
 import logging
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
-    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, update_structure, \
+    get_structures, wait_operation_thread, update_structure, \
     end_epoch, start_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -104,82 +104,55 @@ class ReFeeder:
     def refeed_applications(self, applications):
         for application in applications:
             application_usages = {"cpu": 0, "mem": 0}
+
             for c in application["containers"]:
                 container_usages = self.get_container_usages(c)
                 application_usages = self.merge(application_usages, container_usages)
+
             for resource in application_usages:
                 if resource in application["resources"]:
-                    application["resources"][resource]["usage"] = application_usages[resource]
+                    application["resources"][resource]["used"] = application_usages[resource]
                 else:
                     log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
+
             update_structure(application, self.couchdb_handler, self.debug)
+            log_info("Updated Application {0}".format(application["name"]), self.debug)
 
-    # def refeed_user_cpu_energy(self, applications, users):
-    #     for user in users:
-    #         if "cpu" not in user:
-    #             user["cpu"] = {}
-    #         if "energy" not in user:
-    #             user["energy"] = {}
-    #         total_user = {"cpu": 0, "energy": 0}
-    #         total_user_current_cpu = 0
-    #         user_apps = get_user_apps(applications, user)
-    #         for app in user_apps:
-    #             for resource in ["energy", "cpu"]:
-    #                 if resource in app["resources"] and "usage" in app["resources"][resource] and app["resources"][resource]["usage"]:
-    #                     total_user[resource] += int(app["resources"][resource]["usage"])
-    #                 else:
-    #                     log_error("Application {0} of user {1} has no usage {2} field or value".format(
-    #                         app["name"], user["name"], resource), self.debug)
-    #
-    #             if "current" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
-    #                 total_user_current_cpu += app["resources"][resource]["current"]
-    #             else:
-    #                 log_warning("Application {0} of user {1} has no current cpu field or value".format(
-    #                     app["name"], user["name"]), self.debug)
-    #
-    #         user["energy"]["used"] = total_user["energy"]
-    #         user["cpu"]["usage"] = total_user["cpu"]
-    #         user["cpu"]["current"] = total_user_current_cpu
-    #         self.couchdb_handler.update_user(user)
-    #         log_info("Updated energy consumed by user {0}".format(user["name"]), self.debug)
+    def refeed_users(self, applications, users):
+        def print_missing(field):
+            log_warning("Missing field '{0}' for app '{1}' of user '{2}'".format(
+                field, app["name"], user["name"]), self.debug)
 
-    def refeed_user_cpu(self, applications, users):
         for user in users:
+            user_apps = get_user_apps(applications, user)
+
             if "cpu" not in user:
                 user["cpu"] = {}
-            user["cpu"]["allocated"] = 0
-            user["cpu"]["used"] = 0
-            user_apps = get_user_apps(applications, user)
-            for app in user_apps:
-                if "cpu" in app["resources"] and "usage" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
-                    user["cpu"]["used"] += int(app["resources"]["cpu"]["usage"])
-                else:
-                    log_error("Application {0} of user {1} has no usage field or value for cpu".format(
-                        app["name"], user["name"]), self.debug)
-
-                if "current" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
-                    user["cpu"]["allocated"] += app["resources"]["cpu"]["current"]
-                else:
-                    log_warning("Application {0} of user {1} has no current cpu field or value".format(
-                        app["name"], user["name"]), self.debug)
-
-            log_info("Updated User {0} (cpu)".format(user["name"]), self.debug)
-
-    def refeed_user_energy(self, applications, users):
-        for user in users:
             if "energy" not in user:
                 user["energy"] = {}
-            user["energy"]["used"] = 0
-            user_apps = get_user_apps(applications, user)
-            for app in user_apps:
-                if "energy" in app["resources"] and "usage" in app["resources"]["energy"] and \
-                        app["resources"]["energy"]["usage"]:
-                    user["energy"]["used"] += int(app["resources"]["energy"]["usage"])
-                else:
-                    log_warning("Application {0} of user {1} has no usage field or value for energy".format(
-                        app["name"], user["name"]), self.debug)
 
-            log_info("Updated User {0} (energy)".format(user["name"]), self.debug)
+            user["cpu"]["current"] = 0
+            user["cpu"]["used"] = 0
+            user["energy"]["used"] = 0
+
+            for app in user_apps:
+                if "cpu" in app["resources"] and "used" in app["resources"]["cpu"]:
+                    user["cpu"]["used"] += int(app["resources"]["cpu"]["used"])
+                else:
+                    print_missing("cpu.used")
+
+                if "current" in app["resources"]["cpu"] and "current" in app["resources"]["cpu"]:
+                    user["cpu"]["current"] += app["resources"]["cpu"]["current"]
+                else:
+                    print_missing("cpu.current")
+
+                if "energy" in app["resources"] and "used" in app["resources"]["energy"]:
+                    user["energy"]["used"] += int(app["resources"]["energy"]["used"])
+                else:
+                    print_missing("energy.used")
+
+            self.couchdb_handler.update_user(user)
+            log_info("Updated User {0}".format(user["name"]), self.debug)
 
     def refeed_thread(self, ):
         applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
@@ -188,14 +161,10 @@ class ReFeeder:
 
         users = self.couchdb_handler.get_users()
         if users:
-            # Retrieve again the application as they have been updated
+            # Retrieve again the application as they have been updated (in other threads)
             applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
-            #self.refeed_user_cpu_energy(applications, users)
-            self.refeed_user_cpu(applications, users)
-            self.refeed_user_energy(applications, users)
-            for u in users:
-                self.couchdb_handler.update_user(u)
-            #self.refeed_user_used_cpu(applications, users)
+            self.refeed_users(applications, users)
+
 
     def refeed(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)

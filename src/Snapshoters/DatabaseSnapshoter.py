@@ -35,7 +35,6 @@ import logging
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
 
-
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning
 
 db_handler = couchdb.CouchDBServer()
@@ -51,7 +50,7 @@ SERVICE_NAME = "database_snapshoter"
 MAX_FAIL_NUM = 5
 debug = True
 
-PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"]
+PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "used", "fixed", "shares"]
 PERSIST_CONFIG_SERVICES_NAMES = ["guardian", "scaler"]
 PERSIST_CONFIG_SERVICES_DOCS = {
     "guardian": [
@@ -97,28 +96,24 @@ def get_users():
     # Remote database operation
     for user in db_handler.get_users():
         timestamp = int(time.time())
+        # These are the metrics (os subdocuments) to persist from users documents
+        metrics = {"cpu": [], "energy": [], "accounting": []}
 
-        ## ENERGY ##
-        # for submetric in ["used", "max", "usage", "current"]:
-        #     if submetric not in user["energy"]:
-        #         log_warning("submetric {0} (energy) not available for user {1}".format(submetric, user["name"]), debug)
-        #         continue
-        #     timeseries = dict(metric="user.energy.{0}".format(submetric),
-        #                       value=user["energy"][submetric],
-        #                       timestamp=timestamp,
-        #                       tags={"user": user["name"]})
-        #     docs.append(timeseries)
+        # Fll with the submetrics for each of the three metrics
+        metrics["cpu"] = ["current", "used"]
+        metrics["energy"] = ["max", "used"]
+        metrics["accounting"] = ["max_debt", "min_balance", "coins"]
 
-        # ACCOUNTING ##
-        for submetric in ["credit", "pending", "coins"]:
-            if submetric not in user["accounting"]:
-                log_warning("submetric {0} (accounting) not available for user {1}".format(submetric, user["name"]), debug)
-                continue
-            timeseries = dict(metric="user.accounting.{0}".format(submetric),
-                              value=user["accounting"][submetric],
-                              timestamp=timestamp,
-                              tags={"user": user["name"]})
-            docs.append(timeseries)
+        for metric, submetrics in metrics.items():
+            for subm in submetrics:
+                if subm not in user[metric]:
+                    log_warning("Metric '{0}.{1}' not available for user {2}".format(metric, subm, user["name"]), debug)
+                else:
+                    timeseries = dict(metric="user.{0}.{1}".format(metric, subm),
+                                      value=user[metric][subm],
+                                      timestamp=timestamp,
+                                      tags={"user": user["name"]})
+                    docs.append(timeseries)
     return docs
 
 
@@ -152,7 +147,8 @@ def get_configs():
                                   tags={"service": service["name"]})
                 docs.append(timeseries)
             else:
-                log_warning("Missing config key '{0}' in service '{1}'".format(database_key_name, service["name"]), debug)
+                log_warning("Missing config key '{0}' in service '{1}'".format(database_key_name, service["name"]),
+                            debug)
     return docs
 
 
@@ -160,6 +156,7 @@ funct_map = {"users": get_users,
              "limits": get_limits,
              "structures": get_structures,
              "configs": get_configs}
+
 
 def get_data(funct):
     docs = list()
@@ -169,6 +166,7 @@ def get_data(funct):
         # An error might have been thrown because database was recently updated or created
         log_warning("Couldn't retrieve {0} info, error {1}.".format(funct, str(e)), debug)
     return docs
+
 
 def send_data(docs):
     num_sent_docs = 0
@@ -181,8 +179,8 @@ def send_data(docs):
             num_sent_docs = len(docs)
     return num_sent_docs
 
-def persist_docs(funct):
 
+def persist_docs(funct):
     t0 = time.time()
     docs = get_data(funct)
     t1 = time.time()
@@ -192,16 +190,17 @@ def persist_docs(funct):
         num_docs = send_data(docs)
         t2 = time.time()
         if num_docs > 0:
-            log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)),funct), debug)
+            log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)), funct), debug)
             log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), funct), debug)
 
 
 def invalid_conf(config):
     # TODO THis code is duplicated on the structures and database snapshoters
-    for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
+    for key, num in [("POLLING_FREQUENCY", config.get_value("POLLING_FREQUENCY"))]:
         if num < 3:
             return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
     return False, ""
+
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
@@ -241,7 +240,8 @@ def persist():
             log_error(message, debug)
             time.sleep(polling_frequency)
             if polling_frequency < 4:
-                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
+                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(
+                    CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
                 polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
 
             log_info("----------------------\n", debug)

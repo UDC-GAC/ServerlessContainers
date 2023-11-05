@@ -6,6 +6,7 @@
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="BlockchainServerless" />
     <orderEntry type="module" module-name="ServerlessContainersReportGenerator" />
+    <orderEntry type="module" module-name="BDWatchdog" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="PLAIN" />
