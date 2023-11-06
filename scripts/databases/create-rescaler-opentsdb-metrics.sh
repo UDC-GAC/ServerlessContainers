@@ -17,13 +17,13 @@
     ./build/tsdb mkmetric limit.energy.lower
 
 # RESOURCES
-    ./build/tsdb mkmetric structure.cpu.usage
+    ./build/tsdb mkmetric structure.cpu.used
     ./build/tsdb mkmetric structure.cpu.current
     ./build/tsdb mkmetric structure.cpu.fixed
     ./build/tsdb mkmetric structure.cpu.max
     ./build/tsdb mkmetric structure.cpu.min
 
-    ./build/tsdb mkmetric structure.mem.usage
+    ./build/tsdb mkmetric structure.mem.used
     ./build/tsdb mkmetric structure.mem.current
     ./build/tsdb mkmetric structure.mem.fixed
     ./build/tsdb mkmetric structure.mem.max

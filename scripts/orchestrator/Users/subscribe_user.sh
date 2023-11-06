@@ -10,4 +10,4 @@ then
 fi
 
 name=$(echo ${1} | jq -c '.name' | tr -d '"')
-curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/user/${name} -d $1
+curl -X PUT -H "Content-Type: application/json" -s http://${ORCHESTRATOR_REST_URL}/user/${name} -d $1

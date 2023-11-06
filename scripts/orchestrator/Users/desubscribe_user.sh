@@ -9,4 +9,4 @@ then
       exit 1
 fi
 
-curl -X DELETE -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/user/$1
+curl -X DELETE -H "Content-Type: application/json" -s http://${ORCHESTRATOR_REST_URL}/user/$1

@@ -6,8 +6,8 @@ if [ -z "$2" ]
 then
       echo "2 Arguments are needed"
       echo "1 -> user in JSON format"
-      echo "2 -> value"
+      echo "2 -> value (true or false)"
       exit 1
 fi
 
-curl -X PUT -H "Content-Type: application/json" -s http://${ORCHESTRATOR_REST_URL}/user/${1}/accounting/max_debt  -d '{"value":"'$2'"}'
+curl -X PUT -H "Content-Type: application/json" -s http://${ORCHESTRATOR_REST_URL}/user/${1}/accounting/active  -d '{"value":"'$2'"}'

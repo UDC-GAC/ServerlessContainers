@@ -10,4 +10,4 @@ then
       exit 1
 fi
 
-curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/user/${1}/accounting/min_balance  -d '{"value":"'$2'"}'
+curl -X PUT -H "Content-Type: application/json" -s http://${ORCHESTRATOR_REST_URL}/user/${1}/accounting/min_balance  -d '{"value":"'$2'"}'

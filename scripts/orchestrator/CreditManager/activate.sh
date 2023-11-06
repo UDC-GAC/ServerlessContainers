@@ -2,4 +2,4 @@
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source "${scriptDir}/../set_env.sh"
 
-curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/service/credit_manager/ACTIVE -d '{"value":"true"}'
+curl -X PUT -H "Content-Type: application/json" -s http://${ORCHESTRATOR_REST_URL}/service/credit_manager/ACTIVE -d '{"value":"true"}'

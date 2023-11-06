@@ -42,7 +42,7 @@ opentsdb_handler = opentsdb.OpenTSDBServer()
 CONFIG_DEFAULT_VALUES = {
     "POLLING_FREQUENCY": 5,
     "DEBUG": True,
-    "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"],
+    "DOCUMENTS_PERSISTED": ["structures", "users", "configs"],
     "ACTIVE": True
 }
 OPENTSDB_STORED_VALUES_AS_NULL = 0
@@ -130,6 +130,10 @@ def get_structures():
     # Remote database operation
     for structure in db_handler.get_structures():
         docs += translate_structure_doc_to_timeseries(structure)
+        # Retrieve the structure limits
+        if (structure["subtype"] == "container" or structure["type"] == "app") and structure["guard"]:
+            docs += translate_structure_doc_to_timeseries(db_handler.get_limits(structure))
+
     return docs
 
 
@@ -153,7 +157,6 @@ def get_configs():
 
 
 funct_map = {"users": get_users,
-             "limits": get_limits,
              "structures": get_structures,
              "configs": get_configs}
 

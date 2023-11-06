@@ -22,7 +22,9 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
-
+from flask import abort
+from flask import jsonify
+from flask import request
 from flask import g
 import os
 
@@ -34,6 +36,10 @@ COUCHDB_URL = os.getenv('COUCHDB_URL')
 if not COUCHDB_URL:
     COUCHDB_URL = "couchdb"
 
+def bad_content(message):
+    return abort(jsonify({"message": message}), 400)
+def not_exists(message):
+    return abort(jsonify({"message": message}), 404)
 
 def get_db():
     global COUCHDB_URL

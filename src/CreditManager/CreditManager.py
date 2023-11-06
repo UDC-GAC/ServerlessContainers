@@ -104,65 +104,73 @@ class CreditManager:
                 accounting["credit"] = self.coins_credit_ratio * accounting["coins"]
                 log_info("User {0} counters have been rebased".format(uname), self.debug)
             else:
-                log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"), self.debug)
+                log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"),
+                            self.debug)
+
+    def restrict_container(self, cont, cont_boundary):
+        cont["guard"] = False
+        self.couchdb_handler.update_structure(cont)
+        cont_cpu = cont["resources"]["cpu"]
+        amount = -1 * (cont_cpu["current"] - (cont_cpu["min"] + 2 * cont_boundary))
+        if amount != 0:
+            request = Guardian().generate_request(cont, amount, "cpu")
+            log_info("Sending request to scale an amount of {0} cpu shares".format(amount), self.debug)
+            self.couchdb_handler.add_request(request)
+
+
+    def check_restriction(self, user):
+        apps = user["applications"]
+        for app_name in apps:
+            app_info = self.couchdb_handler.get_structure(app_name)
+            for cont_name in app_info["containers"]:
+                cont_info = self.couchdb_handler.get_structure(cont_name)
+                cont_limits = self.couchdb_handler.get_limits({"name": cont_name})  # TODO This is pretty shoddy I know
+                cont_cpu_boundary = cont_limits["resources"]["cpu"]["boundary"]
+                cont_guarded = cont_info["guard"]
+                cont_current_cpu = cont_info["resources"]["cpu"]["current"]
+                cont_min_cpu = cont_info["resources"]["cpu"]["min"]
+                cont_restricted_cpu = cont_min_cpu + 2 * cont_cpu_boundary
+                if cont_guarded or cont_current_cpu != cont_restricted_cpu:
+                    log_warning("Container {0} is supposed to be restricted but it is not, restricting again".format(cont_name), self.debug)
+                    self.restrict_container(cont_info, cont_cpu_boundary)
+
 
     def restrict_user(self, user):
         user["accounting"]["restricted"] = True
         # Set containers to unguarded and generate petitions to lower the resources for containers
         apps = user["applications"]
-        containers = list()
-        requests = list()
-        guardian = Guardian()
         for app_name in apps:
             app_info = self.couchdb_handler.get_structure(app_name)
             for cont_name in app_info["containers"]:
                 cont_info = self.couchdb_handler.get_structure(cont_name)
-                cont_info["guard"] = False
-                self.couchdb_handler.update_structure(cont_info)
-                containers.append(cont_info)
-
-                amount = -1 * (cont_info["resources"]["cpu"]["current"] - cont_info["resources"]["cpu"]["min"])
-                if amount != 0:
-                    request = guardian.generate_request(cont_info, amount, "cpu")
-                    print(request)
-                    requests.append(request)
-
-        self.couchdb_handler.add_requests(requests)
+                cont_limits = self.couchdb_handler.get_limits({"name": cont_name})  # TODO This is pretty shoddy I know
+                cont_cpu_boundary = cont_limits["resources"]["cpu"]["boundary"]
+                self.restrict_container(cont_info, cont_cpu_boundary)
 
     def raise_restriction(self, user):
         user["accounting"]["restricted"] = False
-        # Set containers to guarded and generate petitions to increase the resources for containers, at least until the Guardian picks up
+        # Set containers to guarded so the Guardian picks up the scaling again (cold start)
         apps = user["applications"]
-        containers = list()
-        requests = list()
-        guardian = Guardian()
         for app_name in apps:
             app_info = self.couchdb_handler.get_structure(app_name)
             for cont_name in app_info["containers"]:
                 cont_info = self.couchdb_handler.get_structure(cont_name)
                 cont_info["guard"] = True
                 self.couchdb_handler.update_structure(cont_info)
-                containers.append(cont_info)
-
-                amount = int(0.5 * (cont_info["resources"]["cpu"]["max"] - cont_info["resources"]["cpu"]["current"]))
-                if amount > 0:
-                    request = guardian.generate_request(cont_info, amount, "cpu")
-                    print(request)
-                    requests.append(request)
-
-        self.couchdb_handler.add_requests(requests)
 
     def check_credit(self, user):
         user_name = user["name"]
         user_restricted = user["accounting"]["restricted"]
         user_credit = user["accounting"]["credit"]
         if user_restricted and user_credit <= 0:
-            log_warning("User {0} is restricted, but still does not have enough credit".format(user_name), self.debug)
+            log_warning("User {0} is restricted and not have enough credit, maintain restriction".format(user_name), self.debug)
+            self.check_restriction(user)
         elif not user_restricted and user_credit < 0:
-            log_warning("User {0} is not restricted, but does not have enough credit, restricting".format(user_name), self.debug)
+            log_warning("User {0} is not restricted but does not have enough credit, restrict".format(user_name), self.debug)
             self.restrict_user(user)
         elif user_restricted and user_credit > 0:
-            log_warning("User {0} is restricted, but has enough credit now, raising restriction".format(user_name), self.debug)
+            log_warning("User {0} is restricted but has enough credit, raise restriction".format(user_name),
+                        self.debug)
             self.raise_restriction(user)
         elif not user_restricted and user_credit >= 0:
             log_warning("User {0} is not restricted and has enough credit".format(user_name), self.debug)

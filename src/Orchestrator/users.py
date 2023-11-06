@@ -24,14 +24,20 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 from flask import Blueprint
-from flask import abort
 from flask import jsonify
 from flask import request
 import time
 
-from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, bad_content, not_exists
 
 users_routes = Blueprint('users', __name__)
+
+
+def retrieve_user(user_name):
+    try:
+        return get_db().get_user(user_name)
+    except ValueError:
+        not_exists("user does not exist")
 
 
 @users_routes.route("/user/", methods=['GET'])
@@ -41,12 +47,12 @@ def get_users():
 
 @users_routes.route("/user/<user_name>", methods=['GET'])
 def get_user(user_name):
-    return jsonify(get_db().get_user(user_name))
+    return jsonify(retrieve_user(user_name))
 
 
 @users_routes.route("/user/<user_name>/accounting/<key>", methods=['GET'])
 def get_accounting_value(user_name, key):
-    user = get_db().get_user(user_name)
+    user = retrieve_user(user_name)
     return jsonify(user["accounting"][key])
 
 
@@ -54,12 +60,12 @@ def get_accounting_value(user_name, key):
 def set_accounting_value(user_name, key):
     data = request.json
     if not data:
-        abort(400, {"message": "empty content"})
+        bad_content("empty content")
 
     value = request.json["value"]
 
     if not isinstance(value, (int, str)):
-        abort(400, {"message": "invalid content, resources must be a number or a string"})
+        return bad_content("invalid content, resources must be a number or a string")
     elif value == "greedy" or value == "conservative":
         pass
     elif value == "true" or value == "false":
@@ -68,13 +74,13 @@ def set_accounting_value(user_name, key):
         try:
             value = float(value)
         except ValueError:
-            abort(400, {"message": "bad content"})
+            bad_content("invalid content, not bool, policy, int, or float")
 
-    user = get_db().get_user(user_name)
+    user = retrieve_user(user_name)
     try:
         bogus = user["accounting"][key]
     except KeyError:
-        abort(404)
+        not_exists("User does not have accounting initialized")
 
     put_done = False
     tries = 0
@@ -84,11 +90,11 @@ def set_accounting_value(user_name, key):
         get_db().update_user(user)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
-        user = get_db().get_user(user_name)
+        user = retrieve_user(user_name)
         put_done = user["accounting"][key] == value
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
 
     return jsonify(201)
 
@@ -101,29 +107,24 @@ def subscribe_user(user_name):
     user = {}
     for key in ["name"]:
         if key not in req_user:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
+            bad_content("Missing key '{0}'".format(key))
         else:
             user[key] = req_user[key]
 
     if user["name"] != user_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
+        bad_content("Name mismatch".format(key))
 
     # Check if the user already exists
-    try:
-        user = get_db().get_user(user_name)
-        if user:
-            return abort(400, {"message": "User with this name already exists".format(key)})
-    except ValueError:
-        pass
+    user = retrieve_user(user_name)
+    if user:
+        bad_content("User with this name already exists".format(key))
 
     if "applications" in req_user:
         for app in req_user["applications"]:
             try:
                 get_db().get_structure(app)
             except ValueError:
-                return abort(400, {
-                    "message": "The application '{0}', which allegedly is a part of this user, does not exists".format(
-                        app)})
+                bad_content("The application '{0}', which allegedly is a part of this user, does not exist".format(app))
         user["applications"] = req_user["applications"]
     else:
         user["applications"] = list()
@@ -140,7 +141,7 @@ def subscribe_user(user_name):
         "coins": 0,
         "min_balance": 2,
         "max_debt": -2,
-        "policy": "greedy" # conservative
+        "policy": "greedy"  # conservative
     }
 
     get_db().add_user(user)
@@ -150,7 +151,7 @@ def subscribe_user(user_name):
 
 @users_routes.route("/user/<user_name>", methods=['DELETE'])
 def desubscribe_user(user_name):
-    user = get_db().get_user(user_name)
+    user = retrieve_user(user_name)
 
     # Delete the document for this user
     get_db().delete_user(user)
@@ -160,15 +161,15 @@ def desubscribe_user(user_name):
 
 @users_routes.route("/user/<user_name>/energy/max", methods=['PUT'])
 def set_user_energy_max(user_name):
-    user = get_db().get_user(user_name)
+    user = retrieve_user(user_name)
     try:
         bogus = user["energy"]["max"]
     except KeyError:
-        abort(404)
+        not_exists("User does not have energy initialized")
 
     value = int(request.json["value"])
     if value < 0:
-        return abort(400)
+        bad_content("Invalid value for max energy")
 
     put_done = False
     tries = 0
@@ -178,10 +179,10 @@ def set_user_energy_max(user_name):
         get_db().update_user(user)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
-        user = get_db().get_user(user_name)
+        user = retrieve_user(user_name)
         put_done = user["energy"]["max"] == value
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
 
     return jsonify(201)
