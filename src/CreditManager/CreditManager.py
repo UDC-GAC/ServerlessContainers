@@ -88,7 +88,7 @@ class CreditManager:
         return result
 
     def rebase_counters(self, user):
-        REBASE_RATIO = self.min_coin_movement  # Used to module how often a rebase is carried out, 1 -> 1 coin per each fold
+        REBASE_RATIO = self.min_coin_movement  # Used to module how often a rebase is done, 1 -> 1 coin per each fold
         REBASE_BLOCK = int(self.min_coin_movement * self.coins_credit_ratio)
         coins_per_fold = REBASE_RATIO * 1
         accounting = user["accounting"]

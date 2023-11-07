@@ -24,12 +24,11 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 from flask import Blueprint
-from flask import abort
 from flask import jsonify
 from flask import request
 import time
 
-from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, bad_content, not_exists
 
 service_routes = Blueprint('services', __name__)
 
@@ -37,7 +36,7 @@ def retrieve_service(service_name):
     try:
         return get_db().get_service(service_name)
     except ValueError:
-        return abort(404)
+        not_exists("Service does not exist")
 
 @service_routes.route("/service/", methods=['GET'])
 def get_services():
@@ -68,7 +67,7 @@ def set_service_information(service_name):
             put_done = put_done and service["config"][key] == data[key]
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
 
     return jsonify(201)
 
@@ -80,12 +79,12 @@ def set_service_value(service_name, key):
 
     data = request.json
     if not data:
-        abort(400, {"message": "empty content"})
+        bad_content("empty content")
 
     value = request.json["value"]
 
     if not isinstance(value, (list, str)):
-        abort(400, {"message": "invalid content, resources must be a list or a string"})
+        bad_content("invalid content, resources must be a list or a string")
     elif value == "true" or value == "false":
         value = value == "true"
     elif value == "container" or value == "application":
@@ -118,7 +117,7 @@ def set_service_value(service_name, key):
         put_done = service["config"][key] == value
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
 
     return jsonify(201)
 

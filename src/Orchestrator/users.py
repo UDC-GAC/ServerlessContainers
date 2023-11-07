@@ -115,9 +115,12 @@ def subscribe_user(user_name):
         bad_content("Name mismatch".format(key))
 
     # Check if the user already exists
-    user = retrieve_user(user_name)
-    if user:
-        bad_content("User with this name already exists".format(key))
+    try:
+        user = get_db().get_user(user_name)
+        if user:
+            bad_content("User with this name already exists".format(key))
+    except ValueError:
+        pass
 
     if "applications" in req_user:
         for app in req_user["applications"]:

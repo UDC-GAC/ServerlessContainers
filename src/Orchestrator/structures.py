@@ -33,7 +33,7 @@ import time
 import src.Scaler.Scaler
 from src.MyUtils import MyUtils
 from src.MyUtils.MyUtils import valid_resource, get_host_containers
-from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES
+from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, bad_content, not_exists
 from src.Scaler import Scaler
 
 structure_routes = Blueprint('structures', __name__)
@@ -43,7 +43,7 @@ def retrieve_structure(structure_name):
     try:
         return get_db().get_structure(structure_name)
     except ValueError:
-        return abort(404)
+        not_exists("Structure does not exist")
 
 
 @structure_routes.route("/structure/", methods=['GET'])
@@ -66,7 +66,7 @@ def get_structure_resource(structure_name, resource):
     try:
         return jsonify(retrieve_structure(structure_name)["resources"][resource])
     except KeyError:
-        return abort(404)
+        not_exists("Structure or its resources do not exist")
 
 
 @structure_routes.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['GET'])
@@ -74,23 +74,23 @@ def get_structure_parameter_of_resource(structure_name, resource, parameter):
     try:
         return jsonify(retrieve_structure(structure_name)["resources"][resource][parameter])
     except KeyError:
-        return abort(404)
+        not_exists("Resource or parameter do not exist")
 
 
 @structure_routes.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['PUT'])
 def set_structure_parameter_of_resource(structure_name, resource, parameter):
     if not valid_resource(resource):
-        return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+        bad_content("Resource '{0}' is not valid".format(resource))
 
     if parameter not in ["max", "min"]:
-        return abort(400, {"message": "Invalid parameter state"})
+        bad_content("Invalid parameter state")
 
     try:
         value = int(request.json["value"])
         if value < 0:
-            return abort(400)
+            bad_content("Invalid value")
     except KeyError:
-        return abort(400)
+        bad_content("Invalid value")
 
     structure = retrieve_structure(structure_name)
     if parameter in structure["resources"][resource] and structure["resources"][resource][parameter] == value:
@@ -110,13 +110,13 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
         put_done = structure["resources"][resource][parameter] == value
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
     return jsonify(201)
 
 
 def set_structure_to_guarded_state(structure_name, state):
     if state not in [True, False]:
-        return abort(400, {"message": "Invalid guarded state"})
+        bad_content("Invalid guarded state")
 
     structure = retrieve_structure(structure_name)
 
@@ -137,7 +137,7 @@ def set_structure_to_guarded_state(structure_name, state):
         put_done = structure["guard"] == state
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
     return jsonify(201)
 
 
@@ -164,13 +164,13 @@ def set_structure_resource_to_unguarded(structure_name, resource):
 def set_structure_multiple_resources_to_guard_state(structure_name, resources, state):
     structure = retrieve_structure(structure_name)
     if "resources" not in structure:
-        return abort(400, {"message": "Structure '{0}' has no resources to configure".format(structure_name)})
+        bad_content("Structure '{0}' has no resources to configure".format(structure_name))
     else:
         for resource in resources:
             if not valid_resource(resource):
-                return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+                bad_content("Resource '{0}' is not valid".format(resource))
             elif resource not in structure["resources"]:
-                return abort(400, {"message": "Resource '{0}' is missing in structure {1}".format(resource, structure_name)})
+                bad_content("Resource '{0}' is missing in structure {1}".format(resource, structure_name))
 
     # 1st check, in case nothing has to be done really
     put_done = True
@@ -199,7 +199,7 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
             put_done = put_done and structure["resources"][resource]["guard"] == state
 
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
 
     return jsonify(201)
 
@@ -208,13 +208,13 @@ def get_resources_to_change_guard_from_request(request):
     resources = None
     data = request.json
     if not data:
-        abort(400, {"message": "empty content"})
+        bad_content("empty content")
     try:
         resources = data["resources"]
         if not isinstance(resources, (list, str)):
-            abort(400, {"message": "invalid content, resources must be a list or a string"})
+            bad_content("invalid content, resources must be a list or a string")
     except (KeyError, TypeError):
-        abort(400, {"message": "invalid content, must be a json object with resources as key"})
+        bad_content("invalid content, must be a json object with resources as key")
     return resources
 
 
@@ -233,6 +233,7 @@ def set_structure_multiple_resources_to_unguarded(structure_name):
 @structure_routes.route("/structure/<structure_name>/profile", methods=['PUT'])
 def set_structure_profile(structure_name):
     put_done = False
+
     def onetry():
         structure = retrieve_structure(structure_name)
         structure["profile"] = profile
@@ -244,7 +245,7 @@ def set_structure_profile(structure_name):
     try:
         profile = request.json["profile"]
     except KeyError:
-        return abort(400)
+        bad_content("profile not defined")
 
     put_done = onetry()
 
@@ -254,15 +255,16 @@ def set_structure_profile(structure_name):
         time.sleep(BACK_OFF_TIME_MS / 1000)
         put_done = onetry()
         if tries >= MAX_TRIES:
-            return abort(400, {"message": "MAX_TRIES updating database document"})
+            bad_content("MAX_TRIES updating database document")
     return jsonify(201)
+
 
 @structure_routes.route("/structure/<structure_name>/limits", methods=['GET'])
 def get_structure_limits(structure_name):
     try:
         return jsonify(get_db().get_limits(retrieve_structure(structure_name))["resources"])
     except ValueError:
-        return abort(404)
+        not_exists("Structure does not exist")
 
 
 @structure_routes.route("/structure/<structure_name>/limits/<resource>", methods=['GET'])
@@ -270,18 +272,18 @@ def get_structure_resource_limits(structure_name, resource):
     try:
         return jsonify(get_db().get_limits(retrieve_structure(structure_name))["resources"][resource])
     except ValueError:
-        return abort(404)
+        not_exists("Structure or its limits do not exist")
 
 
 @structure_routes.route("/structure/<structure_name>/limits/<resource>/boundary", methods=['PUT'])
 def set_structure_resource_limit_boundary(structure_name, resource):
     if not valid_resource(resource):
-        return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+        bad_content("Resource '{0}' is not valid".format(resource))
 
     try:
         value = int(request.json["value"])
         if value < 0:
-            return abort(400)
+            bad_content("Invalid value")
     except ValueError:
         return abort(500)
 
@@ -311,7 +313,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
             put_done = structure_limits["resources"][resource]["boundary"] == value
 
             if tries >= MAX_TRIES:
-                return abort(400, {"message": "MAX_TRIES updating database document"})
+                bad_content("MAX_TRIES updating database document")
 
     return jsonify(201)
 
@@ -321,7 +323,8 @@ def disable_scaler(scaler_service):
     get_db().update_service(scaler_service)
 
     # Wait a little bit, half the polling time of the Scaler
-    polling_freq = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
+    polling_freq = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES,
+                                            "POLLING_FREQUENCY")
     time.sleep(int(polling_freq))
 
 
@@ -340,7 +343,7 @@ def subscribe_container_to_app(structure_name, app_name):
     apps = get_db().get_structures(subtype="application")
     for application in apps:
         if cont_name in application["containers"]:
-            return abort(400, {"message": "Container '{0}' already subscribed in app '{1}'".format(cont_name, app_name)})
+            bad_content("Container '{0}' already subscribed in app '{1}'".format(cont_name, app_name))
 
     app["containers"].append(cont_name)
 
@@ -355,7 +358,7 @@ def desubscribe_container_from_app(structure_name, app_name):
 
     cont_name = container["name"]
     if cont_name not in app["containers"]:
-        return abort(400, {"message": "Container '{0}' missing in app '{1}'".format(cont_name, app_name)})
+        bad_content("Container '{0}' missing in app '{1}'".format(cont_name, app_name))
     else:
         app["containers"].remove(cont_name)
         get_db().update_structure(app)
@@ -375,7 +378,8 @@ def desubscribe_container(structure_name):
 
     # Disable the Scaler as we will modify the core mapping of a host
     scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
-    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "ACTIVE")
+    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES,
+                                              "ACTIVE")
     if previous_state:
         disable_scaler(scaler_service)
 
@@ -403,7 +407,7 @@ def desubscribe_container(structure_name):
     if 'disk' in structure["resources"]:
         disk_name = structure["resources"]["disk"]["name"]
         if "disks" not in host["resources"]:
-            return abort(400, {"message": "Host does not have disks"})
+            bad_content("Host does not have disks")
         else:
             disks = host["resources"]["disks"]
             i = 0
@@ -414,9 +418,9 @@ def desubscribe_container(structure_name):
                     break
                 i -= 1
             if new_disk_load == None:
-                return abort(400, {"message": "Host does not have requested disk"})
+                bad_content("Host does not have requested disk")
             if new_disk_load < 0:
-                return abort(400, {"message": "Host disk can't have negative load"})
+                bad_content("Host disk can't have negative load")
             else:
                 new_disk_load -= 1
                 host["resources"]["disks"][i]["load"] = new_disk_load
@@ -446,7 +450,7 @@ def subscribe_container(structure_name):
     container = {}
     for key in ["name", "host"]:
         if key not in req_cont:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
+            bad_content("Missing key '{0}'".format(key))
         else:
             container[key] = req_cont[key]
 
@@ -455,14 +459,14 @@ def subscribe_container(structure_name):
     # Check that all the needed data for resources is present on the requested container
     container["resources"] = {}
     if "resources" not in req_cont:
-        return abort(400, {"message": "Missing resource information"})
+        bad_content("Missing resource information")
     elif "cpu" not in req_cont["resources"] or "mem" not in req_cont["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information"})
+        bad_content("Missing cpu or mem resource information")
     else:
         container["resources"] = {"cpu": {}, "mem": {}}
         for key in ["max", "min", "current"]:
             if key not in req_cont["resources"]["cpu"] or key not in req_cont["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
+                bad_content("Missing key '{0}' for cpu or mem resource".format(key))
             else:
                 container["resources"]["cpu"][key] = req_cont["resources"]["cpu"][key]
                 container["resources"]["mem"][key] = req_cont["resources"]["mem"][key]
@@ -478,19 +482,19 @@ def subscribe_container(structure_name):
             container["resources"]["disk"] = {}
             for key in ["name", "path"]:
                 if key not in disk:
-                    return abort(400, {"message": "Missing disk resource information"})
+                    bad_content("Missing disk resource information")
                 else:
                     container["resources"]["disk"][key] = disk[key]
 
     # Check that the endpoint requested container name matches with the one in the request
     if cont_name != structure_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
+        bad_content("Name mismatch".format(key))
 
     # Check if the container already exists
     try:
         cont = get_db().get_structure(structure_name)
         if cont:
-            return abort(400, {"message": "Container with this name already exists".format(key)})
+            bad_content("Container with this name already exists".format(key))
     except ValueError:
         pass
 
@@ -499,11 +503,12 @@ def subscribe_container(structure_name):
         # Get the host info
         host = get_db().get_structure(container["host"])
     except ValueError:
-        return abort(400, {"message": "Container host does not exist".format(key)})
-    host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        bad_content("Container host does not exist".format(key))
+    host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session,
+                                          True)
 
     if container["name"] not in host_containers:
-        return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
+        bad_content("Container host does not report any container named '{0}'".format(container["name"]))
 
     # Fill the required host info for the container
     container["host_rescaler_ip"] = host["host_rescaler_ip"]
@@ -520,7 +525,7 @@ def subscribe_container(structure_name):
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {"cpu": {}, "mem": {}}}
     if "boundary" not in req_cont["resources"]["cpu"] or "boundary" not in req_cont["resources"]["mem"]:
-        return abort(400, {"message": "Missing 'boundary' for cpu or mem resource".format(key)})
+        bad_content("Missing 'boundary' for cpu or mem resource".format(key))
     else:
         limits["resources"]["cpu"]["boundary"] = req_cont["resources"]["cpu"]["boundary"]
         limits["resources"]["mem"]["boundary"] = req_cont["resources"]["mem"]["boundary"]
@@ -528,22 +533,21 @@ def subscribe_container(structure_name):
     limits["type"] = 'limit'
     limits["name"] = container["name"]
 
-
     # All looks good up to this point, proceed
 
     # Disable the Scaler as we will modify the core mapping of a host
     scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
-    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "ACTIVE")
+    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES,
+                                              "ACTIVE")
     if previous_state:
         disable_scaler(scaler_service)
-
 
     # CPU
 
     # Look for resource shares on the container's host
     needed_shares = container["resources"]["cpu"]["current"]
     if host["resources"]["cpu"]["free"] < needed_shares:
-        return abort(400, {"message": "Host does not have enough shares".format(key)})
+        bad_content("Host does not have enough shares".format(key))
 
     core_map = host["resources"]["cpu"]["core_usage_mapping"]
     host_max_cores = int(host["resources"]["cpu"]["max"] / 100)
@@ -590,7 +594,7 @@ def subscribe_container(structure_name):
                     used_cores.append(core)
 
     if pending_shares > 0:
-        return abort(400, {"message": "Container host does not have enough free CPU shares as requested"})
+        bad_content("Container host does not have enough free CPU shares as requested")
 
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] -= needed_shares
@@ -600,7 +604,7 @@ def subscribe_container(structure_name):
     host_memory = host["resources"]["mem"]["free"]
 
     if needed_memory > host_memory:
-        return abort(400, {"message": "Container host does not have enough free memory requested"})
+        bad_content("Container host does not have enough free memory requested")
 
     host["resources"]["mem"]["free"] -= needed_memory
 
@@ -613,7 +617,7 @@ def subscribe_container(structure_name):
     if 'disk' in req_cont["resources"]:
         disk_name = req_cont["resources"]["disk"]["name"]
         if "disks" not in host["resources"]:
-            return abort(400, {"message": "Host does not have disks"})
+            bad_content("Host does not have disks")
         else:
             disks = host["resources"]["disks"]
             i = 0
@@ -624,7 +628,7 @@ def subscribe_container(structure_name):
                     break
                 i += 1
             if new_disk_load == None:
-                return abort(400, {"message": "Host does not have requested disk"})
+                bad_content("Host does not have requested disk")
             else:
                 new_disk_load += 1
                 host["resources"]["disks"][i]["load"] = new_disk_load
@@ -656,21 +660,21 @@ def subscribe_host(structure_name):
     host = {}
     for key in ["name", "host", "host_rescaler_ip", "host_rescaler_port"]:
         if key not in data:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
+            bad_content("Missing key '{0}'".format(key))
         else:
             host[key] = data[key]
 
     # Check that all the needed data for resources is present on the request
     host["resources"] = {}
     if "resources" not in data:
-        return abort(400, {"message": "Missing resource information"})
+        bad_content("Missing resource information")
     elif "cpu" not in data["resources"] or "mem" not in data["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information"})
+        bad_content("Missing cpu or mem resource information")
     else:
         host["resources"] = {"cpu": {}, "mem": {}}
         for key in ["max", "free"]:
             if key not in data["resources"]["cpu"] or key not in data["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
+                bad_content("Missing key '{0}' for cpu or mem resource".format(key))
             else:
                 host["resources"]["cpu"][key] = data["resources"]["cpu"][key]
                 host["resources"]["mem"][key] = data["resources"]["mem"][key]
@@ -686,29 +690,30 @@ def subscribe_host(structure_name):
                 new_disk = {}
                 for key in ["name", "type", "load", "path"]:
                     if key not in disk:
-                        return abort(400, {"message": "Missing disk resource information"})
+                        bad_content("Missing disk resource information")
                     else:
                         new_disk[key] = disk[key]
                 host["resources"]["disks"].append(new_disk)
 
     if host["name"] != structure_name:
-        return abort(400, {"message": "Name mismatch, {0} != {1}".format(host["name"], structure_name)})
+        bad_content("Name mismatch, {0} != {1}".format(host["name"], structure_name))
 
     # Check if the host already exists
     try:
         host = get_db().get_structure(structure_name)
         if host:
-            return abort(400, {"message": "Host with this name already exists".format(key)})
+            bad_content("Host with this name already exists".format(key))
     except ValueError:
         pass
 
     # Check that this supposed host exists and that it reports containers
     try:
-        host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session,
+                                              True)
         if host_containers == None:
             raise RuntimeError()
     except Exception:
-        return abort(400, {"message": "Could not connect to this host, is it up and has its node scaler up?"})
+        bad_content("Could not connect to this host, is it up and has its node scaler up?")
 
     # Host looks good, insert it into the database
     host["type"] = "structure"
@@ -737,33 +742,33 @@ def subscribe_app(structure_name):
     app = {}
     for key in ["name", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]:
         if key not in req_app:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
+            bad_content("Missing key '{0}'".format(key))
         else:
             app[key] = req_app[key]
 
     # Check that all the needed data for resources is present on the request
     app["resources"] = {}
     if "resources" not in req_app:
-        return abort(400, {"message": "Missing resource information"})
+        bad_content("Missing resource information")
     elif "cpu" not in req_app["resources"] or "mem" not in req_app["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information"})
+        bad_content("Missing cpu or mem resource information")
     else:
         app["resources"] = {"cpu": {}, "mem": {}}
         for key in ["max", "min"]:
             if key not in req_app["resources"]["cpu"] or key not in req_app["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
+                bad_content("Missing key '{0}' for cpu or mem resource".format(key))
             else:
                 app["resources"]["cpu"][key] = req_app["resources"]["cpu"][key]
                 app["resources"]["mem"][key] = req_app["resources"]["mem"][key]
 
     if app["name"] != structure_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
+        bad_content("Name mismatch".format(key))
 
     # Check if the app already exists
     try:
         app = get_db().get_structure(structure_name)
         if app:
-            return abort(400, {"message": "App with this name already exists".format(key)})
+            bad_content("App with this name already exists".format(key))
     except ValueError:
         pass
 
@@ -773,7 +778,7 @@ def subscribe_app(structure_name):
             try:
                 get_db().get_structure(c)
             except ValueError:
-                return abort(400, {"message": "The container '{0}', which allegedly is a part of this app, does not exists".format(c)})
+                bad_content("The container '{0}', which allegedly is a part of this app, does not exists".format(c))
         app["containers"] = req_app["containers"]
     else:
         app["containers"] = list()
@@ -785,7 +790,7 @@ def subscribe_app(structure_name):
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {"cpu": {}, "mem": {}}}
     if "boundary" not in req_app["resources"]["cpu"] or "boundary" not in req_app["resources"]["mem"]:
-        return abort(400, {"message": "Missing 'boundary' for cpu or mem resource".format(key)})
+        return bad_content("Missing 'boundary' for cpu or mem resource".format(key))
     else:
         limits["resources"]["cpu"]["boundary"] = req_app["resources"]["cpu"]["boundary"]
         limits["resources"]["mem"]["boundary"] = req_app["resources"]["mem"]["boundary"]
@@ -803,8 +808,6 @@ def subscribe_app(structure_name):
     except ValueError:
         # Limits do not exist yet
         get_db().add_limit(limits)
-
-
 
     return jsonify(201)
 

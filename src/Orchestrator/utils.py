@@ -36,15 +36,19 @@ COUCHDB_URL = os.getenv('COUCHDB_URL')
 if not COUCHDB_URL:
     COUCHDB_URL = "couchdb"
 
+
 def bad_content(message):
     return abort(jsonify({"message": message}), 400)
+
+
 def not_exists(message):
     return abort(jsonify({"message": message}), 404)
+
 
 def get_db():
     global COUCHDB_URL
     """Opens a new database connection if there is none yet for the current application context."""
     if not hasattr(g, 'db_handler'):
-        #g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
+        # g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
         g.db_handler = couchDB.CouchDBServer()
     return g.db_handler

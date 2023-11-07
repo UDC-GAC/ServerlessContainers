@@ -7,12 +7,12 @@
       "host_rescaler_port": "8000",
       "resources": {
         "cpu": {
-          "max": 400,
-          "free": 400
+          "max": 3200,
+          "free": 3200
         },
         "mem": {
-          "max": 8192,
-          "free": 8192
+          "max": 204800,
+          "free": 204800
         }
       }
     }
@@ -25,13 +25,13 @@
       "name": "app0",
       "resources": {
         "cpu": {
-          "max": 400,
+          "max": 1600,
           "min": 40,
           "boundary": 40
         },
         "mem": {
-          "max": 4096,
-          "min": 512,
+          "max": 204800,
+          "min": 4096,
           "boundary": 128
         }
       },
