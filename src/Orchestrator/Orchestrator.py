@@ -27,7 +27,7 @@
 import json
 
 import argparse
-from flask import Flask
+from flask import Flask, jsonify
 from flask import Response
 from src.Orchestrator.rules import rules_routes
 from src.Orchestrator.services import service_routes
@@ -40,6 +40,20 @@ app.register_blueprint(rules_routes)
 app.register_blueprint(service_routes)
 app.register_blueprint(structure_routes)
 app.register_blueprint(users_routes)
+
+
+@app.errorhandler(400)
+def custom400(error):
+    response = jsonify({'message': error.description})
+    response.status = 400
+    return response
+
+
+@app.errorhandler(404)
+def custom404(error):
+    response = jsonify({'message': error.description})
+    response.status = 404
+    return response
 
 
 @app.route("/heartbeat", methods=['GET'])

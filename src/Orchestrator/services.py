@@ -23,20 +23,22 @@
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
-from flask import Blueprint
+from flask import Blueprint, abort
 from flask import jsonify
 from flask import request
 import time
 
-from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, bad_content, not_exists
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 service_routes = Blueprint('services', __name__)
+
 
 def retrieve_service(service_name):
     try:
         return get_db().get_service(service_name)
     except ValueError:
-        not_exists("Service does not exist")
+        abort(404, "Service does not exist")
+
 
 @service_routes.route("/service/", methods=['GET'])
 def get_services():
@@ -67,7 +69,7 @@ def set_service_information(service_name):
             put_done = put_done and service["config"][key] == data[key]
 
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
 
     return jsonify(201)
 
@@ -79,12 +81,12 @@ def set_service_value(service_name, key):
 
     data = request.json
     if not data:
-        bad_content("empty content")
+        abort(400, "empty content")
 
     value = request.json["value"]
 
     if not isinstance(value, (list, str)):
-        bad_content("invalid content, resources must be a list or a string")
+        abort(400, "invalid content, resources must be a list or a string")
     elif value == "true" or value == "false":
         value = value == "true"
     elif value == "container" or value == "application":
@@ -98,8 +100,8 @@ def set_service_value(service_name, key):
             else:
                 value = int(value)
         except ValueError:
-            pass # Allow anything basically
-            #abort(400, {"message": "bad content"})
+            pass  # Allow anything basically
+            # abort(400, {"message": "bad content"})
 
     # Check if it is really needed to carry out the operation
     service = retrieve_service(service_name)
@@ -117,7 +119,6 @@ def set_service_value(service_name, key):
         put_done = service["config"][key] == value
 
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
 
     return jsonify(201)
-

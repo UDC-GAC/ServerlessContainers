@@ -46,7 +46,7 @@ CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10,
                          "GRIDCOIN_RPC_IP": "192.168.51.100",
                          "GRIDCOIN_RPC_PORT": "9090",
                          "GRIDCOIN_RPC_PASS": "Bt2oEfVgnMGqvB26UapLERmDu5bvULKr9SPvPBkMkMSV",
-                         "COINS_TO_CREDIT_RATIO": 60,  # 60 credits per 1 GRC -> 1 vcore for 1 minute
+                         "COINS_TO_CREDIT_RATIO": 600,  # 60 credits per 1 GRC -> 1 vcore for 10 minutes
                          "DEBUG": True}
 
 SERVICE_NAME = "credit_manager"

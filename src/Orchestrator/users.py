@@ -23,12 +23,12 @@
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
-from flask import Blueprint
+from flask import Blueprint, abort
 from flask import jsonify
 from flask import request
 import time
 
-from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, bad_content, not_exists
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 users_routes = Blueprint('users', __name__)
 
@@ -37,7 +37,7 @@ def retrieve_user(user_name):
     try:
         return get_db().get_user(user_name)
     except ValueError:
-        not_exists("user does not exist")
+        abort(404, "user does not exist")
 
 
 @users_routes.route("/user/", methods=['GET'])
@@ -60,12 +60,12 @@ def get_accounting_value(user_name, key):
 def set_accounting_value(user_name, key):
     data = request.json
     if not data:
-        bad_content("empty content")
+        abort(400, "empty content")
 
     value = request.json["value"]
 
     if not isinstance(value, (int, str)):
-        return bad_content("invalid content, resources must be a number or a string")
+        abort(400, "invalid content, resources must be a number or a string")
     elif value == "greedy" or value == "conservative":
         pass
     elif value == "true" or value == "false":
@@ -74,13 +74,13 @@ def set_accounting_value(user_name, key):
         try:
             value = float(value)
         except ValueError:
-            bad_content("invalid content, not bool, policy, int, or float")
+            abort(400, "invalid content, not bool, policy, int, or float")
 
     user = retrieve_user(user_name)
     try:
         bogus = user["accounting"][key]
     except KeyError:
-        not_exists("User does not have accounting initialized")
+        abort(404, "User does not have accounting initialized")
 
     put_done = False
     tries = 0
@@ -94,7 +94,7 @@ def set_accounting_value(user_name, key):
         put_done = user["accounting"][key] == value
 
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
 
     return jsonify(201)
 
@@ -107,18 +107,18 @@ def subscribe_user(user_name):
     user = {}
     for key in ["name"]:
         if key not in req_user:
-            bad_content("Missing key '{0}'".format(key))
+            abort(400, "Missing key '{0}'".format(key))
         else:
             user[key] = req_user[key]
 
     if user["name"] != user_name:
-        bad_content("Name mismatch".format(key))
+        abort(400, "Name mismatch".format(key))
 
     # Check if the user already exists
     try:
         user = get_db().get_user(user_name)
         if user:
-            bad_content("User with this name already exists".format(key))
+            abort(400, "User with this name already exists".format(key))
     except ValueError:
         pass
 
@@ -127,7 +127,7 @@ def subscribe_user(user_name):
             try:
                 get_db().get_structure(app)
             except ValueError:
-                bad_content("The application '{0}', which allegedly is a part of this user, does not exist".format(app))
+                abort(400, "The application '{0}', which allegedly is a part of this user, does not exist".format(app))
         user["applications"] = req_user["applications"]
     else:
         user["applications"] = list()
@@ -168,11 +168,11 @@ def set_user_energy_max(user_name):
     try:
         bogus = user["energy"]["max"]
     except KeyError:
-        not_exists("User does not have energy initialized")
+        abort(404, "User does not have energy initialized")
 
     value = int(request.json["value"])
     if value < 0:
-        bad_content("Invalid value for max energy")
+        abort(400, "Invalid value for max energy")
 
     put_done = False
     tries = 0
@@ -186,6 +186,6 @@ def set_user_energy_max(user_name):
         put_done = user["energy"]["max"] == value
 
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
 
     return jsonify(201)

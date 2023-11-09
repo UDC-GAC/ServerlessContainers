@@ -22,7 +22,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
-from flask import abort
+from flask import abort, make_response
 from flask import jsonify
 from flask import request
 from flask import g
@@ -35,14 +35,6 @@ BACK_OFF_TIME_MS = 500
 COUCHDB_URL = os.getenv('COUCHDB_URL')
 if not COUCHDB_URL:
     COUCHDB_URL = "couchdb"
-
-
-def bad_content(message):
-    return abort(jsonify({"message": message}), 400)
-
-
-def not_exists(message):
-    return abort(jsonify({"message": message}), 404)
 
 
 def get_db():

@@ -23,12 +23,12 @@
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
-from flask import Blueprint
+from flask import Blueprint, abort
 from flask import jsonify
 from flask import request
 import time
 
-from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, not_exists, bad_content
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 rules_routes = Blueprint('rules', __name__)
 
@@ -37,7 +37,7 @@ def retrieve_rule(profile, rule_name):
     try:
         return get_db().get_rule(profile, rule_name)
     except ValueError:
-        not_exists("Rules does not exist")
+        abort(404, "Rules does not exist")
 
 
 @rules_routes.route("/rule/<profile>/<rule_name>", methods=['GET'])
@@ -50,7 +50,7 @@ def get_profile_rules(profile):
     try:
         return jsonify(get_db().get_profile_rules(profile))
     except ValueError:
-        not_exists("Profile does not exist")
+        abort(404, "Profile does not exist")
 
 
 @rules_routes.route("/rule/", methods=['GET'])
@@ -74,7 +74,7 @@ def activate_rule(profile, rule_name):
         time.sleep(BACK_OFF_TIME_MS / 1000)
         put_done = rule["active"]
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
     return jsonify(201)
 
 
@@ -94,7 +94,7 @@ def deactivate_rule(profile, rule_name):
         rule = retrieve_rule(profile, rule_name)
         put_done = not rule["active"]
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
     return jsonify(201)
 
 
@@ -103,12 +103,12 @@ def change_amount_rule(profile, rule_name):
     rule = retrieve_rule(profile, rule_name)
 
     if rule["generates"] != "requests" or rule["rescale_type"] != "up":
-        bad_content("This rule can't have its amount changed")
+        abort(400, "This rule can't have its amount changed")
 
     try:
         amount = int(request.json["value"])
     except KeyError:
-        bad_content("Invalid amount")
+        abort(400, "Invalid amount")
 
     rule = retrieve_rule(profile, rule_name)
     put_done = rule["amount"] == amount
@@ -125,7 +125,7 @@ def change_amount_rule(profile, rule_name):
         rule = retrieve_rule(profile, rule_name)
         put_done = rule["amount"] == amount
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
     return jsonify(201)
 
 
@@ -134,14 +134,14 @@ def change_policy_rule(profile, rule_name):
     rule = retrieve_rule(profile, rule_name)
 
     if rule["generates"] != "requests" or rule["rescale_type"] != "up":
-        bad_content("This rule can't have its policy changed")
+        abort(400, "This rule can't have its policy changed")
 
     rescale_policy = request.json["value"]
     put_done = rule["rescale_policy"] == rescale_policy
     tries = 0
 
     if rescale_policy not in ["amount", "proportional"]:
-        bad_content("Invalid policy")
+        abort(400, "Invalid policy")
     else:
         while not put_done:
             tries += 1
@@ -153,7 +153,7 @@ def change_policy_rule(profile, rule_name):
             rule = retrieve_rule(profile, rule_name)
             put_done = rule["rescale_policy"] == rescale_policy
             if tries >= MAX_TRIES:
-                bad_content("MAX_TRIES updating database document")
+                abort(400, "MAX_TRIES updating database document")
     return jsonify(201)
 
 
@@ -164,17 +164,17 @@ def change_events_required_amount(profile, rule_name):
     try:
         new_amount = int(request.json["value"])
         if new_amount < 0:
-            bad_content("Invalid amount, only 0 or greater are valid")
+            abort(400, "Invalid amount, only 0 or greater are valid")
 
         event_type = request.json["event_type"]
         if event_type not in ["down", "up"]:
-            bad_content("Invalid type of event, only 'up' or 'down' accepted")
+            abort(400, "Invalid type of event, only 'up' or 'down' accepted")
     except KeyError:
-        bad_content("Invalid amount")
+        abort(400, "Invalid amount")
 
     rule = retrieve_rule(profile, rule_name)
     if rule["rescale_type"] not in ["down", "up"]:
-        bad_content("Can't apply this change to this rule")
+        abort(400, "Can't apply this change to this rule")
 
     while not put_done:
         tries += 1
@@ -212,5 +212,5 @@ def change_events_required_amount(profile, rule_name):
         rule = retrieve_rule(profile, rule_name)
         put_done = rule["rule"]["and"][list_rules_entry][correct_key][1] == new_amount
         if tries >= MAX_TRIES:
-            bad_content("MAX_TRIES updating database document")
+            abort(400, "MAX_TRIES updating database document")
     return jsonify(201)
