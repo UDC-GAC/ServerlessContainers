@@ -66,7 +66,7 @@ def set_accounting_value(user_name, key):
 
     if not isinstance(value, (int, str)):
         abort(400, "invalid content, resources must be a number or a string")
-    elif value == "greedy" or value == "conservative":
+    elif value in ["greedy", "conservative", "used", "current"]:
         pass
     elif value == "true" or value == "false":
         value = value == "true"
@@ -74,7 +74,7 @@ def set_accounting_value(user_name, key):
         try:
             value = float(value)
         except ValueError:
-            abort(400, "invalid content, not bool, policy, int, or float")
+            abort(400, "invalid content, not bool, policy, billing type, int, or float")
 
     user = retrieve_user(user_name)
     try:
@@ -144,7 +144,8 @@ def subscribe_user(user_name):
         "coins": 0,
         "min_balance": 2,
         "max_debt": -2,
-        "policy": "greedy"  # conservative
+        "policy": "greedy",  # conservative
+        "billing_type": "used" # current
     }
 
     get_db().add_user(user)

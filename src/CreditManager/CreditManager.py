@@ -88,7 +88,7 @@ class CreditManager:
         return result
 
     def rebase_counters(self, user):
-        REBASE_RATIO = self.min_coin_movement  # Used to module how often a rebase is done, 1 -> 1 coin per each fold
+        REBASE_RATIO = self.min_coin_movement
         REBASE_BLOCK = int(self.min_coin_movement * self.coins_credit_ratio)
         coins_per_fold = REBASE_RATIO * 1
         accounting = user["accounting"]
@@ -117,7 +117,6 @@ class CreditManager:
             log_info("Sending request to scale an amount of {0} cpu shares".format(amount), self.debug)
             self.couchdb_handler.add_request(request)
 
-
     def check_restriction(self, user):
         apps = user["applications"]
         for app_name in apps:
@@ -131,9 +130,10 @@ class CreditManager:
                 cont_min_cpu = cont_info["resources"]["cpu"]["min"]
                 cont_restricted_cpu = cont_min_cpu + 2 * cont_cpu_boundary
                 if cont_guarded or cont_current_cpu != cont_restricted_cpu:
-                    log_warning("Container {0} is supposed to be restricted but it is not, restricting again".format(cont_name), self.debug)
+                    log_warning(
+                        "Container {0} is supposed to be restricted but it is not, restricting again".format(cont_name),
+                        self.debug)
                     self.restrict_container(cont_info, cont_cpu_boundary)
-
 
     def restrict_user(self, user):
         user["accounting"]["restricted"] = True
@@ -163,10 +163,12 @@ class CreditManager:
         user_restricted = user["accounting"]["restricted"]
         user_credit = user["accounting"]["credit"]
         if user_restricted and user_credit <= 0:
-            log_warning("User {0} is restricted and not have enough credit, maintain restriction".format(user_name), self.debug)
+            log_warning("User {0} is restricted and not have enough credit, maintain restriction".format(user_name),
+                        self.debug)
             self.check_restriction(user)
         elif not user_restricted and user_credit < 0:
-            log_warning("User {0} is not restricted but does not have enough credit, restrict".format(user_name), self.debug)
+            log_warning("User {0} is not restricted but does not have enough credit, restrict".format(user_name),
+                        self.debug)
             self.restrict_user(user)
         elif user_restricted and user_credit > 0:
             log_warning("User {0} is restricted but has enough credit, raise restriction".format(user_name),
@@ -211,7 +213,14 @@ class CreditManager:
             user["accounting"]["coins"] = users_credits[user_name]
 
     def compute_consumed_cpu(self, user):
-        cpu_consumed = user["cpu"]["used"] / 100  # Convert shares to vcores
+        billed_type = user["accounting"]["billing_type"]
+        if billed_type == "used":
+            cpu_consumed = user["cpu"]["used"]
+        elif billed_type == "current":
+            cpu_consumed = user["cpu"]["current"]
+        else:
+            cpu_consumed = user["cpu"]["used"]
+        cpu_consumed /= 100  # Convert shares to vcores
         if cpu_consumed > self.threshold:
             user["accounting"]["pending"] += cpu_consumed * self.polling_frequency
             user["accounting"]["pending"] = round(user["accounting"]["pending"], 2)

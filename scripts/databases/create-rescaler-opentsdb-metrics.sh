@@ -61,7 +61,3 @@
 
     ./build/tsdb mkmetric user.cpu.current
     ./build/tsdb mkmetric user.cpu.used
-
-    ./build/tsdb mkmetric user.accounting.coins
-    ./build/tsdb mkmetric user.accounting.min_balance
-    ./build/tsdb mkmetric user.accounting.max_debt
