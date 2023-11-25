@@ -3,7 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/../BDWatchdog/.idea/BDWatchdog.iml" filepath="$PROJECT_DIR$/../BDWatchdog/.idea/BDWatchdog.iml" />
-      <module fileurl="file://$PROJECT_DIR$/../BlockchainServerless/.idea/BlockchainServerless.iml" filepath="$PROJECT_DIR$/../BlockchainServerless/.idea/BlockchainServerless.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../BlockchainServerlessPaper/.idea/BlockchainServerlessPaper.iml" filepath="$PROJECT_DIR$/../BlockchainServerlessPaper/.idea/BlockchainServerlessPaper.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/ServerlessContainers.iml" filepath="$PROJECT_DIR$/.idea/ServerlessContainers.iml" />
       <module fileurl="file://$PROJECT_DIR$/../ServerlessContainersReportGenerator/.idea/ServerlessContainersReportGenerator.iml" filepath="$PROJECT_DIR$/../ServerlessContainersReportGenerator/.idea/ServerlessContainersReportGenerator.iml" />
     </modules>

@@ -4,9 +4,9 @@
     <content url="file://$MODULE_DIR$" />
     <orderEntry type="jdk" jdkName="Python 3.10" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="module" module-name="BlockchainServerless" />
     <orderEntry type="module" module-name="ServerlessContainersReportGenerator" />
     <orderEntry type="module" module-name="BDWatchdog" />
+    <orderEntry type="module" module-name="BlockchainServerlessPaper" />
   </component>
   <component name="PyDocumentationSettings">
     <option name="format" value="PLAIN" />
