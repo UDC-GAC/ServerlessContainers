@@ -37,10 +37,11 @@ from src.Guardian.Guardian import Guardian
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
     wait_operation_thread, end_epoch, start_epoch
 import src.StateDatabase.couchdb as couchdb
+import src.StateDatabase.opentsdb as bdwatchdog
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10,
                          "THRESHOLD": 0.1,
-                         "MIN_COIN_MOVEMENT": 0.5,
+                         "MIN_COIN_MOVEMENT": 0.05,
                          "ACTIVE": True,
                          "GRIDCOIN_RPC_USER": "gridcoinrpc",
                          "GRIDCOIN_RPC_IP": "192.168.51.100",
@@ -56,6 +57,7 @@ class CreditManager:
 
     def __init__(self):
         self.couchdb_handler = couchdb.CouchDBServer()
+        self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.debug = True
         self.config = {}
 
@@ -99,13 +101,12 @@ class CreditManager:
             coins_moved = num_folds * coins_per_fold
             success = self.move_credit(uname, "sink", str(coins_moved))
             if success:
-                accounting["pending"] = round(accounting["pending"] - num_folds * REBASE_BLOCK, 2)
+                accounting["pending"] = accounting["pending"] - num_folds * REBASE_BLOCK
                 accounting["coins"] -= coins_moved
                 accounting["credit"] = self.coins_credit_ratio * accounting["coins"]
                 log_info("User {0} counters have been rebased".format(uname), self.debug)
             else:
-                log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"),
-                            self.debug)
+                log_warning("Could not move credit from user {0} to {1}, rebase not carried out".format(uname, "sink"), self.debug)
 
     def restrict_container(self, cont, cont_boundary):
         cont["guard"] = False
@@ -201,7 +202,12 @@ class CreditManager:
             # Check that every user has enough credit
             self.check_credit(u)
 
-            self.couchdb_handler.update_user(u)
+            # Retrieve the user again in case it has been changed by the Refeder, merge the changed info and update it
+            u_current = self.couchdb_handler.get_user(u["name"])
+            u_current["accounting"]["pending"] = u["accounting"]["pending"]
+            u_current["accounting"]["coins"] = u["accounting"]["coins"]
+            self.couchdb_handler.update_user(u_current)
+
             log_info("Updated User {0} (cpu)".format(u["name"]), self.debug)
 
     def compute_credit_cpu(self, user, users_credits):
@@ -216,20 +222,64 @@ class CreditManager:
         billed_type = user["accounting"]["billing_type"]
         if billed_type == "used":
             cpu_consumed = user["cpu"]["used"]
+            # log_warning("Refeeder says {0}".format(cpu_consumed * self.polling_frequency), self.debug)
+            # # TESTING NEW CPU CONSUMPTION ACCOUNTABILITY
+            # summatory = 0
+            # apps = user["applications"]
+            # for app_name in apps:
+            #     app_info = self.couchdb_handler.get_structure(app_name)
+            #     for cont_name in app_info["containers"]:
+            #         cont_info = self.couchdb_handler.get_structure(cont_name)
+            #         start = int(time.time() - self.polling_frequency - 10)
+            #         end = int(time.time() - 10)
+            #         subquery = [dict(aggregator='zimsum', metric="proc.cpu.user", tags={"host": cont_info["name"]}, downsample="5s-avg")]
+            #         query = dict(start=start, end=end, queries=subquery)
+            #         cont_cpu_metrics = self.opentsdb_handler.get_points(query)[0]["dps"]
+            #         print(cont_cpu_metrics)
+            #         summatory = 0
+            #         points = list(cont_cpu_metrics.items())
+            #         if points:
+            #             # Perform the integration through trapezoidal steps
+            #             previous_time = int(points[0][0])
+            #             previous_value = points[0][1]
+            #             sum = previous_value
+            #             for point in points[1:]:
+            #                 t = int(point[0])
+            #                 value = point[1]
+            #                 diff_time = t - previous_time
+            #                 added_value = value + previous_value
+            #                 summatory += (added_value / 2) * diff_time
+            #                 sum += value
+            #                 previous_time = t
+            #                 previous_value = value
+            #         first_time=int(points[0][0])
+            #         last_time=int(points[-1][0])
+            #         diff_time=self.polling_frequency-(last_time-first_time)
+            #         log_warning("Residual time is {0}".format(diff_time), self.debug)
+            #         if diff_time:
+            #             summatory += points[0][1] * diff_time/2
+            #             summatory += points[-1][1] * diff_time/2
+            #         log_warning("Integral says says {0}".format(int(summatory)), self.debug)
+            #         #log_warning("Diff of  {0}".format(round(summatory / (cpu_consumed * self.polling_frequency),3)), self.debug)
+            #         log_warning("average says {0}".format(int(self.polling_frequency * sum / len(points))), self.debug)
+            # cpu_consumed = summatory
+            # ###########
         elif billed_type == "current":
             cpu_consumed = user["cpu"]["current"]
         else:
             cpu_consumed = user["cpu"]["used"]
         cpu_consumed /= 100  # Convert shares to vcores
         if cpu_consumed > self.threshold:
-            user["accounting"]["pending"] += cpu_consumed * self.polling_frequency
-            user["accounting"]["pending"] = round(user["accounting"]["pending"], 2)
+            user["accounting"]["pending"] += cpu_consumed * self.polling_frequency # If the summatory is used above, remove the multiplication
+            #user["accounting"]["pending"] = round(user["accounting"]["pending"], 2)
 
     def manage(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
-
+        i = 0
         while True:
+            t0 = start_epoch(self.debug)
+
             # Get service info
             service = get_service(self.couchdb_handler, SERVICE_NAME)
 
@@ -250,7 +300,6 @@ class CreditManager:
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
             self.threshold = myConfig.get_value("THRESHOLD")
 
-            t0 = start_epoch(self.debug)
 
             log_info("Config is as follows:", debug)
             log_info(".............................................", debug)
@@ -281,14 +330,20 @@ class CreditManager:
                     thread.start()
             else:
                 log_warning("CreditManager is not activated", debug)
-
-            time.sleep(self.polling_frequency)
+            t1 = time.time()
+            log_info("Time for processing was {0}".format(t1 - t0), debug)
+            time.sleep(self.polling_frequency - (t1 - t0))
 
             wait_operation_thread(thread, debug)
             log_info("Credit management processed", debug)
 
-            end_epoch(self.debug, self.polling_frequency, t0)
+            i += 1
+            if i == self.polling_frequency:
+                i = 0
+                log_warning("DECOUPLING FREQUENCY", debug)
+                time.sleep(1)
 
+            end_epoch(self.debug, self.polling_frequency, t0)
 
 def main():
     try:
