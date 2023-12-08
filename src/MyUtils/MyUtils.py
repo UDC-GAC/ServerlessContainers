@@ -90,23 +90,26 @@ def get_config_value(config, default_config, key):
 
 # DON'T NEED TO TEST
 def log_info(message, debug):
+    message = "[{0}] INFO: {1}".format(get_time_now_string(), message)
     logging.info(message)
     if debug:
-        print("[{0}] INFO: {1}".format(get_time_now_string(), message))
+        print(message)
 
 
 # DON'T NEED TO TEST
 def log_warning(message, debug):
+    message = colored("[{0}] WARN: {1}".format(get_time_now_string(), message), "yellow")
     logging.warning(message)
     if debug:
-        print(colored("[{0}] WARN: {1}".format(get_time_now_string(), message), "yellow"))
+        print(message)
 
 
 # DON'T NEED TO TEST
 def log_error(message, debug):
+    message = colored("[{0}] ERROR: {1}".format(get_time_now_string(), message), "red")
     logging.error(message)
     if debug:
-        print(colored("[{0}] ERROR: {1}".format(get_time_now_string(), message), "red"))
+        print(message)
 
 
 # DON'T NEED TO TEST
@@ -256,7 +259,7 @@ def get_structures(db_handler, debug, subtype="application"):
 
 def start_epoch(debug):
     log_info("----------------------", debug)
-    log_info("Starting Epoch", debug)
+    log_info("Starting Epoch at {0}".format(get_time_now_string()), debug)
     return time.time()
 
 def end_epoch(debug, window_difference, t0):
