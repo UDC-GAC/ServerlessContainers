@@ -2,7 +2,5 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../BDWatchdog" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/../ServerlessContainersReportGenerator" vcs="Git" />
   </component>
 </project>
