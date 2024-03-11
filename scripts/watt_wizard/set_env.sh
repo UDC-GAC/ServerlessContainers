@@ -16,4 +16,5 @@ then
       WATT_WIZARD_PORT=$watt_wizard_port
 fi
 
+WATT_WIZARD_URL="localhost" # Overwritten because name resolution is not configured
 export WATT_WIZARD_REST_URL="${WATT_WIZARD_URL}:${WATT_WIZARD_PORT}"

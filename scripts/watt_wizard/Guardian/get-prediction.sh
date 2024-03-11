@@ -2,14 +2,20 @@
 
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source "${scriptDir}/../set_env.sh"
+source "${scriptDir}/../../conf/WattWizard/load-conf.sh"
 
-WATT_WIZARD_REST_URL="localhost:7777"
-PRED_METHOD="polyreg"
-TRAIN_FILE_NAME="train"
-MODEL_NAME="${PRED_METHOD}_${TRAIN_FILE_NAME}"
+if [ -z "$3" ]
+then
+      echo "3 arguments are needed"
+      echo "1 -> prediction method (e.g., polyreg, sgdregressor,...)"
+      echo "2 -> value for user load (e.g., 300)"
+      echo "3 -> value for system load (e.g., 50)"
+      exit 1
+fi
 
-USER_SHARES=100
-SYSTEM_SHARES=0
+MODEL_NAME="${1}_${TRAIN_FILE_NAME}"
+USER_LOAD=${2}
+SYSTEM_LOAD=${3}
 
-curl -G "http://${WATT_WIZARD_REST_URL}/predict/${MODEL_NAME}" --data-urlencode "user_load=${USER_SHARES}" \
-                                                   --data-urlencode "system_load=${SYSTEM_SHARES}"
+curl -G "http://${WATT_WIZARD_REST_URL}/predict/${MODEL_NAME}" --data-urlencode "user_load=${USER_LOAD}" \
+                                                   --data-urlencode "system_load=${SYSTEM_LOAD}"
