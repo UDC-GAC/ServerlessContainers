@@ -10,6 +10,16 @@ def check_model_exists(model_name):
         raise TypeError(f'Model with name {model_name} doesn\'t exists')
 
 
+def check_valid_values(values_dict):
+    for var in values_dict:
+        if values_dict[var] < config.cpu_limits[var]["min"]:
+            raise ValueError(f'Too low {var} value ({values_dict[var]}). '
+                             f'Minimum value is {config.cpu_limits[var]["min"]}.')
+        if values_dict[var] > config.cpu_limits[var]["max"]:
+            raise ValueError(f'{var} value ({values_dict[var]}) exceeds its maximum. '
+                             f'Maximum value is {config.cpu_limits[var]["max"]}.')
+
+
 def get_pred_method(model_name):
     pattern = r'([^_]+)_'
     occurrences = re.findall(pattern, model_name)

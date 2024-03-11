@@ -4,7 +4,8 @@ from flask import request
 
 from src.WattWizard.config import config
 from src.WattWizard.utils import reset_model
-from src.WattWizard.app.model_operations import check_model_exists, get_pred_method, get_desired_power, json_to_train_data, request_to_dict, get_inverse_prediction
+from src.WattWizard.app.model_operations import check_model_exists, check_valid_values, get_pred_method, \
+    get_desired_power, json_to_train_data, request_to_dict, get_inverse_prediction
 
 routes = Blueprint('routes', __name__)
 
@@ -18,6 +19,7 @@ def predict_power(model_name=None):
         check_model_exists(model_name)
         model_instance = config.model_instances[model_name]
         X_test = request_to_dict(model_instance, request)
+        check_valid_values(X_test)
         predicted_consumption = model_instance.predict(X_test)
         return jsonify({'predicted_power': predicted_consumption})
     except Exception as e:
@@ -31,6 +33,7 @@ def predict_values_from_power(model_name=None):
         check_model_exists(model_name)
         model_instance = config.model_instances[model_name]
         current_X = request_to_dict(model_instance, request)
+        check_valid_values(current_X)
         desired_power = get_desired_power(request)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
