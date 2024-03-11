@@ -38,6 +38,7 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
     get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, start_epoch, end_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
+import src.WattWizard.WattWizardUtils as wattwizard
 
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual']}
 BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage']}
@@ -60,7 +61,8 @@ translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "ACTIVE": True}
+                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": True,
+                         "ENERGY_MODEL_NAME": "polyreg_train", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -80,6 +82,7 @@ class Guardian:
     def __init__(self):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
+        self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
     @staticmethod
@@ -276,6 +279,30 @@ class Guardian:
             current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
+
+    def get_amount_from_energy_modelling(self, structure, usages, resource):
+        """Get an amount that will be reduced from the current resource limit using an energy model that relates
+        resource usage with energy usage.
+        Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+        get closer to a limit.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            resource (string): The resource name, used for indexing puroposes
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        """
+        # TODO: Get user and system values properly
+        user_usage = usages[translator_dict["cpu"]]
+        system_usage = usages[translator_dict["cpu"]]
+        target_power = structure["resources"][resource]["max"]
+        target_cpu = self.wattwizard_handler.get_power_from_usage(self.energy_model_name, user_usage, system_usage, target_power)
+        amount = target_cpu - user_usage
+        return int(amount)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
@@ -536,8 +563,11 @@ class Guardian:
                     boundary = limits[resource_label]["boundary"]
                     usage = usages[translator_dict[resource_label]]
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
-                elif rule["rescale_policy"] == "proportional" and rule["resource"] == "energy":
-                    amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
+                    if self.use_energy_model:
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                    else:
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                 else:
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
@@ -746,6 +776,8 @@ class Guardian:
             debug = self.debug
             self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
+            self.use_energy_model = myConfig.get_value("USE_ENERGY_MODEL")
+            self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
             self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
@@ -761,6 +793,8 @@ class Guardian:
             log_info("Event timeout -> {0}".format(self.event_timeout), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
+            if self.use_energy_model:
+                log_info("Energy model name is -> {0}".format(self.energy_model_name), debug)
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##
