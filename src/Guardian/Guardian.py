@@ -45,19 +45,37 @@ BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['struc
 
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
+    'structure.cpu.user': ['proc.cpu.user'],
+    'structure.cpu.kernel': ['proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident']
 }
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
+    'structure.cpu.user': ['structure.cpu.user'],
+    'structure.cpu.kernel': ['structure.cpu.kernel'],
     'structure.mem.usage': ['structure.mem.usage'],
     'structure.energy.usage': ['structure.energy.usage']
 }
+BDWATCHDOG_TO_GUARDIAN_CONTAINER = {
+    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
+    "mem": ['structure.mem.usage']
+}
+BDWATCHDOG_TO_GUARDIAN_APPLICATION = {
+    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
+    "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage']
+}
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
+BDWATCHDOG_TO_GUARDIAN = {"container": BDWATCHDOG_TO_GUARDIAN_CONTAINER, "application": BDWATCHDOG_TO_GUARDIAN_APPLICATION}
 
 TAGS = {"container": "host", "application": "structure"}
 
-translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage"}
+translator_dict = {
+    "cpu": "structure.cpu.usage",
+    "user": "structure.cpu.user",
+    "kernel": "structure.cpu.kernel",
+    "mem": "structure.mem.usage",
+    "energy": "structure.energy.usage"}
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
@@ -290,17 +308,17 @@ class Guardian:
 
         Args:
             structure (dict): The dictionary containing all of the structure resource information
+            usages (dict): a dictionary with the usages of the resources
             resource (string): The resource name, used for indexing puroposes
 
         Returns:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        # TODO: Get user and system values properly
-        user_usage = usages[translator_dict["cpu"]]
-        system_usage = usages[translator_dict["cpu"]]
+        user_usage = usages[translator_dict["user"]]
+        kernel_usage = usages[translator_dict["kernel"]]
         target_power = structure["resources"][resource]["max"]
-        target_cpu = self.wattwizard_handler.get_power_from_usage(self.energy_model_name, user_usage, system_usage, target_power)
+        target_cpu = self.wattwizard_handler.get_power_from_usage(self.energy_model_name, user_usage, kernel_usage, target_power)
         amount = target_cpu - user_usage
         return int(amount)
 
@@ -693,7 +711,9 @@ class Guardian:
             metrics_to_generate = dict()
             for res in struct_guarded_resources:
                 metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
-                metrics_to_generate[generate_structure_usage_metric(res)] = GUARDIAN_METRICS[structure_subtype][generate_structure_usage_metric(res)]
+                if res in BDWATCHDOG_TO_GUARDIAN[structure_subtype]:
+                    for usage_metric in BDWATCHDOG_TO_GUARDIAN[structure_subtype][res]:
+                        metrics_to_generate[usage_metric] = GUARDIAN_METRICS[structure_subtype][usage_metric]
             tag = TAGS[structure_subtype]
 
             # Remote database operation
