@@ -497,19 +497,20 @@ def map_container_to_host_resources(container, host):
     cont_name = container["name"]
     resource_dict = {}
     for resource in container["resources"]:
-        needed_amount = container["resources"][resource]["current"]
-        if host["resources"][resource]["free"] < needed_amount:
-            return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
-        resource_dict[resource] = {}
-        if resource == 'cpu':
-            resource_dict[resource]["cpu_allowance_limit"] = needed_amount
-            used_cores = map_container_to_host_cores(cont_name, host, needed_amount)
-            resource_dict[resource]["cpu_num"] = ",".join(used_cores)
-        elif resource == 'disk':
+        if resource == 'disk':
             map_container_to_host_disks(container, host)
         else:
-            host["resources"][resource]["free"] -= needed_amount
-            resource_dict[resource][f"{resource}_limit"] = needed_amount
+            resource_dict[resource] = {}
+            needed_amount = container["resources"][resource]["current"]
+            if host["resources"][resource]["free"] < needed_amount:
+                return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
+            if resource == 'cpu':
+                resource_dict[resource]["cpu_allowance_limit"] = needed_amount
+                used_cores = map_container_to_host_cores(cont_name, host, needed_amount)
+                resource_dict[resource]["cpu_num"] = ",".join(used_cores)
+            else:
+                host["resources"][resource]["free"] -= needed_amount
+                resource_dict[resource][f"{resource}_limit"] = needed_amount
 
     return resource_dict
 
