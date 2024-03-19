@@ -40,14 +40,15 @@ import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 
-BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual']}
+BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "energy": ["structure.energy.usage"]}
 BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage']}
 
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.cpu.user': ['proc.cpu.user'],
     'structure.cpu.kernel': ['proc.cpu.kernel'],
-    'structure.mem.usage': ['proc.mem.resident']
+    'structure.mem.usage': ['proc.mem.resident'],
+    'structure.energy.usage': ["structure.energy.usage"]
 }
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
@@ -58,11 +59,13 @@ GUARDIAN_APPLICATION_METRICS = {
 }
 BDWATCHDOG_TO_GUARDIAN_CONTAINER = {
     "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
-    "mem": ['structure.mem.usage']
+    "mem": ['structure.mem.usage'],
+    "energy": ["structure.energy.usage"]
 }
 BDWATCHDOG_TO_GUARDIAN_APPLICATION = {
     "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
-    "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage']
+    "mem": ['structure.mem.usage'],
+    "energy": ['structure.energy.usage']
 }
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
