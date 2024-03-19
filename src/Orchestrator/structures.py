@@ -38,6 +38,11 @@ from src.Scaler import Scaler
 
 structure_routes = Blueprint('structures', __name__)
 
+MANDATORY_RESOURCES = ["cpu", "mem"]
+CONTAINER_KEYS = ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]
+HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]
+APP_KEYS = ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]
+
 
 def retrieve_structure(structure_name):
     try:
@@ -332,10 +337,56 @@ def desubscribe_container_from_app(structure_name, app_name):
     return jsonify(201)
 
 
+def free_container_cores(cont_name, host):
+    core_map = host["resources"]["cpu"]["core_usage_mapping"]
+    freed_shares = 0
+    for core in core_map:
+        if cont_name in core_map[core]:
+            core_shares = core_map[core][cont_name]
+            freed_shares += core_shares
+            core_map[core][cont_name] = 0
+            core_map[core]["free"] += core_shares
+    host["resources"]["cpu"]["core_usage_mapping"] = core_map
+    host["resources"]["cpu"]["free"] += freed_shares
+
+
+def free_container_disks(container, host):
+    disk_name = container["resources"]["disk"]["name"]
+    if "disks" not in host["resources"]:
+        return abort(400, {"message": "Host does not have disks"})
+    else:
+        disks = host["resources"]["disks"]
+        i = 0
+        new_disk_load = None
+        for disk in disks:
+            if disk["name"] == disk_name:
+                new_disk_load = disk["load"]
+                break
+            i -= 1
+        if new_disk_load is None:
+            return abort(400, {"message": "Host does not have requested disk"})
+        if new_disk_load < 0:
+            return abort(400, {"message": "Host disk can't have negative load"})
+        else:
+            new_disk_load -= 1
+            host["resources"]["disks"][i]["load"] = new_disk_load
+
+
+def free_container_resources(container, host):
+    cont_name = container["name"]
+    for resource in container["resources"]:
+        if resource == 'cpu':
+            free_container_cores(cont_name, host)
+        elif resource == 'disk':
+            free_container_disks(container, host)
+        else:
+            host["resources"][resource]["free"] += container["resources"][resource]["current"]
+
+
 @structure_routes.route("/structure/container/<structure_name>", methods=['DELETE'])
 def desubscribe_container(structure_name):
-    structure = retrieve_structure(structure_name)
-    cont_name = structure["name"]
+    container = retrieve_structure(structure_name)
+    cont_name = container["name"]
 
     # Look for any application that hosts this container, and remove it from the list
     apps = get_db().get_structures(subtype="application")
@@ -349,55 +400,16 @@ def desubscribe_container(structure_name):
     if previous_state:
         disable_scaler(scaler_service)
 
-    # Free resources
-
-    # CPU
-    # Get the core map of the container's host and free the allocated shares for this container
-    cont_host = structure["host"]
-    host = get_db().get_structure(cont_host)
-    core_map = host["resources"]["cpu"]["core_usage_mapping"]
-    freed_shares = 0
-    for core in core_map:
-        if cont_name in core_map[core]:
-            core_shares = core_map[core][cont_name]
-            freed_shares += core_shares
-            core_map[core][cont_name] = 0
-            core_map[core]["free"] += core_shares
-    host["resources"]["cpu"]["core_usage_mapping"] = core_map
-    host["resources"]["cpu"]["free"] += freed_shares
-
-    # MEM
-    host["resources"]["mem"]["free"] += structure["resources"]["mem"]["current"]
-
-    # Decrease disk load
-    if 'disk' in structure["resources"]:
-        disk_name = structure["resources"]["disk"]["name"]
-        if "disks" not in host["resources"]:
-            return abort(400, {"message": "Host does not have disks"})
-        else:
-            disks = host["resources"]["disks"]
-            i = 0
-            new_disk_load = None
-            for disk in disks:
-                if disk["name"] == disk_name:
-                    new_disk_load = disk["load"]
-                    break
-                i -= 1
-            if new_disk_load == None:
-                return abort(400, {"message": "Host does not have requested disk"})
-            if new_disk_load < 0:
-                return abort(400, {"message": "Host disk can't have negative load"})
-            else:
-                new_disk_load -= 1
-                host["resources"]["disks"][i]["load"] = new_disk_load
-
+    # Free host resources used by this container
+    host = get_db().get_structure(container["host"])
+    free_container_resources(container, host)
     get_db().update_structure(host)
 
-    # Delete the document for this structure
-    get_db().delete_structure(structure)
+    # Delete the document for this container
+    get_db().delete_structure(container)
 
-    # Delete the limits for this structure
-    limits = get_db().get_limits(structure)
+    # Delete the limits for this container
+    limits = get_db().get_limits(container)
     get_db().delete_limit(limits)
 
     # Restore the previous state of the Scaler service
@@ -406,108 +418,7 @@ def desubscribe_container(structure_name):
     return jsonify(201)
 
 
-@structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
-def subscribe_container(structure_name):
-    req_cont = request.json["container"]
-    req_limits = request.json["limits"]
-
-    node_scaler_session = requests.Session()
-
-    # Check that all the needed data is present on the requestes container
-    container = {}
-    for key in ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]:
-        if key not in req_cont:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
-        else:
-            container[key] = req_cont[key]
-
-    # Check that all the needed data for resources is present on the requested container
-    container["resources"] = {}
-    if "resources" not in req_cont:
-        return abort(400, {"message": "Missing resource information"})
-    elif "cpu" not in req_cont["resources"] or "mem" not in req_cont["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information"})
-    else:
-        container["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["max", "min", "current", "guard"]:
-            if key not in req_cont["resources"]["cpu"] or key not in req_cont["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                container["resources"]["cpu"][key] = req_cont["resources"]["cpu"][key]
-                container["resources"]["mem"][key] = req_cont["resources"]["mem"][key]
-
-        if 'disk' in req_cont["resources"]:
-            disk = req_cont["resources"]["disk"]
-            container["resources"]["disk"] = {}
-            for key in ["name", "path"]:
-                if key not in disk:
-                    return abort(400, {"message": "Missing disk resource information"})
-                else:
-                    container["resources"]["disk"][key] = disk[key]
-
-    # Check that the endpoint requested container name matches with the one in the request
-    if container["name"] != structure_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
-
-    # Check if the container already exists
-    try:
-        cont = get_db().get_structure(structure_name)
-        if cont:
-            return abort(400, {"message": "Container with this name already exists".format(key)})
-    except ValueError:
-        pass
-
-    # Check that its supposed host exists and that it reports this container
-    try:
-        get_db().get_structure(container["host"])
-    except ValueError:
-        return abort(400, {"message": "Container host does not exist".format(key)})
-    host_containers = get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
-
-    if container["name"] not in host_containers:
-        return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
-
-    container["type"] = "structure"
-
-    # Check that all the needed data for resources is present on the requested container LIMITS
-    limits = {}
-    if "resources" not in req_limits:
-        return abort(400, {"message": "Missing resource information for the limits"})
-    elif "cpu" not in req_limits["resources"] or "mem" not in req_limits["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information for the limits"})
-    else:
-        limits["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["boundary"]:
-            if key not in req_limits["resources"]["cpu"] or key not in req_limits["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                limits["resources"]["cpu"][key] = req_limits["resources"]["cpu"][key]
-                limits["resources"]["mem"][key] = req_limits["resources"]["mem"][key]
-
-    limits["type"] = 'limit'
-    limits["name"] = container["name"]
-
-
-    #### ALL looks good up to this point, proceed
-
-    # Disable the Scaler as we will modify the core mapping of a host
-    scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
-    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "ACTIVE")
-    if previous_state:
-        disable_scaler(scaler_service)
-
-    # Get the host info
-    cont_host = container["host"]
-    cont_name = container["name"]
-    host = get_db().get_structure(cont_host)
-
-    # CPU
-
-    # Look for resource shares on the container's host
-    needed_shares = container["resources"]["cpu"]["current"]
-    if host["resources"]["cpu"]["free"] < needed_shares:
-        return abort(400, {"message": "Host does not have enough shares".format(key)})
-
+def map_container_to_host_cores(cont_name, host, needed_shares):
     core_map = host["resources"]["cpu"]["core_usage_mapping"]
     host_max_cores = int(host["resources"]["cpu"]["max"] / 100)
     host_cpu_list = [str(i) for i in range(host_max_cores)]
@@ -524,12 +435,13 @@ def subscribe_container(structure_name):
             used_cores.append(core)
             break
 
-    # Finally, if unsuccessful, add as many cores as necessary, starting with the ones with the largest free shares to avoid too much spread
+    # Finally, if unsuccessful, add as many cores as necessary, starting with the
+    # ones with the largest free shares to avoid too much spread
     if pending_shares > 0:
         l = list()
         for core in host_cpu_list:
             l.append((core, core_map[core]["free"]))
-        l.sort(key=lambda tup: tup[1], reverse=True)
+        l.sort(key=lambda tup: tup[1], reverse=True)  # Sort by free shares
         less_used_cores = [i[0] for i in l]
 
         for core in less_used_cores:
@@ -538,7 +450,7 @@ def subscribe_container(structure_name):
                 if cont_name not in core_map[core]:
                     core_map[core][cont_name] = 0
 
-                    # If it has more free shares than needed, assign them and finish
+                # If it has more free shares than needed, assign them and finish
                 if core_map[core]["free"] >= pending_shares:
                     core_map[core]["free"] -= pending_shares
                     core_map[core][cont_name] += pending_shares
@@ -558,39 +470,154 @@ def subscribe_container(structure_name):
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] -= needed_shares
 
-    # MEM
-    needed_memory = container["resources"]["mem"]["current"]
-    host_memory = host["resources"]["mem"]["free"]
+    return used_cores
 
-    if needed_memory > host_memory:
-        return abort(400, {"message": "Container host does not have enough free memory requested"})
 
-    host["resources"]["mem"]["free"] -= needed_memory
-
-    resource_dict = {"cpu": {"cpu_num": ",".join(used_cores), "cpu_allowance_limit": needed_shares},
-                     "mem": {"mem_limit": needed_memory}}
-
-    Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
-
-    # Increase disk load
-    if 'disk' in req_cont["resources"]:
-        disk_name = req_cont["resources"]["disk"]["name"]
-        if "disks" not in host["resources"]:
-            return abort(400, {"message": "Host does not have disks"})
+def map_container_to_host_disks(container, host):
+    disk_name = container["resources"]["disk"]["name"]
+    if "disks" not in host["resources"]:
+        return abort(400, {"message": "Host does not have disks"})
+    else:
+        disks = host["resources"]["disks"]
+        i = 0
+        new_disk_load = None
+        for disk in disks:
+            if disk["name"] == disk_name:
+                new_disk_load = disk["load"]
+                break
+            i += 1
+        if new_disk_load is None:
+            return abort(400, {"message": "Host does not have requested disk"})
         else:
-            disks = host["resources"]["disks"]
-            i = 0
-            new_disk_load = None
-            for disk in disks:
-                if disk["name"] == disk_name:
-                    new_disk_load = disk["load"]
-                    break
-                i += 1
-            if new_disk_load == None:
-                return abort(400, {"message": "Host does not have requested disk"})
-            else:
-                new_disk_load += 1
-                host["resources"]["disks"][i]["load"] = new_disk_load
+            new_disk_load += 1
+            host["resources"]["disks"][i]["load"] = new_disk_load
+
+
+def map_container_to_host_resources(container, host):
+    cont_name = container["name"]
+    resource_dict = {}
+    for resource in container["resources"]:
+        needed_amount = container["resources"][resource]["current"]
+        if host["resources"][resource]["free"] < needed_amount:
+            return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
+        resource_dict[resource] = {}
+        if resource == 'cpu':
+            resource_dict[resource]["cpu_allowance_limit"] = needed_amount
+            used_cores = map_container_to_host_cores(cont_name, host, needed_amount)
+            resource_dict[resource]["cpu_num"] = ",".join(used_cores)
+        elif resource == 'disk':
+            map_container_to_host_disks(container, host)
+        else:
+            host["resources"][resource]["free"] -= needed_amount
+            resource_dict[resource][f"{resource}_limit"] = needed_amount
+
+    return resource_dict
+
+
+def check_name_mismatch(name1, name2):
+    if name1 != name2:
+        return abort(400, {"message": "Name mismatch {0} != {1}".format(name1, name2)})
+
+
+def check_structure_exists(structure_name, structure_type, searching_for_existence):
+    structure_exists = None
+    try:
+        structure = get_db().get_structure(structure_name)
+        if structure:
+            structure_exists = True
+    except ValueError:
+        structure_exists = False
+
+    # If structure exists and we do not want it to exist
+    if structure_exists and not searching_for_existence:
+        return abort(400, {"message": "Structure {0} with name {1} already exists".format(structure_type, structure_name)})
+
+    # If structure doesn't exist and we want it to exist
+    if not structure_exists and searching_for_existence:
+        return abort(400, {"message": "Structure {0} with name {1} does not exist".format(structure_type, structure_name)})
+
+
+def check_resources_data_is_present(data, res_info_type=None):
+    if len(res_info_type) > 1:
+        for res_info in res_info_type:
+            if "resources" not in data[res_info]:
+                return abort(400, {"message": "Missing resource {0} information".format(res_info)})
+            for resource in MANDATORY_RESOURCES:
+                if resource not in data[res_info]["resources"]:
+                    return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
+    else:
+        res_info = res_info_type[0]
+        if "resources" not in data:
+            return abort(400, {"message": "Missing resource {0} information".format(res_info)})
+        for resource in MANDATORY_RESOURCES:
+            if resource not in data["resources"]:
+                return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
+
+
+def get_resource_keys_from_requested_structure(req_structure, structure, resource, keys):
+    structure["resources"][resource] = {}
+    for key in keys:
+        if key not in req_structure["resources"][resource]:
+            return abort(400, {"message": "Missing key '{0}' for '{1}' resource".format(key, resource)})
+        else:
+            structure["resources"][resource][key] = req_structure["resources"][resource][key]
+
+
+@structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
+def subscribe_container(structure_name):
+    node_scaler_session = requests.Session()
+    req_cont = request.json["container"]
+    req_limits = request.json["limits"]
+
+    # Check that all the needed container data is present on the request
+    container = {}
+    for key in CONTAINER_KEYS:
+        if key not in req_cont:
+            return abort(400, {"message": "Missing key '{0}'".format(key)})
+        else:
+            container[key] = req_cont[key]
+    container["type"] = "structure"
+
+    # Check that all the needed data for resources is present on the request
+    check_resources_data_is_present(request.json, ["container", "limits"])
+
+    # Check if the container already exists
+    check_structure_exists(structure_name, "container", False)
+
+    # Check that its supposed host exists and that it reports this container
+    check_structure_exists(container["host"], "host", True)
+    host_containers = get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
+    if container["name"] not in host_containers:
+        return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
+
+    # Check that the endpoint requested container name matches with the one in the request
+    check_name_mismatch(container["name"], structure_name)
+
+    # Get data corresponding to container resources
+    container["resources"] = {}
+    resource_keys = ["max", "min", "current", "guard"]
+    keys = {"cpu": resource_keys, "mem": resource_keys, "energy": resource_keys, "disk": ["name", "path"]}
+    for resource in req_cont["resources"]:
+        get_resource_keys_from_requested_structure(req_cont, container, resource, keys[resource])
+
+    # Get data corresponding to container resource limits
+    limits = {"resources": {}}
+    for resource in req_limits["resources"]:
+        get_resource_keys_from_requested_structure(req_limits, limits, resource, ["boundary"])
+    limits["type"] = 'limit'
+    limits["name"] = container["name"]
+
+    # Disable the Scaler as we will modify the core mapping of a host
+    scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
+    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "ACTIVE")
+    if previous_state:
+        disable_scaler(scaler_service)
+
+    # Get the host info
+    host = get_db().get_structure(container["host"])
+
+    resource_dict = map_container_to_host_resources(container, host)
+    Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
 
     get_db().add_structure(container)
     get_db().update_structure(host)
@@ -612,70 +639,57 @@ def subscribe_container(structure_name):
 
 @structure_routes.route("/structure/host/<structure_name>", methods=['PUT'])
 def subscribe_host(structure_name):
-    data = request.json
+    req_host = request.json
     node_scaler_session = requests.Session()
 
     # Check that all the needed data is present on the request
     host = {}
-    for key in ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]:
-        if key not in data:
+    for key in HOST_KEYS:
+        if key not in req_host:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
-            host[key] = data[key]
+            host[key] = req_host[key]
+    host["type"] = "structure"
 
-    # Check that all the needed data for resources is present on the request
-    host["resources"] = {}
-    if "resources" not in data:
-        return abort(400, {"message": "Missing resource information"})
-    elif "cpu" not in data["resources"] or "mem" not in data["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information"})
-    else:
-        host["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["max", "free"]:
-            if key not in data["resources"]["cpu"] or key not in data["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                host["resources"]["cpu"][key] = data["resources"]["cpu"][key]
-                host["resources"]["mem"][key] = data["resources"]["mem"][key]
+    # Check host name in payload and host name in URL are the same
+    check_name_mismatch(host["name"], structure_name)
 
-        host["resources"]["cpu"]["core_usage_mapping"] = {}
-        for n in range(0, int(host["resources"]["cpu"]["max"] / 100)):
-            host["resources"]["cpu"]["core_usage_mapping"][n] = {"free": 100}
+    # Check if the host already exists in StateDatabase
+    check_structure_exists(structure_name, "host", False)
 
-        if 'disks' in data["resources"]:
-            disks = data["resources"]["disks"]
-            host["resources"]["disks"] = []
-            for disk in disks:
-                new_disk = {}
-                for key in ["name", "type", "load", "path"]:
-                    if key not in disk:
-                        return abort(400, {"message": "Missing disk resource information"})
-                    else:
-                        new_disk[key] = disk[key]
-                host["resources"]["disks"].append(new_disk)
-
-    if host["name"] != structure_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
-
-    # Check if the host already exists
-    try:
-        host = get_db().get_structure(structure_name)
-        if host:
-            return abort(400, {"message": "Host with this name already exists".format(key)})
-    except ValueError:
-        pass
-
-    # Check that this supposed host exists and that it reports this container
+    # Check that this supposed host exists and has its node scaler up
     try:
         host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
-        if host_containers == None:
+        if host_containers is None:
             raise RuntimeError()
     except Exception:
         return abort(400, {"message": "Could not connect to this host, is it up and has its node scaler up?"})
 
-    # Host looks good, insert it into the database
-    host["type"] = "structure"
+    # Check that all the needed data for resources is present on the request
+    check_resources_data_is_present(req_host, ["host"])
 
+    # Get data corresponding to host resources
+    host["resources"] = {}
+    for resource in req_host["resources"]:
+        if resource == 'disks':
+            host["resources"][resource] = []
+            for disk in req_host["resources"][resource]:
+                new_disk = {}
+                for key in ["name", "type", "load", "path"]:
+                    if key not in disk:
+                        return abort(400, {"message": "Missing key '{0}' in disk resource information".format(key)})
+                    else:
+                        new_disk[key] = disk[key]
+                host["resources"][resource].append(new_disk)
+        else:
+            get_resource_keys_from_requested_structure(req_host, host, resource, ["max", "free"])
+
+    # Set all host cores free
+    host["resources"]["cpu"]["core_usage_mapping"] = {}
+    for n in range(0, int(int(host["resources"]["cpu"]["max"]) / 100)):
+        host["resources"]["cpu"]["core_usage_mapping"][str(n)] = {"free": 100}
+
+    # Host looks good, insert it into the database
     get_db().add_structure(host)
 
     return jsonify(201)
@@ -694,64 +708,41 @@ def desubscribe_host(structure_name):
 @structure_routes.route("/structure/apps/<structure_name>", methods=['PUT'])
 def subscribe_app(structure_name):
     req_app = request.json["app"]
-    req_limits  = request.json["limits"]
+    req_limits = request.json["limits"]
 
     # Check that all the needed data is present on the request
     app = {}
-    for key in ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]:
+    for key in APP_KEYS:
         if key not in req_app:
             return abort(400, {"message": "Missing key '{0}'".format(key)})
         else:
             app[key] = req_app[key]
 
-    # Check that all the needed data for resources is present on the request
-    app["resources"] = {}
-    if "resources" not in req_app:
-        return abort(400, {"message": "Missing resource information"})
-    elif "cpu" not in req_app["resources"] or "mem" not in req_app["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information"})
-    else:
-        app["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["max", "min", "guard"]:
-            if key not in req_app["resources"]["cpu"] or key not in req_app["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                app["resources"]["cpu"][key] = req_app["resources"]["cpu"][key]
-                app["resources"]["mem"][key] = req_app["resources"]["mem"][key]
-
-    if app["name"] != structure_name:
-        return abort(400, {"message": "Name mismatch".format(key)})
+    # Check app name in payload and app name in URL are the same
+    check_name_mismatch(app["name"], structure_name)
 
     # Check if the app already exists
-    try:
-        app = get_db().get_structure(structure_name)
-        if app:
-            return abort(400, {"message": "App with this name already exists".format(key)})
-    except ValueError:
-        pass
+    check_structure_exists(structure_name, "application", False)
 
-    #### ALL looks good up to this point, proceed
+    # Check that all the needed data for resources is present on the request
+    check_resources_data_is_present(request.json, ["app", "limits"])
+
+    # Get data corresponding to app resources
+    app["resources"] = {}
+    for resource in req_app["resources"]:
+        get_resource_keys_from_requested_structure(req_app, app, resource, ["max", "min", "guard"])
+
     app["containers"] = list()
     app["type"] = "structure"
 
     # Check that all the needed data for resources is present on the requested container LIMITS
-    limits = {}
-    if "resources" not in req_limits:
-        return abort(400, {"message": "Missing resource information for the limits"})
-    elif "cpu" not in req_limits["resources"] or "mem" not in req_limits["resources"]:
-        return abort(400, {"message": "Missing cpu or mem resource information for the limits"})
-    else:
-        limits["resources"] = {"cpu": {}, "mem": {}}
-        for key in ["boundary"]:
-            if key not in req_limits["resources"]["cpu"] or key not in req_limits["resources"]["mem"]:
-                return abort(400, {"message": "Missing key '{0}' for cpu or mem resource".format(key)})
-            else:
-                limits["resources"]["cpu"][key] = req_limits["resources"]["cpu"][key]
-                limits["resources"]["mem"][key] = req_limits["resources"]["mem"][key]
-
+    limits = {"resources": {}}
+    for resource in req_limits["resources"]:
+        get_resource_keys_from_requested_structure(req_limits, limits, resource, ["boundary"])
     limits["type"] = 'limit'
     limits["name"] = app["name"]
 
+    # Add app to the StateDatabase
     get_db().add_structure(app)
 
     # Check if limits already exist
