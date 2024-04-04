@@ -132,7 +132,6 @@ def set_structure_to_guarded_state(structure_name, state):
     tries = 0
     while not put_done:
         tries += 1
-        structure = retrieve_structure(structure_name)
         structure["guard"] = state
         get_db().update_structure(structure)
 
