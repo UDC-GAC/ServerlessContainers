@@ -30,12 +30,13 @@ import urllib3
 #from spython.main import Client
 import subprocess
 import json
+import re
 
 ## CGROUPS V1
 # Getters
 from src.NodeRescaler.node_resource_manager import get_node_cpus
 from src.NodeRescaler.node_resource_manager import get_node_mem
-from src.NodeRescaler.node_resource_manager import get_node_disks as cgroups_get_node_disks
+from src.NodeRescaler.node_resource_manager import get_node_disks
 from src.NodeRescaler.node_resource_manager import get_node_networks as cgroups_get_node_networks
 # Setters
 from src.NodeRescaler.node_resource_manager import set_node_cpus
@@ -62,8 +63,11 @@ DICT_MEM_LABEL = "mem"
 DICT_DISK_LABEL = "disk"
 DICT_NET_LABEL = "net"
 
+# TODO: get container mount point from vars file
+container_mount_point = "/opt/bind"
+
 # At the moment, apptainer instances with cgroups V1 can only be started with root/sudo
-# TODO properly support Disk and Net for cgroups v1 and add support for cgroups v2
+# TODO properly support Net for cgroups v1 and add support for cgroups v2
 
 class SingularityContainerManager:
 
@@ -128,8 +132,18 @@ class SingularityContainerManager:
                     node_dict[DICT_MEM_LABEL] = mem_resources
 
                 if DICT_DISK_LABEL in resources:
+
+                    # TODO: maybe pass disk path as parameter from an HTTP request instead of getting it here
+                    command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
+                    output,error  = subprocess.Popen(
+                                        command, universal_newlines=True, shell=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                    source = output.split()[5]
+                    device = source.split("[")[0]
+                    mount_point= re.findall(r'\[([^]]*)\]', source)[0]
+
                     if self.cgroups_version == "v1":
-                        disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], self.container_engine)
+                        disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], mount_point, self.container_engine)
                     else:
                         #disk_success, disk_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_LABEL], self.container_engine)
                         pass
@@ -181,14 +195,27 @@ class SingularityContainerManager:
             node_dict[DICT_CPU_LABEL] = cpu_resources
             node_dict[DICT_MEM_LABEL] = mem_resources
 
-            # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
-            # if type(disk_resources) == list and len(disk_resources) > 0:
-            #     node_dict[DICT_DISK_LABEL] = disk_resources[0]
-            # elif disk_resources:
-            #     node_dict[DICT_DISK_LABEL] = disk_resources
-            # else:
-            #     node_dict[DICT_DISK_LABEL] = []
-            # # TODO support multiple disks
+            command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
+            try:
+                output  = subprocess.run(
+                                command, universal_newlines=True, shell=True, capture_output=True, timeout=1).stdout
+                source = output.split()[5]
+                device = source.split("[")[0]
+                mount_point= re.findall(r'\[([^]]*)\]', source)[0]
+
+                disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
+                # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                if type(disk_resources) == list and len(disk_resources) > 0:
+                    node_dict[DICT_DISK_LABEL] = disk_resources[0]
+                elif disk_resources:
+                    node_dict[DICT_DISK_LABEL] = disk_resources
+                else:
+                    node_dict[DICT_DISK_LABEL] = []
+
+            except subprocess.TimeoutExpired:
+                print("Timeout")
+
+            # TODO support multiple disks
             #
             # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
             # if net_resources:

@@ -39,24 +39,26 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
-BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual']}
-BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage']}
+BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['sys.disk.read.mb', 'sys.disk.write.mb']}
+BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage'], "disk": ['structure.disk.usage']}
 
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
-    'structure.mem.usage': ['proc.mem.resident']
+    'structure.mem.usage': ['proc.mem.resident'],
+    'structure.disk.usage': ['sys.disk.read.mb', 'sys.disk.write.mb']
 }
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
     'structure.mem.usage': ['structure.mem.usage'],
-    'structure.energy.usage': ['structure.energy.usage']
+    'structure.energy.usage': ['structure.energy.usage'],
+    'structure.disk.usage': ['structure.disk.usage']
 }
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
 
 TAGS = {"container": "host", "application": "structure"}
 
-translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage"}
+translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage", "disk": "structure.disk.usage"}
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],

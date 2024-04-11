@@ -238,6 +238,97 @@ cpu_usage_high = dict(
     generates="",
 )
 
+## Disk I/O Bandwidth
+disk_exceeded_upper = dict(
+    _id='disk_exceeded_upper',
+    type='rule',
+    resource="disk",
+    name='disk_exceeded_upper',
+    rule=dict(
+        {"and": [
+            {">": [
+                {"var": "disk.structure.disk.usage"},
+                {"var": "disk.limits.disk.upper"}]},
+            {"<": [
+                {"var": "disk.limits.disk.upper"},
+                {"var": "disk.structure.disk.max"}]},
+            {"<": [
+                {"var": "disk.structure.disk.current"},
+                {"var": "disk.structure.disk.max"}]}
+
+        ]
+        }),
+    generates="events",
+    action={"events": {"scale": {"up": 1}}},
+    active=True
+)
+
+disk_dropped_lower = dict(
+    _id='disk_dropped_lower',
+    type='rule',
+    resource="disk",
+    name='disk_dropped_lower',
+    rule=dict(
+        {"and": [
+            {">": [
+                {"var": "disk.structure.disk.usage"},
+                0]},
+            {"<": [
+                {"var": "disk.structure.disk.usage"},
+                {"var": "disk.limits.disk.lower"}]},
+            {">": [
+                {"var": "disk.limits.disk.lower"},
+                {"var": "disk.structure.disk.min"}]}]}),
+    generates="events",
+    action={"events": {"scale": {"down": 1}}},
+    active=True
+)
+
+DiskRescaleUp = dict(
+    _id='DiskRescaleUp',
+    type='rule',
+    resource="disk",
+    name='DiskRescaleUp',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.scale.up"},
+                2]},
+            {"<=": [
+                {"var": "events.scale.down"},
+                6]}
+        ]}),
+    generates="requests",
+    events_to_remove=2,
+    action={"requests": ["DiskRescaleUp"]},
+    amount=10,
+    rescale_policy="amount",
+    rescale_type="up",
+    active=True
+)
+
+DiskRescaleDown = dict(
+    _id='DiskRescaleDown',
+    type='rule',
+    resource="disk",
+    name='DiskRescaleDown',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.scale.down"},
+                8]},
+            {"<=": [
+                {"var": "events.scale.up"},
+                0]}
+        ]}),
+    generates="requests",
+    events_to_remove=8,
+    action={"requests": ["DiskRescaleDown"]},
+    rescale_policy="fit_to_usage",
+    rescale_type="down",
+    active=True
+)
+
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
@@ -256,3 +347,7 @@ if __name__ == "__main__":
         handler.add_rule(MemRescaleDown)
         handler.add_rule(cpu_usage_high)
         handler.add_rule(cpu_usage_low)
+        handler.add_rule(disk_exceeded_upper)
+        handler.add_rule(disk_dropped_lower)
+        handler.add_rule(DiskRescaleUp)
+        handler.add_rule(DiskRescaleDown)

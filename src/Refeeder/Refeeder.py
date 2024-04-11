@@ -40,16 +40,19 @@ import src.StateDatabase.opentsdb as bdwatchdog
 from src.ReBalancer.Utils import get_user_apps
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident', 'proc.disk.writes.mb',
-                      'proc.disk.reads.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb', 'sys.cpu.energy']
+                      'proc.disk.reads.mb', 'sys.disk.read.mb', 'sys.disk.write.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb', 'sys.cpu.energy']
 BDWATCHDOG_ENERGY_METRICS = ['sys.cpu.user', 'sys.cpu.kernel', 'sys.cpu.energy']
 GUARDIAN_METRICS = {'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'], 'proc.mem.resident': ['proc.mem.resident'],
                     'proc.disk.writes.mb': ['proc.disk.writes.mb'], 'proc.disk.reads.mb': ['proc.disk.reads.mb'],
+                    'sys.disk.read.mb': ['sys.disk.read.mb'], 'sys.disk.write.mb': ['sys.disk.write.mb'],
                     'proc.net.tcp.in.mb': ['proc.net.tcp.in.mb'], 'proc.net.tcp.out.mb': ['proc.net.tcp.out.mb']}
 REFEEDER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'], 'energy': ['sys.cpu.energy']}
 
+## sys.disk metrics are more reliable than proc.disk
 REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
                                 'mem': ['proc.mem.resident'],
                                 # 'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
+                                'disk': ['sys.disk.read.mb', 'sys.disk.write.mb'],
                                 # 'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
                                 'energy': ["sys.cpu.energy"]}
 

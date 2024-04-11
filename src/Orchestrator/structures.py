@@ -369,27 +369,19 @@ def desubscribe_container(structure_name):
     # MEM
     host["resources"]["mem"]["free"] += structure["resources"]["mem"]["current"]
 
-    # Decrease disk load
+    # Decrease disk load and increase free bw
     if 'disk' in structure["resources"]:
         disk_name = structure["resources"]["disk"]["name"]
         if "disks" not in host["resources"]:
             return abort(400, {"message": "Host does not have disks"})
         else:
-            disks = host["resources"]["disks"]
-            i = 0
-            new_disk_load = None
-            for disk in disks:
-                if disk["name"] == disk_name:
-                    new_disk_load = disk["load"]
-                    break
-                i -= 1
-            if new_disk_load == None:
-                return abort(400, {"message": "Host does not have requested disk"})
-            if new_disk_load < 0:
-                return abort(400, {"message": "Host disk can't have negative load"})
-            else:
-                new_disk_load -= 1
-                host["resources"]["disks"][i]["load"] = new_disk_load
+            try:
+                current_disk_bw = structure["resources"]["disk"]["current"]
+
+                host["resources"]["disks"][disk_name]["free"] += current_disk_bw
+                host["resources"]["disks"][disk_name]["load"] -= 1
+            except KeyError:
+                return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
     get_db().update_structure(host)
 
@@ -439,9 +431,9 @@ def subscribe_container(structure_name):
         if 'disk' in req_cont["resources"]:
             disk = req_cont["resources"]["disk"]
             container["resources"]["disk"] = {}
-            for key in ["name", "path"]:
+            for key in ["name", "path", "max", "min", "current", "guard"]:
                 if key not in disk:
-                    return abort(400, {"message": "Missing disk resource information"})
+                    return abort(400, {"message": "Missing key {0} for disk resource".format(req_cont)})
                 else:
                     container["resources"]["disk"][key] = disk[key]
 
@@ -483,6 +475,14 @@ def subscribe_container(structure_name):
             else:
                 limits["resources"]["cpu"][key] = req_limits["resources"]["cpu"][key]
                 limits["resources"]["mem"][key] = req_limits["resources"]["mem"][key]
+
+    if 'disk' in req_limits["resources"]:
+        limits["resources"]["disk"] = {}
+        for key in ["boundary"]:
+            if key not in req_limits["resources"]["disk"]:
+                return abort(400, {"message": "Missing key '{0}' for disk resource".format(key)})
+            else:
+                limits["resources"]["disk"][key] = req_limits["resources"]["disk"][key]
 
     limits["type"] = 'limit'
     limits["name"] = container["name"]
@@ -570,27 +570,27 @@ def subscribe_container(structure_name):
     resource_dict = {"cpu": {"cpu_num": ",".join(used_cores), "cpu_allowance_limit": needed_shares},
                      "mem": {"mem_limit": needed_memory}}
 
-    Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
-
-    # Increase disk load
+    # Increase disk load and decrease free bw
     if 'disk' in req_cont["resources"]:
         disk_name = req_cont["resources"]["disk"]["name"]
         if "disks" not in host["resources"]:
             return abort(400, {"message": "Host does not have disks"})
         else:
-            disks = host["resources"]["disks"]
-            i = 0
-            new_disk_load = None
-            for disk in disks:
-                if disk["name"] == disk_name:
-                    new_disk_load = disk["load"]
-                    break
-                i += 1
-            if new_disk_load == None:
-                return abort(400, {"message": "Host does not have requested disk"})
-            else:
-                new_disk_load += 1
-                host["resources"]["disks"][i]["load"] = new_disk_load
+            try:
+                needed_disk_bw = container["resources"]["disk"]["current"]
+                free_disk_bw = host["resources"]["disks"][disk_name]["free"]
+
+                if needed_disk_bw > free_disk_bw:
+                    return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
+
+                host["resources"]["disks"][disk_name]["free"] -= needed_disk_bw
+                host["resources"]["disks"][disk_name]["load"] += 1
+            except KeyError:
+                return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
+
+        resource_dict["disk"] = {"disk_read_limit": needed_disk_bw, "disk_write_limit": needed_disk_bw}
+
+    Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
 
     get_db().add_structure(container)
     get_db().update_structure(host)
@@ -644,15 +644,17 @@ def subscribe_host(structure_name):
 
         if 'disks' in data["resources"]:
             disks = data["resources"]["disks"]
-            host["resources"]["disks"] = []
+            host["resources"]["disks"] = {}
             for disk in disks:
+                if "name" not in disk:
+                    return abort(400, {"message": "Missing name disk resource"})
                 new_disk = {}
-                for key in ["name", "type", "load", "path"]:
+                for key in ["type", "load", "path", "max", "free"]:
                     if key not in disk:
-                        return abort(400, {"message": "Missing disk resource information"})
+                        return abort(400, {"message": "Missing key {0} for disk resource".format(key)})
                     else:
                         new_disk[key] = disk[key]
-                host["resources"]["disks"].append(new_disk)
+                host["resources"]["disks"][disk["name"]] = new_disk
 
     if host["name"] != structure_name:
         return abort(400, {"message": "Name mismatch".format(key)})
@@ -690,7 +692,6 @@ def desubscribe_host(structure_name):
 
     return jsonify(201)
 
-
 @structure_routes.route("/structure/apps/<structure_name>", methods=['PUT'])
 def subscribe_app(structure_name):
     req_app = request.json["app"]
@@ -718,6 +719,15 @@ def subscribe_app(structure_name):
             else:
                 app["resources"]["cpu"][key] = req_app["resources"]["cpu"][key]
                 app["resources"]["mem"][key] = req_app["resources"]["mem"][key]
+
+        if 'disk' in req_app["resources"]:
+            disk = req_app["resources"]["disk"]
+            app["resources"]["disk"] = {}
+            for key in ["max", "min", "guard"]:
+                if key not in disk:
+                    return abort(400, {"message": "Missing key {0} for disk resource".format(key)})
+                else:
+                    app["resources"]["disk"][key] = disk[key]
 
     if app["name"] != structure_name:
         return abort(400, {"message": "Name mismatch".format(key)})
@@ -748,6 +758,14 @@ def subscribe_app(structure_name):
             else:
                 limits["resources"]["cpu"][key] = req_limits["resources"]["cpu"][key]
                 limits["resources"]["mem"][key] = req_limits["resources"]["mem"][key]
+
+        if 'disk' in req_limits["resources"]:
+            limits["resources"]["disk"] = {}
+            for key in ["boundary"]:
+                if key not in req_limits["resources"]["disk"]:
+                    return abort(400, {"message": "Missing key '{0}' for disk resource".format(key)})
+                else:
+                    limits["resources"]["disk"][key] = req_limits["resources"]["disk"][key]
 
     limits["type"] = 'limit'
     limits["name"] = app["name"]

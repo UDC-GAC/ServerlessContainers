@@ -41,7 +41,7 @@ rescaler_http_session = requests.Session()
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
-    "disk": {"metric": "structure.disk.current", "limit_label": "disk_read_limit"},  # FIXME missing write value
+    "disk": {"metric": "structure.disk.current", "limit_label": "disk_write_limit"},  # FIXME missing read value
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
