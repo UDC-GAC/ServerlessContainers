@@ -1,4 +1,3 @@
-import json
 import requests
 import yaml
 import os
@@ -45,3 +44,17 @@ class WattWizardUtils:
                 raise e
             else:
                 self.get_power_from_usage(model_name, user_usage, system_usage, power_target, tries)
+
+    def get_idle_consumption(self, model_name, tries=3):
+        try:
+            r = self.session.get("{0}/{1}/{2}".format(self.server, "idle-consumption", model_name))
+            if r.status_code == 200:
+                return r.json()['idle_consumption']
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise e
+            else:
+                self.get_idle_consumption(model_name, tries)
