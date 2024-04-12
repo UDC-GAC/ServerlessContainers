@@ -13,7 +13,7 @@ energy_exceeded_upper = dict(
                 {"var": "energy.structure.energy.usage"},
                 {"var": "energy.structure.energy.max"}]}]}),
     generates="events", action={"events": {"scale": {"up": 1}}},
-    active=False
+    active=True
 )
 
 EnergyRescaleDown = dict(
@@ -36,7 +36,7 @@ EnergyRescaleDown = dict(
     amount=-20,
     rescale_policy="proportional",
     rescale_type="down",
-    active=False
+    active=True
 )
 
 energy_dropped_lower = dict(
@@ -50,7 +50,7 @@ energy_dropped_lower = dict(
                 {"var": "energy.structure.energy.usage"},
                 {"var": "energy.structure.energy.max"}]}]}),
     generates="events", action={"events": {"scale": {"down": 1}}},
-    active=False
+    active=True
 )
 
 EnergyRescaleUp = dict(
@@ -73,7 +73,7 @@ EnergyRescaleUp = dict(
     amount=20,
     rescale_policy="proportional",
     rescale_type="up",
-    active=False
+    active=True
 )
 
 
