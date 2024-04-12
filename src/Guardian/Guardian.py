@@ -564,6 +564,13 @@ class Guardian:
             if rule["rescale_type"] == "up":
                 if rule["rescale_policy"] == "amount":
                     amount = rule["amount"]
+                elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
+                    amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    current_resource_limit = structure["resources"][resource_label]["current"]
+                    upper_limit = limits[resource_label]["upper"]
+                    usage = usages[translator_dict[resource_label]]
+                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
+                        current_resource_limit, upper_limit, usage, amount), self.debug)
                 elif rule["rescale_policy"] == "proportional":
                     amount = rule["amount"]
                     current_resource_limit = structure["resources"][resource_label]["current"]
@@ -605,19 +612,24 @@ class Guardian:
 
             # If the resource is susceptible to check, ensure that it does not surpass any limit
             new_amount = amount
-            if resource_label not in NON_ADJUSTABLE_RESOURCES:
-                structure_resources = structure["resources"][resource_label]
-                structure_limits = limits[resource_label]
+            resource_to_adjust = "cpu" if resource_label == "energy" else resource_label
+            if resource_to_adjust not in NON_ADJUSTABLE_RESOURCES:
+                structure_resources = structure["resources"][resource_to_adjust]
+                structure_limits = limits[resource_to_adjust]
                 new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
                 if new_amount != amount:
                     log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
                         structure["name"], rule["name"], amount, new_amount), self.debug)
 
-            # Generate the request and append it
-            request = self.generate_request(structure, new_amount, resource_label)
-            generated_requests.append(request)
+            # # If amount is 0 ignore this request else generate the request and append it
+            if new_amount == 0:
+                log_warning("Request generated with rule {0} for structure {1} will be ignored because amount is 0".format(
+                    rule["name"], structure["name"]), self.debug)
+            else:
+                request = self.generate_request(structure, new_amount, resource_label)
+                generated_requests.append(request)
 
-            # Remove the events that triggered the request
+                # Remove the events that triggered the request
             event_name = generate_event_name(events[resource_label]["events"], resource_label)
             if event_name not in events_to_remove:
                 events_to_remove[event_name] = 0
