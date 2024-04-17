@@ -1,7 +1,5 @@
 verbose: no
 
-output: "out"
-
 influxdb_bucket: "compute2"
 
 prediction_methods: "sgdregressor"

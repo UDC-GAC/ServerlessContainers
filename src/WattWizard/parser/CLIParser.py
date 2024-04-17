@@ -20,12 +20,6 @@ class CLIParser:
         )
 
         self.parser.add_argument(
-            "-o",
-            "--output",
-            help="Directory to save time series plots and results. By default is './out'.",
-        )
-
-        self.parser.add_argument(
             "-b",
             "--influxdb-bucket",
             help="If pretrain data is specified you must indicate an InfluxDB Bucket to retrieve data from.",

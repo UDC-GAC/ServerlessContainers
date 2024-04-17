@@ -5,7 +5,7 @@ from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.influxdb.influxdb import check_bucket_exists
 
 
-SUPPORTED_ARGS = ['verbose', 'output', 'influxdb_bucket', 'prediction_methods', 'timestamps_dir', 'train_files', 'model_variables']
+SUPPORTED_ARGS = ['verbose', 'influxdb_bucket', 'prediction_methods', 'timestamps_dir', 'train_files', 'model_variables']
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 
