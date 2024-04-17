@@ -5,6 +5,7 @@ output: "out"
 influxdb_bucket: "compute2"
 
 prediction_methods: "sgdregressor"
+timestamps_dir: "./timestamps"
 train_files: "example"
 model_variables: "user_load,system_load"
 

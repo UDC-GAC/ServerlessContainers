@@ -5,7 +5,7 @@ from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.influxdb.influxdb import check_bucket_exists
 
 
-SUPPORTED_ARGS = ['verbose', 'output', 'influxdb_bucket', 'prediction_methods', 'train_files', 'model_variables']
+SUPPORTED_ARGS = ['verbose', 'output', 'influxdb_bucket', 'prediction_methods', 'timestamps_dir', 'train_files', 'model_variables']
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 
@@ -44,11 +44,14 @@ class ArgsManager:
                 case "verbose":
                     pass  # Nothing to do for verbose
                 case "output":
-                    pass  # Nothing to for output
+                    pass  # Nothing to do for output
                 case "influxdb_bucket":
                     check_bucket_exists(args[arg_name])
                 case "prediction_methods":
                     self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
+
+                case "timestamps_dir":
+                    pass  # Nothing to do for timestamps_dir (already checked in train_files)
 
                 case "train_files":
                     self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
@@ -58,6 +61,7 @@ class ArgsManager:
 
                 case _:
                     log(f"Argument {arg_name} is not supported", "ERR")
+                    exit(1)
 
     def manage_args(self):
         my_config = MyConfig.get_instance()

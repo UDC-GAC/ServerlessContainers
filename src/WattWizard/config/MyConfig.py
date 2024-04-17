@@ -1,5 +1,6 @@
 import os
 
+USER_DIR = os.getcwd()
 SCRIPT_PATH = os.path.abspath(__file__)
 WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 
@@ -54,9 +55,15 @@ class MyConfig:
             self.args[arg_name] = arg_value.split(',')
         else:
             self.args[arg_name] = arg_value
+
+        if arg_name == "timestamps_dir":
+            self.args[arg_name] = arg_value
+            if arg_value.startswith("."):
+                self.args[arg_name] = f"{USER_DIR}/{arg_value[2:]}"
+
         # Set full path for train timestamp files
         if arg_name == "train_files":
-            self.args[arg_name] = [f"{WATTWIZARD_DIR}/timestamps/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
+            self.args[arg_name] = [f"{self.args['timestamps_dir']}/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
 
     def get_resource_cpu_limit(self, resource, limit_type):
         if limit_type not in ["min", "max"]:

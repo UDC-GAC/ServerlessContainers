@@ -41,9 +41,15 @@ class CLIParser:
         )
 
         self.parser.add_argument(
+            "-d",
+            "--timestamps-dir",
+            help="Directory in which the training timestamp files are stored. By default is ./timestamps.",
+        )
+
+        self.parser.add_argument(
             "-t",
             "--train-files",
-            help="Comma-separated list of train file names stored under ./timestamps directory. One model per train file and prediction method will be created if possible. \n\
+            help="Comma-separated list of train file names stored under timestamps directory. One model per train file and prediction method will be created if possible. \n\
 This file must store time series timestamps from pretrain data in proper format. Check README.md to see timestamps proper format.",
         )
 

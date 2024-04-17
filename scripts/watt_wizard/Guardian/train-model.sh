@@ -20,6 +20,4 @@ SYSTEM_LOAD=${3}
 POWER=${4}
 JSON_DATA="{\"user_load\": [${USER_LOAD}], \"system_load\": [${SYSTEM_LOAD}], \"power\": [${POWER}]}"
 
-echo $JSON_DATA
-
 curl -X POST -H "Content-Type: application/json" -d "${JSON_DATA}" "http://${WATT_WIZARD_REST_URL}/train/${MODEL_NAME}"
