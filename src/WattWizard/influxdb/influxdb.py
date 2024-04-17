@@ -11,13 +11,12 @@ warnings.simplefilter("ignore", MissingPivotFunction)
 
 def check_bucket_exists(bucket_name):
     if bucket_name is None:
-        log(f"No InfluxDB bucket specified. You must specify a bucket to " +
-        "retrieve data from when using a train timestamps file.", "ERR")
+        log(f"No InfluxDB bucket specified", "ERR")
         exit(1)
     client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
     buckets_api = client.buckets_api()
     if buckets_api.find_bucket_by_name(bucket_name) is None:
-        log(f"Specified bucket {bucket_name} doesn't exists", "ERR")
+        log(f"Unreachable bucket in InfluxDB host {INFLUXDB_URL}. Bucket {bucket_name} doesn't exists", "ERR")
         exit(1)
 
 

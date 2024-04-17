@@ -2,12 +2,15 @@ from flask import Blueprint
 from flask import jsonify
 from flask import request
 
-from src.WattWizard.config import config
-from src.WattWizard.utils import reset_model
-from src.WattWizard.app.model_operations import check_model_exists, check_valid_values, get_pred_method, \
-    get_desired_power, json_to_train_data, request_to_dict, get_inverse_prediction
+from src.WattWizard.config.MyConfig import MyConfig
+from src.WattWizard.model.ModelHandler import ModelHandler
+from src.WattWizard.app.app_utils import get_desired_power, json_to_train_data, request_to_dict
+
+DYNAMIC_VAR = "user_load"
 
 routes = Blueprint('routes', __name__)
+my_config = MyConfig.get_instance()
+model_handler = ModelHandler.get_instance()
 
 
 # Potential improvement: Remove idle consumption route and implement logic on predict
@@ -16,10 +19,9 @@ routes = Blueprint('routes', __name__)
 @routes.route('/predict/<model_name>', methods=['GET'])
 def predict_power(model_name=None):
     try:
-        check_model_exists(model_name)
-        model_instance = config.model_instances[model_name]
+        model_instance = model_handler.get_model_instance(model_name)
         X_test = request_to_dict(model_instance, request)
-        check_valid_values(X_test)
+        my_config.check_resources_limits(X_test)
         predicted_consumption = model_instance.predict(X_test)
         return jsonify({'predicted_power': predicted_consumption})
     except Exception as e:
@@ -29,17 +31,19 @@ def predict_power(model_name=None):
 @routes.route('/inverse-predict/<model_name>', methods=['GET'])
 def predict_values_from_power(model_name=None):
     try:
-        dynamic_var = "user_load"  # Hardcoded
-        check_model_exists(model_name)
-        model_instance = config.model_instances[model_name]
+        model_instance = model_handler.get_model_instance(model_name)
         current_X = request_to_dict(model_instance, request)
-        check_valid_values(current_X)
+
+        my_config.check_resources_limits(current_X)
+        var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
+
         desired_power = get_desired_power(request)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
-        dynamic_value = get_inverse_prediction(model_instance, current_X, desired_power, dynamic_var)
-        return jsonify({dynamic_var: dynamic_value})
+
+        result = model_instance.get_inverse_prediction(current_X, desired_power, DYNAMIC_VAR, var_limits)
+        return jsonify({DYNAMIC_VAR: result})
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
@@ -47,8 +51,7 @@ def predict_values_from_power(model_name=None):
 @routes.route('/idle-consumption/<model_name>', methods=['GET'])
 def predict_idle(model_name=None):
     try:
-        check_model_exists(model_name)
-        model_instance = config.model_instances[model_name]
+        model_instance = model_handler.get_model_instance(model_name)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption is not None:
             return jsonify({'idle_consumption': idle_consumption})
@@ -58,11 +61,18 @@ def predict_idle(model_name=None):
         return jsonify({'ERROR': str(e)}), 400
 
 
+@routes.route('/models', methods=['GET'])
+def get_available_models():
+    try:
+        return jsonify(list(model_handler.get_models().keys()))
+    except Exception as e:
+        return jsonify({'ERROR': str(e)}), 400
+
+
 @routes.route('/model-attributes/<model_name>', methods=['GET'])
 def get_model_attributes(model_name=None):
     try:
-        check_model_exists(model_name)
-        model_instance = config.model_instances[model_name]
+        model_instance = model_handler.get_model_instance(model_name)
         coefs = model_instance.get_coefs()
         intercept = model_instance.get_intercept()
         if intercept is None or coefs is None:
@@ -76,7 +86,7 @@ def get_model_attributes(model_name=None):
 @routes.route('/cpu-limits', methods=['GET'])
 def get_cpu_limits():
     try:
-        return jsonify(config.cpu_limits)
+        return jsonify(my_config.get_cpu_limits())
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
@@ -84,10 +94,7 @@ def get_cpu_limits():
 @routes.route('/cpu-limits/<var>', methods=['GET'])
 def get_cpu_limits_from_var(var=None):
     try:
-        if var in config.cpu_limits:
-            return jsonify(config.cpu_limits[var])
-        else:
-            return jsonify({'ERROR': f'CPU limits requested from a non-existent variable {var}'}), 400
+        my_config.get_resource_cpu_limits(var)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
@@ -98,9 +105,9 @@ def set_cpu_limits():
         json_data = request.json
         for var in json_data:
             if "max" in json_data[var]:
-                config.cpu_limits[var]["max"] = json_data[var]["max"]
+                my_config.set_resource_cpu_limit(var, "max", json_data[var]["max"])
             if "min" in json_data[var]:
-                config.cpu_limits[var]["min"] = json_data[var]["min"]
+                my_config.set_resource_cpu_limit(var, "min", json_data[var]["min"])
         return jsonify({'INFO': 'CPU limits successfully updated'})
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -110,28 +117,29 @@ def set_cpu_limits():
 def train_model(model_name=None):
     json_data = request.json
     try:
-        check_model_exists(model_name)
-        pred_method = get_pred_method(model_name)
-        if pred_method not in config.STATIC_METHODS:
-            model_instance = config.model_instances[model_name]
-            X_train, y_train = json_to_train_data(model_instance, json_data)
-            model_instance.train(X_train, y_train)
-            return jsonify({'INFO': f'Model trained successfully (Train {model_instance.get_times_trained()})'})
+        model = model_handler.get_model_by_name(model_name)
+        if not ModelHandler.is_static(model["prediction_method"]):
+            X_train, y_train = json_to_train_data(model["instance"], json_data)
+            model["instance"].train(X_train, y_train)
+            return jsonify({'INFO': f'Model trained successfully (Train {model["instance"].get_times_trained()})'})
         else:
-            return jsonify({'ERROR': f'Model {model_name} using static method {pred_method} which doesn\'t support online learning'}), 400
+            return jsonify({'ERROR': f'Model {model_name} using static method {model["prediction_method"]} '
+                                     f'which doesn\'t support online learning'}), 400
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
 
-@routes.route('/restart-model/<model_name>', methods=['DELETE'])
-def restart_model(model_name=None):
+@routes.route('/reset-model/<model_name>', methods=['DELETE'])
+def reset_model(model_name=None):
     try:
-        check_model_exists(model_name)
-        pred_method = get_pred_method(model_name)
-        if pred_method not in config.STATIC_METHODS:
-            reset_model.run(model_name, pred_method)
+        prediction_method = model_handler.get_model_prediction_method(model_name)
+        if not ModelHandler.is_static(prediction_method):
+            model_handler.reset_model_instance(model_name)
+            model_instance = model_handler.get_model_instance(model_name)
+            model_instance.set_model_vars(my_config.get_argument("model_variables"))
             return jsonify({'INFO': 'Model successfully restarted'}), 200
         else:
-            return jsonify({'ERROR': f'Model {model_name} using static method {pred_method} can\'t be restarted'}), 400
+            return jsonify({'ERROR': f'Model \'{model_name}\' using static method '
+                                     f'\'{prediction_method}\' can\'t be restarted'}), 400
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400

@@ -3,8 +3,8 @@ from termcolor import colored
 
 
 def print_header():
-    print("REAL TIME WATT WIZARD")
-    print("Real Time CPU Power Consumption Modeling")
+    print("WATT WIZARD")
+    print("CPU Power Consumption Modeling")
 
 
 def log(message, message_type="INFO", print_log=True):
@@ -14,7 +14,7 @@ def log(message, message_type="INFO", print_log=True):
         "WARN": ("white", "on_yellow"),
         "ERR": ("white", "on_red"),
     }
-    color, on_color = header_colors.get(message_type)
+    color, on_color = header_colors[message_type]
     header = colored(f"[{timestamp} {message_type}]", color, on_color)
     log_entry = f"[{timestamp} {message_type}] {message}\n"
 

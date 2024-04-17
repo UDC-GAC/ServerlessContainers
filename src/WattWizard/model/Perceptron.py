@@ -3,6 +3,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.WattWizard.model.Model import Model
 
+
 class Perceptron(Model):
 
     model = None

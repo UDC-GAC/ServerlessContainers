@@ -1,5 +1,7 @@
 from flask import Flask
-from src.WattWizard.parser import my_parser
+from src.WattWizard.parser.CLIParser import CLIParser
+from src.WattWizard.parser.ConfigFileParser import ConfigFileParser
+from src.WattWizard.parser.ArgsManager import ArgsManager
 from src.WattWizard.utils import create_models
 from src.WattWizard.app.routes import routes
 
@@ -9,10 +11,15 @@ app.register_blueprint(routes)
 
 if __name__ == '__main__':
     # Parse arguments
-    parser = my_parser.create_parser()
-    args = parser.parse_args()
-    my_parser.check_args(args)
-    my_parser.set_args(args)
+    cli_parser = CLIParser()
+    cli_args = cli_parser.parse_args()
+
+    config_file_parser = ConfigFileParser()
+    config_file_args = config_file_parser.parse_args()
+
+    args_manager = ArgsManager(cli_args, config_file_args)
+    args_manager.manage_args()
+    args_manager.validate_args()
 
     # Create models and pretrain them (if specified)
     create_models.run()
