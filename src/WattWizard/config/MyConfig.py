@@ -4,7 +4,10 @@ USER_DIR = os.getcwd()
 SCRIPT_PATH = os.path.abspath(__file__)
 WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 
-COMMA_SEPARATED_LIST_ARGS = ['prediction_methods', 'train_files', 'model_variables']
+COMMA_SEPARATED_LIST_ARGS = ['prediction_methods', 'model_variables', 'host_train_files', 'container_train_files']
+DIRECTORY_ARGS = ['host_timestamps_dir', 'container_timestamps_dir']
+FILE_ARGS = ['host_train_files', 'container_train_files']
+
 DEFAULT_MAX_RESOURCE_LIMIT = float('1e+30')
 DEFAULT_CPU_LIMITS = {
     "load": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
@@ -56,14 +59,17 @@ class MyConfig:
         else:
             self.args[arg_name] = arg_value
 
-        if arg_name == "timestamps_dir":
+        if arg_name in DIRECTORY_ARGS:
             self.args[arg_name] = arg_value
             if arg_value.startswith("."):
                 self.args[arg_name] = f"{USER_DIR}/{arg_value[2:]}"
 
         # Set full path for train timestamp files
-        if arg_name == "train_files":
-            self.args[arg_name] = [f"{self.args['timestamps_dir']}/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
+        if arg_name in FILE_ARGS:
+            if arg_name == "host_train_files":
+                self.args[arg_name] = [f"{self.args['host_timestamps_dir']}/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
+            if arg_name == "container_train_files":
+                self.args[arg_name] = [f"{self.args['container_timestamps_dir']}/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
 
     def get_resource_cpu_limit(self, resource, limit_type):
         if limit_type not in ["min", "max"]:

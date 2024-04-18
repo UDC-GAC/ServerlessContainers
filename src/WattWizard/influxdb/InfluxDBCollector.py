@@ -83,8 +83,9 @@ class InfluxDBCollector:
         query = self.get_query(var, structure, start_date, stop_date)
         query_api = self.client.query_api()
         result = None
+        success = False
         retry = 3
-        while retry != 0:
+        while not success:
             try:
                 result = query_api.query_data_frame(query)
             except ReadTimeoutError:
@@ -101,13 +102,17 @@ class InfluxDBCollector:
                 log(f"{e}", "ERR")
                 exit(1)
             else:
-                if result["_time"][0] is not None:
-                    retry = 0
+                # CHECK EMPTY DATAFRAME!!!
+                if result.empty:
+                    log(f"There isn't any data between {start_date} and {stop_date}. (var = {var})", "WARN")
+                if "_time" in result and result["_time"][0] is not None:
+                    return result
                 elif retry != 0:
                     retry -= 1
                     log(f"Bad df obtained between {start_date} and {stop_date}. Retrying ({retry} tries left)", "WARN")
                 else:
-                    log(f"Bad df obtained between {start_date} and {stop_date}. No more tries", "ERROR")
+                    print(query)
+                    log(f"Bad df obtained between {start_date} and {stop_date}. No more tries", "ERR")
                     exit(1)
         return result
 

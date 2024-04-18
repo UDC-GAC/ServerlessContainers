@@ -16,10 +16,10 @@ model_handler = ModelHandler.get_instance()
 # Potential improvement: Remove idle consumption route and implement logic on predict
 # When utilization is below 100% (bad predictions) power can be computed as follows:
 # P = idle + (user+system)% * (prediction(100%) - idle)
-@routes.route('/predict/<model_name>', methods=['GET'])
-def predict_power(model_name=None):
+@routes.route('/predict/<structure>/<model_name>', methods=['GET'])
+def predict_power(structure=None, model_name=None):
     try:
-        model_instance = model_handler.get_model_instance(model_name)
+        model_instance = model_handler.get_model_instance(structure, model_name)
         X_test = request_to_dict(model_instance, request)
         my_config.check_resources_limits(X_test)
         predicted_consumption = model_instance.predict(X_test)
@@ -28,10 +28,10 @@ def predict_power(model_name=None):
         return jsonify({'ERROR': str(e)}), 400
 
 
-@routes.route('/inverse-predict/<model_name>', methods=['GET'])
-def predict_values_from_power(model_name=None):
+@routes.route('/inverse-predict/<structure>/<model_name>', methods=['GET'])
+def predict_values_from_power(structure=None, model_name=None):
     try:
-        model_instance = model_handler.get_model_instance(model_name)
+        model_instance = model_handler.get_model_instance(structure, model_name)
         current_X = request_to_dict(model_instance, request)
 
         my_config.check_resources_limits(current_X)
@@ -48,10 +48,10 @@ def predict_values_from_power(model_name=None):
         return jsonify({'ERROR': str(e)}), 400
 
 
-@routes.route('/idle-consumption/<model_name>', methods=['GET'])
-def predict_idle(model_name=None):
+@routes.route('/idle-consumption/<structure>/<model_name>', methods=['GET'])
+def predict_idle(structure=None, model_name=None):
     try:
-        model_instance = model_handler.get_model_instance(model_name)
+        model_instance = model_handler.get_model_instance(structure, model_name)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption is not None:
             return jsonify({'idle_consumption': idle_consumption})
@@ -64,15 +64,23 @@ def predict_idle(model_name=None):
 @routes.route('/models', methods=['GET'])
 def get_available_models():
     try:
-        return jsonify(list(model_handler.get_models().keys()))
+        return jsonify(model_handler.get_model_names())
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
 
-@routes.route('/model-attributes/<model_name>', methods=['GET'])
-def get_model_attributes(model_name=None):
+@routes.route('/models/<structure>', methods=['GET'])
+def get_available_models_structure(structure=None):
     try:
-        model_instance = model_handler.get_model_instance(model_name)
+        return jsonify(model_handler.get_model_names_structure(structure))
+    except Exception as e:
+        return jsonify({'ERROR': str(e)}), 400
+
+
+@routes.route('/model-attributes/<structure>/<model_name>', methods=['GET'])
+def get_model_attributes(structure=None, model_name=None):
+    try:
+        model_instance = model_handler.get_model_instance(structure, model_name)
         coefs = model_instance.get_coefs()
         intercept = model_instance.get_intercept()
         if intercept is None or coefs is None:
@@ -113,11 +121,11 @@ def set_cpu_limits():
         return jsonify({'ERROR': str(e)}), 400
 
 
-@routes.route('/train/<model_name>', methods=['POST'])
-def train_model(model_name=None):
+@routes.route('/train/<structure>/<model_name>', methods=['POST'])
+def train_model(structure=None, model_name=None):
     json_data = request.json
     try:
-        model = model_handler.get_model_by_name(model_name)
+        model = model_handler.get_model_by_name(structure, model_name)
         if not ModelHandler.is_static(model["prediction_method"]):
             X_train, y_train = json_to_train_data(model["instance"], json_data)
             model["instance"].train(X_train, y_train)
@@ -129,13 +137,13 @@ def train_model(model_name=None):
         return jsonify({'ERROR': str(e)}), 400
 
 
-@routes.route('/reset-model/<model_name>', methods=['DELETE'])
-def reset_model(model_name=None):
+@routes.route('/reset-model/<structure>/<model_name>', methods=['DELETE'])
+def reset_model(structure=None, model_name=None):
     try:
-        prediction_method = model_handler.get_model_prediction_method(model_name)
+        prediction_method = model_handler.get_model_prediction_method(structure, model_name)
         if not ModelHandler.is_static(prediction_method):
-            model_handler.reset_model_instance(model_name)
-            model_instance = model_handler.get_model_instance(model_name)
+            model_handler.reset_model_instance(structure, model_name)
+            model_instance = model_handler.get_model_instance(structure, model_name)
             model_instance.set_model_vars(my_config.get_argument("model_variables"))
             return jsonify({'INFO': 'Model successfully restarted'}), 200
         else:

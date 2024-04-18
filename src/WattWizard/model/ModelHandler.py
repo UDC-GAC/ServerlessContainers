@@ -43,46 +43,70 @@ class ModelHandler:
         else:
             ModelHandler.__instance = self
 
-        self.models = {}
+        self.models = {"host": {}, "container": {}}
 
-    def add_model(self, prediction_method, train_file):
+    def add_model(self, structure, prediction_method, train_file):
         model_name = f"{prediction_method}_{self.get_file_name(train_file) if train_file else 'NPT'}"
-        if model_name in self.models:
+        if structure in self.models and model_name in self.models[structure]:
             raise Exception(f"Model with name {model_name} already exists")
         else:
-            self.models[model_name] = {
+            self.models[structure][model_name] = {
                 "prediction_method": prediction_method,
                 "train_file": train_file,
                 "instance": self.create_model_instance(prediction_method)
             }
         return model_name
 
+    def get_model_names(self):
+        models_list = []
+        for structure in self.models:
+            models_list.append(list(self.models[structure].keys()))
+        return models_list
+
+    def get_model_names_structure(self, structure):
+        if structure in self.models:
+            return list(self.models[structure].keys())
+        raise Exception(f"Structure {structure} doesn\'t exists")
+
     def get_models(self):
         return self.models
 
-    def get_model_by_name(self, model_name):
-        if model_name in self.models:
-            return self.models[model_name]
-        raise Exception(f'Model with name \'{model_name}\' doesn\'t exists')
+    def get_models_structure(self, structure):
+        if structure in self.models:
+            return self.models[structure]
+        raise Exception(f"Structure {structure} doesn\'t exists")
 
-    def __get_model_value(self, model_name, value):
-        if model_name in self.models:
-            if value in self.models[model_name]:
-                return self.models[model_name][value]
-            raise Exception(f"Attribute '{value}' doesn\'t exists for model {model_name}")
-        raise Exception(f'Model with name \'{model_name}\' doesn\'t exists')
+    def get_host_models(self):
+        self.get_models_structure("host")
 
-    def get_model_prediction_method(self, model_name):
-        return self.__get_model_value(model_name, "prediction_method")
+    def get_container_models(self):
+        self.get_models_structure("container")
 
-    def get_model_train_file(self, model_name):
-        return self.__get_model_value(model_name, "train_file")
+    def get_model_by_name(self, structure, model_name):
+        if structure in self.models and model_name in self.models[structure]:
+            return self.models[structure][model_name]
+        raise Exception(f'Model with name \'{model_name}\' for structure \'{structure}\' doesn\'t exists')
 
-    def get_model_instance(self, model_name):
-        return self.__get_model_value(model_name, "instance")
+    def __get_model_value(self, structure, model_name, value):
+        if structure in self.models:
+            if model_name in self.models[structure]:
+                if value in self.models[model_name]:
+                    return self.models[model_name][value]
+                raise Exception(f"Attribute '{value}' doesn\'t exists for model {model_name} and structure {structure}")
+            raise Exception(f'Model with name \'{model_name}\' doesn\'t exists for structure {structure}')
+        raise Exception(f'Structure \'{structure}\' doesn\'t exists')
 
-    def reset_model_instance(self, model_name):
-        if model_name in self.models:
+    def get_model_prediction_method(self, structure, model_name):
+        return self.__get_model_value(structure, model_name, "prediction_method")
+
+    def get_model_train_file(self, structure, model_name):
+        return self.__get_model_value(structure, model_name, "train_file")
+
+    def get_model_instance(self, structure, model_name):
+        return self.__get_model_value(structure, model_name, "instance")
+
+    def reset_model_instance(self, structure, model_name):
+        if structure in self.models and model_name in self.models[structure]:
             self.models[model_name]["instance"] = self.create_model_instance(self.models[model_name]["prediction_method"])
         else:
-            raise Exception(f'Model with name \'{model_name}\' doesn\'t exists')
+            raise Exception(f'Model with name \'{model_name}\' doesn\'t exists for structure \'{structure}\'')

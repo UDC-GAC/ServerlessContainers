@@ -5,7 +5,8 @@ from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBChecker
 
 
-SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'prediction_methods', 'timestamps_dir', 'train_files', 'model_variables']
+SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'prediction_methods', 'model_variables',
+                  'host_timestamps_dir', 'container_timestamps_dir', 'host_train_files', 'container_train_files', ]
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 
@@ -59,10 +60,16 @@ class ArgsManager:
                 case "prediction_methods":
                     self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
 
-                case "timestamps_dir":
-                    pass  # Nothing to do for timestamps_dir (already checked in train_files)
+                case "host_timestamps_dir":
+                    pass  # Nothing to do for host_timestamps_dir (already checked in host_train_files)
 
-                case "train_files":
+                case "container_timestamps_dir":
+                    pass  # Nothing to do for container_timestamps_dir (already checked in container_train_files)
+
+                case "host_train_files":
+                    self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
+
+                case "container_train_files":
                     self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
 
                 case "model_variables":

@@ -13,6 +13,7 @@ class TimeSeriesCollector:
 
     model_variables = None
     influxdb_handler = None
+    structure = None
 
     def __init__(self, model_variables, influxdb_host, influxdb_bucket):
         self.model_variables = model_variables
@@ -45,6 +46,9 @@ class TimeSeriesCollector:
             self.model_variables = v
         raise Exception("Trying to set model variables from TimeSeriesCollector as None")
 
+    def set_structure(self, structure):
+        self.structure = structure
+
     def parse_timestamps(self, file):
         try:
             with open(file, 'r') as f:
@@ -69,7 +73,7 @@ class TimeSeriesCollector:
         # Get model variables time series and merge data
         exp_data = pd.DataFrame()
         for var in self.model_variables:
-            df = self.influxdb_handler.query_influxdb(var, "host", start_str, stop_str)
+            df = self.influxdb_handler.query_influxdb(var, self.structure, start_str, stop_str)
             if not df.empty:
                 df = self.remove_outliers(df, "_value")
                 df.rename(columns={'_value': var}, inplace=True)

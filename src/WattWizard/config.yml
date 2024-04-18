@@ -4,7 +4,9 @@ influxdb_host: "montoxo.des.udc.es"
 influxdb_bucket: "compute2"
 
 prediction_methods: "sgdregressor"
-timestamps_dir: "./timestamps"
-train_files: "example"
 model_variables: "user_load,system_load"
 
+host_timestamps_dir: "./timestamps/host"
+container_timestamps_dir: "./timestamps/container"
+host_train_files: "example"
+container_train_files: "example"

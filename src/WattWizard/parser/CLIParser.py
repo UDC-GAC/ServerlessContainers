@@ -41,23 +41,32 @@ class CLIParser:
         )
 
         self.parser.add_argument(
-            "-d",
-            "--timestamps-dir",
-            help="Directory in which the training timestamp files are stored. By default is ./timestamps.",
-        )
-
-        self.parser.add_argument(
-            "-t",
-            "--train-files",
-            help="Comma-separated list of train file names stored under timestamps directory. One model per train file and prediction method will be created if possible. \n\
-This file must store time series timestamps from pretrain data in proper format. Check README.md to see timestamps proper format.",
-        )
-
-        self.parser.add_argument(
             "-m",
             "--model-variables",
             help="Comma-separated list of variables to use in the model. Commonly known as features. \
     \nSupported values: user_load, system_load, wait_load, freq, sumfreq.",
+        )
+
+        self.parser.add_argument(
+            "--host-timestamps-dir",
+            help="Directory in which the timestamp files to train host models are stored. By default is ./timestamps/host.",
+        )
+
+        self.parser.add_argument(
+            "--container-timestamps-dir",
+            help="Directory in which the timestamp files to train container models are stored. By default is ./timestamps/container.",
+        )
+
+        self.parser.add_argument(
+            "--host-train-files",
+            help="Comma-separated list of train file names stored under host timestamps directory. One host model per train file and prediction method will be created if possible. \n\
+This file must store time series timestamps from pretrain data in proper format. Check README.md to see timestamps proper format.",
+        )
+
+        self.parser.add_argument(
+            "--container-train-files",
+            help="Comma-separated list of train file names stored under container timestamps directory. One container model per train file and prediction method will be created if possible. \n\
+This file must store time series timestamps from pretrain data in proper format. Check README.md to see timestamps proper format.",
         )
 
     def parse_args(self):

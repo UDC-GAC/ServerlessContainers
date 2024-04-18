@@ -52,16 +52,18 @@ def run():
     model_handler = ModelHandler.get_instance()
     ts_collector = TimeSeriesCollector(model_variables + ["power"], influxdb_host, influxdb_bucket)
 
-    for prediction_method in my_config.get_argument("prediction_methods"):
-        for train_file in my_config.get_argument("train_files"):
-            train_file = None if train_file == "NPT" else train_file  # NPT = Not Pre-Trained
-            if train_file is None and ModelHandler.is_static(prediction_method):
-                log(f"Prediction method {prediction_method} doesn't support online learning, "
-                    f"so it's mandatory to pretrain the model. Model will be discarded", "WARN")
-                continue
-            model_name = model_handler.add_model(prediction_method, train_file)
-            model = model_handler.get_model_by_name(model_name)
-            if model and model['instance']:
-                model['instance'].set_model_vars(model_variables)
-                if model['train_file']:
-                    pretrain_model(ts_collector, model['instance'], model['train_file'], model['prediction_method'])
+    for structure in ["host", "container"]:
+        ts_collector.set_structure(structure)
+        for prediction_method in my_config.get_argument("prediction_methods"):
+            for train_file in my_config.get_argument(f"{structure}_train_files"):
+                train_file = None if train_file == "NPT" else train_file  # NPT = Not Pre-Trained
+                if train_file is None and ModelHandler.is_static(prediction_method):
+                    log(f"Prediction method {prediction_method} doesn't support online learning, "
+                        f"so it's mandatory to pretrain the model. Model will be discarded", "WARN")
+                    continue
+                model_name = model_handler.add_model(structure, prediction_method, train_file)
+                model = model_handler.get_model_by_name(structure, model_name)
+                if model and model['instance']:
+                    model['instance'].set_model_vars(model_variables)
+                    if model['train_file']:
+                        pretrain_model(ts_collector, model['instance'], model['train_file'], model['prediction_method'])

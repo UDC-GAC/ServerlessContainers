@@ -1,10 +1,8 @@
 import numpy as np
 
 from src.WattWizard.config.MyConfig import MyConfig
-from src.WattWizard.model.ModelHandler import ModelHandler
 
 my_config = MyConfig.get_instance()
-model_handler = ModelHandler.get_instance()
 
 
 def get_desired_power(req):
