@@ -5,7 +5,10 @@ from influxdb_client.client.warnings import MissingPivotFunction
 from urllib3.exceptions import ReadTimeoutError
 
 from src.WattWizard.logs.logger import log
+from src.WattWizard.influxdb.container_queries import container_queries
+from src.WattWizard.influxdb.host_queries import host_queries
 
+INFLUXDB_QUERIES = {"host": host_queries, "container": container_queries}
 INFLUXDB_TOKEN = "MyToken"
 INFLUXDB_ORG = "MyOrg"
 
@@ -59,23 +62,40 @@ class InfluxDBCollector:
             exit(1)
 
         if self.client.buckets_api().find_bucket_by_name(self.influxdb_bucket) is None:
-            log(f"Unreachable bucket in InfluxDB host {self.influxdb_url}. Bucket {self.influxdb_bucket} doesn't exists", "ERR")
+            log(f"Unreachable bucket in InfluxDB host {self.influxdb_url}. "
+                f"Bucket {self.influxdb_bucket} doesn't exists", "ERR")
             exit(1)
 
-    def query_influxdb(self, query, start_date, stop_date):
-        retry = 3
+    def get_query(self, var, structure, start_date, stop_date):
+        if structure not in INFLUXDB_QUERIES:
+            log(f"Querying model variable \'{var}\' for unknown structure \'{structure}\'", "ERR")
+            exit(1)
+        if var not in INFLUXDB_QUERIES[structure]:
+            log(f"Model variable \'{var}\' not supported for structure \'{structure}\'", "ERR")
+            exit(1)
+        if INFLUXDB_QUERIES[structure][var] is None:
+            log(f"Model variable \'{var}\' not yet supported for structure \'{structure}\'", "ERR")
+            exit(1)
+        return INFLUXDB_QUERIES[structure][var].format(start_date=start_date, stop_date=stop_date,
+                                                       influxdb_bucket=self.influxdb_bucket, influxdb_window="2s")
+
+    def query_influxdb(self, var, structure, start_date, stop_date):
+        query = self.get_query(var, structure, start_date, stop_date)
         query_api = self.client.query_api()
-        query = query.format(start_date=start_date, stop_date=stop_date, influxdb_bucket=self.influxdb_bucket, influxdb_window="2s")
         result = None
+        retry = 3
         while retry != 0:
             try:
                 result = query_api.query_data_frame(query)
             except ReadTimeoutError:
                 if retry != 0:
                     retry -= 1
-                    log(f"InfluxDB query has timed out (start_date = {start_date}, stop_date = {stop_date}). Retrying ({retry} tries left)", "WARN")
+                    log(f"InfluxDB query has timed out (start_date = {start_date}, "
+                        f"stop_date = {stop_date}). Retrying ({retry} tries left)", "WARN")
                 else:
-                    log(f"InfluxDB query has timed out (start_date = {start_date}, stop_date = {stop_date}). No more tries", "ERR")
+                    log(f"InfluxDB query has timed out (start_date = {start_date}, "
+                        f"stop_date = {stop_date}). No more tries", "ERR")
+                    exit(1)
             except Exception as e:
                 log(f"Unexpected error while querying InfluxDB (start_date = {start_date}, stop_date = {stop_date}).", "ERR")
                 log(f"{e}", "ERR")

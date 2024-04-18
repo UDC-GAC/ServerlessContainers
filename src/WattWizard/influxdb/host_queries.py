@@ -87,7 +87,7 @@ temp_query = '''
         }}))
 '''
 
-var_query = {
+host_queries = {
     "load": load_query,
     "user_load": user_load_query,
     "system_load": system_load_query,

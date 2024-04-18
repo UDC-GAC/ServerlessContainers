@@ -2,9 +2,7 @@ import warnings
 import pandas as pd
 from datetime import datetime, timedelta
 
-from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.logs.logger import log
-from src.WattWizard.influxdb.influxdb_queries import var_query
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBCollector
 
 OUT_RANGE = 1.5
@@ -71,7 +69,7 @@ class TimeSeriesCollector:
         # Get model variables time series and merge data
         exp_data = pd.DataFrame()
         for var in self.model_variables:
-            df = self.influxdb_handler.query_influxdb(var_query[var], start_str, stop_str)
+            df = self.influxdb_handler.query_influxdb(var, "host", start_str, stop_str)
             if not df.empty:
                 df = self.remove_outliers(df, "_value")
                 df.rename(columns={'_value': var}, inplace=True)
