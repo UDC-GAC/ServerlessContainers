@@ -44,12 +44,13 @@ def pretrain_model(ts_collector, model_instance, train_file, pred_method):
 def run():
     my_config = MyConfig.get_instance()
     model_variables = my_config.get_argument("model_variables")
+    influxdb_host = my_config.get_argument("influxdb_host")
     influxdb_bucket = my_config.get_argument("influxdb_bucket")
     for line in my_config.get_summary():
         log(line)
 
     model_handler = ModelHandler.get_instance()
-    ts_collector = TimeSeriesCollector(model_variables + ["power"], influxdb_bucket)
+    ts_collector = TimeSeriesCollector(model_variables + ["power"], influxdb_host, influxdb_bucket)
 
     for prediction_method in my_config.get_argument("prediction_methods"):
         for train_file in my_config.get_argument("train_files"):

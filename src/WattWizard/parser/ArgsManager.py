@@ -2,14 +2,15 @@ import os
 
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
-from src.WattWizard.influxdb.influxdb import check_bucket_exists
+from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBChecker
 
 
-SUPPORTED_ARGS = ['verbose', 'influxdb_bucket', 'prediction_methods', 'timestamps_dir', 'train_files', 'model_variables']
+SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'prediction_methods', 'timestamps_dir', 'train_files', 'model_variables']
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 
 WATTWIZARD_DIR = MyConfig.get_project_dir()
+
 
 class ArgsManager:
 
@@ -43,10 +44,18 @@ class ArgsManager:
             match arg_name:
                 case "verbose":
                     pass  # Nothing to do for verbose
+
                 case "output":
                     pass  # Nothing to do for output
+
+                case "influxdb_host":
+                    with InfluxDBChecker(args["influxdb_host"], args["influxdb_bucket"]) as conn:
+                        conn.check_influxdb_connection()
+
                 case "influxdb_bucket":
-                    check_bucket_exists(args[arg_name])
+                    with InfluxDBChecker(args["influxdb_host"], args["influxdb_bucket"]) as conn:
+                        conn.check_bucket_exists()
+
                 case "prediction_methods":
                     self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
 

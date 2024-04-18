@@ -1,5 +1,6 @@
 verbose: no
 
+influxdb_host: "montoxo.des.udc.es"
 influxdb_bucket: "compute2"
 
 prediction_methods: "sgdregressor"

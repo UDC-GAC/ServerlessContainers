@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.logs.logger import log
 from src.WattWizard.influxdb.influxdb_queries import var_query
-from src.WattWizard.influxdb.influxdb import query_influxdb
+from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBCollector
 
 OUT_RANGE = 1.5
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -13,12 +13,12 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 class TimeSeriesCollector:
 
-    influxdb_bucket = None
     model_variables = None
+    influxdb_handler = None
 
-    def __init__(self, model_variables, influxdb_bucket):
+    def __init__(self, model_variables, influxdb_host, influxdb_bucket):
         self.model_variables = model_variables
-        self.influxdb_bucket = influxdb_bucket
+        self.influxdb_handler = InfluxDBCollector(influxdb_host, influxdb_bucket)
 
     # Remove outliers for a specified column
     @staticmethod
@@ -71,7 +71,7 @@ class TimeSeriesCollector:
         # Get model variables time series and merge data
         exp_data = pd.DataFrame()
         for var in self.model_variables:
-            df = query_influxdb(var_query[var], start_str, stop_str, self.influxdb_bucket)
+            df = self.influxdb_handler.query_influxdb(var_query[var], start_str, stop_str)
             if not df.empty:
                 df = self.remove_outliers(df, "_value")
                 df.rename(columns={'_value': var}, inplace=True)

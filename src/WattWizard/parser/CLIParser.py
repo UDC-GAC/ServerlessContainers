@@ -20,6 +20,12 @@ class CLIParser:
         )
 
         self.parser.add_argument(
+            "-i",
+            "--influxdb-host",
+            help="If pretrain data is specified you must indicate an InfluxDB Host to retrieve data from.",
+        )
+
+        self.parser.add_argument(
             "-b",
             "--influxdb-bucket",
             help="If pretrain data is specified you must indicate an InfluxDB Bucket to retrieve data from.",
