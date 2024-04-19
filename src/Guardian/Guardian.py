@@ -321,7 +321,9 @@ class Guardian:
         user_usage = usages[translator_dict["user"]]
         kernel_usage = usages[translator_dict["kernel"]]
         target_power = structure["resources"][resource]["max"]
-        target_cpu = self.wattwizard_handler.get_power_from_usage(self.energy_model_name, user_usage, kernel_usage, target_power)
+        # TODO: Check uses cases of each structure subtype and manage them
+        subtype = structure["subtype"] if structure["subtype"] != "application" else "host"
+        target_cpu = self.wattwizard_handler.get_power_from_usage(subtype, self.energy_model_name, user_usage, kernel_usage, target_power)
         amount = target_cpu - user_usage
         return int(amount)
 

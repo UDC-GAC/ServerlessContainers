@@ -30,10 +30,10 @@ class WattWizardUtils:
     def close_connection(self):
         self.session.close()
 
-    def get_power_from_usage(self, model_name, user_usage, system_usage, power_target, tries=3):
+    def get_power_from_usage(self, structure, model_name, user_usage, system_usage, power_target, tries=3):
         try:
             params = {'user_load': user_usage, 'system_load': system_usage, 'desired_power': power_target}
-            r = self.session.get("{0}/{1}/{2}".format(self.server, "inverse-predict", model_name), params=params)
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "inverse-predict", structure, model_name), params=params)
             if r.status_code == 200:
                 return r.json()['user_load']
             else:
@@ -43,11 +43,11 @@ class WattWizardUtils:
             if tries <= 0:
                 raise e
             else:
-                self.get_power_from_usage(model_name, user_usage, system_usage, power_target, tries)
+                self.get_power_from_usage(structure, model_name, user_usage, system_usage, power_target, tries)
 
-    def get_idle_consumption(self, model_name, tries=3):
+    def get_idle_consumption(self, structure, model_name, tries=3):
         try:
-            r = self.session.get("{0}/{1}/{2}".format(self.server, "idle-consumption", model_name))
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "idle-consumption", structure, model_name))
             if r.status_code == 200:
                 return r.json()['idle_consumption']
             else:
@@ -57,4 +57,4 @@ class WattWizardUtils:
             if tries <= 0:
                 raise e
             else:
-                self.get_idle_consumption(model_name, tries)
+                self.get_idle_consumption(structure, model_name, tries)
