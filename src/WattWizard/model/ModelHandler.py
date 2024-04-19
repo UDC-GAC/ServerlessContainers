@@ -58,10 +58,10 @@ class ModelHandler:
         return model_name
 
     def get_model_names(self):
-        models_list = []
+        models_dict = {}
         for structure in self.models:
-            models_list.append(list(self.models[structure].keys()))
-        return models_list
+            models_dict[structure] = self.get_model_names_structure(structure)
+        return models_dict
 
     def get_model_names_structure(self, structure):
         if structure in self.models:
@@ -90,8 +90,8 @@ class ModelHandler:
     def __get_model_value(self, structure, model_name, value):
         if structure in self.models:
             if model_name in self.models[structure]:
-                if value in self.models[model_name]:
-                    return self.models[model_name][value]
+                if value in self.models[structure][model_name]:
+                    return self.models[structure][model_name][value]
                 raise Exception(f"Attribute '{value}' doesn\'t exists for model {model_name} and structure {structure}")
             raise Exception(f'Model with name \'{model_name}\' doesn\'t exists for structure {structure}')
         raise Exception(f'Structure \'{structure}\' doesn\'t exists')
@@ -107,6 +107,6 @@ class ModelHandler:
 
     def reset_model_instance(self, structure, model_name):
         if structure in self.models and model_name in self.models[structure]:
-            self.models[model_name]["instance"] = self.create_model_instance(self.models[model_name]["prediction_method"])
+            self.models[structure][model_name]["instance"] = self.create_model_instance(self.models[structure][model_name]["prediction_method"])
         else:
             raise Exception(f'Model with name \'{model_name}\' doesn\'t exists for structure \'{structure}\'')
