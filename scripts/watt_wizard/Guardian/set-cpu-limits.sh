@@ -4,7 +4,7 @@ scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 source "${scriptDir}/../set_env.sh"
 source "${scriptDir}/../../conf/WattWizard/load-conf.sh"
 
-if [ -z "$3" ]
+if [ -z "${3}" ]
 then
       echo "3 arguments are needed"
       echo "1 -> variable to be limited (e.g., user_load, system_load)"
