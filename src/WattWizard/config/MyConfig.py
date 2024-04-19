@@ -27,10 +27,6 @@ class MyConfig:
     cpu_limits = None
 
     @staticmethod
-    def get_project_dir():
-        return WATTWIZARD_DIR
-
-    @staticmethod
     def get_instance():
         if MyConfig.__instance is None:
             MyConfig()
@@ -45,6 +41,34 @@ class MyConfig:
         self.args = {}
         self.cpu_limits = DEFAULT_CPU_LIMITS
 
+    @staticmethod
+    def get_project_dir():
+        return WATTWIZARD_DIR
+
+    @staticmethod
+    def adjust_filenames_list(filenames_list, timestamps_dir):
+        if len(filenames_list) == 1 and filenames_list[0] == "all":
+            filenames_list = [f for f in os.listdir(timestamps_dir)]
+        return filenames_list
+
+    @staticmethod
+    def get_files_list(filenames_list, timestamps_dir):
+        files_list = []
+        for filename in filenames_list:
+            if filename != "NPT":
+                _, extension = os.path.splitext(filename)
+                if extension == '':
+                    filename += ".timestamps"
+
+                file = f"{timestamps_dir}/{filename}"
+                if os.path.isfile(file):
+                    files_list.append(file)
+                else:
+                    raise Exception(f"While making files list: File path {file} is not a file")
+            else:
+                files_list.append("NPT")
+        return files_list
+
     def set_resource_cpu_limit(self, resource, limit_type, value):
         if limit_type not in ["min", "max"]:
             raise Exception(f"Bad cpu limit type '{limit_type}' it must be 'min' or 'max'")
@@ -52,6 +76,12 @@ class MyConfig:
             self.cpu_limits[resource][limit_type] = value
         else:
             raise Exception(f"Resource '{resource}' not found in cpu limits")
+
+    def map_train_file_arg_to_timestamps_dir(self, file_arg_name):
+        index = file_arg_name.find("_")
+        if index != -1:
+            return self.args[f'{file_arg_name[:index]}_timestamps_dir']
+        raise Exception(f"Bad argument name for train files. Argument {file_arg_name} not supported")
 
     def add_argument(self, arg_name, arg_value):
         if arg_name in COMMA_SEPARATED_LIST_ARGS:
@@ -66,10 +96,9 @@ class MyConfig:
 
         # Set full path for train timestamp files
         if arg_name in FILE_ARGS:
-            if arg_name == "host_train_files":
-                self.args[arg_name] = [f"{self.args['host_timestamps_dir']}/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
-            if arg_name == "container_train_files":
-                self.args[arg_name] = [f"{self.args['container_timestamps_dir']}/{f}.timestamps" if f != "NPT" else f for f in self.args[arg_name]]
+            timestamps_dir = self.map_train_file_arg_to_timestamps_dir(arg_name)
+            filenames_list = self.adjust_filenames_list(self.args[arg_name], timestamps_dir)
+            self.args[arg_name] = self.get_files_list(filenames_list, timestamps_dir)
 
     def get_resource_cpu_limit(self, resource, limit_type):
         if limit_type not in ["min", "max"]:

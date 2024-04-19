@@ -8,5 +8,5 @@ model_variables: "user_load,system_load"
 
 host_timestamps_dir: "./timestamps/host"
 container_timestamps_dir: "./timestamps/container"
-host_train_files: "example"
-container_train_files: "example"
+host_train_files: "all"
+container_train_files: "all"

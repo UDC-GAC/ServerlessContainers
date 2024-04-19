@@ -59,14 +59,16 @@ class CLIParser:
 
         self.parser.add_argument(
             "--host-train-files",
-            help="Comma-separated list of train file names stored under host timestamps directory. One host model per train file and prediction method will be created if possible. \n\
-This file must store time series timestamps from pretrain data in proper format. Check README.md to see timestamps proper format.",
+            help="Comma-separated list of train file names stored under host timestamps directory (or 'all' keyword to use all files in this directory). \n\
+One host model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
+data in proper format. Check README.md to see timestamps proper format.",
         )
 
         self.parser.add_argument(
             "--container-train-files",
-            help="Comma-separated list of train file names stored under container timestamps directory. One container model per train file and prediction method will be created if possible. \n\
-This file must store time series timestamps from pretrain data in proper format. Check README.md to see timestamps proper format.",
+            help="Comma-separated list of train file names stored under container timestamps directory (or 'all' keyword to use all files in this directory). \n\
+One container model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
+data in proper format. Check README.md to see timestamps proper format.",
         )
 
     def parse_args(self):
