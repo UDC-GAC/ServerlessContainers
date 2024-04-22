@@ -1,4 +1,5 @@
 import requests
+import json
 import yaml
 import os
 
@@ -13,11 +14,10 @@ class WattWizardUtils:
         config_file = serverless_path + "/services_config.yml"
         with open(config_file, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
-
         if not wattwizard_url:
-            wattwizard_url = config['WATTWIZARD_URL']
+            wattwizard_url = config['WATT_WIZARD_URL']
         if not wattwizard_port:
-            wattwizard_port = config['WATTWIZARD_PORT']
+            wattwizard_port = config['WATT_WIZARD_PORT']
         else:
             try:
                 wattwizard_port = int(wattwizard_port)
@@ -30,7 +30,7 @@ class WattWizardUtils:
     def close_connection(self):
         self.session.close()
 
-    def get_power_from_usage(self, structure, model_name, user_usage, system_usage, power_target, tries=3):
+    def get_usage_from_power(self, structure, model_name, user_usage, system_usage, power_target, tries=3):
         try:
             params = {'user_load': user_usage, 'system_load': system_usage, 'desired_power': power_target}
             r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "inverse-predict", structure, model_name), params=params)
@@ -43,7 +43,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise e
             else:
-                self.get_power_from_usage(structure, model_name, user_usage, system_usage, power_target, tries)
+                self.get_usage_from_power(structure, model_name, user_usage, system_usage, power_target, tries)
 
     def get_idle_consumption(self, structure, model_name, tries=3):
         try:
@@ -58,3 +58,19 @@ class WattWizardUtils:
                 raise e
             else:
                 self.get_idle_consumption(structure, model_name, tries)
+
+    def train_model(self, structure, model_name, user_usage, system_usage, power, tries=3):
+        try:
+            payload = {'user_load': user_usage, 'system_load': system_usage, 'power': power}
+            r = self.session.post("{0}/{1}/{2}/{3}".format(self.server, "train", structure, model_name), json=json.dumps(payload))
+
+            if r.status_code == 200:
+                return r.json()
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise e
+            else:
+                self.train_model(structure, model_name, user_usage, system_usage, power, tries)

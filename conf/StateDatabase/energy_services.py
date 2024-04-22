@@ -11,6 +11,15 @@ watt_wizard = dict(
     )
 )
 
+watt_trainer = dict(
+    name="watt_trainer",
+    type="service",
+    heartbeat="",
+    config=dict(
+        DEBUG=True
+    )
+)
+
 energy_manager = dict(
     name="energy_manager",
     type="service",
