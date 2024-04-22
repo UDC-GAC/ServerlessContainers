@@ -47,6 +47,8 @@ class MyConfig:
 
     @staticmethod
     def adjust_filenames_list(filenames_list, timestamps_dir):
+        if len(filenames_list) == 1 and filenames_list[0] == "":
+            filenames_list = []
         if len(filenames_list) == 1 and filenames_list[0] == "all":
             filenames_list = [f for f in os.listdir(timestamps_dir)]
         return filenames_list
@@ -98,6 +100,7 @@ class MyConfig:
         if arg_name in FILE_ARGS:
             timestamps_dir = self.map_train_file_arg_to_timestamps_dir(arg_name)
             filenames_list = self.adjust_filenames_list(self.args[arg_name], timestamps_dir)
+            print(timestamps_dir, filenames_list)
             self.args[arg_name] = self.get_files_list(filenames_list, timestamps_dir)
 
     def get_resource_cpu_limit(self, resource, limit_type):

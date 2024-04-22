@@ -41,6 +41,7 @@ class ArgsManager:
         my_config = MyConfig.get_instance()
         args = my_config.get_arguments()
 
+        structure_without_train_files = 0
         for arg_name in args:
             match arg_name:
                 case "verbose":
@@ -67,9 +68,13 @@ class ArgsManager:
                     pass  # Nothing to do for container_timestamps_dir (already checked in container_train_files)
 
                 case "host_train_files":
+                    if len(args[arg_name]) == 0:
+                        structure_without_train_files += 1
                     self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
 
                 case "container_train_files":
+                    if len(args[arg_name]) == 0:
+                        structure_without_train_files += 1
                     self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
 
                 case "model_variables":
@@ -78,6 +83,10 @@ class ArgsManager:
                 case _:
                     log(f"Argument {arg_name} is not supported", "ERR")
                     exit(1)
+
+        if structure_without_train_files == 2:
+            log(f"No host or container train files have been specified. At least one file (or NPT) "
+                f"must be indicated for one of these structures. Otherwise, no model would be created.", "ERR")
 
     def manage_args(self):
         my_config = MyConfig.get_instance()
