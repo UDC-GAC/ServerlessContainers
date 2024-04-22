@@ -111,7 +111,6 @@ class InfluxDBCollector:
                     retry -= 1
                     log(f"Bad df obtained between {start_date} and {stop_date}. Retrying ({retry} tries left)", "WARN")
                 else:
-                    print(query)
                     log(f"Bad df obtained between {start_date} and {stop_date}. No more tries", "ERR")
                     exit(1)
         return result
