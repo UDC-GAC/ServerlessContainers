@@ -323,7 +323,7 @@ class Guardian:
         target_power = structure["resources"][resource]["max"]
         # TODO: Check uses cases of each structure subtype and manage them
         subtype = structure["subtype"] if structure["subtype"] != "application" else "host"
-        target_cpu = self.wattwizard_handler.get_power_from_usage(subtype, self.energy_model_name, user_usage, kernel_usage, target_power)
+        target_cpu = self.wattwizard_handler.get_usage_from_power(subtype, self.energy_model_name, user_usage, kernel_usage, target_power)
         amount = target_cpu - user_usage
         return int(amount)
 
@@ -567,7 +567,10 @@ class Guardian:
                 if rule["rescale_policy"] == "amount":
                     amount = rule["amount"]
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
-                    amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    if self.use_energy_model:
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                    else:
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     current_resource_limit = structure["resources"][resource_label]["current"]
                     upper_limit = limits[resource_label]["upper"]
                     usage = usages[translator_dict[resource_label]]

@@ -110,7 +110,7 @@ def get_cpu_limits_from_var(var=None):
 @routes.route('/cpu-limits', methods=['PUT'])
 def set_cpu_limits():
     try:
-        json_data = request.json
+        json_data = eval(request.json) if isinstance(request.json, str) else request.json
         for var in json_data:
             if "max" in json_data[var]:
                 my_config.set_resource_cpu_limit(var, "max", json_data[var]["max"])
@@ -123,7 +123,7 @@ def set_cpu_limits():
 
 @routes.route('/train/<structure>/<model_name>', methods=['POST'])
 def train_model(structure=None, model_name=None):
-    json_data = request.json
+    json_data = eval(request.json) if isinstance(request.json, str) else request.json
     try:
         model = model_handler.get_model_by_name(structure, model_name)
         if not ModelHandler.is_static(model["prediction_method"]):

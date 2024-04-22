@@ -133,7 +133,7 @@ class ReFeeder:
                         log_error("Application {0} of user {1} has no used {2} field or value".format(
                             app["name"], user["name"], resource), debug)
 
-                if "current" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
+                if "current" in app["resources"]["cpu"] and app["resources"]["cpu"]["current"]:
                     total_user_current_cpu += app["resources"][resource]["current"]
                 else:
                     log_error("Application {0} of user {1} has no current cpu field or value".format(

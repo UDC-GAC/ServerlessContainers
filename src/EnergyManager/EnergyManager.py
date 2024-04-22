@@ -65,6 +65,8 @@ class EnergyManager:
             except requests.exceptions.HTTPError as e:
                 MyUtils.log_error("Couldn't get users", self.debug)
                 MyUtils.log_error(str(e), self.debug)
+                time.sleep(polling_frequency)
+                continue
 
             for user in users:
                 MyUtils.log_info("Processing user {0}".format(user["name"]), self.debug)
