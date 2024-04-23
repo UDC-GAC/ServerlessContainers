@@ -8,6 +8,8 @@ COMMA_SEPARATED_LIST_ARGS = ['prediction_methods', 'model_variables', 'host_trai
 DIRECTORY_ARGS = ['host_timestamps_dir', 'container_timestamps_dir']
 FILE_ARGS = ['host_train_files', 'container_train_files']
 
+DASHED_LINE = "".join(["-" for _ in range(1, 200)])
+
 DEFAULT_MAX_RESOURCE_LIMIT = float('1e+30')
 DEFAULT_CPU_LIMITS = {
     "load": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
@@ -21,7 +23,6 @@ DEFAULT_CPU_LIMITS = {
 
 
 class MyConfig:
-
     __instance = None
     args = None
     cpu_limits = None
@@ -34,12 +35,24 @@ class MyConfig:
 
     def __init__(self):
         if MyConfig.__instance is not None:
-            raise Exception(f"Trying to break Singleton. There is already an instance of {self.__class__.__name__} class")
+            raise Exception(
+                f"Trying to break Singleton. There is already an instance of {self.__class__.__name__} class")
         else:
             MyConfig.__instance = self
 
         self.args = {}
         self.cpu_limits = DEFAULT_CPU_LIMITS
+
+    @staticmethod
+    def get_logo():
+        return '''
+        __          __   _   ___          ___                  _ 
+        \\ \\        / /  | | | \\ \\        / (_)                | |
+         \\ \\  /\\  / /_ _| |_| |\\ \\  /\\  / / _ ______ _ _ __ __| |
+          \\ \\/  \\/ / _` | __| __\\ \\/  \\/ / | |_  / _` | '__/ _` |
+           \\  /\\  / (_| | |_| |_ \\  /\\  /  | |/ / (_| | | | (_| |
+            \\/  \\/ \\__,_|\\__|\\__| \\/  \\/   |_/___\\__,_|_|  \\__,_|
+        '''
 
     @staticmethod
     def get_project_dir():
@@ -126,9 +139,11 @@ class MyConfig:
         return self.args
 
     def get_summary(self):
-        summary = []
+        summary = [DASHED_LINE]
+        summary.append("WATTWIZARD CONFIGURATION")
         for arg_name in self.args:
             summary.append(f"{arg_name}: {self.args[arg_name]}")
+        summary.append(DASHED_LINE)
         return summary
 
     def check_resources_limits(self, resources):
