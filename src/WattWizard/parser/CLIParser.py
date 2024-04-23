@@ -32,6 +32,16 @@ class CLIParser:
         )
 
         self.parser.add_argument(
+            "--influxdb-token",
+            help="If pretrain data is specified you must indicate an InfluxDB Token to retrieve data from.",
+        )
+
+        self.parser.add_argument(
+            "--influxdb-org",
+            help="If pretrain data is specified you must indicate an InfluxDB Organization to retrieve data from.",
+        )
+
+        self.parser.add_argument(
             "-p",
             "--prediction-methods",
             help="Comma-separated list of methods used to predict CPU power consumption. By default is a SGD Regressor. Supported methods:\n\

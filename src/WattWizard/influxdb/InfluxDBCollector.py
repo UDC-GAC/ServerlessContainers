@@ -9,8 +9,6 @@ from src.WattWizard.influxdb.container_queries import container_queries
 from src.WattWizard.influxdb.host_queries import host_queries
 
 INFLUXDB_QUERIES = {"host": host_queries, "container": container_queries}
-INFLUXDB_TOKEN = "MyToken"
-INFLUXDB_ORG = "MyOrg"
 
 warnings.simplefilter("ignore", MissingPivotFunction)
 
@@ -20,12 +18,16 @@ class InfluxDBCollector:
     influxdb_host = None
     influxdb_url = None
     influxdb_bucket = None
+    influxdb_token = None
+    influxdb_org = None
 
-    def __init__(self, host, bucket):
+    def __init__(self, host, bucket, token, org):
         self.influxdb_host = host
         self.influxdb_url = f"http://{self.influxdb_host}:8086"
         self.influxdb_bucket = bucket
-        self.client = InfluxDBClient(url=self.influxdb_url, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
+        self.influxdb_token = token
+        self.influxdb_org = org
+        self.client = InfluxDBClient(url=self.influxdb_url, token=self.influxdb_token, org=self.influxdb_org)
 
     def __del__(self):
         self.close_connection()
@@ -53,7 +55,8 @@ class InfluxDBCollector:
                 log(f"Bad host response (host = {self.influxdb_host}): {response}", "ERR")
                 exit(1)
         except requests.exceptions.RequestException as e:
-            log(f"Failed to connect to InfluxDB (host = {self.influxdb_host}): {e}", "ERR")
+            log(f"Failed to connect to InfluxDB (host = {self.influxdb_host} token = {self.influxdb_token} "
+                f"org = {self.influxdb_org}): {e}", "ERR")
             exit(1)
 
     def check_bucket_exists(self):
@@ -120,14 +123,18 @@ class InfluxDBChecker:
 
     influxdb_host = None
     influxdb_bucket = None
+    influxdb_token = None
+    influxdb_org = None
     influxdb_handler = None
 
-    def __init__(self, host, bucket):
+    def __init__(self, host, bucket, token, org):
         self.influxdb_host = host
         self.influxdb_bucket = bucket
+        self.influxdb_token = token
+        self.influxdb_org = org
 
     def __enter__(self):
-        self.influxdb_handler = InfluxDBCollector(self.influxdb_host, self.influxdb_bucket)
+        self.influxdb_handler = InfluxDBCollector(self.influxdb_host, self.influxdb_bucket, self.influxdb_token, self.influxdb_org)
         return self.influxdb_handler
 
     def __exit__(self, exc_type, exc_val, exc_tb):

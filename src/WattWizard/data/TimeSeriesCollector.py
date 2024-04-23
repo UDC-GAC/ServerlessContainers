@@ -15,9 +15,9 @@ class TimeSeriesCollector:
     influxdb_handler = None
     structure = None
 
-    def __init__(self, model_variables, influxdb_host, influxdb_bucket):
+    def __init__(self, model_variables, influxdb_host, influxdb_bucket, influxdb_token, influxdb_org):
         self.model_variables = model_variables
-        self.influxdb_handler = InfluxDBCollector(influxdb_host, influxdb_bucket)
+        self.influxdb_handler = InfluxDBCollector(influxdb_host, influxdb_bucket, influxdb_token, influxdb_org)
 
     # Remove outliers for a specified column
     @staticmethod

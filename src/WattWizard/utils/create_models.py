@@ -44,13 +44,19 @@ def pretrain_model(ts_collector, model_instance, train_file, pred_method):
 def run():
     my_config = MyConfig.get_instance()
     model_variables = my_config.get_argument("model_variables")
+
+    # Get InfluxDB info
     influxdb_host = my_config.get_argument("influxdb_host")
     influxdb_bucket = my_config.get_argument("influxdb_bucket")
+    influxdb_token = my_config.get_argument("influxdb_token")
+    influxdb_org = my_config.get_argument("influxdb_org")
+
+    print(my_config.get_logo())
     for line in my_config.get_summary():
         log(line)
 
     model_handler = ModelHandler.get_instance()
-    ts_collector = TimeSeriesCollector(model_variables + ["power"], influxdb_host, influxdb_bucket)
+    ts_collector = TimeSeriesCollector(model_variables + ["power"], influxdb_host, influxdb_bucket, influxdb_token, influxdb_org)
 
     for structure in ["host", "container"]:
         ts_collector.set_structure(structure)

@@ -5,8 +5,9 @@ from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBChecker
 
 
-SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'prediction_methods', 'model_variables',
-                  'host_timestamps_dir', 'container_timestamps_dir', 'host_train_files', 'container_train_files', ]
+SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
+                  'prediction_methods', 'model_variables', 'host_timestamps_dir', 'container_timestamps_dir',
+                  'host_train_files', 'container_train_files']
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 
@@ -42,6 +43,7 @@ class ArgsManager:
         args = my_config.get_arguments()
 
         structure_without_train_files = 0
+        influxdb_args = 0
         for arg_name in args:
             match arg_name:
                 case "verbose":
@@ -50,13 +52,9 @@ class ArgsManager:
                 case "output":
                     pass  # Nothing to do for output
 
-                case "influxdb_host":
-                    with InfluxDBChecker(args["influxdb_host"], args["influxdb_bucket"]) as conn:
-                        conn.check_influxdb_connection()
-
-                case "influxdb_bucket":
-                    with InfluxDBChecker(args["influxdb_host"], args["influxdb_bucket"]) as conn:
-                        conn.check_bucket_exists()
+                # Count InfluxDB arguments
+                case value if value.startswith("influxdb"):
+                    influxdb_args += 1
 
                 case "prediction_methods":
                     self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
@@ -87,6 +85,15 @@ class ArgsManager:
         if structure_without_train_files == 2:
             log(f"No host or container train files have been specified. At least one file (or NPT) "
                 f"must be indicated for one of these structures. Otherwise, no model would be created.", "ERR")
+            exit(1)
+
+        if influxdb_args == 4:
+            with InfluxDBChecker(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:
+                conn.check_influxdb_connection()
+                conn.check_bucket_exists()
+        else:
+            log(f"Missing some InfluxDB parameter. InfluxDB host, bucket, token and organization must be specified", "ERR")
+            exit(1)
 
     def manage_args(self):
         my_config = MyConfig.get_instance()

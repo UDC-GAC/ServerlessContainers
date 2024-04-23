@@ -2,6 +2,8 @@ verbose: no
 
 influxdb_host: "montoxo.des.udc.es"
 influxdb_bucket: "compute2"
+influxdb_token: "MyToken"
+influxdb_org: "MyOrg"
 
 prediction_methods: "sgdregressor"
 model_variables: "user_load,system_load"
