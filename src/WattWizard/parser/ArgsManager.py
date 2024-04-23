@@ -45,42 +45,41 @@ class ArgsManager:
         structure_without_train_files = 0
         influxdb_args = 0
         for arg_name in args:
-            match arg_name:
-                case "verbose":
-                    pass  # Nothing to do for verbose
 
-                case "output":
-                    pass  # Nothing to do for output
+            if arg_name == "verbose":
+                pass  # Nothing to do for verbose
 
-                # Count InfluxDB arguments
-                case value if value.startswith("influxdb"):
-                    influxdb_args += 1
+            elif arg_name == "output":
+                pass  # Nothing to do for output
 
-                case "prediction_methods":
-                    self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
+            elif arg_name.startswith("influxdb"):
+                influxdb_args += 1  # Count InfluxDB arguments
 
-                case "host_timestamps_dir":
-                    pass  # Nothing to do for host_timestamps_dir (already checked in host_train_files)
+            elif arg_name == "prediction_methods":
+                self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
 
-                case "container_timestamps_dir":
-                    pass  # Nothing to do for container_timestamps_dir (already checked in container_train_files)
+            elif arg_name == "host_timestamps_dir":
+                pass  # Nothing to do for host_timestamps_dir (already checked in host_train_files)
 
-                case "host_train_files":
-                    if len(args[arg_name]) == 0:
-                        structure_without_train_files += 1
-                    self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
+            elif arg_name == "container_timestamps_dir":
+                pass  # Nothing to do for container_timestamps_dir (already checked in container_train_files)
 
-                case "container_train_files":
-                    if len(args[arg_name]) == 0:
-                        structure_without_train_files += 1
-                    self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
+            elif arg_name == "host_train_files":
+                if len(args[arg_name]) == 0:
+                    structure_without_train_files += 1
+                self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
 
-                case "model_variables":
-                    self.check_supported_values(arg_name, args[arg_name], SUPPORTED_VARS)
+            elif arg_name == "container_train_files":
+                if len(args[arg_name]) == 0:
+                    structure_without_train_files += 1
+                self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
 
-                case _:
-                    log(f"Argument {arg_name} is not supported", "ERR")
-                    exit(1)
+            elif arg_name == "model_variables":
+                self.check_supported_values(arg_name, args[arg_name], SUPPORTED_VARS)
+
+            else:
+                log(f"Argument {arg_name} is not supported", "ERR")
+                exit(1)
 
         if structure_without_train_files == 2:
             log(f"No host or container train files have been specified. At least one file (or NPT) "
