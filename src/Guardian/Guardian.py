@@ -83,7 +83,7 @@ translator_dict = {
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
                          "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": True,
-                         "ENERGY_MODEL_NAME": "polyreg_train", "ACTIVE": True}
+                         "ENERGY_MODEL_NAME": "polyreg_General", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -453,7 +453,7 @@ class Guardian:
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
                 log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
-            else:
+            elif usages[translator_dict[resource]] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                 useful_resources.append(resource)
 
         data = dict()
