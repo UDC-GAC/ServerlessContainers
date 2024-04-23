@@ -15,9 +15,9 @@ class WattWizardUtils:
         with open(config_file, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         if not wattwizard_url:
-            wattwizard_url = config['WATT_WIZARD_URL']
+            wattwizard_url = config['WATTWIZARD_URL']
         if not wattwizard_port:
-            wattwizard_port = config['WATT_WIZARD_PORT']
+            wattwizard_port = config['WATTWIZARD_PORT']
         else:
             try:
                 wattwizard_port = int(wattwizard_port)
@@ -41,7 +41,7 @@ class WattWizardUtils:
         except requests.ConnectionError as e:
             tries -= 1
             if tries <= 0:
-                raise e
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
                 self.get_usage_from_power(structure, model_name, user_usage, system_usage, power_target, tries)
 
@@ -55,7 +55,7 @@ class WattWizardUtils:
         except requests.ConnectionError as e:
             tries -= 1
             if tries <= 0:
-                raise e
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
                 self.get_idle_consumption(structure, model_name, tries)
 
@@ -71,6 +71,6 @@ class WattWizardUtils:
         except requests.ConnectionError as e:
             tries -= 1
             if tries <= 0:
-                raise e
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
                 self.train_model(structure, model_name, user_usage, system_usage, power, tries)

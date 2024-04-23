@@ -85,7 +85,7 @@ def get_node_cpus(container_id, container_engine):
     if op["success"]:
         cpu_limit = int(op["data"])
         if cpu_limit != -1:
-            # A limit is set, else leave it untouchedset_node_mem
+            # A limit is set, else leave it untouched
             cpu_limit = int(op["data"]) / TICKS_PER_CPU_PERCENTAGE
     else:
         return False, op

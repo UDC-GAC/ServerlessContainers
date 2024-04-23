@@ -10,8 +10,8 @@ ORCHESTRATOR_URL: "orchestrator"
 ORCHESTRATOR_PORT: 5000
 
 ## WattWizard
-WATT_WIZARD_URL: "wattwizard"
-WATT_WIZARD_PORT: 7777
+WATTWIZARD_URL: "wattwizard"
+WATTWIZARD_PORT: 7777
 
 # CouchDB
 COUCHDB_URL: "couchdb"
