@@ -47,7 +47,9 @@ GUARDIAN_CONTAINER_METRICS = {
     'energy': ['structure.energy.usage']
 }
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"], "MODELS_TO_TRAIN": ["sgdregressor_example"], "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
+                         "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"],
+                         "MODELS_TO_TRAIN": ["sgdregressor_example"], "DEBUG": True}
 
 SERVICE_NAME = "watt_trainer"
 
@@ -74,7 +76,7 @@ class WattTrainer:
                 if metric not in self.config.get_value("GENERATED_METRICS"):
                     continue
                 if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
-                    log_warning("No metric info for {0} in container {1}".format(metric, container_name), debug=self.debug)
+                    log_warning("No info for {0} in container {1}".format(metric, container_name), debug=self.debug)
 
         except requests.ConnectionError as e:
             log_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=self.debug)
