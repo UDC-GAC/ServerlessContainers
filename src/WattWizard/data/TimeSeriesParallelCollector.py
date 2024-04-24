@@ -4,7 +4,7 @@ import concurrent.futures
 from datetime import datetime, timedelta
 
 from src.WattWizard.logs.logger import log
-from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBChecker
+from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 OUT_RANGE = 1.5
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -77,7 +77,7 @@ class TimeSeriesParallelCollector:
         start_str = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         stop_str = stop_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        with InfluxDBChecker(influxdb_info["host"], influxdb_info["bucket"],
+        with InfluxDBHandler(influxdb_info["host"], influxdb_info["bucket"],
                              influxdb_info["token"], influxdb_info["org"]) as conn:
             # Get model variables time series and merge data
             exp_data = pd.DataFrame()

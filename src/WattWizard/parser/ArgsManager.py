@@ -2,7 +2,7 @@ import os
 
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
-from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBChecker
+from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 
 SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
@@ -87,7 +87,7 @@ class ArgsManager:
             exit(1)
 
         if influxdb_args == 4:
-            with InfluxDBChecker(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:
+            with InfluxDBHandler(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:
                 conn.check_influxdb_connection()
                 conn.check_bucket_exists()
         else:

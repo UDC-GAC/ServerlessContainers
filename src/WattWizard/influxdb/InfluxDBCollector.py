@@ -119,7 +119,7 @@ class InfluxDBCollector:
         return result
 
 
-class InfluxDBChecker:
+class InfluxDBHandler:
 
     influxdb_host = None
     influxdb_bucket = None
@@ -141,5 +141,5 @@ class InfluxDBChecker:
         if self.influxdb_handler:
             self.influxdb_handler.close_connection()
         if exc_type is not None:
-            log(f"Unexpected error using InfluxDBChecker: exc_type = {exc_type} | exc_val = {exc_val} | exc_tb = {exc_tb}")
+            log(f"Unexpected error using InfluxDBHandler: exc_type = {exc_type} | exc_val = {exc_val} | exc_tb = {exc_tb}")
         return False
