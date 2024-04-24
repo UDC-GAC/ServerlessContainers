@@ -1,4 +1,4 @@
-from src.WattWizard.data.TimeSeriesCollector import TimeSeriesCollector
+from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 from src.WattWizard.app.app_utils import time_series_to_train_data
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
@@ -56,7 +56,7 @@ def run():
         log(line)
 
     model_handler = ModelHandler.get_instance()
-    ts_collector = TimeSeriesCollector(model_variables + ["power"], influxdb_host, influxdb_bucket, influxdb_token, influxdb_org)
+    ts_collector = TimeSeriesParallelCollector(model_variables + ["power"], influxdb_host, influxdb_bucket, influxdb_token, influxdb_org)
 
     for structure in ["host", "container"]:
         ts_collector.set_structure(structure)
