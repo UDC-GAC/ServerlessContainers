@@ -139,11 +139,14 @@ class SingularityContainerManager:
                                         command, universal_newlines=True, shell=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
                     source = output.split()[5]
-                    device = source.split("[")[0]
-                    mount_point= re.findall(r'\[([^]]*)\]', source)[0]
+                    if ":" in source:
+                        ## Device mounted on NFS
+                        device = source.split(":")[0]
+                    else:
+                        device = source.split("[")[0]
 
                     if self.cgroups_version == "v1":
-                        disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], mount_point, self.container_engine)
+                        disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], device, self.container_engine)
                     else:
                         #disk_success, disk_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_LABEL], self.container_engine)
                         pass
@@ -200,8 +203,12 @@ class SingularityContainerManager:
                 output  = subprocess.run(
                                 command, universal_newlines=True, shell=True, capture_output=True, timeout=1).stdout
                 source = output.split()[5]
-                device = source.split("[")[0]
-                mount_point= re.findall(r'\[([^]]*)\]', source)[0]
+                if ":" in source:
+                    ## Device mounted on NFS
+                    device, mount_point = source.split(":")
+                else:
+                    device = source.split("[")[0]
+                    mount_point= re.findall(r'\[([^]]*)\]', source)[0]
 
                 disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
                 # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent

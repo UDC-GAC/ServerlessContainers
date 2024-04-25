@@ -345,17 +345,13 @@ def get_node_disk_limits(container_id, container_engine):
     return devices_read_limits, devices_write_limits
 
 
-def set_node_disk(container_id, disk_resource, device_mountpoint, container_engine):
-
-    findmnt = subprocess.Popen(["findmnt", "-T", device_mountpoint], stdout=subprocess.PIPE)
-    result = findmnt.communicate()[0].decode('utf-8').strip().split("\n")[1]
-    device_path = " ".join(result.split()).split()[1]
+def set_node_disk(container_id, disk_resource, device, container_engine):
 
     try:
-        major, minor = get_device_major_minor(device_path)
+        major, minor = get_device_major_minor(device)
     except TypeError:
         # None was returned
-        return False, {"error": "No major and minor found for device {0}".format(device_path)}
+        return False, {"error": "No major and minor found for device {0}".format(device)}
 
     if DISK_WRITE_LIMIT_LABEL in disk_resource:
         limit_write = int(disk_resource[DISK_WRITE_LIMIT_LABEL]) * 1048576
@@ -449,12 +445,8 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
     retrieved_disks = list()
     limits_read, limits_write = get_node_disk_limits(container_id, container_engine)
 
-    findmnt = subprocess.Popen(["findmnt", "-T", device_mountpoint], stdout=subprocess.PIPE)
-    result = findmnt.communicate()[0].decode('utf-8').strip().split("\n")[1]
-    device_path = " ".join(result.split()).split()[1]
-
     try:
-        major, minor = get_device_major_minor(device_path)
+        major, minor = get_device_major_minor(device)
     except TypeError:
         # None was returned
         return False, retrieved_disks
@@ -477,7 +469,7 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
 
     disk_dict = dict()
     disk_dict["mountpoint"] = device_mountpoint
-    disk_dict["device_path"] = device_path
+    disk_dict["device_path"] = device
     disk_dict["major"] = major
     disk_dict["minor"] = minor
     disk_dict["unit"] = "Mbit"
