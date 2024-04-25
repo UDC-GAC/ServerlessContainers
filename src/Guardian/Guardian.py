@@ -82,8 +82,8 @@ translator_dict = {
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": True,
-                         "ENERGY_MODEL_NAME": "polyreg_General", "ACTIVE": True}
+                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False,
+                         "ENERGY_MODEL_NAME": "sgdregressor_General", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"

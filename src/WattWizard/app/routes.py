@@ -13,6 +13,14 @@ my_config = MyConfig.get_instance()
 model_handler = ModelHandler.get_instance()
 
 
+@routes.route('/is-static/<structure>/<model_name>', methods=['GET'])
+def is_static(structure=None, model_name=None):
+    try:
+        prediction_method = model_handler.get_model_prediction_method(structure, model_name)
+        return jsonify({'is_static': ModelHandler.is_static(prediction_method)})
+    except Exception as e:
+        return jsonify({'ERROR': str(e)}), 400
+
 # Potential improvement: Remove idle consumption route and implement logic on predict
 # When utilization is below 100% (bad predictions) power can be computed as follows:
 # P = idle + (user+system)% * (prediction(100%) - idle)

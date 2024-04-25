@@ -30,6 +30,20 @@ class WattWizardUtils:
     def close_connection(self):
         self.session.close()
 
+    def is_static(self, structure, model_name, tries=3):
+        try:
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "is-static", structure, model_name))
+            if r.status_code == 200:
+                return r.json()['is_static']
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.is_static(structure, model_name, tries)
+
     def get_usage_from_power(self, structure, model_name, user_usage, system_usage, power_target, tries=3):
         try:
             params = {'user_load': user_usage, 'system_load': system_usage, 'desired_power': power_target}

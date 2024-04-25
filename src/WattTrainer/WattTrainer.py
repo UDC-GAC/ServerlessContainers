@@ -49,7 +49,7 @@ GUARDIAN_CONTAINER_METRICS = {
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
                          "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"],
-                         "MODELS_TO_TRAIN": ["sgdregressor_example"], "DEBUG": True}
+                         "MODELS_TO_TRAIN": ["sgdregressor_General"], "DEBUG": True, "ACTIVE": True}
 
 SERVICE_NAME = "watt_trainer"
 
@@ -106,7 +106,10 @@ class WattTrainer:
         for container in containers:
             container_usages = self.get_container_usages(container["name"])
             for model in self.models_to_train:
-                self.train_model("container", container["name"], model, container_usages)
+                if not self.wattwizard_handler.is_static("container", model):
+                    self.train_model("container", container["name"], model, container_usages)
+                else:
+                    log_warning("Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model), debug=self.debug)
 
     def train_thread(self, ):
         containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
