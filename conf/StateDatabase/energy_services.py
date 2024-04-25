@@ -37,4 +37,5 @@ if __name__ == "__main__":
     if handler.database_exists("services"):
         print("Adding 'energy services' document")
         handler.add_service(energy_manager)
-        #handler.add_service(watt_wizard)
+        handler.add_service(watt_wizard)
+        handler.add_service(watt_trainer)

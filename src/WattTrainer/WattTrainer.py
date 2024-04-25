@@ -39,9 +39,8 @@ import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'structure.energy.usage']
-WATT_TRAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'energy': ['structure.energy.usage']}
 
-GUARDIAN_CONTAINER_METRICS = {
+WATT_TRAINER_METRICS = {
     'cpu_user': ['proc.cpu.user'],
     'cpu_kernel': ['proc.cpu.kernel'],
     'energy': ['structure.energy.usage']
@@ -107,7 +106,7 @@ class WattTrainer:
             container_usages = self.get_container_usages(container["name"])
             for model in self.models_to_train:
                 if not self.wattwizard_handler.is_static("container", model):
-                    self.train_model("container", container["name"], model, container_usages)
+                    self.train_model(container["name"], "container", model, container_usages)
                 else:
                     log_warning("Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model), debug=self.debug)
 
