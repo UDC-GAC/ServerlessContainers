@@ -301,7 +301,7 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
-    def get_amount_from_energy_modelling(self, structure, usages, resource):
+    def get_amount_from_energy_modelling(self, structure, limits, resource):
         """Get an amount that will be reduced from the current resource limit using an energy model that relates
         resource usage with energy usage.
         Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
@@ -318,13 +318,14 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        user_usage = usages[translator_dict["user"]]
-        kernel_usage = usages[translator_dict["kernel"]]
-        target_power = structure["resources"][resource]["max"]
+        user_usage = structure["resources"]["cpu"]["user"]
+        kernel_usage = structure["resources"]["cpu"]["kernel"]
+        target_power = structure["resources"][resource]["max"] - limits[resource]['boundary']
         # TODO: Check uses cases of each structure subtype and manage them
         subtype = structure["subtype"] if structure["subtype"] != "application" else "host"
         target_cpu = self.wattwizard_handler.get_usage_from_power(subtype, self.energy_model_name, user_usage, kernel_usage, target_power)
-        amount = target_cpu - user_usage
+        current_cpu_limit = structure["resources"]["cpu"]["current"]
+        amount = target_cpu - current_cpu_limit
         return int(amount)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, resource):
@@ -521,6 +522,20 @@ class Guardian:
 
         return request
 
+    def print_energy_rescale_info(self, structure, limits, usages, amount):
+        for res in ["energy", "cpu"]:
+            current_limit = structure["resources"][res]["current"]
+            max_limit = structure["resources"][res]["max"]
+            boundary = limits[res]["boundary"]
+            upper_limit = limits[res]["upper"]
+            res_usage = structure["resources"][res]["usage"]
+            if res == "energy":
+                log_warning("POWER BUDGET -> max : {0} | boundary : {1} | target : {2} | usa: {3}".format(
+                    max_limit, boundary, max_limit - boundary, res_usage), self.debug)
+            else:
+                log_warning("PROP CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
+                    current_limit, upper_limit, res_usage, amount), self.debug)
+
     def match_rules_and_events(self, structure, rules, events, limits, usages):
         generated_requests = list()
         events_to_remove = dict()
@@ -568,14 +583,10 @@ class Guardian:
                     amount = rule["amount"]
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
                     if self.use_energy_model:
-                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                        amount = self.get_amount_from_energy_modelling(structure, limits, resource_label)
                     else:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
-                    current_resource_limit = structure["resources"][resource_label]["current"]
-                    upper_limit = limits[resource_label]["upper"]
-                    usage = usages[translator_dict[resource_label]]
-                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
-                        current_resource_limit, upper_limit, usage, amount), self.debug)
+                    self.print_energy_rescale_info(structure, limits, usages, amount)
                 elif rule["rescale_policy"] == "proportional":
                     amount = rule["amount"]
                     current_resource_limit = structure["resources"][resource_label]["current"]
@@ -598,9 +609,10 @@ class Guardian:
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
                     if self.use_energy_model:
-                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                        amount = self.get_amount_from_energy_modelling(structure, limits, resource_label)
                     else:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    self.print_energy_rescale_info(structure, limits, usages, amount)
                 else:
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
@@ -634,7 +646,7 @@ class Guardian:
                 request = self.generate_request(structure, new_amount, resource_label)
                 generated_requests.append(request)
 
-                # Remove the events that triggered the request
+            # Remove the events that triggered the request
             event_name = generate_event_name(events[resource_label]["events"], resource_label)
             if event_name not in events_to_remove:
                 events_to_remove[event_name] = 0
