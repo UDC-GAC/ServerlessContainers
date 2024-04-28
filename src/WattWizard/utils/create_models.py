@@ -9,7 +9,7 @@ idle_consumption = {}
 processed_models = []
 
 
-def pretrain_model(ts_collector, model_instance, train_file, pred_method):
+def pretrain_model(ts_collector, structure, model_instance, train_file, pred_method):
     # Check if same train timestamps file was already used
     previous_method = None
     for model in processed_models:
@@ -21,7 +21,7 @@ def pretrain_model(ts_collector, model_instance, train_file, pred_method):
     if previous_method is None:
         log(f"Processing timestamps file: {train_file}")
         train_timestamps = ts_collector.parse_timestamps(train_file)
-        time_series[pred_method] = ts_collector.get_time_series(train_timestamps)
+        time_series[pred_method] = ts_collector.get_time_series(train_timestamps, structure == "container")
         idle_consumption[pred_method] = ts_collector.get_idle_consumption(train_timestamps)
     else:
         log(f"File {train_file} was previously processed for method {previous_method}")
@@ -72,4 +72,4 @@ def run():
                 if model and model['instance']:
                     model['instance'].set_model_vars(model_variables)
                     if model['train_file']:
-                        pretrain_model(ts_collector, model['instance'], model['train_file'], model['prediction_method'])
+                        pretrain_model(ts_collector, structure, model['instance'], model['train_file'], model['prediction_method'])
