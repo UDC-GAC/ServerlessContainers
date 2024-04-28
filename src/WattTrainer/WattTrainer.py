@@ -137,6 +137,7 @@ class WattTrainer:
 
             log_info("Config is as follows:", self.debug)
             log_info(".............................................", self.debug)
+            log_info("Models to train -> {0}".format(self.models_to_train), self.debug)
             log_info("Time window lapse -> {0}".format(self.window_difference), self.debug)
             log_info("Delay -> {0}".format(self.window_delay), self.debug)
             log_info(".............................................", self.debug)
