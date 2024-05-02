@@ -14,3 +14,5 @@ influxdb-client==1.37.0
 pandas
 numpy
 scikit-learn
+matplotlib
+seaborn

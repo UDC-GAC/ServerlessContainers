@@ -80,7 +80,7 @@ def get_available_models():
 @routes.route('/models/<structure>', methods=['GET'])
 def get_available_models_structure(structure=None):
     try:
-        return jsonify(model_handler.get_model_names_structure(structure))
+        return jsonify(model_handler.get_model_names_by_structure(structure))
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 

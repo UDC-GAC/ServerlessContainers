@@ -12,3 +12,6 @@ host_timestamps_dir: "./conf/WattWizard/host"
 container_timestamps_dir: "./conf/WattWizard/container"
 host_train_files: "all"
 container_train_files: "all"
+
+plot_time_series: no
+plot_time_series_dir: "./conf/WattWizard/time_series"

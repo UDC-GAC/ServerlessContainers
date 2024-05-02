@@ -59,12 +59,12 @@ class CLIParser:
 
         self.parser.add_argument(
             "--host-timestamps-dir",
-            help="Directory in which the timestamp files to train host models are stored. By default is ./timestamps/host.",
+            help="Directory in which the timestamp files to train host models are stored. By default is ./conf/WattWizard/host.",
         )
 
         self.parser.add_argument(
             "--container-timestamps-dir",
-            help="Directory in which the timestamp files to train container models are stored. By default is ./timestamps/container.",
+            help="Directory in which the timestamp files to train container models are stored. By default is ./conf/WattWizard/container.",
         )
 
         self.parser.add_argument(
@@ -79,6 +79,18 @@ data in proper format. Check README.md to see timestamps proper format.",
             help="Comma-separated list of train file names stored under container timestamps directory (or 'all' keyword to use all files in this directory). \n\
 One container model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
 data in proper format. Check README.md to see timestamps proper format.",
+        )
+
+        self.parser.add_argument(
+            "--plot-time-series",
+            action="store_const",
+            const=False,
+            help="Plot the time series used to train each model",
+        )
+
+        self.parser.add_argument(
+            "--plot-time-series-dir",
+            help="Directory to store a plot of the train time series for each model. Works together with option --plot-time-series. By default is ./conf/WattWizard/time_series.",
         )
 
     def parse_args(self):

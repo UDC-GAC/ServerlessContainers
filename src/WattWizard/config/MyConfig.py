@@ -5,7 +5,7 @@ SCRIPT_PATH = os.path.abspath(__file__)
 WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 
 COMMA_SEPARATED_LIST_ARGS = ['prediction_methods', 'model_variables', 'host_train_files', 'container_train_files']
-DIRECTORY_ARGS = ['host_timestamps_dir', 'container_timestamps_dir']
+DIRECTORY_ARGS = ['host_timestamps_dir', 'container_timestamps_dir', 'plot_time_series_dir']
 FILE_ARGS = ['host_train_files', 'container_train_files']
 
 DASHED_LINE = "".join(["-" for _ in range(1, 200)])

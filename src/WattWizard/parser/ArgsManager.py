@@ -7,7 +7,7 @@ from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
                   'prediction_methods', 'model_variables', 'host_timestamps_dir', 'container_timestamps_dir',
-                  'host_train_files', 'container_train_files']
+                  'host_train_files', 'container_train_files', 'plot_time_series', 'plot_time_series_dir']
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 
@@ -29,6 +29,24 @@ class ArgsManager:
             if not os.access(file, os.R_OK):
                 log(f"File {file} is not accesible: check file permissions", "ERR")
                 exit(1)
+
+    @staticmethod
+    def check_dirs_exist(dirs):
+        for dir in dirs:
+            if not os.path.exists(dir):
+                log(f"Directory {dir} doesn't exist", "ERR")
+                exit(1)
+            if not os.path.isdir(dir):
+                log(f"Directory {dir} is not a directory", "ERR")
+                exit(1)
+            if not os.access(dir, os.R_OK):
+                log(f"Directory {dir} is not accesible: check directory permissions", "ERR")
+                exit(1)
+
+    @staticmethod
+    def create_dir(dir):
+        if not os.path.exists(dir):
+            os.makedirs(dir)
 
     @staticmethod
     def check_supported_values(arg_name, current_values, supported_values):
@@ -76,6 +94,13 @@ class ArgsManager:
 
             elif arg_name == "model_variables":
                 self.check_supported_values(arg_name, args[arg_name], SUPPORTED_VARS)
+
+            elif arg_name == "plot_time_series":
+                pass
+
+            elif arg_name == "plot_time_series_dir":
+                if args["plot_time_series"]:
+                    self.create_dir(args[arg_name])
 
             else:
                 log(f"Argument {arg_name} is not supported", "ERR")

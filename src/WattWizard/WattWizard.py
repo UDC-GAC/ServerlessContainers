@@ -2,7 +2,7 @@ from flask import Flask
 from src.WattWizard.parser.CLIParser import CLIParser
 from src.WattWizard.parser.ConfigFileParser import ConfigFileParser
 from src.WattWizard.parser.ArgsManager import ArgsManager
-from src.WattWizard.utils import create_models
+from src.WattWizard.utils.ModelBuilder import ModelBuilder
 from src.WattWizard.app.routes import routes
 
 app = Flask(__name__)
@@ -22,7 +22,8 @@ if __name__ == '__main__':
     args_manager.validate_args()
 
     # Create models and pretrain them (if specified)
-    create_models.run()
+    model_builder = ModelBuilder()
+    model_builder.build_models()
 
     # Start Flask server
     app.run(host='0.0.0.0', port=7777)

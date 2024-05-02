@@ -60,10 +60,10 @@ class ModelHandler:
     def get_model_names(self):
         models_dict = {}
         for structure in self.models:
-            models_dict[structure] = self.get_model_names_structure(structure)
+            models_dict[structure] = self.get_model_names_by_structure(structure)
         return models_dict
 
-    def get_model_names_structure(self, structure):
+    def get_model_names_by_structure(self, structure):
         if structure in self.models:
             return list(self.models[structure].keys())
         raise Exception(f"Structure {structure} doesn\'t exists")
@@ -71,16 +71,16 @@ class ModelHandler:
     def get_models(self):
         return self.models
 
-    def get_models_structure(self, structure):
+    def get_models_by_structure(self, structure):
         if structure in self.models:
             return self.models[structure]
         raise Exception(f"Structure {structure} doesn\'t exists")
 
     def get_host_models(self):
-        self.get_models_structure("host")
+        self.get_models_by_structure("host")
 
     def get_container_models(self):
-        self.get_models_structure("container")
+        self.get_models_by_structure("container")
 
     def get_model_by_name(self, structure, model_name):
         if structure in self.models and model_name in self.models[structure]:
