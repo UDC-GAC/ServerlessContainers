@@ -41,6 +41,25 @@ class TimeSeriesCollector:
         stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=offset)
         return [(start, stop, exp_type)]
 
+    # Add time_diff column which represents time instead of dates
+    @staticmethod
+    def set_time_diff(df, time_column, initial_date=None):
+        first_date = initial_date if initial_date is not None else df[time_column].min()
+        last_date = df[time_column].max()
+        time_diff = (df[time_column] - first_date)
+        total_duration = last_date - first_date
+
+        # Depending on time series duration different time units are used
+        if total_duration < pd.Timedelta(hours=1):
+            df["time_diff"] = time_diff.dt.total_seconds()
+            df["time_unit"] = 'seconds'
+        elif total_duration < pd.Timedelta(hours=12):
+            df["time_diff"] = time_diff.dt.total_seconds() / 60
+            df["time_unit"] = 'minutes'
+        else:
+            df["time_diff"] = time_diff.dt.total_seconds() / 3600
+            df["time_unit"] = 'hours'
+
     def __set_model_variables(self, v):
         if v is not None:
             self.model_variables = v
@@ -105,6 +124,8 @@ class TimeSeriesCollector:
             result.dropna(inplace=True)
             time_series = pd.concat([time_series, result], ignore_index=True)
 
+        self.set_time_diff(time_series, "time")
+
         return time_series
 
     def get_idle_consumption(self, timestamps):
@@ -121,4 +142,3 @@ class TimeSeriesCollector:
 
         # Return idle consumption as mean power in idle periods
         return time_series["power"].mean()
-

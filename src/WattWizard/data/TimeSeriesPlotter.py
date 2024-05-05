@@ -1,6 +1,6 @@
 import seaborn as sns
 import matplotlib.pyplot as plt
-from matplotlib.dates import DateFormatter, AutoDateLocator
+import os
 from matplotlib.lines import Line2D
 
 DEFAULT_LABELS = {
@@ -47,7 +47,76 @@ class TimeSeriesPlotter:
 
     def __init__(self, output_dir=None):
         self.output_dir = output_dir
+        if output_dir:
+            self.create_non_existent_dir(output_dir)
 
     def set_output_dir(self, output_dir):
         self.output_dir = output_dir
-        # TODO: Create dir or dirs if they doesn't exist
+        self.create_non_existent_dir(output_dir)
+
+    def save_plot(self, figure):
+        path = f'{self.output_dir}/TimeSeries.png'
+        figure.tight_layout()
+        figure.savefig(path, bbox_inches='tight')
+
+    @staticmethod
+    def create_non_existent_dir(dir):
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+
+    @staticmethod
+    def get_key_from_default_value(dict, value):
+        for k, v in dict.items():
+            if v == value:
+                return k
+
+    @staticmethod
+    def set_legend_with_markers(ax1, ax2):
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+
+        custom_lines = []
+        for line, label in zip(lines1 + lines2, labels1 + labels2):
+            if isinstance(line, Line2D):
+                var = TimeSeriesPlotter.get_key_from_default_value(DEFAULT_LABELS, label)
+                custom_line = Line2D([0], [0], color=line.get_color(), markerfacecolor="black",
+                                     marker=DEFAULT_MARKERS[var], markersize=10, label=label,
+                                     linestyle=line.get_linestyle())
+                custom_lines.append(custom_line)
+        ax1.legend(handles=custom_lines, loc="center left", bbox_to_anchor=(0, 1.5))
+        ax2.get_legend().remove()
+
+    @staticmethod
+    def set_basic_labels(title, xlabel, ylabel, ax):
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+
+    @staticmethod
+    def set_line_plot(var, df, ax):
+        x = df["time_diff"]
+        y = df[var]
+        linestyle = "dashed" if var == "power_predicted" else "solid"
+        color = DEFAULT_COLORS[var]
+        label = DEFAULT_LABELS[var]
+        marker = DEFAULT_MARKERS[var]
+        sns.lineplot(x=x, y=y, ax=ax, color=color, label=label, linestyle=linestyle)
+        if marker is not None:
+            ax.scatter(x[::50], y[::50], s=20, color="black", marker=marker, zorder=3, edgecolors=color, linewidths=0.2)
+
+    def plot_time_series(self, title, time_series, model_variables):
+        fig, ax1 = plt.subplots(figsize=(14, 6))
+        ax2 = ax1.twinx()
+
+        # Plot 1 line for each predictor variable (Left Axis: ax1)
+        for var in model_variables:
+            self.set_line_plot(var, time_series, ax1)
+
+        # Plot dependent variable "power" (Right Axis: ax2)
+        self.set_line_plot("power", time_series, ax2)
+
+        self.set_basic_labels(title, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
+        self.set_basic_labels(None, None, "Power Consumption (W)", ax2)
+        self.set_legend_with_markers(ax1, ax2)
+        self.save_plot(fig)
+        plt.close(fig)

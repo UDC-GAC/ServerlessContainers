@@ -44,11 +44,6 @@ class ArgsManager:
                 exit(1)
 
     @staticmethod
-    def create_dir(dir):
-        if not os.path.exists(dir):
-            os.makedirs(dir)
-
-    @staticmethod
     def check_supported_values(arg_name, current_values, supported_values):
         for value in current_values:
             if value not in supported_values:
@@ -99,8 +94,7 @@ class ArgsManager:
                 pass
 
             elif arg_name == "plot_time_series_dir":
-                if args["plot_time_series"]:
-                    self.create_dir(args[arg_name])
+                pass
 
             else:
                 log(f"Argument {arg_name} is not supported", "ERR")

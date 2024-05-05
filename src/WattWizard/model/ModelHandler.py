@@ -17,9 +17,12 @@ class ModelHandler:
 
     @staticmethod
     def get_file_name(file):
-        pattern = r'\/([^/]+)\.'
-        occurrences = re.findall(pattern, file)
-        return occurrences[-1]
+        if file:
+            pattern = r'\/([^/]+)\.'
+            occurrences = re.findall(pattern, file)
+            return occurrences[-1]
+        else:
+            return "NPT"
 
     @staticmethod
     def get_instance():
@@ -46,16 +49,18 @@ class ModelHandler:
         self.models = {"host": {}, "container": {}}
 
     def add_model(self, structure, prediction_method, train_file):
-        model_name = f"{prediction_method}_{self.get_file_name(train_file) if train_file else 'NPT'}"
+        model_name = f"{prediction_method}_{self.get_file_name(train_file)}"
         if structure in self.models and model_name in self.models[structure]:
             raise Exception(f"Model with name {model_name} already exists")
         else:
             self.models[structure][model_name] = {
+                "name": model_name,
                 "prediction_method": prediction_method,
-                "train_file": train_file,
+                "train_file_path": train_file,
+                "train_file_name": self.get_file_name(train_file),
                 "instance": self.create_model_instance(prediction_method)
             }
-        return model_name
+        return self.models[structure][model_name]
 
     def get_model_names(self):
         models_dict = {}

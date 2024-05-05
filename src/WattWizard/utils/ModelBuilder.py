@@ -6,7 +6,6 @@ from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.model.ModelHandler import ModelHandler
 
 
-
 class ModelBuilder:
 
     time_series = None
@@ -58,32 +57,32 @@ class ModelBuilder:
         self.add_processed_file(train_file, pred_method)
 
     def pretrain_model(self, structure, model):
-        train_file_short_name = ModelHandler.get_file_name(model['train_file'])
 
-        self.get_time_series_from_file(structure, model['train_file'], model['prediction_method'])
+        self.get_time_series_from_file(structure, model['train_file_path'], model['prediction_method'])
         # Pretrain model with collected time series
         try:
             X_train, y_train = time_series_to_train_data(model['instance'], self.time_series[model['prediction_method']])
             model['instance'].pretrain(X_train, y_train)
             model['instance'].set_idle_consumption(self.idle_consumption[model['prediction_method']])
             
-            log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {train_file_short_name} timestamps")
+            log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")
         except TypeError as e:
             log(f"{str(e)}", "ERROR")
 
         # Plot train time series if specified
         if self.config.get_argument("plot_time_series"):
-            output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{train_file_short_name}"
+            output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}"
             self.ts_plotter.set_output_dir(output_dir)
-            # TODO: Plot time series from train_file
+            self.ts_plotter.plot_time_series(f"{model['name']} time series",
+                                             self.time_series[model['prediction_method']],
+                                             self.config.get_argument("model_variables"))
 
-    def initialize_model(self, structure, model_name):
-        model = self.model_handler.get_model_by_name(structure, model_name)
+    def initialize_model(self, structure, model):
         model_variables = self.config.get_argument("model_variables")
 
         if model and model['instance']:
             model['instance'].set_model_vars(model_variables)
-            if model['train_file']:
+            if model['train_file_path']:
                 self.pretrain_model(structure, model)
 
     def build_models(self):
@@ -100,8 +99,5 @@ class ModelBuilder:
                         log(f"Prediction method {prediction_method} doesn't support online learning, "
                             f"so it's mandatory to pretrain the model. Model {prediction_method}_NPT will be discarded", "WARN")
                         continue
-                    model_name = self.model_handler.add_model(structure, prediction_method, train_file)
-                    self.initialize_model(structure, model_name)
-
-
-
+                    model = self.model_handler.add_model(structure, prediction_method, train_file)
+                    self.initialize_model(structure, model)
