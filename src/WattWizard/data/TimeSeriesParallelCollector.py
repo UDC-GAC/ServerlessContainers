@@ -1,22 +1,26 @@
 import warnings
 import pandas as pd
 import concurrent.futures
+import multiprocessing
 from datetime import datetime, timedelta
 
 from src.WattWizard.logs.logger import log
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 OUT_RANGE = 1.5
+MAX_CPU_USAGE_RATIO = 1.0  # Use up to MAX_CPU_USAGE_RATIO of total CPU cores to retrieve InfluxDB time series
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 class TimeSeriesParallelCollector:
 
+    max_cores = None
     model_variables = None
     influxdb_info = None
     structure = None
 
     def __init__(self, model_variables, influxdb_host, influxdb_bucket, influxdb_token, influxdb_org):
+        self.max_cores = round(multiprocessing.cpu_count() * MAX_CPU_USAGE_RATIO)
         self.model_variables = model_variables
         self.influxdb_info = {
             "host": influxdb_host,
@@ -127,7 +131,8 @@ class TimeSeriesParallelCollector:
         filtered_timestamps = [t for t in timestamps if include_idle or t[2] != "IDLE"]
 
         result_dfs = []
-        with concurrent.futures.ProcessPoolExecutor(max_workers=len(timestamps)) as executor:
+        workers = min(len(timestamps), self.max_cores)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
             thread_to_timestamp = {
                 executor.submit(self.get_experiment_data, ts, self.influxdb_info): ts for ts in filtered_timestamps}
             for thread in concurrent.futures.as_completed(thread_to_timestamp):

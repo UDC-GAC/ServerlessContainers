@@ -46,6 +46,7 @@ class TimeSeriesPlotter:
     output_dir = None
 
     def __init__(self, output_dir=None):
+        plt.switch_backend('agg')
         self.output_dir = output_dir
         if output_dir:
             self.create_non_existent_dir(output_dir)
@@ -54,10 +55,10 @@ class TimeSeriesPlotter:
         self.output_dir = output_dir
         self.create_non_existent_dir(output_dir)
 
-    def save_plot(self, figure):
+    def save_plot(self):
         path = f'{self.output_dir}/TimeSeries.png'
-        figure.tight_layout()
-        figure.savefig(path, bbox_inches='tight')
+        plt.tight_layout()
+        plt.savefig(path, bbox_inches='tight')
 
     @staticmethod
     def create_non_existent_dir(dir):
@@ -118,5 +119,6 @@ class TimeSeriesPlotter:
         self.set_basic_labels(title, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
         self.set_basic_labels(None, None, "Power Consumption (W)", ax2)
         self.set_legend_with_markers(ax1, ax2)
-        self.save_plot(fig)
+        self.save_plot()
+
         plt.close(fig)

@@ -63,7 +63,7 @@ class MyConfig:
         if len(filenames_list) == 1 and filenames_list[0] == "":
             filenames_list = []
         if len(filenames_list) == 1 and filenames_list[0] == "all":
-            filenames_list = [f for f in os.listdir(timestamps_dir)]
+            filenames_list = [f for f in os.listdir(timestamps_dir) if f.endswith('.timestamps')]
         return filenames_list
 
     @staticmethod

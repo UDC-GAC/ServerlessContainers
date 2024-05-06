@@ -64,18 +64,18 @@ class ModelBuilder:
             X_train, y_train = time_series_to_train_data(model['instance'], self.time_series[model['prediction_method']])
             model['instance'].pretrain(X_train, y_train)
             model['instance'].set_idle_consumption(self.idle_consumption[model['prediction_method']])
-            
             log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")
-        except TypeError as e:
-            log(f"{str(e)}", "ERROR")
 
-        # Plot train time series if specified
-        if self.config.get_argument("plot_time_series"):
-            output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}"
-            self.ts_plotter.set_output_dir(output_dir)
-            self.ts_plotter.plot_time_series(f"{model['name']} time series",
-                                             self.time_series[model['prediction_method']],
-                                             self.config.get_argument("model_variables"))
+            # Plot train time series if specified
+            if self.config.get_argument("plot_time_series"):
+                output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}"
+                self.ts_plotter.set_output_dir(output_dir)
+                log(f"Plotting train time series for model {model['name']}. Plot will be stored at {output_dir}")
+                self.ts_plotter.plot_time_series(f"{model['name']} time series",
+                                                 self.time_series[model['prediction_method']],
+                                                 self.config.get_argument("model_variables"))
+        except Exception as e:
+            log(f"{str(e)}", "ERR")
 
     def initialize_model(self, structure, model):
         model_variables = self.config.get_argument("model_variables")
