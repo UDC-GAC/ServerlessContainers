@@ -796,3 +796,86 @@ def desubscribe_app(structure_name):
     get_db().delete_limit(limits)
 
     return jsonify(201)
+
+@structure_routes.route("/structure/host/<structure_name>/disks", methods=['PUT'])
+def add_disks_to_host(structure_name):
+    data = request.json
+
+    try:
+        host = retrieve_structure(structure_name)
+    except ValueError:
+        return abort(404, {"message": "Host '{0}' does not exist".format(structure_name)})
+
+    if "resources" not in host:
+        return abort(404, {"message": "Missing resource information from host '{0}'".format(host)})
+
+    if "disks" not in host['resources']:
+        ## Create disks dict
+        host["resources"]["disks"] = {}
+
+    if "resources" not in data or "disks" not in data['resources']:
+        return abort(400, {"message": "Missing resource information on request"})
+
+    # Check that all the needed data is present on the request
+    for disk in data['resources']['disks']:
+
+        if "name" not in disk:
+            return abort(400, {"message": "Missing name disk resource"})
+
+        if disk['name'] in host['resources']['disks']: continue
+
+        new_disk = {}
+        for key in ["type", "load", "path", "max", "free"]:
+            if key not in disk:
+                return abort(400, {"message": "Missing key {0} for disk resource".format(key)})
+            else:
+                new_disk[key] = disk[key]
+
+        host["resources"]["disks"][disk["name"]] = new_disk
+
+    get_db().update_structure(host)
+
+    return jsonify(201)
+
+@structure_routes.route("/structure/host/<structure_name>/disks", methods=['POST'])
+def update_host_disks(structure_name):
+    data = request.json
+
+    try:
+        host = retrieve_structure(structure_name)
+    except ValueError:
+        return abort(404, {"message": "Host '{0}' does not exist".format(structure_name)})
+
+    if "resources" not in host or "disks" not in host['resources']:
+        return abort(404, {"message": "Missing disk resource information from host '{0}'".format(host)})
+
+    if "resources" not in data or "disks" not in data['resources']:
+        return abort(400, {"message": "Missing resource information on request"})
+
+    # Check that all the needed data is present on the request
+    for disk in data['resources']['disks']:
+
+        if "name" not in disk:
+            return abort(400, {"message": "Missing name disk resource"})
+
+        if disk['name'] not in host['resources']['disks']:
+            return abort(404, {"message": "Missing disk {0} in host {1}".format(disk, structure_name)})
+
+        disk_info = host['resources']['disks'][disk['name']]
+
+        busy_bw = 0
+        if 'free' in disk_info:
+            busy_bw = disk_info['max'] - disk_info['free']
+
+        for key in ["max"]:
+            if key not in disk:
+                return abort(400, {"message": "Missing key '{0}'".format(key)})
+            else:
+                disk_info[key] = disk[key]
+
+        ## Update free BW
+        disk_info['free'] = disk_info['max'] - busy_bw
+
+    get_db().update_structure(host)
+
+    return jsonify(201)
