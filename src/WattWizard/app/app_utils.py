@@ -5,12 +5,17 @@ from src.WattWizard.config.MyConfig import MyConfig
 my_config = MyConfig.get_instance()
 
 
-def get_desired_power(req):
-    value = req.args.get("desired_power", type=float)
+def get_param_value(req, param, param_type=None):
+    value = req.args.get(param, type=param_type)
     if value is None:
-        raise TypeError(f"Missing desired power value in request. You must include it as follows"
-                        f" <url>:<port>/predict?desired_power=<value>")
+        raise TypeError(f"Missing {param} value in request. You must include it as follows"
+                        f" <url>:<port>/predict?{param}=<value>")
     return value
+
+
+def get_boolean_param_value(req, param):
+    value = req.args.get(param, default='')
+    return value == "true"
 
 
 def time_series_to_train_data(model_instance, time_series):
@@ -39,7 +44,7 @@ def json_to_train_data(model_instance, json_data):
     return x_stack, y
 
 
-def request_to_dict(model_instance, request):
+def get_model_variables_from_request(model_instance, request):
     x_values = {}
     for var in model_instance.get_model_vars():
         value = request.args.get(var, type=float)

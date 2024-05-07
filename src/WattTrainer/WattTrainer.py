@@ -48,7 +48,7 @@ WATT_TRAINER_METRICS = {
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
                          "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"],
-                         "MODELS_TO_TRAIN": ["sgdregressor_General"], "DEBUG": True, "ACTIVE": True}
+                         "MODELS_TO_TRAIN": ["all"], "DEBUG": True, "ACTIVE": True}
 
 SERVICE_NAME = "watt_trainer"
 
@@ -101,7 +101,13 @@ class WattTrainer:
             except Exception as e:
                 log_error(str(e), debug=self.debug)
 
-    def train_model_with_containers_info(self, containers):
+    def train_all_models_with_containers_info(self, containers):
+        for container in containers:
+            container_usages = self.get_container_usages(container["name"])
+            for model in self.wattwizard_handler.get_models_structure("container", avoid_static=True):
+                self.train_model(container["name"], "container", model, container_usages)
+
+    def train_config_models_with_containers_info(self, containers):
         for container in containers:
             container_usages = self.get_container_usages(container["name"])
             for model in self.models_to_train:
@@ -113,7 +119,10 @@ class WattTrainer:
     def train_thread(self, ):
         containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
         if containers:
-            self.train_model_with_containers_info(containers)
+            if len(self.models_to_train) == 1 and self.models_to_train[0] == "all":
+                self.train_all_models_with_containers_info(containers)
+            else:
+                self.train_config_models_with_containers_info(containers)
 
     def train(self, ):
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)

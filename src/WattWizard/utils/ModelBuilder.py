@@ -35,7 +35,7 @@ class ModelBuilder:
     def check_file_was_processed(self, train_file):
         for file in self.processed_files:
             if file["path"] == train_file:
-                return file["pred_method"]
+                return file["prediction_method"]
         return None
 
     def get_time_series_from_file(self, structure, train_file, pred_method):

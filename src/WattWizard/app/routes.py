@@ -4,7 +4,7 @@ from flask import request
 
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.model.ModelHandler import ModelHandler
-from src.WattWizard.app.app_utils import get_desired_power, json_to_train_data, request_to_dict
+from src.WattWizard.app.app_utils import get_param_value, get_boolean_param_value, json_to_train_data, get_model_variables_from_request
 
 DYNAMIC_VAR = "user_load"
 
@@ -28,7 +28,7 @@ def is_static(structure=None, model_name=None):
 def predict_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
-        X_test = request_to_dict(model_instance, request)
+        X_test = get_model_variables_from_request(model_instance, request)
         my_config.check_resources_limits(X_test)
         predicted_consumption = model_instance.predict(X_test)
         return jsonify({'predicted_power': predicted_consumption})
@@ -40,12 +40,12 @@ def predict_power(structure=None, model_name=None):
 def predict_values_from_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
-        current_X = request_to_dict(model_instance, request)
+        current_X = get_model_variables_from_request(model_instance, request)
 
         my_config.check_resources_limits(current_X)
         var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
 
-        desired_power = get_desired_power(request)
+        desired_power = get_param_value(request, "desired_power", float)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
@@ -72,6 +72,9 @@ def predict_idle(structure=None, model_name=None):
 @routes.route('/models', methods=['GET'])
 def get_available_models():
     try:
+        avoid_static = get_boolean_param_value(request, "avoid-static")
+        if avoid_static:
+            return jsonify(model_handler.get_non_static_model_names())
         return jsonify(model_handler.get_model_names())
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -80,6 +83,9 @@ def get_available_models():
 @routes.route('/models/<structure>', methods=['GET'])
 def get_available_models_structure(structure=None):
     try:
+        avoid_static = get_boolean_param_value(request, "avoid-static")
+        if avoid_static:
+            return jsonify(model_handler.get_non_static_model_names_by_structure(structure))
         return jsonify(model_handler.get_model_names_by_structure(structure))
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400

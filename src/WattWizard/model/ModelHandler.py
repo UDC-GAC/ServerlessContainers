@@ -73,6 +73,18 @@ class ModelHandler:
             return list(self.models[structure].keys())
         raise Exception(f"Structure {structure} doesn\'t exists")
 
+    def get_non_static_model_names(self):
+        models_dict = {}
+        for structure in self.models:
+            models_dict[structure] = self.get_non_static_model_names_by_structure(structure)
+        return models_dict
+
+    def get_non_static_model_names_by_structure(self, structure):
+        if structure in self.models:
+            return [self.models[structure][model_name]['name'] for model_name in self.models[structure]
+                    if not self.is_static(self.models[structure][model_name]["prediction_method"])]
+        raise Exception(f"Structure {structure} doesn\'t exists")
+
     def get_models(self):
         return self.models
 

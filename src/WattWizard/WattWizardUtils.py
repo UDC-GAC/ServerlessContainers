@@ -73,6 +73,38 @@ class WattWizardUtils:
             else:
                 self.get_idle_consumption(structure, model_name, tries)
 
+    def get_models(self, avoid_static=False, tries=3):
+        try:
+            params = {'avoid-static': 'true' if avoid_static else 'false'}
+            r = self.session.get("{0}/{1}".format(self.server, "models"), params=params)
+
+            if r.status_code == 200:
+                return r.json()
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.get_models(avoid_static, tries)
+
+    def get_models_structure(self, structure, avoid_static=False, tries=3):
+        try:
+            params = {'avoid-static': 'true' if avoid_static else 'false'}
+            r = self.session.get("{0}/{1}/{2}".format(self.server, "models", structure), params=params)
+
+            if r.status_code == 200:
+                return r.json()
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.get_models_structure(structure, avoid_static, tries)
+
     def train_model(self, structure, model_name, user_usage, system_usage, power, tries=3):
         try:
             payload = {'user_load': user_usage, 'system_load': system_usage, 'power': power}
