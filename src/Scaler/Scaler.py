@@ -48,13 +48,12 @@ from src.StateDatabase import couchdb
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "self.debug": True, "CHECK_CORE_MAP": True, "ACTIVE": True}
 SERVICE_NAME = "scaler"
 
-## sys.disk metrics are more reliable than proc.disk
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
                                 "mem": ['proc.mem.resident'],
-                                "disk": ['sys.disk.read.mb', 'sys.disk.write.mb'],
+                                "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
                                 "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident'],
-                              'disk': ['sys.disk.read.mb', 'sys.disk.write.mb'],
+                              'disk': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
                               'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
 APP_SCALING_SPLIT_AMOUNT = 5
@@ -479,6 +478,11 @@ class Scaler:
     def apply_mem_request(self, request, database_resources, real_resources, amount):
         resource_dict = {request["resource"]: {}}
         current_mem_limit = self.get_current_resource_value(real_resources, request["resource"])
+        current_mem_free = self.host_info_cache[request["host"]]["resources"]["mem"]["free"]
+
+        if amount > current_mem_free:
+            ## It is trying to get more resources than available
+            amount = current_mem_free
 
         # No error thrown, so persist the new mapping to the cache
         self.host_info_cache[request["host"]]["resources"]["mem"]["free"] -= amount
@@ -490,10 +494,15 @@ class Scaler:
 
     def apply_disk_request(self, request, database_resources, real_resources, amount):
         resource_dict = {request["resource"]: {}}
+        bound_disk = self.get_bound_disk(request['structure'])
         current_disk_limit = self.get_current_resource_value(real_resources, request["resource"])
+        current_disk_free = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free"]
+
+        if amount > current_disk_free:
+            ## It is trying to get more resources than available
+            amount = current_disk_free
 
         # No error thrown, so persist the new mapping to the cache
-        bound_disk = self.get_bound_disk(request['structure'])
         self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free"] -= amount
 
         # Return the dictionary to set the resources

@@ -39,13 +39,13 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
-BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['sys.disk.read.mb', 'sys.disk.write.mb']}
+BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb']}
 BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage'], "disk": ['structure.disk.usage']}
 
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident'],
-    'structure.disk.usage': ['sys.disk.read.mb', 'sys.disk.write.mb']
+    'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb']
 }
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
