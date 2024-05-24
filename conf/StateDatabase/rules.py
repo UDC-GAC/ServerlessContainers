@@ -270,7 +270,7 @@ disk_dropped_lower = dict(
     name='disk_dropped_lower',
     rule=dict(
         {"and": [
-            {">": [
+            {">=": [
                 {"var": "disk.structure.disk.usage"},
                 0]},
             {"<": [
