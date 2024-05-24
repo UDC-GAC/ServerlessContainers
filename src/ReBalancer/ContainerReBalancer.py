@@ -352,6 +352,8 @@ class ContainerRebalancer:
             for container in containers:
                 if container["name"] in host_containers_names:
                     host_containers[host_name].append(container)
+            # Get the container usages
+            host_containers[host_name] = self.__fill_containers_with_usage_info(host_containers[host_name])
 
         # Rebalance hosts
         for host in hosts:
@@ -376,7 +378,7 @@ class ContainerRebalancer:
                     diff = container["resources"][resource]["max"] - container["resources"][resource]["current"]
                     if diff < resources_to_balance[resource]["diff_percentage"] * container["resources"][resource]["max"]:
                         donors.append(container)
-                    else:
+                    elif container["resources"][resource]["current"] - container["resources"][resource]["usage"] < resources_to_balance[resource]["diff_percentage"] * container["resources"][resource]["current"]:
                         receivers.append(container)
 
             log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
@@ -391,8 +393,7 @@ class ContainerRebalancer:
 
             shuffling_tuples = list()
             for donor in donors:
-                diff = donor["resources"][resource]["max"] - donor["resources"][resource]["current"]
-                stolen_amount = resources_to_balance[resource]["stolen_percentage"] * diff
+                stolen_amount = resources_to_balance[resource]["stolen_percentage"] * donor["resources"][resource]["current"]
                 shuffling_tuples.append((donor, stolen_amount))
             shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
 
@@ -467,7 +468,7 @@ class ContainerRebalancer:
                 if donor["name"] not in requests:
                     requests[donor["name"]] = list()
                 requests[donor["name"]].append(request)
-                log_info("Resource swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]), self.__debug)
+                log_info("Resource swap between {0}(donor) and {1}(receiver) with amount {2}".format(donor["name"], receiver["name"], amount_to_scale), self.__debug)
 
             log_info("No more receivers", self.__debug)
 
