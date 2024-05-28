@@ -9,6 +9,9 @@ from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 OUT_RANGE = 1.5
 MAX_CPU_USAGE_RATIO = 1.0  # Use up to MAX_CPU_USAGE_RATIO of total CPU cores to retrieve InfluxDB time series
+START_OFFSET = 60  # Offset to start timestamp
+STOP_OFFSET = 10  # Offset to stop timestamp
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
@@ -41,14 +44,14 @@ class TimeSeriesParallelCollector:
         return df_filtered
 
     @staticmethod
-    def get_timestamp_from_line(start_line, stop_line, offset):
+    def get_timestamp_from_line(start_line, stop_line):
+        exp_type = start_line.split(" ")[1]
+        start_offset = 0 if exp_type == "IDLE" else START_OFFSET
+        stop_offset = 0 if exp_type == "IDLE" else STOP_OFFSET
         start_str = " ".join(start_line.split(" ")[-2:]).strip()
         stop_str = " ".join(stop_line.split(" ")[-2:]).strip()
-        exp_type = start_line.split(" ")[1]
-        if exp_type == "IDLE":
-            offset = 0
-        start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=offset)
-        stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=offset)
+        start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=start_offset)
+        stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=stop_offset)
         return [(start, stop, exp_type)]
 
     @staticmethod
@@ -62,7 +65,7 @@ class TimeSeriesParallelCollector:
         for i in range(0, len(lines), 2):
             start_line = lines[i]
             stop_line = lines[i + 1]
-            ts_line = TimeSeriesParallelCollector.get_timestamp_from_line(start_line, stop_line, 20)
+            ts_line = TimeSeriesParallelCollector.get_timestamp_from_line(start_line, stop_line)
             timestamps.append(ts_line[0])
         log(f"Timestamps belong to period [{timestamps[0][0]}, {timestamps[-1][1]}]")
         return timestamps
@@ -119,9 +122,9 @@ class TimeSeriesParallelCollector:
         # Remove DataFrame useless variables
         try:
             exp_data = exp_data[self.model_variables + ["time"]]
-        except KeyError:
-            log(f"Error getting data between {start_date} and {stop_date}", "ERR")
-            print(exp_data)
+        except KeyError as e:
+            log(f"Error getting data between {start_date} and {stop_date}: {str(e)}", "ERR")
+            log(f"Data causing the error: {exp_data}", "ERR")
             exit(1)
         return exp_data
 

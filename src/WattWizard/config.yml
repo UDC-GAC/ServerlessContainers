@@ -5,13 +5,11 @@ influxdb_bucket: "compute2"
 influxdb_token: "MyToken"
 influxdb_org: "MyOrg"
 
-prediction_methods: "sgdregressor"
+prediction_methods: "polyreg,sgdregressor"
 model_variables: "user_load,system_load"
 
-host_timestamps_dir: "./conf/WattWizard/host"
-container_timestamps_dir: "./conf/WattWizard/container"
-host_train_files: "all"
-container_train_files: "all"
+timestamps_dir: "./conf/WattWizard/timestamps"
+train_files: "all"
 
 plot_time_series: no
 plot_time_series_dir: "./conf/WattWizard/time_series"

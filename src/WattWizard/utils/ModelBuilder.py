@@ -29,6 +29,9 @@ class ModelBuilder:
                                                         self.config.get_argument("influxdb_token"),
                                                         self.config.get_argument("influxdb_org"))
 
+    def clear_processed_files(self):
+        self.processed_files.clear()
+
     def add_processed_file(self, train_file, pred_method):
         self.processed_files.append({"path": train_file, "prediction_method": pred_method})
 
@@ -92,12 +95,13 @@ class ModelBuilder:
 
         for structure in ["host", "container"]:
             self.ts_collector.set_structure(structure)
+            self.clear_processed_files()
             for prediction_method in self.config.get_argument("prediction_methods"):
-                for train_file in self.config.get_argument(f"{structure}_train_files"):
+                for train_file in self.config.get_argument(f"train_files"):
                     train_file = None if train_file == "NPT" else train_file  # NPT = Not Pre-Trained
                     if train_file is None and ModelHandler.is_static(prediction_method):
-                        log(f"Prediction method {prediction_method} doesn't support online learning, "
-                            f"so it's mandatory to pretrain the model. Model {prediction_method}_NPT will be discarded", "WARN")
+                        log(f"Prediction method {prediction_method} doesn't support online learning, so it's mandatory "
+                            f"to pretrain the model. Model {prediction_method}_NPT will be discarded", "WARN")
                         continue
                     model = self.model_handler.add_model(structure, prediction_method, train_file)
                     self.initialize_model(structure, model)

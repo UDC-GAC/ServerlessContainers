@@ -58,26 +58,14 @@ class CLIParser:
         )
 
         self.parser.add_argument(
-            "--host-timestamps-dir",
-            help="Directory in which the timestamp files to train host models are stored. By default is ./conf/WattWizard/host.",
+            "--timestamps-dir",
+            help="Directory in which the timestamp files to train models are stored. By default is ./conf/WattWizard/timestamps.",
         )
 
         self.parser.add_argument(
-            "--container-timestamps-dir",
-            help="Directory in which the timestamp files to train container models are stored. By default is ./conf/WattWizard/container.",
-        )
-
-        self.parser.add_argument(
-            "--host-train-files",
-            help="Comma-separated list of train file names stored under host timestamps directory (or 'all' keyword to use all files in this directory). \n\
-One host model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
-data in proper format. Check README.md to see timestamps proper format.",
-        )
-
-        self.parser.add_argument(
-            "--container-train-files",
-            help="Comma-separated list of train file names stored under container timestamps directory (or 'all' keyword to use all files in this directory). \n\
-One container model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
+            "--train-files",
+            help="Comma-separated list of train file names stored under timestamps directory (or 'all' keyword to use all files in this directory). \n\
+One model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
 data in proper format. Check README.md to see timestamps proper format.",
         )
 

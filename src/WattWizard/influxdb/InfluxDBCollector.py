@@ -5,10 +5,7 @@ from influxdb_client.client.warnings import MissingPivotFunction
 from urllib3.exceptions import ReadTimeoutError
 
 from src.WattWizard.logs.logger import log
-from src.WattWizard.influxdb.container_queries import container_queries
-from src.WattWizard.influxdb.host_queries import host_queries
-
-INFLUXDB_QUERIES = {"host": host_queries, "container": container_queries}
+from src.WattWizard.influxdb.influxdb_queries import INFLUXDB_QUERIES
 
 warnings.simplefilter("ignore", MissingPivotFunction)
 
@@ -31,6 +28,24 @@ class InfluxDBCollector:
 
     def __del__(self):
         self.close_connection()
+
+    @staticmethod
+    def get_hostname_from_structure(structure, var):
+        """
+        Since the data stored in InfluxDB should have been obtained using
+        ContainerPowerWatcher: https://github.com/TomeMD/ContainerPowerWatcher.git
+        This method returns the hostname associated to the data stored in InfluxDB
+        which is "container" for container metrics and "global" for host metrics.
+        RAPL actual power is stored under the hostname "rapl" (as "global" contains
+        the host power modelled by SmartWatts).
+        """
+        if structure == "container":
+            return "container"
+        if structure == "host":
+            return "rapl" if var == "power" else "global"
+
+        log(f"Structure {structure} not supported", "ERR")
+        exit(1)
 
     def get_influxdb_host(self):
         return self.influxdb_host
@@ -70,17 +85,17 @@ class InfluxDBCollector:
             exit(1)
 
     def get_query(self, var, structure, start_date, stop_date):
-        if structure not in INFLUXDB_QUERIES:
-            log(f"Querying model variable \'{var}\' for unknown structure \'{structure}\'", "ERR")
+        if var not in INFLUXDB_QUERIES:
+            log(f"Model variable \'{var}\' not supported", "ERR")
             exit(1)
-        if var not in INFLUXDB_QUERIES[structure]:
-            log(f"Model variable \'{var}\' not supported for structure \'{structure}\'", "ERR")
+        if INFLUXDB_QUERIES[var] is None:
+            log(f"Model variable \'{var}\' not yet supported. It will be implemented in the future", "ERR")
             exit(1)
-        if INFLUXDB_QUERIES[structure][var] is None:
-            log(f"Model variable \'{var}\' not yet supported for structure \'{structure}\'", "ERR")
-            exit(1)
-        return INFLUXDB_QUERIES[structure][var].format(start_date=start_date, stop_date=stop_date,
-                                                       influxdb_bucket=self.influxdb_bucket, influxdb_window="2s")
+        return INFLUXDB_QUERIES[var].format(start_date=start_date,
+                                            stop_date=stop_date,
+                                            host=self.get_hostname_from_structure(structure, var),
+                                            influxdb_bucket=self.influxdb_bucket,
+                                            influxdb_window="2s")
 
     def query_influxdb(self, var, structure, start_date, stop_date):
         query = self.get_query(var, structure, start_date, stop_date)
@@ -105,7 +120,6 @@ class InfluxDBCollector:
                 log(f"{e}", "ERR")
                 exit(1)
             else:
-                # CHECK EMPTY DATAFRAME!!!
                 if result.empty:
                     log(f"There isn't any data between {start_date} and {stop_date}. (var = {var})", "WARN")
                 if "_time" in result and result["_time"][0] is not None:

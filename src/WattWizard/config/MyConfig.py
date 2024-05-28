@@ -4,9 +4,9 @@ USER_DIR = os.getcwd()
 SCRIPT_PATH = os.path.abspath(__file__)
 WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 
-COMMA_SEPARATED_LIST_ARGS = ['prediction_methods', 'model_variables', 'host_train_files', 'container_train_files']
-DIRECTORY_ARGS = ['host_timestamps_dir', 'container_timestamps_dir', 'plot_time_series_dir']
-FILE_ARGS = ['host_train_files', 'container_train_files']
+COMMA_SEPARATED_LIST_ARGS = ['prediction_methods', 'model_variables', 'train_files']
+DIRECTORY_ARGS = ['timestamps_dir', 'plot_time_series_dir']
+FILE_ARGS = ['train_files']
 
 DASHED_LINE = "".join(["-" for _ in range(1, 200)])
 
@@ -92,12 +92,6 @@ class MyConfig:
         else:
             raise Exception(f"Resource '{resource}' not found in cpu limits")
 
-    def map_train_file_arg_to_timestamps_dir(self, file_arg_name):
-        index = file_arg_name.find("_")
-        if index != -1:
-            return self.args[f'{file_arg_name[:index]}_timestamps_dir']
-        raise Exception(f"Bad argument name for train files. Argument {file_arg_name} not supported")
-
     def add_argument(self, arg_name, arg_value):
         if arg_name in COMMA_SEPARATED_LIST_ARGS:
             self.args[arg_name] = arg_value.split(',')
@@ -111,9 +105,8 @@ class MyConfig:
 
         # Set full path for train timestamp files
         if arg_name in FILE_ARGS:
-            timestamps_dir = self.map_train_file_arg_to_timestamps_dir(arg_name)
-            filenames_list = self.adjust_filenames_list(self.args[arg_name], timestamps_dir)
-            self.args[arg_name] = self.get_files_list(filenames_list, timestamps_dir)
+            filenames_list = self.adjust_filenames_list(self.args[arg_name], self.args["timestamps_dir"])
+            self.args[arg_name] = self.get_files_list(filenames_list, self.args["timestamps_dir"])
 
     def get_resource_cpu_limit(self, resource, limit_type):
         if limit_type not in ["min", "max"]:
