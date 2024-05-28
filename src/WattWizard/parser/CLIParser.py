@@ -42,6 +42,14 @@ class CLIParser:
         )
 
         self.parser.add_argument(
+            "-s",
+            "--structures",
+            help="Comma-separated list of structures to build models for. Supported structures:\n\
+    \tcontainer\t\t\tModel using container metrics\n\
+    \thost\t\t\tModel using wide-system metrics",
+        )
+
+        self.parser.add_argument(
             "-p",
             "--prediction-methods",
             help="Comma-separated list of methods used to predict CPU power consumption. By default is a SGD Regressor. Supported methods:\n\

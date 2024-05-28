@@ -46,13 +46,15 @@ class ModelHandler:
         else:
             ModelHandler.__instance = self
 
-        self.models = {"host": {}, "container": {}}
+        self.models = {}
 
     def add_model(self, structure, prediction_method, train_file):
         model_name = f"{prediction_method}_{self.get_file_name(train_file)}"
         if structure in self.models and model_name in self.models[structure]:
             raise Exception(f"Model with name {model_name} already exists")
         else:
+            if structure not in self.models:
+                self.models[structure] = {}
             self.models[structure][model_name] = {
                 "name": model_name,
                 "prediction_method": prediction_method,

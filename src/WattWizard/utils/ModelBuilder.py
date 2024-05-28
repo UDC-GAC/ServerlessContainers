@@ -93,7 +93,7 @@ class ModelBuilder:
         for line in self.config.get_summary():
             log(line)
 
-        for structure in ["host", "container"]:
+        for structure in self.config.get_argument("structures"):
             self.ts_collector.set_structure(structure)
             self.clear_processed_files()
             for prediction_method in self.config.get_argument("prediction_methods"):

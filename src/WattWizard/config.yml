@@ -5,6 +5,7 @@ influxdb_bucket: "compute2"
 influxdb_token: "MyToken"
 influxdb_org: "MyOrg"
 
+structures: "host,container"
 prediction_methods: "polyreg,sgdregressor"
 model_variables: "user_load,system_load"
 

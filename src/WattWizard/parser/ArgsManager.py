@@ -6,10 +6,11 @@ from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 
 SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
-                  'prediction_methods', 'model_variables', 'timestamps_dir', 'train_files',
+                  'structures', 'prediction_methods', 'model_variables', 'timestamps_dir', 'train_files',
                   'plot_time_series', 'plot_time_series_dir']
-SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
+SUPPORTED_STRUCTURES = ["container", "host"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
+SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 
 WATTWIZARD_DIR = MyConfig.get_project_dir()
 
@@ -51,6 +52,16 @@ class ArgsManager:
                 log(f"Supported values: {supported_values}", "ERR")
                 exit(1)
 
+    @staticmethod
+    def check_influxdb_args(args, num_args):
+        if num_args == 4:
+            with InfluxDBHandler(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:
+                conn.check_influxdb_connection()
+                conn.check_bucket_exists()
+        else:
+            log(f"Missing some InfluxDB parameter. InfluxDB host, bucket, token and organization must be specified", "ERR")
+            exit(1)
+
     def validate_args(self):
         my_config = MyConfig.get_instance()
         args = my_config.get_arguments()
@@ -66,6 +77,9 @@ class ArgsManager:
 
             elif arg_name.startswith("influxdb"):
                 influxdb_args += 1  # Count InfluxDB arguments
+
+            elif arg_name == "structures":
+                self.check_supported_values(arg_name, args[arg_name], SUPPORTED_STRUCTURES)
 
             elif arg_name == "prediction_methods":
                 self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
@@ -93,13 +107,7 @@ class ArgsManager:
                 log(f"Argument {arg_name} is not supported", "ERR")
                 exit(1)
 
-        if influxdb_args == 4:
-            with InfluxDBHandler(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:
-                conn.check_influxdb_connection()
-                conn.check_bucket_exists()
-        else:
-            log(f"Missing some InfluxDB parameter. InfluxDB host, bucket, token and organization must be specified", "ERR")
-            exit(1)
+        self.check_influxdb_args(args, influxdb_args)
 
     def manage_args(self):
         my_config = MyConfig.get_instance()
