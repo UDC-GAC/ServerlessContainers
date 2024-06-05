@@ -320,9 +320,10 @@ class Guardian:
         """
         user_usage = usages[translator_dict["user"]]
         kernel_usage = usages[translator_dict["kernel"]]
-        target_power = structure["resources"][resource]["max"] - limits[resource]['boundary']
+        target_power = structure["resources"][resource]["max"] #- limits[resource]['boundary']
         # TODO: Check uses cases of each structure subtype and manage them
-        subtype = structure["subtype"] if structure["subtype"] != "application" else "host"
+        # subtype = structure["subtype"] if structure["subtype"] != "application" else "host"
+        subtype = "host"
         target_cpu = self.wattwizard_handler.get_usage_from_power(subtype, self.energy_model_name, user_usage, kernel_usage, target_power)
         current_cpu_limit = structure["resources"]["cpu"]["current"]
         amount = target_cpu - current_cpu_limit
@@ -338,7 +339,7 @@ class Guardian:
 
         Args:
             structure (dict): The dictionary containing all of the structure resource information
-            resource (string): The resource name, used for indexing puroposes
+            resource (string): The resource name, used for indexing purposes
 
         Returns:
             (int) The amount to be reduced using the fit to usage policy.
