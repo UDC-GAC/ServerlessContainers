@@ -46,7 +46,7 @@ WATT_TRAINER_METRICS = {
     'energy': ['structure.energy.usage']
 }
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10,
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "USAGE_THRESHOLD": 1.0,
                          "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"],
                          "MODELS_TO_TRAIN": ["all"], "DEBUG": True, "ACTIVE": True}
 
@@ -65,6 +65,7 @@ class WattTrainer:
         self.debug = True
 
     def get_container_usages(self, container_name):
+        success = False
         try:
             container_info = self.opentsdb_handler.get_structure_timeseries({"host": container_name},
                                                                             self.window_difference,
@@ -76,19 +77,25 @@ class WattTrainer:
                     continue
                 if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     log_warning("No info for {0} in container {1}".format(metric, container_name), debug=self.debug)
+                    return False, {}
+
+            success = container_info["cpu_user"] > self.config.get_value("USAGE_THRESHOLD") or \
+                      container_info["cpu_kernel"] > self.config.get_value("USAGE_THRESHOLD")
 
         except requests.ConnectionError as e:
             log_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=self.debug)
             raise e
 
-        return container_info
+        return success, container_info
 
     def train_model(self, structure, structure_type, model_name, usages):
         missing_values = False
         for resource in self.config.get_value("GENERATED_METRICS"):
             if resource not in usages:
                 missing_values = True
-                log_error("Missing {0} value for structure {1} to train model {2}".format(resource, structure, model_name), debug=self.debug)
+                log_error(
+                    "Missing {0} value for structure {1} to train model {2}".format(resource, structure, model_name),
+                    debug=self.debug)
 
         if not missing_values:
             try:
@@ -97,24 +104,29 @@ class WattTrainer:
                                                         [usages['cpu_user']],
                                                         [usages['cpu_kernel']],
                                                         [usages['energy']])
-                log_info("Structure = {0} | Model name = {1} | Msg = {2}".format(structure, model_name, r["INFO"]), self.debug)
+                log_info("Structure = {0} | Model name = {1} | Msg = {2}".format(structure, model_name, r["INFO"]),
+                         self.debug)
             except Exception as e:
                 log_error(str(e), debug=self.debug)
 
     def train_all_models_with_containers_info(self, containers):
         for container in containers:
-            container_usages = self.get_container_usages(container["name"])
-            for model in self.wattwizard_handler.get_models_structure("container", avoid_static=True):
-                self.train_model(container["name"], "container", model, container_usages)
+            success, container_usages = self.get_container_usages(container["name"])
+            if success:
+                for model in self.wattwizard_handler.get_models_structure("container", avoid_static=True):
+                    self.train_model(container["name"], "container", model, container_usages)
 
     def train_config_models_with_containers_info(self, containers):
         for container in containers:
-            container_usages = self.get_container_usages(container["name"])
-            for model in self.models_to_train:
-                if not self.wattwizard_handler.is_static("container", model):
-                    self.train_model(container["name"], "container", model, container_usages)
-                else:
-                    log_warning("Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model), debug=self.debug)
+            success, container_usages = self.get_container_usages(container["name"])
+            if success:
+                for model in self.models_to_train:
+                    if not self.wattwizard_handler.is_static("container", model):
+                        self.train_model(container["name"], "container", model, container_usages)
+                    else:
+                        log_warning(
+                            "Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model),
+                            debug=self.debug)
 
     def train_thread(self, ):
         containers = get_structures(self.couchdb_handler, self.debug, subtype="container")

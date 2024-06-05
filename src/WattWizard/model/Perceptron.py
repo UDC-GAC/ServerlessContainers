@@ -11,9 +11,18 @@ class Perceptron(Model):
 
     def __init__(self):
         super().__init__()
-        self.model = MLPRegressor(hidden_layer_sizes=(100, 100), max_iter=2000, random_state=1,
-                                      learning_rate_init=0.1, alpha=0.0001, solver='adam', n_iter_no_change=50, tol=1e-6)         
+        self.model = MLPRegressor(hidden_layer_sizes=(), max_iter=10000, warm_start=False)
         self.scaler = StandardScaler()
+
+    def get_coefs(self):
+        if self.pretrained or self.times_trained > 0:
+            return [x for xs in self.model.coefs_[0].tolist() for x in xs]
+        return None
+
+    def get_intercept(self):
+        if self.pretrained or self.times_trained > 0:
+            return self.model.intercepts_[0].tolist()
+        return None
 
     def pretrain(self, X, y):
         X_scaled = self.scaler.fit_transform(X)

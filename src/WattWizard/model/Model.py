@@ -14,12 +14,6 @@ class Model(object):
         self.times_trained = 0
         self.pretrained = False
         self.idle_consumption = 0
-        
-    def get_coefs(self):
-        return self.model.coef_.tolist() if self.pretrained or self.times_trained > 0 else None
-
-    def get_intercept(self):
-        return self.model.intercept_.tolist() if self.pretrained or self.times_trained > 0 else None
 
     def get_times_trained(self):
         return self.times_trained

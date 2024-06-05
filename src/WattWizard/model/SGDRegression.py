@@ -20,6 +20,16 @@ class SGDRegression(Model):
             ('scaler', StandardScaler())
         ])
 
+    def get_coefs(self):
+        if self.pretrained or self.times_trained > 0:
+            return self.model.coef_.tolist()
+        return None
+
+    def get_intercept(self):
+        if self.pretrained or self.times_trained > 0:
+            return self.model.intercept_.tolist()
+        return None
+
     def pretrain(self, X, y):
         X_scaled = self.pipeline.fit_transform(X)
         self.model.fit(X_scaled, y)
