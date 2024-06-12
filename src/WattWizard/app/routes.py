@@ -41,17 +41,34 @@ def predict_values_from_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
         current_X = get_model_variables_from_request(model_instance, request)
-
         my_config.check_resources_limits(current_X)
-        var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
-
         desired_power = get_param_value(request, "desired_power", float)
+        var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
 
         result = model_instance.get_inverse_prediction(current_X, desired_power, DYNAMIC_VAR, var_limits)
-        return jsonify({DYNAMIC_VAR: result})
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'ERROR': str(e)}), 400
+
+
+@routes.route('/adjusted-inverse-predict/<structure>/<model_name>', methods=['GET'])
+def predict_adjusted_values_from_power(structure=None, model_name=None):
+    try:
+        model_instance = model_handler.get_model_instance(structure, model_name)
+        current_X = get_model_variables_from_request(model_instance, request)
+        my_config.check_resources_limits(current_X)
+        real_power = get_param_value(request, "real_power", float)
+        desired_power = get_param_value(request, "desired_power", float)
+        var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
+        idle_consumption = model_instance.get_idle_consumption()
+        if idle_consumption and desired_power <= idle_consumption:
+            return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
+
+        result = model_instance.get_adjusted_inverse_prediction(current_X, real_power, desired_power, DYNAMIC_VAR, var_limits)
+        return jsonify(result)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 

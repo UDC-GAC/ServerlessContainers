@@ -44,12 +44,14 @@ class WattWizardUtils:
             else:
                 self.is_static(structure, model_name, tries)
 
-    def get_usage_from_power(self, structure, model_name, user_usage, system_usage, power_target, tries=3):
+    def get_usage_meeting_budget(self, structure, model_name, user_usage, system_usage, power_budget, tries=3):
         try:
-            params = {'user_load': user_usage, 'system_load': system_usage, 'desired_power': power_target}
+            params = {'user_load': user_usage,
+                      'system_load': system_usage,
+                      'desired_power': power_budget}
             r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "inverse-predict", structure, model_name), params=params)
             if r.status_code == 200:
-                return r.json()['user_load']
+                return r.json()
             else:
                 r.raise_for_status()
         except requests.ConnectionError as e:
@@ -57,7 +59,25 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_usage_from_power(structure, model_name, user_usage, system_usage, power_target, tries)
+                self.get_usage_meeting_budget(structure, model_name, user_usage, system_usage, power_budget, tries)
+
+    def get_adjusted_usage_meeting_budget(self, structure, model_name, user_usage, system_usage, real_power, power_budget, tries=3):
+        try:
+            params = {'user_load': user_usage,
+                      'system_load': system_usage,
+                      'real_power': real_power,
+                      'desired_power': power_budget}
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "adjusted-inverse-predict", structure, model_name), params=params)
+            if r.status_code == 200:
+                return r.json()
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.get_usage_meeting_budget(structure, model_name, user_usage, system_usage, power_budget, tries)
 
     def get_idle_consumption(self, structure, model_name, tries=3):
         try:

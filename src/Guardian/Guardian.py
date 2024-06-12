@@ -104,6 +104,7 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
+        self.last_power_budget = None
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
     @staticmethod
@@ -301,7 +302,7 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
-    def get_amount_from_energy_modelling(self, structure, usages, limits, resource):
+    def get_amount_from_energy_modelling(self, structure, usages, resource):
         """Get an amount that will be reduced from the current resource limit using an energy model that relates
         resource usage with energy usage.
         Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
@@ -312,22 +313,37 @@ class Guardian:
         Args:
             structure (dict): The dictionary containing all of the structure resource information
             usages (dict): a dictionary with the usages of the resources
-            resource (string): The resource name, used for indexing puroposes
+            resource (string): The resource name, used for indexing purposes
 
         Returns:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        user_usage = usages[translator_dict["user"]]
-        kernel_usage = usages[translator_dict["kernel"]]
-        target_power = structure["resources"][resource]["max"] #- limits[resource]['boundary']
-        # TODO: Check uses cases of each structure subtype and manage them
-        # subtype = structure["subtype"] if structure["subtype"] != "application" else "host"
-        subtype = "host"
-        target_cpu = self.wattwizard_handler.get_usage_from_power(subtype, self.energy_model_name, user_usage, kernel_usage, target_power)
+        power_budget = structure["resources"][resource]["max"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
-        amount = target_cpu - current_cpu_limit
-        return int(amount)
+
+        # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
+        if not self.last_power_budget or self.last_power_budget != power_budget:
+            self.last_power_budget = power_budget
+
+            # TODO: Check uses cases of each structure subtype and manage them
+            subtype = "host"  # structure["subtype"] if structure["subtype"] != "application" else "host"
+            user_usage = usages[translator_dict["user"]]
+            kernel_usage = usages[translator_dict["kernel"]]
+            result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name, user_usage,
+                                                                      kernel_usage, power_budget)
+            log_warning("First time rescaling with this power budget. "
+                        "Setting power model estimated CPU ({0}W = {1}% CPU)."
+                        .format(power_budget, result["value"]), self.debug)
+            amount = result["value"] - current_cpu_limit
+            return int(amount)
+
+        # If not, we adjust the CPU value previously retrieved from the model based on current error
+        else:
+            real_power = usages[translator_dict["energy"]]
+            percentage_error = min((power_budget - real_power) / power_budget, 0)
+            amount = current_cpu_limit * percentage_error
+            return int(amount)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
@@ -527,14 +543,12 @@ class Guardian:
         for res in ["energy", "cpu"]:
             current_limit = structure["resources"][res]["current"]
             max_limit = structure["resources"][res]["max"]
-            boundary = limits[res]["boundary"]
             upper_limit = limits[res]["upper"]
             res_usage = usages[translator_dict[res]]
             if res == "energy":
-                log_warning("POWER BUDGET -> max : {0} | boundary : {1} | target : {2} | usa: {3}".format(
-                    max_limit, boundary, max_limit - boundary, res_usage), self.debug)
+                log_warning("POWER BUDGETING -> max : {0} | usa: {1}".format(max_limit, res_usage), self.debug)
             else:
-                log_warning("PROP CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
+                log_warning("PROPORTIONAL CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
                     current_limit, upper_limit, res_usage, amount), self.debug)
 
     def match_rules_and_events(self, structure, rules, events, limits, usages):
@@ -584,7 +598,7 @@ class Guardian:
                     amount = rule["amount"]
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
                     if self.use_energy_model:
-                        amount = self.get_amount_from_energy_modelling(structure, usages, limits, resource_label)
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
                     else:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     self.print_energy_rescale_info(structure, usages, limits, amount)
@@ -610,7 +624,7 @@ class Guardian:
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
                     if self.use_energy_model:
-                        amount = self.get_amount_from_energy_modelling(structure, usages, limits, resource_label)
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
                     else:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     self.print_energy_rescale_info(structure, usages, limits, amount)

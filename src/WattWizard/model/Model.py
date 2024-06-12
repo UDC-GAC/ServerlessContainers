@@ -35,15 +35,23 @@ class Model(object):
         return hasattr(estimator, 'n_features_in_')
 
     def get_inverse_prediction(self, current_X, desired_power, dynamic_var, limits):
-        current_power = self.predict(current_X)
-        error = abs(desired_power - current_power)
+        estimated_power = self.predict(current_X)
+        error = abs(desired_power - estimated_power)
         count_iters = 0
         while error > MAX_ERROR and count_iters < MAX_ITERS and limits["min"] < current_X[dynamic_var] < limits["max"]:
-            current_X[dynamic_var] = desired_power * current_X[dynamic_var] / current_power
-            current_power = self.predict(current_X)
-            error = abs(desired_power - current_power)
+            current_X[dynamic_var] = desired_power * current_X[dynamic_var] / estimated_power
+            estimated_power = self.predict(current_X)
+            error = abs(desired_power - estimated_power)
             count_iters += 1
 
-        value = limits["max"] if current_X[dynamic_var] > limits["max"] else current_X[dynamic_var]
-        value = limits["min"] if value < limits["min"] else current_X[dynamic_var]
-        return value
+        return {
+            "value": max(limits["min"], min(limits["max"], current_X[dynamic_var]))
+        }
+
+    def get_adjusted_inverse_prediction(self, current_X, real_power, desired_power, dynamic_var, limits):
+        result = self.get_inverse_prediction(current_X, desired_power, dynamic_var, limits)
+        # Adjust estimation based on model error
+        result["model_error_percentage"] = (self.predict(current_X) - real_power) / max(real_power, float('1e-30'))
+        adjusted_value = result["value"] * (1 + result["model_error_percentage"])
+        result["adjusted_value"] = max(limits["min"], min(limits["max"], adjusted_value))
+        return result
