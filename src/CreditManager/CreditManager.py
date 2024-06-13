@@ -206,6 +206,8 @@ class CreditManager:
             u_current = self.couchdb_handler.get_user(u["name"])
             u_current["accounting"]["pending"] = u["accounting"]["pending"]
             u_current["accounting"]["coins"] = u["accounting"]["coins"]
+            u_current["accounting"]["restricted"] = u["accounting"]["restricted"]
+            u_current["accounting"]["credit"] = u["accounting"]["credit"]
             self.couchdb_handler.update_user(u_current)
 
             log_info("Updated User {0} (cpu)".format(u["name"]), self.debug)
