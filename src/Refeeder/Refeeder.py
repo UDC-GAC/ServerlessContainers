@@ -49,7 +49,7 @@ REFEEDER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'], 'energy': 
 
 REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
                                 'mem': ['proc.mem.resident'],
-                                # 'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
+                                'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
                                 # 'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
                                 'energy': ["sys.cpu.energy"]}
 
@@ -99,15 +99,20 @@ class ReFeeder:
 
     def generate_application_metrics(self, application):
         application_info = dict()
-        for c in application["containers"]:
-            container_info = self.get_container_usages(c)
-            application_info = self.merge(application_info, container_info)
 
-        for resource in application_info:
-            if resource in application["resources"]:
-                application["resources"][resource]["usage"] = application_info[resource]
-            else:
-                log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
+        if len(application["containers"]) > 0:
+            for c in application["containers"]:
+                container_info = self.get_container_usages(c)
+                application_info = self.merge(application_info, container_info)
+
+            for resource in application_info:
+                if resource in application["resources"]:
+                    application["resources"][resource]["usage"] = application_info[resource]
+                else:
+                    log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
+        else:
+            for resource in application["resources"]:
+                application["resources"][resource]["usage"] = 0
 
         return application
 
@@ -186,15 +191,15 @@ class ReFeeder:
                 # Remote database operation
                 host_info_cache = dict()
                 containers = get_structures(self.couchdb_handler, debug, subtype="container")
-                if not containers:
-                    # As no container info is available, no application information will be able to be generated
-                    log_info("No structures to process", debug)
-                    time.sleep(self.window_difference)
-                    end_epoch(self.debug, self.window_difference, t0)
-                    continue
-                else:
-                    thread = Thread(target=self.refeed_thread, args=())
-                    thread.start()
+                # if not containers:
+                #     # As no container info is available, no application information will be able to be generated
+                #     log_info("No structures to process", debug)
+                #     time.sleep(self.window_difference)
+                #     end_epoch(self.debug, self.window_difference, t0)
+                #     continue
+                # else:
+                thread = Thread(target=self.refeed_thread, args=())
+                thread.start()
             else:
                 log_warning("Refeeder is not activated", debug)
 

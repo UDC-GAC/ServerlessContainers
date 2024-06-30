@@ -34,9 +34,10 @@ from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
 
-BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel']
+BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.disk.reads.mb', 'proc.disk.writes.mb']
 GUARDIAN_CONTAINER_METRICS = {
-    'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel']}
+    'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
+    'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb']}
 
 
 class ContainerRebalancer:
@@ -293,6 +294,10 @@ class ContainerRebalancer:
         self.__config = config
         self.__debug = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
+        ## ATM we are using the energy percentage parameters to balance other resources (such as disk)
+        self.__DIFF_PERCENTAGE = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
+        self.__STOLEN_PERCENTAGE = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
+
         log_info("_______________", self.__debug)
         log_info("Performing CONTAINER CPU Balancing", self.__debug)
 
@@ -300,6 +305,7 @@ class ContainerRebalancer:
         try:
             applications = get_structures(self.__couchdb_handler, self.__debug, subtype="application")
             containers = get_structures(self.__couchdb_handler, self.__debug, subtype="container")
+            hosts = get_structures(self.__couchdb_handler, self.__debug, subtype="host")
         except requests.exceptions.HTTPError as e:
             log_error("Couldn't get applications", self.__debug)
             log_error(str(e), self.__debug)
@@ -336,5 +342,156 @@ class ContainerRebalancer:
             app_name = app["name"]
             log_info("Going to rebalance {0} now".format(app_name), self.__debug)
             self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
+
+        # Get hosts' containers
+        host_containers = dict()
+        for host in hosts:
+            host_name = host["name"]
+            host_containers[host_name] = list()
+            host_containers_names = [c["name"] for c in containers if c["host"] == host_name]
+            for container in containers:
+                if container["name"] in host_containers_names:
+                    host_containers[host_name].append(container)
+            # Get the container usages
+            host_containers[host_name] = self.__fill_containers_with_usage_info(host_containers[host_name])
+
+        # Rebalance hosts
+        for host in hosts:
+            host_name = host["name"]
+            self.__rebalance_host_containers_by_pair_swapping(host_containers[host_name], host_name)
+
+    def __rebalance_host_containers_by_pair_swapping(self, containers, host_name):
+
+        ## Currently supported resources: disk
+        resources_to_balance = {"disk": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}}
+
+        for resource in resources_to_balance:
+
+            log_info("Going to rebalance {0} for {1} now".format(resource, host_name), self.__debug)
+
+            requests = dict()
+            donors, receivers = list(), list()
+
+            # Filter the containers between donors and receivers
+            for container in containers:
+                if resource in container["resources"]:
+                    diff = container["resources"][resource]["max"] - container["resources"][resource]["current"]
+                    if diff < resources_to_balance[resource]["diff_percentage"] * container["resources"][resource]["max"]:
+                        donors.append(container)
+                    elif container["resources"][resource]["current"] - container["resources"][resource]["usage"] < resources_to_balance[resource]["diff_percentage"] * container["resources"][resource]["current"]:
+                        receivers.append(container)
+
+            log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
+            log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
+
+            if not receivers:
+                log_info("No containers in need of rebalancing for {0}".format(host_name), self.__debug)
+                return
+            else:
+                # Order the containers from lower to upper current resource limit
+                receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
+
+            shuffling_tuples = list()
+            for donor in donors:
+                stolen_amount = resources_to_balance[resource]["stolen_percentage"] * donor["resources"][resource]["current"]
+                shuffling_tuples.append((donor, stolen_amount))
+            shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
+
+            # Give the resources to the bottlenecked containers
+            for receiver in receivers:
+
+                max_receiver_amount = receiver["resources"][resource]["max"] - receiver["resources"][resource]["current"]
+                # If this container can't be scaled anymore, skip
+                if max_receiver_amount == 0:
+                    continue
+
+                if resource == "disk":
+                    i = 0
+                    initial_donors = len(shuffling_tuples)
+                    disk_match = False
+
+                    while not disk_match and shuffling_tuples and i < initial_donors:
+                        donor, amount_to_scale = shuffling_tuples.pop(0)
+                        i += 1
+                        if donor["resources"]["disk"]["name"] == receiver["resources"]["disk"]["name"]:
+                            disk_match = True
+                        else:
+                            shuffling_tuples.append(donor, amount_to_scale)
+
+                    if not disk_match:
+                        log_info("No more donors or no donors suited for container {0}".format(receiver["name"]), self.__debug)
+                        continue
+                else:
+                    if shuffling_tuples:
+                        donor, amount_to_scale = shuffling_tuples.pop(0)
+                    else:
+                        log_info("No more donors, container {0} left out".format(receiver["name"]), self.__debug)
+                        continue
+
+                # Trim the amount to scale if needed
+                if amount_to_scale > max_receiver_amount:
+                    amount_to_scale = max_receiver_amount
+
+                # Create the pair of scaling requests
+                # TODO This should use Guardians method to generate requests
+                request = dict(
+                    type="request",
+                    resource=resource,
+                    amount=int(amount_to_scale),
+                    structure=receiver["name"],
+                    action="{0}RescaleUp".format(resource.capitalize()),
+                    timestamp=int(time.time()),
+                    structure_type="container",
+                    host=receiver["host"],
+                    host_rescaler_ip=receiver["host_rescaler_ip"],
+                    host_rescaler_port=receiver["host_rescaler_port"]
+                )
+
+                if receiver["name"] not in requests:
+                    requests[receiver["name"]] = list()
+                requests[receiver["name"]].append(request)
+
+                # TODO This should use Guardians method to generate requests
+                request = dict(
+                    type="request",
+                    resource=resource,
+                    amount=int(-amount_to_scale),
+                    structure=donor["name"],
+                    action="{0}RescaleDown".format(resource.capitalize()),
+                    timestamp=int(time.time()),
+                    structure_type="container",
+                    host=donor["host"],
+                    host_rescaler_ip=donor["host_rescaler_ip"],
+                    host_rescaler_port=donor["host_rescaler_port"]
+                )
+
+                if donor["name"] not in requests:
+                    requests[donor["name"]] = list()
+                requests[donor["name"]].append(request)
+                log_info("Resource swap between {0}(donor) and {1}(receiver) with amount {2}".format(donor["name"], receiver["name"], amount_to_scale), self.__debug)
+
+            log_info("No more receivers", self.__debug)
+
+            final_requests = list()
+            for container in requests:
+                # Copy the first request as the base request
+                flat_request = dict(requests[container][0])
+                flat_request["amount"] = 0
+                for request in requests[container]:
+                    flat_request["amount"] += request["amount"]
+                final_requests.append(flat_request)
+
+            log_info("REQUESTS ARE:", self.__debug)
+            for c in requests.values():
+                for r in c:
+                    print(r)
+
+            # TODO
+            # Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed but not the scaling up, and shares will be lost
+
+            log_info("FINAL REQUESTS ARE:", self.__debug)
+            for r in final_requests:
+                print(r)
+                self.__couchdb_handler.add_request(r)
 
         log_info("_______________", self.__debug)

@@ -44,7 +44,8 @@ structures_snapshoter = dict(
     heartbeat="",
     config=dict(
         ACTIVE=False,
-        DEBUG=True
+        DEBUG=True,
+        RESOURCES_PERSISTED=["cpu", "mem", "disk"]
     )
 )
 

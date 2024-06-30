@@ -354,22 +354,13 @@ def free_container_disks(container, host):
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
     else:
-        disks = host["resources"]["disks"]
-        i = 0
-        new_disk_load = None
-        for disk in disks:
-            if disk["name"] == disk_name:
-                new_disk_load = disk["load"]
-                break
-            i -= 1
-        if new_disk_load is None:
-            return abort(400, {"message": "Host does not have requested disk"})
-        if new_disk_load < 0:
-            return abort(400, {"message": "Host disk can't have negative load"})
-        else:
-            new_disk_load -= 1
-            host["resources"]["disks"][i]["load"] = new_disk_load
+        try:
+            current_disk_bw = container["resources"]["disk"]["current"]
 
+            host["resources"]["disks"][disk_name]["free"] += current_disk_bw
+            host["resources"]["disks"][disk_name]["load"] -= 1
+        except KeyError:
+            return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
 def free_container_resources(container, host):
     cont_name = container["name"]
@@ -402,6 +393,7 @@ def desubscribe_container(structure_name):
     # Free host resources used by this container
     host = get_db().get_structure(container["host"])
     free_container_resources(container, host)
+
     get_db().update_structure(host)
 
     # Delete the document for this container
@@ -471,35 +463,35 @@ def map_container_to_host_cores(cont_name, host, needed_shares):
 
     return used_cores
 
-
-def map_container_to_host_disks(container, host):
+def map_container_to_host_disks(resource_dict, container, host):
+    resource_dict
     disk_name = container["resources"]["disk"]["name"]
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
     else:
-        disks = host["resources"]["disks"]
-        i = 0
-        new_disk_load = None
-        for disk in disks:
-            if disk["name"] == disk_name:
-                new_disk_load = disk["load"]
-                break
-            i += 1
-        if new_disk_load is None:
-            return abort(400, {"message": "Host does not have requested disk"})
-        else:
-            new_disk_load += 1
-            host["resources"]["disks"][i]["load"] = new_disk_load
+        try:
+            needed_disk_bw = container["resources"]["disk"]["current"]
+            free_disk_bw = host["resources"]["disks"][disk_name]["free"]
+
+            if needed_disk_bw > free_disk_bw:
+                return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
+
+            host["resources"]["disks"][disk_name]["free"] -= needed_disk_bw
+            host["resources"]["disks"][disk_name]["load"] += 1
+        except KeyError:
+            return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
+
+    resource_dict["disk"] = {"disk_read_limit": needed_disk_bw, "disk_write_limit": needed_disk_bw}
 
 
 def map_container_to_host_resources(container, host):
     cont_name = container["name"]
     resource_dict = {}
     for resource in container["resources"]:
+        resource_dict[resource] = {}
         if resource == 'disk':
-            map_container_to_host_disks(container, host)
+            map_container_to_host_disks(resource_dict, container, host)
         else:
-            resource_dict[resource] = {}
             needed_amount = container["resources"][resource]["current"]
             if host["resources"][resource]["free"] < needed_amount:
                 return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
@@ -596,7 +588,7 @@ def subscribe_container(structure_name):
     # Get data corresponding to container resources
     container["resources"] = {}
     resource_keys = ["max", "min", "current", "guard"]
-    keys = {"cpu": resource_keys, "mem": resource_keys, "energy": resource_keys, "disk": ["name", "path"]}
+    keys = {"cpu": resource_keys, "mem": resource_keys, "energy": resource_keys, "disk": ["name", "path"] + resource_keys}
     for resource in req_cont["resources"]:
         get_resource_keys_from_requested_structure(req_cont, container, resource, keys[resource])
 
@@ -672,15 +664,15 @@ def subscribe_host(structure_name):
     host["resources"] = {}
     for resource in req_host["resources"]:
         if resource == 'disks':
-            host["resources"][resource] = []
+            host["resources"][resource] = {}
             for disk in req_host["resources"][resource]:
                 new_disk = {}
-                for key in ["name", "type", "load", "path"]:
+                for key in ["type", "load", "path", "max", "free"]:
                     if key not in disk:
                         return abort(400, {"message": "Missing key '{0}' in disk resource information".format(key)})
                     else:
                         new_disk[key] = disk[key]
-                host["resources"][resource].append(new_disk)
+                host["resources"][resource][disk["name"]] = new_disk
         else:
             get_resource_keys_from_requested_structure(req_host, host, resource, ["max", "free"])
 
@@ -703,7 +695,6 @@ def desubscribe_host(structure_name):
     get_db().delete_structure(host)
 
     return jsonify(201)
-
 
 @structure_routes.route("/structure/apps/<structure_name>", methods=['PUT'])
 def subscribe_app(structure_name):
@@ -767,5 +758,88 @@ def desubscribe_app(structure_name):
     # Delete the limits for this structure
     limits = get_db().get_limits(app)
     get_db().delete_limit(limits)
+
+    return jsonify(201)
+
+@structure_routes.route("/structure/host/<structure_name>/disks", methods=['PUT'])
+def add_disks_to_host(structure_name):
+    data = request.json
+
+    try:
+        host = retrieve_structure(structure_name)
+    except ValueError:
+        return abort(404, {"message": "Host '{0}' does not exist".format(structure_name)})
+
+    if "resources" not in host:
+        return abort(404, {"message": "Missing resource information from host '{0}'".format(host)})
+
+    if "disks" not in host['resources']:
+        ## Create disks dict
+        host["resources"]["disks"] = {}
+
+    if "resources" not in data or "disks" not in data['resources']:
+        return abort(400, {"message": "Missing resource information on request"})
+
+    # Check that all the needed data is present on the request
+    for disk in data['resources']['disks']:
+
+        if "name" not in disk:
+            return abort(400, {"message": "Missing name disk resource"})
+
+        if disk['name'] in host['resources']['disks']: continue
+
+        new_disk = {}
+        for key in ["type", "load", "path", "max", "free"]:
+            if key not in disk:
+                return abort(400, {"message": "Missing key {0} for disk resource".format(key)})
+            else:
+                new_disk[key] = disk[key]
+
+        host["resources"]["disks"][disk["name"]] = new_disk
+
+    get_db().update_structure(host)
+
+    return jsonify(201)
+
+@structure_routes.route("/structure/host/<structure_name>/disks", methods=['POST'])
+def update_host_disks(structure_name):
+    data = request.json
+
+    try:
+        host = retrieve_structure(structure_name)
+    except ValueError:
+        return abort(404, {"message": "Host '{0}' does not exist".format(structure_name)})
+
+    if "resources" not in host or "disks" not in host['resources']:
+        return abort(404, {"message": "Missing disk resource information from host '{0}'".format(host)})
+
+    if "resources" not in data or "disks" not in data['resources']:
+        return abort(400, {"message": "Missing resource information on request"})
+
+    # Check that all the needed data is present on the request
+    for disk in data['resources']['disks']:
+
+        if "name" not in disk:
+            return abort(400, {"message": "Missing name disk resource"})
+
+        if disk['name'] not in host['resources']['disks']:
+            return abort(404, {"message": "Missing disk {0} in host {1}".format(disk, structure_name)})
+
+        disk_info = host['resources']['disks'][disk['name']]
+
+        busy_bw = 0
+        if 'free' in disk_info:
+            busy_bw = disk_info['max'] - disk_info['free']
+
+        for key in ["max"]:
+            if key not in disk:
+                return abort(400, {"message": "Missing key '{0}'".format(key)})
+            else:
+                disk_info[key] = disk[key]
+
+        ## Update free BW
+        disk_info['free'] = disk_info['max'] - busy_bw
+
+    get_db().update_structure(host)
 
     return jsonify(201)

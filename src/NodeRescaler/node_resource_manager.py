@@ -277,16 +277,28 @@ def get_device_path_from_mounted_filesystem(path):
 
 
 def get_device_major_minor_from_volumes(device_path):
-    dmsetup = subprocess.Popen(
-        ["dmsetup", "info", "-c", "-o", "major,minor", "--separator=,", "--noheadings", device_path],
+    ## With dmsetup (requires root permissions)
+    # dmsetup = subprocess.Popen(
+    #     ["sudo","dmsetup", "info", "-c", "-o", "major,minor", "--separator=,", "--noheadings", device_path],
+    #     stdout=subprocess.PIPE)
+    # result = dmsetup.communicate()[0]
+    # if dmsetup.returncode == 0:
+    #     # TODO check that this still works for volumes
+    #     return result.decode('utf-8').strip().split(",")
+    # else:
+    #     return None
+
+    ## With just ls
+    real_device_path = os.path.realpath(device_path)
+    ls = subprocess.Popen(
+        ["ls", "-l", real_device_path],
         stdout=subprocess.PIPE)
-    result = dmsetup.communicate()[0]
-    if dmsetup.returncode == 0:
-        # TODO check that this still works for volumes
-        return result.decode('utf-8').strip().split(",")
+    result = ls.communicate()[0]
+    if ls.returncode == 0:
+        output = result.decode('utf-8').split()
+        return [output[4].strip(','),output[5]]
     else:
         return None
-
 
 def get_device_major_minor_raw_device(device_path):
     stat = subprocess.Popen(
@@ -333,21 +345,24 @@ def get_node_disk_limits(container_id, container_engine):
     return devices_read_limits, devices_write_limits
 
 
-def set_node_disk(container_id, disk_resource, container_engine):
-    major = disk_resource["major"]
-    minor = disk_resource["minor"]
+def set_node_disk(container_id, disk_resource, device, container_engine):
+
+    try:
+        major, minor = get_device_major_minor(device)
+    except TypeError:
+        # None was returned
+        return False, {"error": "No major and minor found for device {0}".format(device)}
 
     if DISK_WRITE_LIMIT_LABEL in disk_resource:
-        limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+        limit_write = int(disk_resource[DISK_WRITE_LIMIT_LABEL]) * 1048576
         try:
-            # TODO FIX the path issue
-            # TODO and use function to differentiate between container engines
-            # set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
-            set_bandwidth_script_path = "/".join([os.getcwd()])
+
+            script_dir = os.path.dirname(os.path.realpath(__file__))
+            set_bandwidth_script_path = "/".join([script_dir, "..", "..", "scripts", container_engine, "set_bandwidth.sh"])
             set_disk_bandwidth = subprocess.Popen(
-                ["/bin/bash", "{0}/set_bandwidth.sh".format(set_bandwidth_script_path), container_id,
-                 "{0}:{1}".format(major, minor),
-                 limit_write], stderr=subprocess.PIPE)
+                ["/bin/bash", set_bandwidth_script_path, str(container_id), "{0}:{1}".format(major, minor), str(limit_write)],
+                stderr=subprocess.PIPE)
+
             out, err = set_disk_bandwidth.communicate()
             if set_disk_bandwidth.returncode == 0:
                 pass
@@ -357,27 +372,54 @@ def set_node_disk(container_id, disk_resource, container_engine):
         except subprocess.CalledProcessError as e:
             return False, {"error": str(e)}
 
-    # blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_id])
-    # if DISK_READ_LIMIT_LABEL in disk_resource:
-    #     limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
-    #     devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
-    #
-    #     op = write_cgroup_file_value(devices_read_limit_path, str(major + ":" + minor + " " + limit_read))
-    #     if not op["success"]:
-    #         # Something happened
-    #         return False, op
-    #
-    # if DISK_WRITE_LIMIT_LABEL in disk_resource:
-    #     limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
-    #     devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
-    #
-    #     op = write_cgroup_file_value(devices_write_limit_path, str(major + ":" + minor + " " + limit_write))
-    #     if not op["success"]:
-    #         # Something happened
-    #         return False, op
-
     # Nothing bad happened
     return True, disk_resource
+
+# def set_node_disk(container_id, disk_resource, container_engine):
+#     major = disk_resource["major"]
+#     minor = disk_resource["minor"]
+
+#     if DISK_WRITE_LIMIT_LABEL in disk_resource:
+#         limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+#         try:
+#             # TODO FIX the path issue
+#             # TODO and use function to differentiate between container engines
+#             # set_bandwidth_script_path = "/".join([os.getcwd(), "NodeRescaler"])
+#             set_bandwidth_script_path = "/".join([os.getcwd()])
+#             set_disk_bandwidth = subprocess.Popen(
+#                 ["/bin/bash", "{0}/set_bandwidth.sh".format(set_bandwidth_script_path), container_id,
+#                  "{0}:{1}".format(major, minor),
+#                  limit_write], stderr=subprocess.PIPE)
+#             out, err = set_disk_bandwidth.communicate()
+#             if set_disk_bandwidth.returncode == 0:
+#                 pass
+#             else:
+#                 return False, {"error": "exit code of set_disk_bandwidth was: {0} with error message: {1}".format(str(
+#                     set_disk_bandwidth.returncode), str(err))}
+#         except subprocess.CalledProcessError as e:
+#             return False, {"error": str(e)}
+
+#     # blkio_path = "/".join([CGROUP_PATH, "blkio", "lxc", container_id])
+#     # if DISK_READ_LIMIT_LABEL in disk_resource:
+#     #     limit_read = disk_resource[DISK_READ_LIMIT_LABEL]
+#     #     devices_read_limit_path = blkio_path + "/blkio.throttle.read_bps_device"
+#     #
+#     #     op = write_cgroup_file_value(devices_read_limit_path, str(major + ":" + minor + " " + limit_read))
+#     #     if not op["success"]:
+#     #         # Something happened
+#     #         return False, op
+#     #
+#     # if DISK_WRITE_LIMIT_LABEL in disk_resource:
+#     #     limit_write = disk_resource[DISK_WRITE_LIMIT_LABEL]
+#     #     devices_write_limit_path = blkio_path + "/blkio.throttle.write_bps_device"
+#     #
+#     #     op = write_cgroup_file_value(devices_write_limit_path, str(major + ":" + minor + " " + limit_write))
+#     #     if not op["success"]:
+#     #         # Something happened
+#     #         return False, op
+
+#     # Nothing bad happened
+#     return True, disk_resource
 
 
 def get_device_major_minor(device_path):
@@ -399,55 +441,94 @@ def get_device_major_minor(device_path):
     return None
 
 
-def get_node_disks(container_id, devices):
-    SKIP_DISKS = ["bdev", "development", "production", "root"]
+def get_node_disks(container_id, device, device_mountpoint, container_engine):
     retrieved_disks = list()
-    limits_read, limits_write = get_node_disk_limits(container_id)
-    for device in devices.keys():
-        # TODO FIX, ignored devices should be obtained from a file
-        if device in SKIP_DISKS:
-            continue
-        device_mountpoint = devices[device]["source"]
-        device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
+    limits_read, limits_write = get_node_disk_limits(container_id, container_engine)
 
-        if not device_path:
-            print("Disk {0} not found for container {1}".format(device, container_id))
-            continue
+    try:
+        major, minor = get_device_major_minor(device)
+    except TypeError:
+        # None was returned
+        return False, retrieved_disks
 
-        try:
-            major, minor = get_device_major_minor(device_path)
-        except TypeError:
-            # None was returned
-            continue
+    major_minor_str = major + ":" + minor
 
-        major_minor_str = major + ":" + minor
+    if major_minor_str in limits_read:
+        # Convert the limits to Mbits/s
+        device_read_limit = int(limits_read[major_minor_str])
+        device_read_limit = int(device_read_limit / 1048576)
+    else:
+        device_read_limit = -1
 
-        if major_minor_str in limits_read:
-            # Convert the limits to Mbits/s
-            device_read_limit = int(limits_read[major_minor_str])
-            device_read_limit = int(device_read_limit / 1048576)
-        else:
-            device_read_limit = -1
+    if major_minor_str in limits_write:
+        # Convert the limits to Mbits/s
+        device_write_limit = int(limits_write[major_minor_str])
+        device_write_limit = int(device_write_limit / 1048576)
+    else:
+        device_write_limit = -1
 
-        if major_minor_str in limits_write:
-            # Convert the limits to Mbits/s
-            device_write_limit = int(limits_write[major_minor_str])
-            device_write_limit = int(device_write_limit / 1048576)
-        else:
-            device_write_limit = -1
+    disk_dict = dict()
+    disk_dict["mountpoint"] = device_mountpoint
+    disk_dict["device_path"] = device
+    disk_dict["major"] = major
+    disk_dict["minor"] = minor
+    disk_dict["unit"] = "Mbit"
+    disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
+    disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
 
-        disk_dict = dict()
-        disk_dict["mountpoint"] = device_mountpoint
-        disk_dict["device_path"] = device_path
-        disk_dict["major"] = major
-        disk_dict["minor"] = minor
-        disk_dict["unit"] = "Mbit"
-        disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
-        disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
-
-        retrieved_disks.append(disk_dict)
+    retrieved_disks.append(disk_dict)
 
     return True, retrieved_disks
+
+# def get_node_disks(container_id, devices):
+#     SKIP_DISKS = ["bdev", "development", "production", "root"]
+#     retrieved_disks = list()
+#     limits_read, limits_write = get_node_disk_limits(container_id)
+#     for device in devices.keys():
+#         # TODO FIX, ignored devices should be obtained from a file
+#         if device in SKIP_DISKS:
+#             continue
+#         device_mountpoint = devices[device]["source"]
+#         device_path = get_device_path_from_mounted_filesystem(device_mountpoint)
+
+#         if not device_path:
+#             print("Disk {0} not found for container {1}".format(device, container_id))
+#             continue
+
+#         try:
+#             major, minor = get_device_major_minor(device_path)
+#         except TypeError:
+#             # None was returned
+#             continue
+
+#         major_minor_str = major + ":" + minor
+
+#         if major_minor_str in limits_read:
+#             # Convert the limits to Mbits/s
+#             device_read_limit = int(limits_read[major_minor_str])
+#             device_read_limit = int(device_read_limit / 1048576)
+#         else:
+#             device_read_limit = -1
+
+#         if major_minor_str in limits_write:
+#             # Convert the limits to Mbits/s
+#             device_write_limit = int(limits_write[major_minor_str])
+#             device_write_limit = int(device_write_limit / 1048576)
+#         else:
+#             device_write_limit = -1
+
+#         disk_dict = dict()
+#         disk_dict["mountpoint"] = device_mountpoint
+#         disk_dict["device_path"] = device_path
+#         disk_dict["major"] = major
+#         disk_dict["minor"] = minor
+#         disk_dict["unit"] = "Mbit"
+#         disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
+#         disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
+
+#         retrieved_disks.append(disk_dict)
+
+#     return True, retrieved_disks
 
 
 # NET #
