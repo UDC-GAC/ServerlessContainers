@@ -50,7 +50,7 @@ MAX_FAIL_NUM = 5
 debug = True
 
 
-def update_container_current_values(container_name, resources):
+def update_container_current_values(container_name, limits):
     # Remote database operation
     database_structure = db_handler.get_structure(container_name)
     structure = database_structure.copy()
@@ -63,11 +63,11 @@ def update_container_current_values(container_name, resources):
         if resource not in structure["resources"]:
             structure["resources"][resource] = dict()
 
-        if resource not in resources or not resources[resource]:
+        if resource not in limits or not limits[resource]:
             log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name), debug)
             structure["resources"][resource]["current"] = 0
         else:
-            structure["resources"][resource]["current"] = resources[resource][translate_map[resource]["limit_label"]]
+            structure["resources"][resource]["current"] = limits[resource][translate_map[resource]["limit_label"]]
 
         structure["resources"][resource]["current"] = int(structure["resources"][resource]["current"])
 

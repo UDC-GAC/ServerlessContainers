@@ -38,31 +38,62 @@ from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info
     get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, start_epoch, end_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
+import src.WattWizard.WattWizardUtils as wattwizard
 
-BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb']}
-BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "energy": ['structure.energy.usage'], "disk": ['structure.disk.usage']}
+BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'], "energy": ["structure.energy.usage"]}
+BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "disk": ['structure.disk.usage'], "energy": ['structure.energy.usage']}
 
 GUARDIAN_CONTAINER_METRICS = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
+    'structure.cpu.user': ['proc.cpu.user'],
+    'structure.cpu.kernel': ['proc.cpu.kernel'],
     'structure.mem.usage': ['proc.mem.resident'],
-    'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb']
+    'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+    'structure.energy.usage': ["structure.energy.usage"]
 }
+
 GUARDIAN_APPLICATION_METRICS = {
     'structure.cpu.usage': ['structure.cpu.usage'],
+    'structure.cpu.user': ['structure.cpu.user'],
+    'structure.cpu.kernel': ['structure.cpu.kernel'],
     'structure.mem.usage': ['structure.mem.usage'],
-    'structure.energy.usage': ['structure.energy.usage'],
-    'structure.disk.usage': ['structure.disk.usage']
+    'structure.disk.usage': ['structure.disk.usage'],
+    'structure.energy.usage': ['structure.energy.usage']
 }
+
+BDWATCHDOG_TO_GUARDIAN_CONTAINER = {
+    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
+    "mem": ['structure.mem.usage'],
+    "disk": ['structure.disk.usage'],
+    "energy": ["structure.energy.usage"]
+}
+
+BDWATCHDOG_TO_GUARDIAN_APPLICATION = {
+    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
+    "mem": ['structure.mem.usage'],
+    "disk": ['structure.disk.usage'],
+    "energy": ['structure.energy.usage']
+}
+
 GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
+BDWATCHDOG_TO_GUARDIAN = {"container": BDWATCHDOG_TO_GUARDIAN_CONTAINER, "application": BDWATCHDOG_TO_GUARDIAN_APPLICATION}
 
 TAGS = {"container": "host", "application": "structure"}
 
-translator_dict = {"cpu": "structure.cpu.usage", "mem": "structure.mem.usage", "energy": "structure.energy.usage", "disk": "structure.disk.usage"}
+translator_dict = {
+    "cpu": "structure.cpu.usage",
+    "user": "structure.cpu.user",
+    "kernel": "structure.cpu.kernel",
+    "mem": "structure.mem.usage",
+    "disk": "structure.disk.usage",
+    "energy": "structure.energy.usage"
+}
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "ACTIVE": True}
+                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False,
+                         "ENERGY_MODEL_NAME": "sgdregressor_General", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -82,6 +113,8 @@ class Guardian:
     def __init__(self):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
+        self.wattwizard_handler = wattwizard.WattWizardUtils()
+        self.last_power_budget = None
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
     @staticmethod
@@ -279,6 +312,49 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
+    def get_amount_from_energy_modelling(self, structure, usages, resource):
+        """Get an amount that will be reduced from the current resource limit using an energy model that relates
+        resource usage with energy usage.
+        Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+        get closer to a limit.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            usages (dict): a dictionary with the usages of the resources
+            resource (string): The resource name, used for indexing purposes
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        """
+        power_budget = structure["resources"][resource]["max"]
+        current_cpu_limit = structure["resources"]["cpu"]["current"]
+
+        # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
+        if not self.last_power_budget or self.last_power_budget != power_budget:
+            self.last_power_budget = power_budget
+
+            # TODO: Check uses cases of each structure subtype and manage them
+            subtype = "host"  # structure["subtype"] if structure["subtype"] != "application" else "host"
+            user_usage = usages[translator_dict["user"]]
+            kernel_usage = usages[translator_dict["kernel"]]
+            result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name, user_usage,
+                                                                      kernel_usage, power_budget)
+            log_warning("First time rescaling with this power budget. "
+                        "Setting power model estimated CPU ({0}W = {1}% CPU)."
+                        .format(power_budget, result["value"]), self.debug)
+            amount = result["value"] - current_cpu_limit
+            return int(amount)
+
+        # If not, we adjust the CPU value previously retrieved from the model based on current error
+        else:
+            real_power = usages[translator_dict["energy"]]
+            percentage_error = min((power_budget - real_power) / power_budget, 0)
+            amount = current_cpu_limit * percentage_error
+            return int(amount)
+
     def get_amount_from_proportional_energy_rescaling(self, structure, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
         energy-based CPU scaling*.
@@ -289,7 +365,7 @@ class Guardian:
 
         Args:
             structure (dict): The dictionary containing all of the structure resource information
-            resource (string): The resource name, used for indexing puroposes
+            resource (string): The resource name, used for indexing purposes
 
         Returns:
             (int) The amount to be reduced using the fit to usage policy.
@@ -405,7 +481,7 @@ class Guardian:
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
                 log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
-            else:
+            elif usages[translator_dict[resource]] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                 useful_resources.append(resource)
 
         data = dict()
@@ -473,6 +549,18 @@ class Guardian:
 
         return request
 
+    def print_energy_rescale_info(self, structure, usages, limits, amount):
+        for res in ["energy", "cpu"]:
+            current_limit = structure["resources"][res]["current"]
+            max_limit = structure["resources"][res]["max"]
+            upper_limit = limits[res]["upper"]
+            res_usage = usages[translator_dict[res]]
+            if res == "energy":
+                log_warning("POWER BUDGETING -> max : {0} | usa: {1}".format(max_limit, res_usage), self.debug)
+            else:
+                log_warning("PROPORTIONAL CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
+                    current_limit, upper_limit, res_usage, amount), self.debug)
+
     def match_rules_and_events(self, structure, rules, events, limits, usages):
         generated_requests = list()
         events_to_remove = dict()
@@ -518,6 +606,12 @@ class Guardian:
             if rule["rescale_type"] == "up":
                 if rule["rescale_policy"] == "amount":
                     amount = rule["amount"]
+                elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
+                    if self.use_energy_model:
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                    else:
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    self.print_energy_rescale_info(structure, usages, limits, amount)
                 elif rule["rescale_policy"] == "proportional":
                     amount = rule["amount"]
                     current_resource_limit = structure["resources"][resource_label]["current"]
@@ -538,8 +632,12 @@ class Guardian:
                     boundary = limits[resource_label]["boundary"]
                     usage = usages[translator_dict[resource_label]]
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
-                elif rule["rescale_policy"] == "proportional" and rule["resource"] == "energy":
-                    amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
+                    if self.use_energy_model:
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                    else:
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
+                    self.print_energy_rescale_info(structure, usages, limits, amount)
                 else:
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
@@ -556,17 +654,22 @@ class Guardian:
 
             # If the resource is susceptible to check, ensure that it does not surpass any limit
             new_amount = amount
-            if resource_label not in NON_ADJUSTABLE_RESOURCES:
-                structure_resources = structure["resources"][resource_label]
-                structure_limits = limits[resource_label]
+            resource_to_adjust = "cpu" if resource_label == "energy" else resource_label
+            if resource_to_adjust not in NON_ADJUSTABLE_RESOURCES:
+                structure_resources = structure["resources"][resource_to_adjust]
+                structure_limits = limits[resource_to_adjust]
                 new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
                 if new_amount != amount:
                     log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
                         structure["name"], rule["name"], amount, new_amount), self.debug)
 
-            # Generate the request and append it
-            request = self.generate_request(structure, new_amount, resource_label)
-            generated_requests.append(request)
+            # # If amount is 0 ignore this request else generate the request and append it
+            if new_amount == 0:
+                log_warning("Request generated with rule {0} for structure {1} will be ignored because amount is 0".format(
+                    rule["name"], structure["name"]), self.debug)
+            else:
+                request = self.generate_request(structure, new_amount, resource_label)
+                generated_requests.append(request)
 
             # Remove the events that triggered the request
             event_name = generate_event_name(events[resource_label]["events"], resource_label)
@@ -665,7 +768,9 @@ class Guardian:
             metrics_to_generate = dict()
             for res in struct_guarded_resources:
                 metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
-                metrics_to_generate[generate_structure_usage_metric(res)] = GUARDIAN_METRICS[structure_subtype][generate_structure_usage_metric(res)]
+                if res in BDWATCHDOG_TO_GUARDIAN[structure_subtype]:
+                    for usage_metric in BDWATCHDOG_TO_GUARDIAN[structure_subtype][res]:
+                        metrics_to_generate[usage_metric] = GUARDIAN_METRICS[structure_subtype][usage_metric]
             tag = TAGS[structure_subtype]
 
             # Remote database operation
@@ -748,6 +853,8 @@ class Guardian:
             debug = self.debug
             self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
+            self.use_energy_model = myConfig.get_value("USE_ENERGY_MODEL")
+            self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
             self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
@@ -763,6 +870,8 @@ class Guardian:
             log_info("Event timeout -> {0}".format(self.event_timeout), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
+            if self.use_energy_model:
+                log_info("Energy model name is -> {0}".format(self.energy_model_name), debug)
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##

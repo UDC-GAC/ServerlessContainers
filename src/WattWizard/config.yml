@@ -1,0 +1,16 @@
+verbose: no
+
+influxdb_host: "montoxo.des.udc.es"
+influxdb_bucket: "compute2"
+influxdb_token: "MyToken"
+influxdb_org: "MyOrg"
+
+structures: "host,container"
+prediction_methods: "polyreg,sgdregressor"
+model_variables: "user_load,system_load"
+
+timestamps_dir: "./conf/WattWizard/timestamps"
+train_files: "all"
+
+plot_time_series: no
+plot_time_series_dir: "./conf/WattWizard/time_series"

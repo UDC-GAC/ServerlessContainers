@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-tmux kill-session -t "Scaler"
+tmux kill-session -t "scaler"
 
 
 

@@ -92,6 +92,8 @@ def set_service_value(service_name, key):
         pass
     elif isinstance(value, list):
         pass
+    elif key == "ENERGY_MODEL_NAME":
+        pass
     else:
         try:
             if 0 < float(value) < 1:

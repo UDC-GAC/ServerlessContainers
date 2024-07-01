@@ -78,6 +78,25 @@ rebalancer  = dict(
     )
 )
 
+watt_trainer = dict(
+    name="watt_trainer",
+    type="service",
+    heartbeat="",
+    config=dict(
+        DEBUG=True
+    )
+)
+
+energy_manager = dict(
+    name="energy_manager",
+    type="service",
+    heartbeat="",
+    config=dict(
+        POLLING_FREQUENCY=10,
+        DEBUG=True
+    )
+)
+
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
@@ -94,3 +113,5 @@ if __name__ == "__main__":
         handler.add_service(refeeder)
         handler.add_service(sanity_checker)
         handler.add_service(rebalancer)
+        handler.add_service(energy_manager)
+        handler.add_service(watt_trainer)
