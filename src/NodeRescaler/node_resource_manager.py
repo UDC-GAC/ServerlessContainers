@@ -300,6 +300,7 @@ def get_device_major_minor_from_volumes(device_path):
     else:
         return None
 
+
 def get_device_major_minor_raw_device(device_path):
     stat = subprocess.Popen(
         ["stat", "-c", "%t,%T", device_path],
@@ -467,14 +468,15 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
     else:
         device_write_limit = -1
 
-    disk_dict = dict()
-    disk_dict["mountpoint"] = device_mountpoint
-    disk_dict["device_path"] = device
-    disk_dict["major"] = major
-    disk_dict["minor"] = minor
-    disk_dict["unit"] = "Mbit"
-    disk_dict[DISK_READ_LIMIT_LABEL] = device_read_limit
-    disk_dict[DISK_WRITE_LIMIT_LABEL] = device_write_limit
+    disk_dict = {
+        "mountpoint": device_mountpoint,
+        "device_path": device,
+        "major": major,
+        "minor": minor,
+        "unit": "Mbit",
+        DISK_READ_LIMIT_LABEL: device_read_limit,
+        DISK_WRITE_LIMIT_LABEL: device_write_limit
+    }
 
     retrieved_disks.append(disk_dict)
 

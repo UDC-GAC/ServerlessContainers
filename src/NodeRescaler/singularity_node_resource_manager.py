@@ -200,7 +200,7 @@ class SingularityContainerManager:
 
             command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
             try:
-                output  = subprocess.run(
+                output = subprocess.run(
                                 command, universal_newlines=True, shell=True, capture_output=True, timeout=1).stdout
                 source = output.split()[5]
                 if ":" in source:
@@ -221,6 +221,10 @@ class SingularityContainerManager:
 
             except subprocess.TimeoutExpired:
                 print("Timeout")
+            except IndexError:
+                # If there are not subscribed containers that don't have a mount point on /opt/bind
+                # Subprocess will return an empty string and output.split()[5] will raise an IndexError
+                print("Container not subscribed")
 
             # TODO support multiple disks
             #

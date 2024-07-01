@@ -464,7 +464,6 @@ def map_container_to_host_cores(cont_name, host, needed_shares):
     return used_cores
 
 def map_container_to_host_disks(resource_dict, container, host):
-    resource_dict
     disk_name = container["resources"]["disk"]["name"]
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
