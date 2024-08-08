@@ -36,10 +36,6 @@ class ModelHandler:
             return INSTANCE_CONSTRUCTORS[prediction_method]()
         raise Exception(f"Trying to create model with unsupported prediction method ({prediction_method})")
 
-    @staticmethod
-    def is_static(prediction_method):
-        return prediction_method in STATIC_PREDICTION_METHODS
-
     def __init__(self):
         if ModelHandler.__instance is not None:
             raise Exception(f"Trying to break Singleton. There is already an instance of {self.__class__.__name__} class")
@@ -60,7 +56,8 @@ class ModelHandler:
                 "prediction_method": prediction_method,
                 "train_file_path": train_file,
                 "train_file_name": self.get_file_name(train_file),
-                "instance": self.create_model_instance(prediction_method)
+                "instance": self.create_model_instance(prediction_method),
+                "is_static": prediction_method in STATIC_PREDICTION_METHODS
             }
         return self.models[structure][model_name]
 
@@ -84,7 +81,7 @@ class ModelHandler:
     def get_non_static_model_names_by_structure(self, structure):
         if structure in self.models:
             return [self.models[structure][model_name]['name'] for model_name in self.models[structure]
-                    if not self.is_static(self.models[structure][model_name]["prediction_method"])]
+                    if not self.is_static(structure, model_name)]
         raise Exception(f"Structure {structure} doesn\'t exists")
 
     def get_models(self):
@@ -123,6 +120,9 @@ class ModelHandler:
 
     def get_model_instance(self, structure, model_name):
         return self.__get_model_value(structure, model_name, "instance")
+
+    def is_static(self, structure, model_name):
+        return self.__get_model_value(structure, model_name, "is_static")
 
     def reset_model_instance(self, structure, model_name):
         if structure in self.models and model_name in self.models[structure]:

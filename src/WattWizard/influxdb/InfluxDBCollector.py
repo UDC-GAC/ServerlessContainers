@@ -93,7 +93,6 @@ class InfluxDBCollector:
             exit(1)
         return INFLUXDB_QUERIES[var].format(start_date=start_date,
                                             stop_date=stop_date,
-                                            host=self.get_hostname_from_structure(structure, var),
                                             influxdb_bucket=self.influxdb_bucket,
                                             influxdb_window="2s")
 

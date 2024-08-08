@@ -109,22 +109,25 @@ class TimeSeriesParallelCollector:
             # Get model variables time series and merge data
             exp_data = pd.DataFrame()
             for var in self.model_variables:
+
                 df = conn.query_influxdb(var, self.structure, start_str, stop_str)
+
                 if not df.empty:
                     df = self.remove_outliers(df, "_value")
                     df.rename(columns={'_value': var}, inplace=True)
                     df = df.loc[:, ("_time", var)]
-                    df.loc[:, "exp_name"] = exp_name
-                    df.loc[:, "exp_type"] = exp_type
                     if exp_data.empty:
                         exp_data = df
                     else:
                         exp_data = pd.merge(exp_data, df, on='_time')
             exp_data.rename(columns={'_time': 'time'}, inplace=True)
+            exp_data.loc[:, "exp_name"] = exp_name
+            exp_data.loc[:, "exp_type"] = exp_type
 
         # Remove DataFrame useless variables
         try:
-            exp_data = exp_data[self.model_variables + ["exp_name", "exp_type", "time"]]
+            exp_data["power"] = exp_data.loc[:, "power_pkg0"] + exp_data.get("power_pkg1", 0)
+            exp_data = exp_data[self.model_variables + ["power", "exp_name", "exp_type", "time"]]
         except KeyError as e:
             log(f"Error getting data between {start_date} and {stop_date}: {str(e)}", "ERR")
             log(f"Data causing the error: {exp_data}", "ERR")
@@ -152,7 +155,7 @@ class TimeSeriesParallelCollector:
     def get_idle_consumption(self, timestamps):
         # Set power as the only model variable temporarily
         model_variables = self.model_variables
-        self.model_variables = ["power"]
+        self.model_variables = ["power_pkg0", "power_pkg1"]
 
         # Get power only from idle periods
         filtered_timestamps = [t for t in timestamps if t[3] == "IDLE"]
@@ -162,4 +165,4 @@ class TimeSeriesParallelCollector:
         self.model_variables = model_variables
 
         # Return idle consumption as mean power in idle periods
-        return time_series["power"].mean()
+        return time_series

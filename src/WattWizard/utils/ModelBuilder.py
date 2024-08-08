@@ -17,12 +17,12 @@ class ModelBuilder:
 
     def __init__(self):
         self.time_series = {}
-        self.idle_consumption = {}
+        self.idle_time_series = {}
         self.processed_files = []
         self.config = MyConfig.get_instance()
         self.model_handler = ModelHandler.get_instance()
         self.ts_plotter = TimeSeriesPlotter()
-        self.ts_collector = TimeSeriesParallelCollector(self.config.get_argument("model_variables") + ["power"],
+        self.ts_collector = TimeSeriesParallelCollector(self.config.get_argument("model_variables") + ["power_pkg0", "power_pkg1"],
                                                         self.config.get_argument("influxdb_host"),
                                                         self.config.get_argument("influxdb_bucket"),
                                                         self.config.get_argument("influxdb_token"),
@@ -49,12 +49,12 @@ class ModelBuilder:
             log(f"Processing timestamps file: {train_file}")
             train_timestamps = self.ts_collector.parse_timestamps(train_file)
             self.time_series[pred_method] = self.ts_collector.get_time_series(train_timestamps, structure == "container")
-            self.idle_consumption[pred_method] = self.ts_collector.get_idle_consumption(train_timestamps)
+            self.idle_time_series[pred_method] = self.ts_collector.get_idle_consumption(train_timestamps)
         else:
             log(f"File {train_file} was previously processed for method {previous_method}")
             log(f"Reusing time series for method {pred_method}")
             self.time_series[pred_method] = self.time_series[previous_method]
-            self.idle_consumption[pred_method] = self.idle_consumption[previous_method]
+            self.idle_time_series[pred_method] = self.idle_time_series[previous_method]
 
         self.add_processed_file(train_file, pred_method)
 
@@ -64,7 +64,7 @@ class ModelBuilder:
         # Pretrain model with collected time series
         try:
             print(self.time_series[model['prediction_method']])
-            model['instance'].set_idle_consumption(self.idle_consumption[model['prediction_method']])
+            model['instance'].set_idle_consumption(self.idle_time_series[model['prediction_method']])
             model['instance'].pretrain(self.time_series[model['prediction_method']], data_type="df")
 
             log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")

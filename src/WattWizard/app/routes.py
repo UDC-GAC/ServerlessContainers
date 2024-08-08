@@ -17,7 +17,7 @@ model_handler = ModelHandler.get_instance()
 def is_static(structure=None, model_name=None):
     try:
         prediction_method = model_handler.get_model_prediction_method(structure, model_name)
-        return jsonify({'is_static': ModelHandler.is_static(prediction_method)})
+        return jsonify({'is_static': model_handler.is_static(structure, model_name)})
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 

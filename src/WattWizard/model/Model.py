@@ -3,6 +3,7 @@ import numpy as np
 MAX_ERROR = 0.001
 MAX_ITERS = 100
 
+
 class Model(object):
 
     model_vars = None
@@ -28,9 +29,11 @@ class Model(object):
     def set_model_vars(self, v):
         self.model_vars = v
     
-    def set_idle_consumption(self, v):
-        self.idle_consumption = v
-    
+    def set_idle_consumption(self, time_series):
+        if "power" not in time_series:
+            raise TypeError("Missing power in idle time series while setting idle consumption")
+        self.idle_consumption = time_series["power"].mean()
+
     def is_fitted(self, attr_name):
         estimator = getattr(self, attr_name, None)
         return hasattr(estimator, 'n_features_in_')
@@ -93,3 +96,27 @@ class Model(object):
         adjusted_value = result["value"] * (1 + result["model_error_percentage"])
         result["adjusted_value"] = max(limits["min"], min(limits["max"], adjusted_value))
         return result
+
+    ########################################################################################################
+    #   MODEL DEPENDENT METHODS - Implement at least these methods  and __init__ to create a new model     #
+    ########################################################################################################
+
+    def get_coefs(self):
+        print("Get model coefficients or weights")
+
+    def get_intercept(self):
+        print("Get model intercept or constant term if it exists")
+
+    def pretrain(self, time_series, data_type):
+        print("This method is responsible for the initial training of the model")
+
+    def train(self, time_series, data_type):
+        print("This method is responsible for the online training of the model, that is, "
+              "to train the model as new data arrives")
+
+    def test(self, time_series, data_type):
+        print("This method is responsible for testing the model with a dataset in order to know its accuracy")
+
+    def predict(self, X_dict):
+        print("This method is responsible for obtaining a prediction from a dictionary that "
+              "contains a value for each model variable")
