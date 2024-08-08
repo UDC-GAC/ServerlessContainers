@@ -5,7 +5,7 @@ from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 
-SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
+SUPPORTED_ARGS = ['verbose', 'server_mode', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
                   'structures', 'prediction_methods', 'model_variables', 'train_timestamps_dir', 'train_files',
                   'test_timestamps_dir', 'test_files',
                   'plot_time_series', 'plot_time_series_dir']
@@ -72,6 +72,9 @@ class ArgsManager:
 
             if arg_name == "verbose":
                 pass  # Nothing to do for verbose
+
+            elif arg_name == "server_mode":
+                pass  # Nothing to do for server_mode
 
             elif arg_name == "output":
                 pass  # Nothing to do for output

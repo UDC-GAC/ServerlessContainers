@@ -1,4 +1,5 @@
 from flask import Flask
+from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.parser.CLIParser import CLIParser
 from src.WattWizard.parser.ConfigFileParser import ConfigFileParser
 from src.WattWizard.parser.ArgsManager import ArgsManager
@@ -26,4 +27,5 @@ if __name__ == '__main__':
     model_builder.build_models()
 
     # Start Flask server
-    app.run(host='0.0.0.0', port=7777)
+    if MyConfig.get_instance().get_argument("server_mode"):
+        app.run(host='0.0.0.0', port=7777)

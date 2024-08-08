@@ -20,6 +20,13 @@ class CLIParser:
         )
 
         self.parser.add_argument(
+            "--server-mode",
+            action="store_const",
+            const=True,
+            help="Create an API REST to access models in real time",
+        )
+
+        self.parser.add_argument(
             "-i",
             "--influxdb-host",
             help="If pretrain data is specified you must indicate an InfluxDB Host to retrieve data from.",
