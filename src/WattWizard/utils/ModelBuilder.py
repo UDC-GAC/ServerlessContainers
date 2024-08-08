@@ -1,8 +1,5 @@
-import numpy as np
-
 from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 from src.WattWizard.data.TimeSeriesPlotter import TimeSeriesPlotter
-from src.WattWizard.app.app_utils import time_series_to_train_data
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.model.ModelHandler import ModelHandler
@@ -66,9 +63,9 @@ class ModelBuilder:
         self.get_time_series_from_file(structure, model['train_file_path'], model['prediction_method'])
         # Pretrain model with collected time series
         try:
-            X_train, y_train = time_series_to_train_data(self.config.get_argument("model_variables"), self.time_series[model['prediction_method']])
+            print(self.time_series[model['prediction_method']])
             model['instance'].set_idle_consumption(self.idle_consumption[model['prediction_method']])
-            model['instance'].pretrain(X_train, y_train)
+            model['instance'].pretrain(self.time_series[model['prediction_method']], data_type="df")
 
             log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")
 
@@ -100,15 +97,12 @@ class ModelBuilder:
             test_timestamps = self.ts_collector.parse_timestamps(test_file)
             test_time_series = self.ts_collector.get_time_series(test_timestamps, include_idle=False)
 
-            # Format time series values
-            X_test, y_test = time_series_to_train_data(self.config.get_argument("model_variables"), test_time_series)
-
             # Test all models with the collected time series
             test_name = ModelHandler.get_file_name(test_file)
             for structure in self.config.get_argument("structures"):
                 for model_name in self.model_handler.get_models_by_structure(structure):
                     model = self.model_handler.get_model_by_name(structure, model_name)
-                    power_predicted = model['instance'].test(X_test)
+                    power_predicted = model['instance'].test(test_time_series, data_type="df")
                     test_time_series['power_predicted'] = power_predicted.flatten()
 
                     # Plot results

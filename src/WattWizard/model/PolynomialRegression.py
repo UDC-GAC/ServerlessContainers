@@ -22,18 +22,20 @@ class PolynomialRegression(Model):
         return self.idle_consumption
 
     # TODO: Check if it could be better simply adding idle consumption to train data
-    def pretrain(self, X, y):
-        X_poly = self.poly_features.fit_transform(X)
-        y_adjusted = y - self.idle_consumption
+    def pretrain(self, time_series, data_type="df"):
+        X_train, y_train = self.get_model_data(time_series, data_type)
+        X_poly = self.poly_features.fit_transform(X_train)
+        y_adjusted = y_train - self.idle_consumption
         self.model.fit(X_poly, y_adjusted)
         self.pretrained = True
 
     def train(self):
         raise TypeError("This method doesn't support online learning")
 
-    def test(self, X_test):
+    def test(self, time_series, data_type="df"):
         if not self.pretrained:
             raise TypeError("Model not fitted yet, first train the model, then predict")
+        X_test, y_test = self.get_model_data(time_series, data_type)
         X_poly = self.poly_features.transform(X_test)
         return self.model.predict(X_poly) + self.idle_consumption
 

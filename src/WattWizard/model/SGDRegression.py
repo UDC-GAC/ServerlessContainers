@@ -30,20 +30,23 @@ class SGDRegression(Model):
             return self.model.intercept_.tolist()
         return None
 
-    def pretrain(self, X, y):
-        X_scaled = self.pipeline.fit_transform(X)
-        self.model.fit(X_scaled, y)
+    def pretrain(self, time_series, data_type="df"):
+        X_train, y_train = self.get_model_data(time_series, data_type)
+        X_scaled = self.pipeline.fit_transform(X_train)
+        self.model.fit(X_scaled, y_train)
         self.pretrained = True
 
-    def train(self, X, y):
+    def train(self, time_series, data_type="json"):
+        X_train, y_train = self.get_model_data(time_series, data_type)
         if not self.is_fitted('pipeline'):
-            self.pipeline.fit(X)
-        weights = np.ones(len(y)) + self.times_trained * NEW_DATA_WEIGHT_DIFF
-        X_scaled = self.pipeline.transform(X)
-        self.model.partial_fit(X_scaled, y, sample_weight=weights)
+            self.pipeline.fit(X_train)
+        weights = np.ones(len(y_train)) + self.times_trained * NEW_DATA_WEIGHT_DIFF
+        X_scaled = self.pipeline.transform(X_train)
+        self.model.partial_fit(X_scaled, y_train, sample_weight=weights)
         self.times_trained += 1
 
-    def test(self, X_test):
+    def test(self, time_series, data_type="df"):
+        X_test, y_test = self.get_model_data(time_series, data_type)
         if not self.is_fitted('pipeline'):
             self.pipeline.fit(X_test)
         X_scaled = self.pipeline.transform(X_test)

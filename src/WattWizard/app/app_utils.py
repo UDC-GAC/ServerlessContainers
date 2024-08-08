@@ -18,32 +18,6 @@ def get_boolean_param_value(req, param):
     return value == "true"
 
 
-def time_series_to_train_data(model_vars, time_series):
-    x_values = []
-    for var in model_vars:
-        if var in time_series:
-            x_values.append(time_series[var].values.reshape(-1, 1))
-        else:
-            raise TypeError(f"Missing variable {var} in train time series")
-    x_stack = np.hstack(x_values)
-    y = time_series["power"].values
-    return x_stack, y
-
-
-def json_to_train_data(model_instance, json_data):
-    if "power" in json_data:
-        y = np.array(json_data["power"])
-    else:
-        raise TypeError("Missing power data in JSON")
-    x_values = []
-    for var in model_instance.get_model_vars():
-        if var not in json_data:
-            raise TypeError(f"Missing {var} data in JSON")
-        x_values.append(np.array(json_data[var]).reshape(-1, 1))
-    x_stack = np.hstack(x_values)
-    return x_stack, y
-
-
 def get_model_variables_from_request(model_instance, request):
     x_values = {}
     for var in model_instance.get_model_vars():

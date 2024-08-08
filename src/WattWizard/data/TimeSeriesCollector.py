@@ -34,6 +34,7 @@ class TimeSeriesCollector:
 
     @staticmethod
     def get_timestamp_from_line(start_line, stop_line):
+        exp_name = start_line.split(" ")[0]
         exp_type = start_line.split(" ")[1]
         start_offset = 0 if exp_type == "IDLE" else START_OFFSET
         stop_offset = 0 if exp_type == "IDLE" else STOP_OFFSET
@@ -41,7 +42,7 @@ class TimeSeriesCollector:
         stop_str = " ".join(stop_line.split(" ")[-2:]).strip()
         start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=start_offset)
         stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=stop_offset)
-        return [(start, stop, exp_type)]
+        return [(start, stop, exp_name, exp_type)]
 
     # Add time_diff column which represents time instead of dates
     @staticmethod
@@ -87,7 +88,7 @@ class TimeSeriesCollector:
 
     # Get data for a given period (obtained from timestamps)
     def get_experiment_data(self, timestamp):
-        start_date, stop_date, exp_type = timestamp
+        start_date, stop_date, exp_name, exp_type = timestamp
         start_str = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         stop_str = stop_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -108,6 +109,8 @@ class TimeSeriesCollector:
         # Remove DataFrame useless variables
         try:
             exp_data = exp_data[self.model_variables + ["time"]]
+            exp_data["exp_name"] = exp_name
+            exp_data["exp_type"] = exp_type
         except KeyError as e:
             log(f"Error getting data between {start_date} and {stop_date}: {str(e)}", "ERR")
             log(f"Data causing the error: {exp_data}", "ERR")
@@ -119,7 +122,7 @@ class TimeSeriesCollector:
         time_series = pd.DataFrame(columns=self.model_variables)
 
         # Remove idle periods when include_idle is False
-        filtered_timestamps = [t for t in timestamps if include_idle or t[2] != "IDLE"]
+        filtered_timestamps = [t for t in timestamps if include_idle or t[3] != "IDLE"]
 
         for timestamp in filtered_timestamps:
             result = self.get_experiment_data(timestamp)
@@ -136,7 +139,7 @@ class TimeSeriesCollector:
         self.model_variables = ["power"]
 
         # Get power only from idle periods
-        filtered_timestamps = [t for t in timestamps if t[2] == "IDLE"]
+        filtered_timestamps = [t for t in timestamps if t[3] == "IDLE"]
         time_series = self.get_time_series(filtered_timestamps, include_idle=True)
 
         # Set the model variables to their original value

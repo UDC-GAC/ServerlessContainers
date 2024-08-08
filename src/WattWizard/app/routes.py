@@ -4,7 +4,7 @@ from flask import request
 
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.model.ModelHandler import ModelHandler
-from src.WattWizard.app.app_utils import get_param_value, get_boolean_param_value, json_to_train_data, get_model_variables_from_request
+from src.WattWizard.app.app_utils import get_param_value, get_boolean_param_value, get_model_variables_from_request
 
 DYNAMIC_VAR = "user_load"
 
@@ -158,8 +158,7 @@ def train_model(structure=None, model_name=None):
     try:
         model = model_handler.get_model_by_name(structure, model_name)
         if not ModelHandler.is_static(model["prediction_method"]):
-            X_train, y_train = json_to_train_data(model["instance"], json_data)
-            model["instance"].train(X_train, y_train)
+            model["instance"].train(json_data, data_type="json")
             return jsonify({'INFO': f'Model trained successfully (Train {model["instance"].get_times_trained()})'})
         else:
             return jsonify({'ERROR': f'Model {model_name} using static method {model["prediction_method"]} '

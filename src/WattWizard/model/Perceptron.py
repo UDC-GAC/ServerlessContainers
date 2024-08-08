@@ -24,19 +24,22 @@ class Perceptron(Model):
             return self.model.intercepts_[0].tolist()
         return None
 
-    def pretrain(self, X, y):
-        X_scaled = self.scaler.fit_transform(X)
-        self.model.fit(X_scaled, y)
+    def pretrain(self, time_series, data_type="df"):
+        X_train, y_train = self.get_model_data(time_series, data_type)
+        X_scaled = self.scaler.fit_transform(X_train)
+        self.model.fit(X_scaled, y_train)
         self.pretrained = True
 
-    def train(self, X, y):
+    def train(self, time_series, data_type="json"):
+        X_train, y_train = self.get_model_data(time_series, data_type)
         if not self.is_fitted('scaler'):
-            self.scaler.fit(X)
-        X_scaled = self.scaler.transform(X)
-        self.model.partial_fit(X_scaled, y)
+            self.scaler.fit(X_train)
+        X_scaled = self.scaler.transform(X_train)
+        self.model.partial_fit(X_scaled, y_train)
         self.times_trained += 1
 
-    def test(self, X_test):
+    def test(self, time_series, data_type="df"):
+        X_test, y_test = self.get_model_data(time_series, data_type)
         if not self.is_fitted('scaler'):
             self.scaler.fit(X_test)
         X_scaled = self.scaler.transform(X_test)

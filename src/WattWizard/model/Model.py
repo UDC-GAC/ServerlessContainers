@@ -1,6 +1,7 @@
+import numpy as np
+
 MAX_ERROR = 0.001
 MAX_ITERS = 100
-
 
 class Model(object):
 
@@ -33,6 +34,43 @@ class Model(object):
     def is_fitted(self, attr_name):
         estimator = getattr(self, attr_name, None)
         return hasattr(estimator, 'n_features_in_')
+
+    def df_to_model_data(self, df):
+        x_values = []
+        for var in self.model_vars:
+            if var in df:
+                x_values.append(df[var].values.reshape(-1, 1))
+            else:
+                raise TypeError(f"Missing variable {var} in DataFrame")
+        x_stack = np.hstack(x_values)
+        if "power" in df:
+            y = df["power"].values
+        else:
+            raise TypeError("Missing power data in DataFrame")
+        return x_stack, y
+
+    def json_to_model_data(self, json_data):
+        x_values = []
+        for var in self.model_vars:
+            if var not in json_data:
+                raise TypeError(f"Missing {var} data in JSON")
+            x_values.append(np.array(json_data[var]).reshape(-1, 1))
+        x_stack = np.hstack(x_values)
+
+        if "power" in json_data:
+            y = np.array(json_data["power"])
+        else:
+            raise TypeError("Missing power data in JSON")
+
+        return x_stack, y
+
+    def get_model_data(self, time_series, data_type):
+        if data_type == "df":
+            return self.df_to_model_data(time_series)
+        elif data_type == "json":
+            return self.json_to_model_data(time_series)
+        else:
+            raise TypeError(f"Not supported data type {data_type}. It must be DataFrame or JSON.")
 
     def get_inverse_prediction(self, current_X, desired_power, dynamic_var, limits):
         estimated_power = self.predict(current_X)

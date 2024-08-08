@@ -45,6 +45,7 @@ class TimeSeriesParallelCollector:
 
     @staticmethod
     def get_timestamp_from_line(start_line, stop_line):
+        exp_name = start_line.split(" ")[0]
         exp_type = start_line.split(" ")[1]
         start_offset = 0 if exp_type == "IDLE" else START_OFFSET
         stop_offset = 0 if exp_type == "IDLE" else STOP_OFFSET
@@ -52,7 +53,7 @@ class TimeSeriesParallelCollector:
         stop_str = " ".join(stop_line.split(" ")[-2:]).strip()
         start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=start_offset)
         stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=stop_offset)
-        return [(start, stop, exp_type)]
+        return [(start, stop, exp_name, exp_type)]
 
     @staticmethod
     def parse_timestamps(file):
@@ -99,7 +100,7 @@ class TimeSeriesParallelCollector:
 
     # Get data for a given period (obtained from timestamps)
     def get_experiment_data(self, timestamp, influxdb_info):
-        start_date, stop_date, exp_type = timestamp
+        start_date, stop_date, exp_name, exp_type = timestamp
         start_str = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         stop_str = stop_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -112,7 +113,9 @@ class TimeSeriesParallelCollector:
                 if not df.empty:
                     df = self.remove_outliers(df, "_value")
                     df.rename(columns={'_value': var}, inplace=True)
-                    df = df[["_time", var]]
+                    df = df.loc[:, ("_time", var)]
+                    df.loc[:, "exp_name"] = exp_name
+                    df.loc[:, "exp_type"] = exp_type
                     if exp_data.empty:
                         exp_data = df
                     else:
@@ -121,7 +124,7 @@ class TimeSeriesParallelCollector:
 
         # Remove DataFrame useless variables
         try:
-            exp_data = exp_data[self.model_variables + ["time"]]
+            exp_data = exp_data[self.model_variables + ["exp_name", "exp_type", "time"]]
         except KeyError as e:
             log(f"Error getting data between {start_date} and {stop_date}: {str(e)}", "ERR")
             log(f"Data causing the error: {exp_data}", "ERR")
@@ -131,7 +134,7 @@ class TimeSeriesParallelCollector:
     # Get model variables time series from timestamps
     def get_time_series(self, timestamps, include_idle=False):
         # Remove idle periods when include_idle is False
-        filtered_timestamps = [t for t in timestamps if include_idle or t[2] != "IDLE"]
+        filtered_timestamps = [t for t in timestamps if include_idle or t[3] != "IDLE"]
 
         result_dfs = []
         workers = min(len(timestamps), self.max_cores)
@@ -152,7 +155,7 @@ class TimeSeriesParallelCollector:
         self.model_variables = ["power"]
 
         # Get power only from idle periods
-        filtered_timestamps = [t for t in timestamps if t[2] == "IDLE"]
+        filtered_timestamps = [t for t in timestamps if t[3] == "IDLE"]
         time_series = self.get_time_series(filtered_timestamps, include_idle=True)
 
         # Set the model variables to their original value
