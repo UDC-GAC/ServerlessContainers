@@ -43,6 +43,12 @@ class SGDRegression(Model):
         self.model.partial_fit(X_scaled, y, sample_weight=weights)
         self.times_trained += 1
 
+    def test(self, X_test):
+        if not self.is_fitted('pipeline'):
+            self.pipeline.fit(X_test)
+        X_scaled = self.pipeline.transform(X_test)
+        return self.model.predict(X_scaled)
+
     def predict(self, X_dict):
         X_values = [[X_dict[var] for var in self.model_vars]]
         if not self.is_fitted('pipeline'):

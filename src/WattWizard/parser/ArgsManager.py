@@ -6,9 +6,10 @@ from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 
 SUPPORTED_ARGS = ['verbose', 'influxdb_host', 'influxdb_bucket', 'influxdb_token', 'influxdb_org',
-                  'structures', 'prediction_methods', 'model_variables', 'timestamps_dir', 'train_files',
+                  'structures', 'prediction_methods', 'model_variables', 'train_timestamps_dir', 'train_files',
+                  'test_timestamps_dir', 'test_files',
                   'plot_time_series', 'plot_time_series_dir']
-SUPPORTED_STRUCTURES = ["container", "host"]
+SUPPORTED_STRUCTURES = ["container", "host", "core"]
 SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg"]
 SUPPORTED_VARS = ["load", "user_load", "system_load", "wait_load", "freq", "sumfreq", "temp"]
 
@@ -84,8 +85,8 @@ class ArgsManager:
             elif arg_name == "prediction_methods":
                 self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
 
-            elif arg_name == "timestamps_dir":
-                pass  # Nothing to do for timestamps_dir (already checked in train_files)
+            elif arg_name == "train_timestamps_dir":
+                pass  # Nothing to do for train_timestamps_dir (already checked in train_files)
 
             elif arg_name == "train_files":
                 if len(args[arg_name]) == 0:
@@ -93,6 +94,13 @@ class ArgsManager:
                         f"Otherwise, no model would be created.", "ERR")
                     exit(1)
                 self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
+
+            elif arg_name == "test_timestamps_dir":
+                pass  # Nothing to do for test_timestamps_dir (already checked in test_files)
+
+            elif arg_name == "test_files":
+                if len(args[arg_name]) > 0:
+                    self.check_files_exist(args[arg_name])
 
             elif arg_name == "model_variables":
                 self.check_supported_values(arg_name, args[arg_name], SUPPORTED_VARS)

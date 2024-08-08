@@ -18,9 +18,9 @@ def get_boolean_param_value(req, param):
     return value == "true"
 
 
-def time_series_to_train_data(model_instance, time_series):
+def time_series_to_train_data(model_vars, time_series):
     x_values = []
-    for var in model_instance.get_model_vars():
+    for var in model_vars:
         if var in time_series:
             x_values.append(time_series[var].values.reshape(-1, 1))
         else:

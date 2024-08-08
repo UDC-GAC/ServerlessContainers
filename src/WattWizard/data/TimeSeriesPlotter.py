@@ -55,8 +55,8 @@ class TimeSeriesPlotter:
         self.output_dir = output_dir
         self.create_non_existent_dir(output_dir)
 
-    def save_plot(self):
-        path = f'{self.output_dir}/TimeSeries.png'
+    def save_plot(self, name):
+        path = f'{self.output_dir}/{name}.png'
         plt.tight_layout()
         plt.savefig(path, bbox_inches='tight')
 
@@ -119,6 +119,34 @@ class TimeSeriesPlotter:
         self.set_basic_labels(title, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
         self.set_basic_labels(None, None, "Power Consumption (W)", ax2)
         self.set_legend_with_markers(ax1, ax2)
-        self.save_plot()
+        self.save_plot("TrainTimeSeries")
 
         plt.close(fig)
+
+    def plot_test_time_series(self, test_app_name, title, time_series, model_variables):
+        fig, ax1 = plt.subplots(figsize=(14, 6))
+        ax2 = ax1.twinx()
+
+        # Plot 1 line for each predictor variable (Left Axis: ax1)
+        for var in model_variables:
+            self.set_line_plot(var, time_series, ax1)
+
+        # Plot dependent variables "power" and "predicted_power" (Right Axis: ax2)
+        self.set_line_plot("power", time_series, ax2)
+        self.set_line_plot("power_predicted", time_series, ax2)
+
+        self.set_basic_labels(title, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
+        self.set_basic_labels(None, None, "Power Consumption (W)", ax2)
+        self.set_legend_with_markers(ax1, ax2)
+        self.save_plot(test_app_name)
+
+        plt.close(fig)
+
+    def plot_vars_vs_power(self, time_series, model_variables):
+        for var in model_variables:
+            fig, ax = plt.subplots(figsize=(14, 6))
+            sns.lineplot(x=time_series[var], y=time_series["power"], color="#fdae61")
+            self.set_basic_labels(f"{var} VS power", DEFAULT_LABELS[var], DEFAULT_LABELS["power"], ax)
+            ax.set_title(f"{var} VS power")
+            self.save_plot(f"{var}_vs_power")
+            plt.close(fig)

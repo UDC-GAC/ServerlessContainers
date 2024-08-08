@@ -19,17 +19,23 @@ class PolynomialRegression(Model):
         return None
 
     def get_intercept(self):
-        if self.pretrained or self.times_trained > 0:
-            return self.model.intercept_
-        return None
+        return self.idle_consumption
 
+    # TODO: Check if it could be better simply adding idle consumption to train data
     def pretrain(self, X, y):
         X_poly = self.poly_features.fit_transform(X)
-        self.model.fit(X_poly, y)
+        y_adjusted = y - self.idle_consumption
+        self.model.fit(X_poly, y_adjusted)
         self.pretrained = True
 
     def train(self):
         raise TypeError("This method doesn't support online learning")
+
+    def test(self, X_test):
+        if not self.pretrained:
+            raise TypeError("Model not fitted yet, first train the model, then predict")
+        X_poly = self.poly_features.transform(X_test)
+        return self.model.predict(X_poly) + self.idle_consumption
 
     def predict(self, X_dict):
         X_values = [[X_dict[var] for var in self.model_vars]]

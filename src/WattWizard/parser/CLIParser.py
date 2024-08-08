@@ -66,27 +66,39 @@ class CLIParser:
         )
 
         self.parser.add_argument(
-            "--timestamps-dir",
-            help="Directory in which the timestamp files to train models are stored. By default is ./conf/WattWizard/timestamps.",
+            "--train-timestamps-dir",
+            help="Directory in which the timestamp files to train models are stored. By default is ./conf/WattWizard/timestamps/train.",
         )
 
         self.parser.add_argument(
             "--train-files",
-            help="Comma-separated list of train file names stored under timestamps directory (or 'all' keyword to use all files in this directory). \n\
+            help="Comma-separated list of train file names stored under train timestamps directory (or 'all' keyword to use all files in this directory). \n\
 One model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
 data in proper format. Check README.md to see timestamps proper format.",
+        )
+
+        self.parser.add_argument(
+            "--test-timestamps-dir",
+            help="Directory in which the timestamp files to test models are stored. By default is ./conf/WattWizard/timestamps/test.",
+        )
+
+        self.parser.add_argument(
+            "--test-files",
+            help="Comma-separated list of test file names stored under test timestamps directory (or 'all' keyword to use all files in this directory). \n\
+Each file must store time series timestamps from test data in proper format. Check README.md to see timestamps proper format.",
         )
 
         self.parser.add_argument(
             "--plot-time-series",
             action="store_const",
             const=False,
-            help="Plot the time series used to train each model",
+            help="Plot the time series used to train and test each model",
         )
 
         self.parser.add_argument(
             "--plot-time-series-dir",
-            help="Directory to store a plot of the train time series for each model. Works together with option --plot-time-series. By default is ./conf/WattWizard/time_series.",
+            help="Directory to store a plot of the train/tets time series for each model. Works together with option --plot-time-series. \n\
+By default is ./conf/WattWizard/time_series.",
         )
 
     def parse_args(self):

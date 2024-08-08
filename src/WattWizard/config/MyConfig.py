@@ -4,9 +4,9 @@ USER_DIR = os.getcwd()
 SCRIPT_PATH = os.path.abspath(__file__)
 WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 
-COMMA_SEPARATED_LIST_ARGS = ['structures', 'prediction_methods', 'model_variables', 'train_files']
-DIRECTORY_ARGS = ['timestamps_dir', 'plot_time_series_dir']
-FILE_ARGS = ['train_files']
+COMMA_SEPARATED_LIST_ARGS = ['structures', 'prediction_methods', 'model_variables', 'train_files', 'test_files']
+DIRECTORY_ARGS = ['train_timestamps_dir', 'test_timestamps_dir', 'plot_time_series_dir']
+FILE_ARGS = ['train_files', 'test_files']
 
 DASHED_LINE = "".join(["-" for _ in range(1, 200)])
 
@@ -101,10 +101,10 @@ class MyConfig:
             self.args[arg_name] = f"{USER_DIR}/{arg_value[2:]}"
 
         elif arg_name in FILE_ARGS:
-            # Set full path for train timestamp files
-            filenames_list = self.adjust_filenames_list(arg_value, self.args["timestamps_dir"])
-            self.args[arg_name] = self.get_files_list(filenames_list, self.args["timestamps_dir"])
-
+            suffix = arg_name.split('_')[0]  # Train or test
+            # Set full path for timestamp files
+            filenames_list = self.adjust_filenames_list(arg_value, self.args[f"{suffix}_timestamps_dir"])
+            self.args[arg_name] = self.get_files_list(filenames_list, self.args[f"{suffix}_timestamps_dir"])
         else:
             self.args[arg_name] = arg_value
 

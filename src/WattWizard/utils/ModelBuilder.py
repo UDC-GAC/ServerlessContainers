@@ -1,3 +1,5 @@
+import numpy as np
+
 from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 from src.WattWizard.data.TimeSeriesPlotter import TimeSeriesPlotter
 from src.WattWizard.app.app_utils import time_series_to_train_data
@@ -64,19 +66,22 @@ class ModelBuilder:
         self.get_time_series_from_file(structure, model['train_file_path'], model['prediction_method'])
         # Pretrain model with collected time series
         try:
-            X_train, y_train = time_series_to_train_data(model['instance'], self.time_series[model['prediction_method']])
-            model['instance'].pretrain(X_train, y_train)
+            X_train, y_train = time_series_to_train_data(self.config.get_argument("model_variables"), self.time_series[model['prediction_method']])
             model['instance'].set_idle_consumption(self.idle_consumption[model['prediction_method']])
+            model['instance'].pretrain(X_train, y_train)
+
             log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")
 
             # Plot train time series if specified
             if self.config.get_argument("plot_time_series"):
-                output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}"
+                output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}/train"
                 self.ts_plotter.set_output_dir(output_dir)
                 log(f"Plotting train time series for model {model['name']}. Plot will be stored at {output_dir}")
                 self.ts_plotter.plot_time_series(f"{model['name']} time series",
                                                  self.time_series[model['prediction_method']],
                                                  self.config.get_argument("model_variables"))
+                self.ts_plotter.plot_vars_vs_power(self.time_series[model['prediction_method']], self.config.get_argument("model_variables"))
+
         except Exception as e:
             log(f"{str(e)}", "ERR")
 
@@ -87,6 +92,34 @@ class ModelBuilder:
             model['instance'].set_model_vars(model_variables)
             if model['train_file_path']:
                 self.pretrain_model(structure, model)
+
+    def test_models(self):
+        for test_file in self.config.get_argument("test_files"):
+            # Get test time series
+            log(f"Processing timestamps file for tests: {test_file}")
+            test_timestamps = self.ts_collector.parse_timestamps(test_file)
+            test_time_series = self.ts_collector.get_time_series(test_timestamps, include_idle=False)
+
+            # Format time series values
+            X_test, y_test = time_series_to_train_data(self.config.get_argument("model_variables"), test_time_series)
+
+            # Test all models with the collected time series
+            test_name = ModelHandler.get_file_name(test_file)
+            for structure in self.config.get_argument("structures"):
+                for model_name in self.model_handler.get_models_by_structure(structure):
+                    model = self.model_handler.get_model_by_name(structure, model_name)
+                    power_predicted = model['instance'].test(X_test)
+                    test_time_series['power_predicted'] = power_predicted.flatten()
+
+                    # Plot results
+                    if self.config.get_argument("plot_time_series"):
+                        output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}/test"
+                        self.ts_plotter.set_output_dir(output_dir)
+                        log(f"Plotting test time series for model {model['name']} and test '{test_name}'.")
+                        self.ts_plotter.plot_test_time_series(f"{model['name']}_{test_name}",
+                                                              f"{model['name']} test time series ({test_name})",
+                                                              test_time_series,
+                                                              self.config.get_argument("model_variables"))
 
     def build_models(self):
         print(self.config.get_logo())
@@ -105,3 +138,8 @@ class ModelBuilder:
                         continue
                     model = self.model_handler.add_model(structure, prediction_method, train_file)
                     self.initialize_model(structure, model)
+
+        if len(self.config.get_argument("test_files")) > 0:
+            self.test_models()
+        else:
+            log(f"The models won't be tested as no test files have been specified.")
