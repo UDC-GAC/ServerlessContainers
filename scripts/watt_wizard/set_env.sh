@@ -3,8 +3,8 @@
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 SERVICES_CONFIG_FILE=$scriptDir"/../../services_config.yml"
 
-watt_wizard_url=`yq -r '.WATT_WIZARD_URL' < $SERVICES_CONFIG_FILE`
-watt_wizard_port=`yq -r '.WATT_WIZARD_PORT' < $SERVICES_CONFIG_FILE`
+watt_wizard_url=`yq -r '.WATTWIZARD_URL' < $SERVICES_CONFIG_FILE`
+watt_wizard_port=`yq -r '.WATTWIZARD_PORT' < $SERVICES_CONFIG_FILE`
 
 if [ -z "${WATT_WIZARD_URL}" ]
 then
