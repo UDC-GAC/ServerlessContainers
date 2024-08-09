@@ -63,9 +63,8 @@ class ModelBuilder:
         self.get_time_series_from_file(structure, model['train_file_path'], model['prediction_method'])
         # Pretrain model with collected time series
         try:
-            print(self.time_series[model['prediction_method']])
             model['instance'].set_idle_consumption(self.idle_time_series[model['prediction_method']])
-            model['instance'].pretrain(self.time_series[model['prediction_method']], data_type="df")
+            model['instance'].pretrain(time_series=self.time_series[model['prediction_method']], data_type="df")
 
             log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")
 
@@ -102,7 +101,7 @@ class ModelBuilder:
             for structure in self.config.get_argument("structures"):
                 for model_name in self.model_handler.get_models_by_structure(structure):
                     model = self.model_handler.get_model_by_name(structure, model_name)
-                    power_predicted = model['instance'].test(test_time_series, data_type="df")
+                    power_predicted = model['instance'].test(time_series=test_time_series, data_type="df")
                     test_time_series['power_predicted'] = power_predicted.flatten()
 
                     # Plot results

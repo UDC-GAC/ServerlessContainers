@@ -4,7 +4,7 @@ from flask import request
 
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.model.ModelHandler import ModelHandler
-from src.WattWizard.app.app_utils import get_param_value, get_boolean_param_value, get_model_variables_from_request
+from src.WattWizard.app.app_utils import get_param_value, get_boolean_param_value, get_kwargs_from_request
 
 DYNAMIC_VAR = "user_load"
 
@@ -16,7 +16,6 @@ model_handler = ModelHandler.get_instance()
 @routes.route('/is-static/<structure>/<model_name>', methods=['GET'])
 def is_static(structure=None, model_name=None):
     try:
-        prediction_method = model_handler.get_model_prediction_method(structure, model_name)
         return jsonify({'is_static': model_handler.is_static(structure, model_name)})
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -28,9 +27,9 @@ def is_static(structure=None, model_name=None):
 def predict_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
-        X_test = get_model_variables_from_request(model_instance, request)
-        my_config.check_resources_limits(X_test)
-        predicted_consumption = model_instance.predict(X_test)
+        kwargs = get_kwargs_from_request(model_instance, request, 'predict')
+        my_config.check_resources_limits(kwargs['X_dict'])
+        predicted_consumption = model_instance.predict(**kwargs)
         return jsonify({'predicted_power': predicted_consumption})
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -40,15 +39,14 @@ def predict_power(structure=None, model_name=None):
 def predict_values_from_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
-        current_X = get_model_variables_from_request(model_instance, request)
-        my_config.check_resources_limits(current_X)
+        kwargs = get_kwargs_from_request(model_instance, request, 'get_inverse_prediction')
+        my_config.check_resources_limits(kwargs['X_dict'])
         desired_power = get_param_value(request, "desired_power", float)
         var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
-
-        result = model_instance.get_inverse_prediction(current_X, desired_power, DYNAMIC_VAR, var_limits)
+        result = model_instance.get_inverse_prediction(desired_power, DYNAMIC_VAR, var_limits, **kwargs)
         return jsonify(result)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -58,8 +56,8 @@ def predict_values_from_power(structure=None, model_name=None):
 def predict_adjusted_values_from_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
-        current_X = get_model_variables_from_request(model_instance, request)
-        my_config.check_resources_limits(current_X)
+        kwargs = get_kwargs_from_request(model_instance, request, 'get_adjusted_inverse_prediction')
+        my_config.check_resources_limits(kwargs['current_X'])
         real_power = get_param_value(request, "real_power", float)
         desired_power = get_param_value(request, "desired_power", float)
         var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
@@ -67,7 +65,7 @@ def predict_adjusted_values_from_power(structure=None, model_name=None):
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
 
-        result = model_instance.get_adjusted_inverse_prediction(current_X, real_power, desired_power, DYNAMIC_VAR, var_limits)
+        result = model_instance.get_adjusted_inverse_prediction(real_power, desired_power, DYNAMIC_VAR, var_limits, **kwargs)
         return jsonify(result)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -133,7 +131,7 @@ def get_cpu_limits():
 @routes.route('/cpu-limits/<var>', methods=['GET'])
 def get_cpu_limits_from_var(var=None):
     try:
-        my_config.get_resource_cpu_limits(var)
+        return my_config.get_resource_cpu_limits(var)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
@@ -157,8 +155,8 @@ def train_model(structure=None, model_name=None):
     json_data = eval(request.json) if isinstance(request.json, str) else request.json
     try:
         model = model_handler.get_model_by_name(structure, model_name)
-        if not ModelHandler.is_static(model["prediction_method"]):
-            model["instance"].train(json_data, data_type="json")
+        if not model_handler.is_static(structure, model_name):
+            model["instance"].train(time_series=json_data, data_type="json")
             return jsonify({'INFO': f'Model trained successfully (Train {model["instance"].get_times_trained()})'})
         else:
             return jsonify({'ERROR': f'Model {model_name} using static method {model["prediction_method"]} '
@@ -170,14 +168,12 @@ def train_model(structure=None, model_name=None):
 @routes.route('/reset-model/<structure>/<model_name>', methods=['DELETE'])
 def reset_model(structure=None, model_name=None):
     try:
-        prediction_method = model_handler.get_model_prediction_method(structure, model_name)
-        if not ModelHandler.is_static(prediction_method):
+        if not model_handler.is_static(structure, model_name):
             model_handler.reset_model_instance(structure, model_name)
             model_instance = model_handler.get_model_instance(structure, model_name)
             model_instance.set_model_vars(my_config.get_argument("model_variables"))
             return jsonify({'INFO': 'Model successfully restarted'}), 200
         else:
-            return jsonify({'ERROR': f'Model \'{model_name}\' using static method '
-                                     f'\'{prediction_method}\' can\'t be restarted'}), 400
+            return jsonify({'ERROR': f'Model \'{model_name}\' using static method can\'t be restarted'}), 400
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
