@@ -2,6 +2,15 @@ import argparse
 from argparse import RawTextHelpFormatter
 
 
+def parse_cores_distribution_to_dict(arg_str):
+    arg_dict = {}
+    cpus_str = arg_str.split(';')
+    for cpu_str in cpus_str:
+        cpu, cores = cpu_str.split('=')
+        arg_dict[cpu] = cores
+    return arg_dict
+
+
 class CLIParser:
 
     def __init__(self):
@@ -70,6 +79,20 @@ class CLIParser:
             "--model-variables",
             help="Comma-separated list of variables to use in the model. Commonly known as features. \
     \nSupported values: user_load, system_load, wait_load, freq, sumfreq.",
+        )
+
+        self.parser.add_argument(
+            "--sockets",
+            type=int,
+            help="Number of sockets of the CPU to be modelled. Only used for HW aware models. \
+More than two sockets is not yet supported.",
+        )
+
+        self.parser.add_argument(
+            "--cores-distribution",
+            type=parse_cores_distribution_to_dict,
+            help="Cores distribution of the CPU to be modelled. Only used for HW aware models. \
+Example: CPU0=0-15,32-47;CPU1=16-31,48-63",
         )
 
         self.parser.add_argument(

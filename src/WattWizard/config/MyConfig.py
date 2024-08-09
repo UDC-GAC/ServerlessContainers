@@ -7,6 +7,7 @@ WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 COMMA_SEPARATED_LIST_ARGS = ['structures', 'prediction_methods', 'model_variables', 'train_files', 'test_files']
 DIRECTORY_ARGS = ['train_timestamps_dir', 'test_timestamps_dir', 'plot_time_series_dir']
 FILE_ARGS = ['train_files', 'test_files']
+DICT_ARGS = ['cores_distribution']
 
 DASHED_LINE = "".join(["-" for _ in range(1, 200)])
 
@@ -84,6 +85,20 @@ class MyConfig:
                 files_list.append("NPT")
         return files_list
 
+    @staticmethod
+    def convert_distribution_dict(dict_arg):
+        new_dict = {}
+        for cpu, ranges_str in dict_arg.items():
+            result = []
+            for r in ranges_str.split(','):
+                if '-' in r:
+                    start, end = map(int, r.split('-'))
+                    result.extend(range(start, end + 1))
+                else:
+                    result.append(int(r))
+            new_dict[cpu] = result
+        return new_dict
+
     def set_resource_cpu_limit(self, resource, limit_type, value):
         if limit_type not in ["min", "max"]:
             raise Exception(f"Bad cpu limit type '{limit_type}' it must be 'min' or 'max'")
@@ -95,6 +110,9 @@ class MyConfig:
     def add_argument(self, arg_name, arg_value):
         if arg_name in COMMA_SEPARATED_LIST_ARGS:
             arg_value = arg_value.split(',')
+
+        if arg_name in DICT_ARGS:
+            arg_value = self.convert_distribution_dict(arg_value)
 
         if arg_name in DIRECTORY_ARGS and arg_value.startswith("."):
             # Convert relative path to full path
