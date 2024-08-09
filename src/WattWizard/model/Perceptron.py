@@ -9,7 +9,7 @@ class Perceptron(Model):
     model = None
     scaler = None
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__()
         self.model = MLPRegressor(hidden_layer_sizes=(), max_iter=10000, warm_start=False)
         self.scaler = StandardScaler()

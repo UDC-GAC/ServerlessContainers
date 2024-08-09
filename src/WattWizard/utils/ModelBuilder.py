@@ -125,11 +125,15 @@ class ModelBuilder:
             for prediction_method in self.config.get_argument("prediction_methods"):
                 for train_file in self.config.get_argument(f"train_files"):
                     train_file = None if train_file == "NPT" else train_file  # NPT = Not Pre-Trained
-                    if train_file is None and ModelHandler.is_static(prediction_method):
+                    if train_file is None and ModelHandler.is_static_method(prediction_method):
                         log(f"Prediction method {prediction_method} doesn't support online learning, so it's mandatory "
                             f"to pretrain the model. Model {prediction_method}_NPT will be discarded", "WARN")
                         continue
-                    model = self.model_handler.add_model(structure, prediction_method, train_file)
+                    if ModelHandler.is_hw_aware_method(prediction_method):
+                        # TODO: Add cores distribution and sockets from config
+                        model = self.model_handler.add_model(structure, prediction_method, train_file)
+                    else:
+                        model = self.model_handler.add_model(structure, prediction_method, train_file)
                     self.initialize_model(structure, model)
 
         if len(self.config.get_argument("test_files")) > 0:

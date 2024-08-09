@@ -1,20 +1,32 @@
 verbose: no
 server_mode: no
 
+# InfluxDB configuration
 influxdb_host: "montoxo.des.udc.es"
 influxdb_bucket: "compute2"
 influxdb_token: "MyToken"
 influxdb_org: "MyOrg"
 
-structures: "host,container"
+# Models configuration
+structures: "host"
 prediction_methods: "polyreg,sgdregressor"
 model_variables: "user_load,system_load"
 
+# Harware info: Only required when using HW aware models
+sockets: 2
+cores_distribution:
+  CPU0: "0-15,32-47"
+  CPU1: "16-31,48-63"
+
+# Train configuration
 train_timestamps_dir: "./conf/WattWizard/timestamps/train"
 train_files: "all"
 
+# Test configuration
 test_timestamps_dir: "./conf/WattWizard/timestamps/test"
 test_files: "all"
 
+# Plots configuration
 plot_time_series: no
 plot_time_series_dir: "./conf/WattWizard/time_series"
+

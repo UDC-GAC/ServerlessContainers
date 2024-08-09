@@ -8,7 +8,7 @@ class PolynomialRegression(Model):
 
     model = None
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__()
         self.model = LinearRegression(fit_intercept=False)
         self.poly_features = PolynomialFeatures(degree=2, include_bias=False)

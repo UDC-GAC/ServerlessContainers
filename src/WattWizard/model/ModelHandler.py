@@ -4,10 +4,13 @@ from src.WattWizard.model import *
 
 STATIC_PREDICTION_METHODS = ["polyreg"]
 
+HW_AWARE_PREDICTION_METHODS = ["multisocket"]
+
 INSTANCE_CONSTRUCTORS = {
     "mlpregressor": lambda: Perceptron(),
     "sgdregressor": lambda: SGDRegression(),
-    "polyreg": lambda: PolynomialRegression()
+    "polyreg": lambda: PolynomialRegression(),
+    "multisocket": lambda: MultiSocketRegresion()
 }
 
 
@@ -31,10 +34,18 @@ class ModelHandler:
         return ModelHandler.__instance
 
     @staticmethod
-    def create_model_instance(prediction_method):
+    def create_model_instance(prediction_method, **kwargs):
         if prediction_method in INSTANCE_CONSTRUCTORS:
-            return INSTANCE_CONSTRUCTORS[prediction_method]()
+            return INSTANCE_CONSTRUCTORS[prediction_method](**kwargs)
         raise Exception(f"Trying to create model with unsupported prediction method ({prediction_method})")
+
+    @staticmethod
+    def is_static_method(prediction_method):
+        return prediction_method in STATIC_PREDICTION_METHODS
+
+    @staticmethod
+    def is_hw_aware_method(prediction_method):
+        return prediction_method in HW_AWARE_PREDICTION_METHODS
 
     def __init__(self):
         if ModelHandler.__instance is not None:
@@ -44,7 +55,7 @@ class ModelHandler:
 
         self.models = {}
 
-    def add_model(self, structure, prediction_method, train_file):
+    def add_model(self, structure, prediction_method, train_file, **kwargs):
         model_name = f"{prediction_method}_{self.get_file_name(train_file)}"
         if structure in self.models and model_name in self.models[structure]:
             raise Exception(f"Model with name {model_name} already exists")
@@ -56,8 +67,9 @@ class ModelHandler:
                 "prediction_method": prediction_method,
                 "train_file_path": train_file,
                 "train_file_name": self.get_file_name(train_file),
-                "instance": self.create_model_instance(prediction_method),
-                "is_static": prediction_method in STATIC_PREDICTION_METHODS
+                "instance": self.create_model_instance(prediction_method, **kwargs),
+                "is_static": prediction_method in STATIC_PREDICTION_METHODS,
+                "hw_aware": prediction_method in HW_AWARE_PREDICTION_METHODS
             }
         return self.models[structure][model_name]
 

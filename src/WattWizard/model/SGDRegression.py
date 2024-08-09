@@ -13,7 +13,7 @@ class SGDRegression(Model):
     model = None
     pipeline = None
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         super().__init__()
         self.model = SGDRegressor(eta0=0.001, learning_rate="constant", fit_intercept=False, max_iter=10000)
         self.pipeline = Pipeline(steps=[
