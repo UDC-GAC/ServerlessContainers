@@ -47,13 +47,14 @@ class TimeSeriesParallelCollector:
     def get_timestamp_from_line(start_line, stop_line):
         exp_name = start_line.split(" ")[0]
         exp_type = start_line.split(" ")[1]
+        cores = start_line.split(" ")[4].strip(')')
         start_offset = 0 if exp_type == "IDLE" else START_OFFSET
         stop_offset = 0 if exp_type == "IDLE" else STOP_OFFSET
         start_str = " ".join(start_line.split(" ")[-2:]).strip()
         stop_str = " ".join(stop_line.split(" ")[-2:]).strip()
         start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=start_offset)
         stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=stop_offset)
-        return [(start, stop, exp_name, exp_type)]
+        return [(start, stop, exp_name, exp_type, cores)]
 
     @staticmethod
     def parse_timestamps(file):
@@ -100,7 +101,7 @@ class TimeSeriesParallelCollector:
 
     # Get data for a given period (obtained from timestamps)
     def get_experiment_data(self, timestamp, influxdb_info):
-        start_date, stop_date, exp_name, exp_type = timestamp
+        start_date, stop_date, exp_name, exp_type, cores = timestamp
         start_str = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         stop_str = stop_date.strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -123,11 +124,12 @@ class TimeSeriesParallelCollector:
             exp_data.rename(columns={'_time': 'time'}, inplace=True)
             exp_data.loc[:, "exp_name"] = exp_name
             exp_data.loc[:, "exp_type"] = exp_type
+            exp_data.loc[:, "cores"] = cores
 
         # Remove DataFrame useless variables
         try:
             exp_data["power"] = exp_data.loc[:, "power_pkg0"] + exp_data.get("power_pkg1", 0)
-            exp_data = exp_data[self.model_variables + ["power", "exp_name", "exp_type", "time"]]
+            exp_data = exp_data[self.model_variables + ["power", "exp_name", "exp_type", "cores", "time"]]
         except KeyError as e:
             log(f"Error getting data between {start_date} and {stop_date}: {str(e)}", "ERR")
             log(f"Data causing the error: {exp_data}", "ERR")
