@@ -10,7 +10,9 @@ INSTANCE_CONSTRUCTORS = {
     "mlpregressor": lambda: Perceptron(),
     "sgdregressor": lambda: SGDRegression(),
     "polyreg": lambda: PolynomialRegression(),
-    "multisocket": lambda: MultiSocketRegresion()
+    "multisocket": lambda: MultiSocketRegresion(),
+    "segmentedreg": lambda: SegmentedRegression(),
+    "interpolation": lambda: LinearInterpolation()
 }
 
 
