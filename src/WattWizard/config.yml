@@ -19,7 +19,7 @@ cores_distribution:
   CPU1: "16-31,48-63"
 
 # Train configuration
-train_timestamps_dir: "./conf/WattWizard/timestamps/train"
+train_timestamps_dir: "./conf/WattWizard/timestamps/train/default"
 train_files: "all"
 
 # Test configuration
