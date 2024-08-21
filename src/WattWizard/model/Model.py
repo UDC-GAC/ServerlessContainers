@@ -90,6 +90,7 @@ class Model(object):
             raise TypeError(f"Not supported data type {data_type}. It must be DataFrame or JSON.")
 
     def get_inverse_prediction(self, desired_power, dynamic_var, limits, **kwargs):
+        self.check_required_kwargs(self.required_kwargs_map['get_inverse_prediction'], kwargs)
         estimated_power = self.predict(**kwargs)
         error = abs(desired_power - estimated_power)
         count_iters = 0
@@ -102,6 +103,26 @@ class Model(object):
         return {
             "value": max(limits["min"], min(limits["max"], kwargs['X_dict'][dynamic_var]))
         }
+
+    # from scipy.optimize import fsolve
+    # def get_inverse_prediction(self, desired_power, dynamic_var, limits, **kwargs):
+    #     self.check_required_kwargs(self.required_kwargs_map['get_inverse_prediction'], kwargs)
+    #
+    #     def equation(dyn_value):
+    #         new_kwargs = kwargs
+    #         new_kwargs[dynamic_var] = dyn_value
+    #         y = self.predict(**kwargs)
+    #         return y - desired_power
+    #
+    #     initial_estimated_power = self.predict(**kwargs)
+    #     error = abs(desired_power - estimated_power)
+    #     initial_estimation = desired_power * kwargs['X_dict'][dynamic_var] / estimated_power
+    #     result = fsolve(equation, initial_estimation)
+    #
+    #
+    #     return {
+    #         "value": max(limits["min"], min(limits["max"], result))
+    #     }
 
     def get_adjusted_inverse_prediction(self, real_power, desired_power, dynamic_var, limits, **kwargs):
         result = self.get_inverse_prediction(desired_power, dynamic_var, limits, **kwargs)

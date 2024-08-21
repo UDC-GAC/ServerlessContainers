@@ -84,20 +84,30 @@ class InfluxDBCollector:
                 f"Bucket {self.influxdb_bucket} doesn't exists", "ERR")
             exit(1)
 
-    def get_query(self, var, structure, start_date, stop_date):
+    def get_query(self, var, structure, start_date, stop_date, core):
+        params = {
+            "start_date": start_date,
+            "stop_date": stop_date,
+            "influxdb_bucket": self.influxdb_bucket,
+            "influxdb_window": "2s"
+        }
+
+        if core is not None:
+            var = f"{var}_core"  # _core indicates we want to get var filtering by a specific core
+            params["core"] = core
+
         if var not in INFLUXDB_QUERIES:
             log(f"Model variable \'{var}\' not supported", "ERR")
             exit(1)
+
         if INFLUXDB_QUERIES[var] is None:
             log(f"Model variable \'{var}\' not yet supported. It will be implemented in the future", "ERR")
             exit(1)
-        return INFLUXDB_QUERIES[var].format(start_date=start_date,
-                                            stop_date=stop_date,
-                                            influxdb_bucket=self.influxdb_bucket,
-                                            influxdb_window="2s")
 
-    def query_influxdb(self, var, structure, start_date, stop_date):
-        query = self.get_query(var, structure, start_date, stop_date)
+        return INFLUXDB_QUERIES[var].format(**params)
+
+    def query_influxdb(self, var, structure, start_date, stop_date, core=None):
+        query = self.get_query(var, structure, start_date, stop_date, core)
         query_api = self.client.query_api()
         result = None
         success = False

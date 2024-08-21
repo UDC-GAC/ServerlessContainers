@@ -3,6 +3,7 @@ load_query = '''
         |> range(start: {start_date}, stop: {stop_date})
         |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
         |> filter(fn: (r) => r["_field"] == "user" or r["_field"] == "system")
+        |> filter(fn: (r) => r["core"] == "all")
         |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
 '''
 
@@ -11,6 +12,7 @@ user_load_query = '''
         |> range(start: {start_date}, stop: {stop_date})
         |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
         |> filter(fn: (r) => r["_field"] == "user" )
+        |> filter(fn: (r) => r["core"] == "all")
         |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
 '''
 
@@ -19,6 +21,61 @@ system_load_query = '''
         |> range(start: {start_date}, stop: {stop_date})
         |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
         |> filter(fn: (r) => r["_field"] == "system" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+p_user_load_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "puser" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+p_system_load_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "psystem" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+l_user_load_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "luser" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+l_system_load_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "lsystem" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+user_load_core_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "user" )
+        |> filter(fn: (r) => r["core"] == \"{core}\")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+system_load_core_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "system" )
+        |> filter(fn: (r) => r["core"] == \"{core}\")
         |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
 '''
 
@@ -56,6 +113,12 @@ INFLUXDB_QUERIES = {
     "load": load_query,
     "user_load": user_load_query,
     "system_load": system_load_query,
+    "p_user_load": p_user_load_query,
+    "p_system_load": p_system_load_query,
+    "l_user_load": l_user_load_query,
+    "l_system_load": l_system_load_query,
+    "user_load_core": user_load_core_query,
+    "system_load_core": system_load_core_query,
     "power": power_query,
     "power_pkg0": power_pkg0_query,
     "power_pkg1": power_pkg1_query,
