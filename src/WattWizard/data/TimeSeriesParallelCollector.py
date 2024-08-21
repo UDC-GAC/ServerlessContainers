@@ -141,6 +141,11 @@ class TimeSeriesParallelCollector:
         # Remove idle periods when include_idle is False
         filtered_timestamps = [t for t in timestamps if include_idle or t[3] != "IDLE"]
 
+        if len(filtered_timestamps) == 0:
+            log(f"Timestamps to obtain {"idle " if include_idle else ""}time series have not been provided or are mislabelled", "ERR")
+            log("Timestamps must follow the format: <EXP_NAME> <EXP_TYPE> ... <START|STOP> <TIMESTAMP>", "ERR")
+            exit(1)
+
         result_dfs = []
         workers = min(len(timestamps), self.max_cores)
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:

@@ -40,13 +40,15 @@ def predict_values_from_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
         kwargs = get_kwargs_from_request(model_instance, request, 'get_inverse_prediction')
-        my_config.check_resources_limits(kwargs['X_dict'])
+        if 'X_dict' in kwargs:
+            my_config.check_resources_limits(kwargs['X_dict'])
         desired_power = get_param_value(request, "desired_power", float)
-        var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
+        dynamic_var = get_param_value(request, "dynamic_var")
+        var_limits = my_config.get_resource_cpu_limits(dynamic_var)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
-        result = model_instance.get_inverse_prediction(desired_power, DYNAMIC_VAR, var_limits, **kwargs)
+        result = model_instance.get_inverse_prediction(desired_power, dynamic_var, var_limits, **kwargs)
         return jsonify(result)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -57,15 +59,17 @@ def predict_adjusted_values_from_power(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
         kwargs = get_kwargs_from_request(model_instance, request, 'get_adjusted_inverse_prediction')
-        my_config.check_resources_limits(kwargs['current_X'])
+        if 'X_dict' in kwargs:
+            my_config.check_resources_limits(kwargs['X_dict'])
         real_power = get_param_value(request, "real_power", float)
         desired_power = get_param_value(request, "desired_power", float)
-        var_limits = my_config.get_resource_cpu_limits(DYNAMIC_VAR)
+        dynamic_var = get_param_value(request, "dynamic_var")
+        var_limits = my_config.get_resource_cpu_limits(dynamic_var)
         idle_consumption = model_instance.get_idle_consumption()
         if idle_consumption and desired_power <= idle_consumption:
             return jsonify({'ERROR': f'Requested power value ({desired_power}) lower than idle consumption ({idle_consumption})'}), 400
 
-        result = model_instance.get_adjusted_inverse_prediction(real_power, desired_power, DYNAMIC_VAR, var_limits, **kwargs)
+        result = model_instance.get_adjusted_inverse_prediction(real_power, desired_power, dynamic_var, var_limits, **kwargs)
         return jsonify(result)
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
@@ -116,6 +120,18 @@ def get_model_attributes(structure=None, model_name=None):
             return jsonify({'ERROR': 'Model not trained. Train the model first, then you could get its attributes'}), 400
         else:
             return jsonify({'intercept': intercept, 'coefficients': coefs})
+    except Exception as e:
+        return jsonify({'ERROR': str(e)}), 400
+
+@routes.route('/model-variables/<structure>/<model_name>', methods=['GET'])
+def get_model_variables(structure=None, model_name=None):
+    try:
+        model_instance = model_handler.get_model_instance(structure, model_name)
+        model_variables = model_instance.get_model_vars
+        if model_variables is None:
+            return jsonify({'ERROR': 'Model doesn\'t have variables. Something weird has happened.'}), 400
+        else:
+            return jsonify({'model_variables': model_variables})
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 

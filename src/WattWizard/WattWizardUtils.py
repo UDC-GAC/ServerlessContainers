@@ -44,11 +44,14 @@ class WattWizardUtils:
             else:
                 self.is_static(structure, model_name, tries)
 
-    def get_usage_meeting_budget(self, structure, model_name, user_usage, system_usage, power_budget, tries=3):
+    # TODO: Adapt to different model variables + add dynamic var parameter
+    def get_usage_meeting_budget(self, structure, model_name, power_budget, tries=3, **kwargs):
         try:
-            params = {'user_load': user_usage,
-                      'system_load': system_usage,
-                      'desired_power': power_budget}
+            params = kwargs
+            params['desired_power'] = power_budget
+            params['dynamic_var'] = "user_load"  # Hardcoded
+            if 'core_usages' in params:
+                params['core_usages'] = json.dumps(params['core_usages'])
             r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "inverse-predict", structure, model_name), params=params)
             if r.status_code == 200:
                 return r.json()
@@ -59,14 +62,16 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_usage_meeting_budget(structure, model_name, user_usage, system_usage, power_budget, tries)
+                self.get_usage_meeting_budget(structure, model_name, power_budget, tries, **kwargs)
 
-    def get_adjusted_usage_meeting_budget(self, structure, model_name, user_usage, system_usage, real_power, power_budget, tries=3):
+    def get_adjusted_usage_meeting_budget(self, structure, model_name, real_power, power_budget, tries=3, **kwargs):
         try:
-            params = {'user_load': user_usage,
-                      'system_load': system_usage,
-                      'real_power': real_power,
-                      'desired_power': power_budget}
+            params = kwargs
+            params['real_power'] = real_power
+            params['desired_power'] = power_budget
+            params['dynamic_var'] = "user_load"  # Hardcoded
+            if 'core_usages' in params:
+                params['core_usages'] = json.dumps(params['core_usages'])
             r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "adjusted-inverse-predict", structure, model_name), params=params)
             if r.status_code == 200:
                 return r.json()
@@ -77,7 +82,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_usage_meeting_budget(structure, model_name, user_usage, system_usage, power_budget, tries)
+                self.get_usage_meeting_budget(structure, model_name, power_budget, tries, **kwargs)
 
     def get_idle_consumption(self, structure, model_name, tries=3):
         try:
@@ -92,6 +97,21 @@ class WattWizardUtils:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
                 self.get_idle_consumption(structure, model_name, tries)
+
+    def get_model_variables(self, structure, model_name, tries=3):
+        try:
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "model-variables", structure, model_name))
+
+            if r.status_code == 200:
+                return r.json()['model_variables']
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.get_model_variables(structure, model_name, tries)
 
     def get_models(self, avoid_static=False, tries=3):
         try:

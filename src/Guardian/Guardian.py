@@ -92,7 +92,7 @@ translator_dict = {
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False,
+                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False, "MODEL_IS_HW_AWARE": False,
                          "ENERGY_MODEL_NAME": "sgdregressor_General", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
@@ -312,6 +312,44 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
+    def get_core_usages(self, structure):
+        """Get the usage of a structure disaggregated by core. The usage of each core will be used to predict power
+        with hardware aware models that need this information.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+
+        Returns:
+            core_usages (dict): Dictionary containing the CPU cores as a key and their usage as values
+
+        """
+        tag = TAGS[structure["subtype"]]
+        metrics_to_retieve = ["sys.cpu.user", "sys.cpu.kernel"]
+        metrics_to_generate = {
+            "user_load": ["sys.cpu.user"],
+            "system_load": ["sys.cpu.kernel"]
+        }
+
+        core_usages = {}
+        host_info = self.couchdb_handler.get_structure(structure["host"])
+        try:
+            host_cores_mapping = host_info["resources"]["cpu"]["core_usage_mapping"]
+        except KeyError:
+            raise KeyError("No available cores info for structure {0}. HW aware models can't predict power without this information".format(structure['name']), self.debug)
+
+        for core in host_cores_mapping:
+            # If core is used by this structure then get core usage
+            if structure["name"] in host_cores_mapping[core] and host_cores_mapping[core][structure["name"]] > 0:
+                # Remote database operation
+                core_usage = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"], "core": core},
+                                                                            self.window_difference, self.window_delay,
+                                                                            metrics_to_retieve, metrics_to_generate)
+                core_usages[core] = core_usage
+
+        return core_usages
+
     def get_amount_from_energy_modelling(self, structure, usages, resource):
         """Get an amount that will be reduced from the current resource limit using an energy model that relates
         resource usage with energy usage.
@@ -335,25 +373,28 @@ class Guardian:
         # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
         if not self.last_power_budget or self.last_power_budget != power_budget:
             self.last_power_budget = power_budget
-
-            # TODO: Check uses cases of each structure subtype and manage them
-            subtype = "host"  # structure["subtype"] if structure["subtype"] != "application" else "host"
-            user_usage = usages[translator_dict["user"]]
-            kernel_usage = usages[translator_dict["kernel"]]
-            result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name, user_usage,
-                                                                      kernel_usage, power_budget)
-            log_warning("First time rescaling with this power budget. "
-                        "Setting power model estimated CPU ({0}W = {1}% CPU)."
+            subtype = "host"  # TODO: Check uses cases of each structure subtype and manage them
+            if self.model_is_hw_aware:
+                core_usages = self.get_core_usages(structure)
+                result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name,
+                                                                          power_budget, core_usages=core_usages)
+            else:
+                vars_usages = {
+                    "user_load": usages[translator_dict["user"]],
+                    "system_load": usages[translator_dict["kernel"]]
+                }
+                result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name,
+                                                                          power_budget, vars_usages)
+            log_warning("First time rescaling with this power budget. Setting power model estimated CPU ({0}W = {1}% CPU)."
                         .format(power_budget, result["value"]), self.debug)
             amount = result["value"] - current_cpu_limit
-            return int(amount)
-
         # If not, we adjust the CPU value previously retrieved from the model based on current error
         else:
             real_power = usages[translator_dict["energy"]]
             percentage_error = min((power_budget - real_power) / power_budget, 0)
             amount = current_cpu_limit * percentage_error
-            return int(amount)
+
+        return int(amount)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
@@ -464,9 +505,9 @@ class Guardian:
             return False
         else:
             return rule["active"] and \
-                   resources[rule["resource"]]["guard"] and \
-                   rule["generates"] == "events" and \
-                   jsonLogic(rule["rule"], data)
+                resources[rule["resource"]]["guard"] and \
+                rule["generates"] == "events" and \
+                jsonLogic(rule["rule"], data)
 
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
 
@@ -855,6 +896,7 @@ class Guardian:
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
             self.use_energy_model = myConfig.get_value("USE_ENERGY_MODEL")
             self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
+            self.model_is_hw_aware = myConfig.get_value("MODEL_IS_HW_AWARE")
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
             self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
@@ -871,7 +913,8 @@ class Guardian:
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
             if self.use_energy_model:
-                log_info("Energy model name is -> {0}".format(self.energy_model_name), debug)
+                hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
+                log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##
