@@ -28,6 +28,23 @@ class ModelBuilder:
                                                         self.config.get_argument("influxdb_token"),
                                                         self.config.get_argument("influxdb_org"))
 
+    @staticmethod
+    def is_hw_aware_compatible(file):
+        try:
+            with open(file, 'r') as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            log(f"Error while parsing timestamps (file doesn't exists): {file}", "ERR")
+
+        for i in range(0, len(lines)):
+            exp_name = lines[i].split(" ")[0]
+            exp_type = lines[i].split(" ")[1]
+            if exp_name.startswith("CPU"):
+                return True
+            elif exp_type != "IDLE":
+                return False
+        return False
+
     def clear_processed_files(self):
         self.processed_files.clear()
 
@@ -125,13 +142,24 @@ class ModelBuilder:
             for prediction_method in self.config.get_argument("prediction_methods"):
                 for train_file in self.config.get_argument(f"train_files"):
                     train_file = None if train_file == "NPT" else train_file  # NPT = Not Pre-Trained
+
+                    # Check that we always pretrain static methods
                     if train_file is None and ModelHandler.is_static_method(prediction_method):
                         log(f"Prediction method {prediction_method} doesn't support online learning, so it's mandatory "
                             f"to pretrain the model. Model {prediction_method}_NPT will be discarded", "WARN")
                         continue
+
+                    # Check that we use the appropiate files for HW aware models
                     if ModelHandler.is_hw_aware_method(prediction_method):
                         # TODO: Add cores distribution and sockets from config
-                        model = self.model_handler.add_model(structure, prediction_method, train_file)
+                        if self.is_hw_aware_compatible(train_file):
+                            model = self.model_handler.add_model(structure, prediction_method, train_file)
+                        else:
+                            model_name = f"{prediction_method}_{ModelHandler.get_file_name(train_file)}"
+                            log(f"Train file {train_file} is not suitable for HW aware models. This file must "
+                                f"indicate the CPU socket where each experiment have been executed at the beginning of "
+                                f"its <EXP_NAME> (e.g., CPU0_Group_P&L). Model {model_name} will be discarded", "WARN")
+                            continue
                     else:
                         model = self.model_handler.add_model(structure, prediction_method, train_file)
                     self.initialize_model(structure, model)
