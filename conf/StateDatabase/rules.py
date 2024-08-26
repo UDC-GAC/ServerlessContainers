@@ -346,16 +346,19 @@ energy_exceeded_upper = dict(
     active=True
 )
 
-energy_dropped_lower = dict(
-    _id='energy_dropped_lower',
+energy_dropped_lower_and_cpu_exceeded_upper = dict(
+    _id='energy_dropped_lower_and_cpu_exceeded_upper',
     type='rule',
     resource="energy",
-    name='energy_dropped_lower',
+    name='energy_dropped_lower_and_cpu_exceeded_upper',
     rule=dict(
         {"and": [
             {"<": [
                 {"var": "energy.structure.energy.usage"},
-                {"var": "energy.structure.energy.max"}]}]}),
+                {"var": "energy.structure.energy.upper"}]},
+            {">": [
+                {"var": "cpu.structure.cpu.usage"},
+                {"var": "cpu.limits.cpu.upper"}]}]}),
     generates="events", action={"events": {"scale": {"down": 1}}},
     active=True
 )
@@ -437,7 +440,7 @@ if __name__ == "__main__":
 
         # Energy
         handler.add_rule(energy_exceeded_upper)
-        handler.add_rule(energy_dropped_lower)
+        handler.add_rule(energy_dropped_lower_and_cpu_exceeded_upper)
         handler.add_rule(EnergyRescaleUp)
         handler.add_rule(EnergyRescaleDown)
 

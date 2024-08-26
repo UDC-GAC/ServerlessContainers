@@ -114,7 +114,7 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
-        self.last_power_budget = None
+        self.last_power_budget = {}
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
     @staticmethod
@@ -350,7 +350,7 @@ class Guardian:
 
         return core_usages
 
-    def get_amount_from_energy_modelling(self, structure, usages, resource):
+    def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type):
         """Get an amount that will be reduced from the current resource limit using an energy model that relates
         resource usage with energy usage.
         Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
@@ -369,10 +369,15 @@ class Guardian:
         """
         power_budget = structure["resources"][resource]["max"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
+        structure_name = structure['name']
+
+        # Initialise with a non-possible value
+        if structure_name not in self.last_power_budget:
+            self.last_power_budget[structure_name] = -1
 
         # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
-        if not self.last_power_budget or self.last_power_budget != power_budget:
-            self.last_power_budget = power_budget
+        if self.last_power_budget[structure_name] != power_budget:
+            self.last_power_budget[structure_name] = power_budget
             subtype = "host"  # TODO: Check uses cases of each structure subtype and manage them
             if self.model_is_hw_aware:
                 core_usages = self.get_core_usages(structure)
@@ -384,14 +389,25 @@ class Guardian:
                     "system_load": usages[translator_dict["kernel"]]
                 }
                 result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name,
-                                                                          power_budget, vars_usages)
+                                                                          power_budget, **vars_usages)
             log_warning("First time rescaling with this power budget. Setting power model estimated CPU ({0}W = {1}% CPU)."
                         .format(power_budget, result["value"]), self.debug)
             amount = result["value"] - current_cpu_limit
+
+            # If we want to rescale up, avoid rescaling down and vice versa
+            if (rescale_type == "up" and amount < 0) or (rescale_type == "down" and amount > 0):
+                amount = 0
+
         # If not, we adjust the CPU value previously retrieved from the model based on current error
         else:
+            power_margin = 0.05
             real_power = usages[translator_dict["energy"]]
-            percentage_error = min((power_budget - real_power) / power_budget, 0)
+
+            # If power is within some reasonable limits we do nothing
+            if power_budget * (1 - power_margin) < real_power < power_budget * (1 + power_margin):
+                return 0
+
+            percentage_error = (power_budget - real_power) / power_budget
             amount = current_cpu_limit * percentage_error
 
         return int(amount)
@@ -412,9 +428,9 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        max_resource_limit = structure["resources"][resource]["max"]
-        current_resource_limit = structure["resources"][resource]["usage"]
-        difference = max_resource_limit - current_resource_limit
+        max_energy_limit = structure["resources"][resource]["max"]
+        current_energy_usage = structure["resources"][resource]["usage"]
+        difference = max_energy_limit - current_energy_usage
         energy_amplification = difference * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
         return int(energy_amplification)
 
@@ -649,7 +665,7 @@ class Guardian:
                     amount = rule["amount"]
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
                     if self.use_energy_model:
-                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label, "up")
                     else:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     self.print_energy_rescale_info(structure, usages, limits, amount)
@@ -675,7 +691,7 @@ class Guardian:
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
                     if self.use_energy_model:
-                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label)
+                        amount = self.get_amount_from_energy_modelling(structure, usages, resource_label, "down")
                     else:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
                     self.print_energy_rescale_info(structure, usages, limits, amount)
