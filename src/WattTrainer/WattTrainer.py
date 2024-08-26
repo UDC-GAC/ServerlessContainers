@@ -113,16 +113,16 @@ class WattTrainer:
         for container in containers:
             success, container_usages = self.get_container_usages(container["name"])
             if success:
-                for model in self.wattwizard_handler.get_models_structure("container", avoid_static=True):
-                    self.train_model(container["name"], "container", model, container_usages)
+                for model in self.wattwizard_handler.get_models_structure("host", avoid_static=True):
+                    self.train_model(container["name"], "host", model, container_usages)
 
     def train_config_models_with_containers_info(self, containers):
         for container in containers:
             success, container_usages = self.get_container_usages(container["name"])
             if success:
                 for model in self.models_to_train:
-                    if not self.wattwizard_handler.is_static("container", model):
-                        self.train_model(container["name"], "container", model, container_usages)
+                    if not self.wattwizard_handler.is_static("host", model):
+                        self.train_model(container["name"], "host", model, container_usages)
                     else:
                         log_warning(
                             "Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model),
