@@ -355,7 +355,7 @@ energy_dropped_lower_and_cpu_exceeded_upper = dict(
         {"and": [
             {"<": [
                 {"var": "energy.structure.energy.usage"},
-                {"var": "energy.structure.energy.upper"}]},
+                {"var": "energy.limits.energy.upper"}]},
             {">": [
                 {"var": "cpu.structure.cpu.usage"},
                 {"var": "cpu.limits.cpu.upper"}]}]}),

@@ -170,20 +170,16 @@ class WattTrainer:
                 if not containers:
                     # As no container info is available, models can't be trained
                     log_info("No structures to process", self.debug)
-                    time.sleep(self.window_difference)
-                    end_epoch(self.debug, self.window_difference, t0)
-                    continue
                 else:
                     thread = Thread(target=self.train_thread, args=())
                     thread.start()
+                    log_info("Model trained", self.debug)
             else:
                 log_warning("WattTrainer is not activated", self.debug)
-                continue
 
             time.sleep(self.window_difference)
 
             wait_operation_thread(thread, self.debug)
-            log_info("Model trained", self.debug)
 
             end_epoch(self.debug, self.window_difference, t0)
 

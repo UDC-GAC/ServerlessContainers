@@ -533,6 +533,8 @@ class Guardian:
                 pass
             else:
                 resources_with_rules.append(rule["resource"])
+                if rule["resource"] == "energy":
+                    resources_with_rules.append("cpu")
 
         useful_resources = list()
         for resource in self.guardable_resources:
