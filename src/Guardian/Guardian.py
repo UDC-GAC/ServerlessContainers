@@ -114,6 +114,7 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
+        self.last_used_energy_model = None
         self.last_power_budget = {}
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
@@ -933,6 +934,10 @@ class Guardian:
             if self.use_energy_model:
                 hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
                 log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
+                # If model is changed the power budgets must be restarted
+                if self.energy_model_name != self.last_used_energy_model:
+                    self.last_power_budget = {}
+                    self.last_used_energy_model = self.energy_model_name
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##
