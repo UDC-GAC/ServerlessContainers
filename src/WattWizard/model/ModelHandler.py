@@ -138,6 +138,9 @@ class ModelHandler:
     def is_static(self, structure, model_name):
         return self.__get_model_value(structure, model_name, "is_static")
 
+    def is_hw_aware(self, structure, model_name):
+        return self.__get_model_value(structure, model_name, "hw_aware")
+
     def reset_model_instance(self, structure, model_name):
         if structure in self.models and model_name in self.models[structure]:
             self.models[structure][model_name]["instance"] = self.create_model_instance(self.models[structure][model_name]["prediction_method"])

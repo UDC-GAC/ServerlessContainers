@@ -90,9 +90,11 @@ translator_dict = {
     "energy": "structure.energy.usage"
 }
 
+MODELS_STRUCTURE = "host"
+
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False, "MODEL_IS_HW_AWARE": False,
+                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False,
                          "ENERGY_MODEL_NAME": "sgdregressor_General", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
@@ -116,6 +118,7 @@ class Guardian:
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.last_used_energy_model = None
         self.last_power_budget = {}
+        self.model_is_hw_aware = False
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
     @staticmethod
@@ -381,10 +384,9 @@ class Guardian:
         # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
         if self.last_power_budget[structure_name] != power_budget:
             self.last_power_budget[structure_name] = power_budget
-            subtype = "host"  # TODO: Check uses cases of each structure subtype and manage them
             if self.model_is_hw_aware:
                 host_cores_mapping, core_usages = self.get_core_usages(structure)
-                result = self.wattwizard_handler.get_usage_meeting_budget(subtype,
+                result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE,
                                                                           self.energy_model_name,
                                                                           power_budget,
                                                                           core_usages=core_usages,
@@ -394,7 +396,7 @@ class Guardian:
                     "user_load": usages[translator_dict["user"]],
                     "system_load": usages[translator_dict["kernel"]]
                 }
-                result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name,
+                result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
                                                                           power_budget, **vars_usages)
             log_warning("First time rescaling with this power budget. Setting power model estimated CPU ({0}W = {1}% CPU)."
                         .format(power_budget, result["value"]), self.debug)
@@ -920,7 +922,6 @@ class Guardian:
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
             self.use_energy_model = myConfig.get_value("USE_ENERGY_MODEL")
             self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
-            self.model_is_hw_aware = myConfig.get_value("MODEL_IS_HW_AWARE")
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
             self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
@@ -937,12 +938,15 @@ class Guardian:
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
             if self.use_energy_model:
-                hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
-                log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
-                # If model is changed the power budgets must be restarted
+                # If model is changed the power budgets must be restarted and we have to check if model is HW aware
                 if self.energy_model_name != self.last_used_energy_model:
                     self.last_power_budget = {}
                     self.last_used_energy_model = self.energy_model_name
+                    self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
+
+                hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
+                log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
+
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##

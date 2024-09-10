@@ -44,6 +44,20 @@ class WattWizardUtils:
             else:
                 self.is_static(structure, model_name, tries)
 
+    def is_hw_aware(self, structure, model_name, tries=3):
+        try:
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "is-hw-aware", structure, model_name))
+            if r.status_code == 200:
+                return r.json()['is_hw_aware']
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.is_hw_aware(structure, model_name, tries)
+
     # TODO: Adapt to different model variables + add dynamic var parameter
     def get_usage_meeting_budget(self, structure, model_name, power_budget, tries=3, **kwargs):
         try:

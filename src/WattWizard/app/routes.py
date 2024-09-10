@@ -20,6 +20,15 @@ def is_static(structure=None, model_name=None):
     except Exception as e:
         return jsonify({'ERROR': str(e)}), 400
 
+
+@routes.route('/is-hw-aware/<structure>/<model_name>', methods=['GET'])
+def is_hw_aware(structure=None, model_name=None):
+    try:
+        return jsonify({'is_hw_aware': model_handler.is_hw_aware(structure, model_name)})
+    except Exception as e:
+        return jsonify({'ERROR': str(e)}), 400
+
+
 # Potential improvement: Remove idle consumption route and implement logic on predict
 # When utilization is below 100% (bad predictions) power can be computed as follows:
 # P = idle + (user+system)% * (prediction(100%) - idle)
