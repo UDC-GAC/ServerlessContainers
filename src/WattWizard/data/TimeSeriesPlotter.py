@@ -16,6 +16,8 @@ DEFAULT_LABELS = {
     "sumfreq": "Sum Frequency (MHz)",
     "temp": "Temperature Cº",
     "power": "Power Consumption (W)",
+    "power_pkg0": "Power Consumption CPU0 (W)",
+    "power_pkg1": "Power Consumption CPU1 (W)",
     "power_predicted": "Predicted Power Consumption (W)"
 }
 
@@ -32,6 +34,8 @@ DEFAULT_COLORS = {
     "sumfreq": "#d7191c",
     "temp": "#f781bf",
     "power": "#fdae61",
+    "power_pkg0": "#fdae61",
+    "power_pkg1": "#fdae61",
     "power_predicted": "#008837"
 }
 
@@ -48,6 +52,8 @@ DEFAULT_MARKERS = {
     "sumfreq": "X",
     "temp": None,
     "power": None,
+    "power_pkg0": None,
+    "power_pkg1": None,
     "power_predicted": None
 }
 
@@ -117,7 +123,7 @@ class TimeSeriesPlotter:
         if marker is not None:
             ax.scatter(x[::50], y[::50], s=20, color="black", marker=marker, zorder=3, edgecolors=color, linewidths=0.2)
 
-    def plot_time_series(self, title, time_series, model_variables):
+    def plot_time_series(self, filename, time_series, model_variables, power_var="power"):
         fig, ax1 = plt.subplots(figsize=(14, 6))
         ax2 = ax1.twinx()
 
@@ -126,12 +132,12 @@ class TimeSeriesPlotter:
             self.set_line_plot(var, time_series, ax1)
 
         # Plot dependent variable "power" (Right Axis: ax2)
-        self.set_line_plot("power", time_series, ax2)
+        self.set_line_plot(power_var, time_series, ax2)
 
-        self.set_basic_labels(title, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
+        self.set_basic_labels(None, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
         self.set_basic_labels(None, None, "Power Consumption (W)", ax2)
         self.set_legend_with_markers(ax1, ax2)
-        self.save_plot("TrainTimeSeries")
+        self.save_plot(filename)
 
         plt.close(fig)
 

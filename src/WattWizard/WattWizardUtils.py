@@ -52,6 +52,8 @@ class WattWizardUtils:
             params['dynamic_var'] = "user_load"  # Hardcoded
             if 'core_usages' in params:
                 params['core_usages'] = json.dumps(params['core_usages'])
+            if 'host_cores_mapping' in params:
+                params['host_cores_mapping'] = json.dumps(params['host_cores_mapping'])
             r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "inverse-predict", structure, model_name), params=params)
             if r.status_code == 200:
                 return r.json()

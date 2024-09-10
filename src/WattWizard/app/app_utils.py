@@ -1,10 +1,11 @@
-import numpy as np
+import json
 
 from src.WattWizard.config.MyConfig import MyConfig
 
 my_config = MyConfig.get_instance()
 
 MODEL_VARIABLES_ARGS = ["current_X", "X_dict"]
+JSON_ARGS = ["core_usages", "host_cores_mapping"]
 
 
 def get_param_value(req, param, param_type=None):
@@ -33,6 +34,8 @@ def get_kwargs_from_request(model_instance, request, method):
     for arg in required_kwargs:
         if arg in MODEL_VARIABLES_ARGS:
             kwargs_dict[arg] = get_model_variables_from_request(model_instance.get_model_vars(), request)
+        elif arg in JSON_ARGS:
+            kwargs_dict[arg] = json.loads(get_param_value(request, arg))
         else:
             kwargs_dict[arg] = get_param_value(request, arg)
 

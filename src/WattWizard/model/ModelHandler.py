@@ -2,7 +2,7 @@ import re
 
 from src.WattWizard.model import *
 
-STATIC_PREDICTION_METHODS = ["polyreg"]
+STATIC_PREDICTION_METHODS = ["polyreg", "interpolation", "multisocket"]
 
 HW_AWARE_PREDICTION_METHODS = ["multisocket"]
 
@@ -10,7 +10,7 @@ INSTANCE_CONSTRUCTORS = {
     "mlpregressor": lambda: Perceptron(),
     "sgdregressor": lambda: SGDRegression(),
     "polyreg": lambda: PolynomialRegression(),
-    "multisocket": lambda: MultiSocketRegresion(),
+    "multisocket": lambda **kwargs: MultiSocketRegresion(**kwargs),
     "segmentedreg": lambda: SegmentedRegression(),
     "interpolation": lambda: LinearInterpolation()
 }

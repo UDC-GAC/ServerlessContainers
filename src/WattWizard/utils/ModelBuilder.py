@@ -78,6 +78,7 @@ class ModelBuilder:
     def pretrain_model(self, structure, model):
 
         self.get_time_series_from_file(structure, model['train_file_path'], model['prediction_method'])
+
         # Pretrain model with collected time series
         try:
             model['instance'].set_idle_consumption(self.idle_time_series[model['prediction_method']])
@@ -90,9 +91,30 @@ class ModelBuilder:
                 output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}/train"
                 self.ts_plotter.set_output_dir(output_dir)
                 log(f"Plotting train time series for model {model['name']}. Plot will be stored at {output_dir}")
-                self.ts_plotter.plot_time_series(f"{model['name']} time series",
-                                                 self.time_series[model['prediction_method']],
-                                                 self.config.get_argument("model_variables"))
+                if model['hw_aware']:
+                    sockets = self.config.get_argument('sockets')
+                    # Create a plot for each submodel (2 running models + 2 active models)
+                    for i in range(sockets):
+                        current_cpu = f"CPU{i}"
+                        next_cpu_num = (i + 1) % sockets
+                        next_cpu = f"CPU{next_cpu_num}"
+                        cpu_mask = self.time_series[model['prediction_method']]["exp_name"].str.startswith(current_cpu)
+                        cpu_time_series = self.time_series[model['prediction_method']].loc[cpu_mask, :]
+                        # Plot running model CPU i
+                        self.ts_plotter.plot_time_series(f"{model['name']}_{current_cpu}_running_data",
+                                                         cpu_time_series,
+                                                         self.config.get_argument("model_variables"),
+                                                         power_var=f"power_pkg{i}")
+                        # Plot active model CPU (i + 1) % sockets
+                        self.ts_plotter.plot_time_series(f"{model['name']}_{next_cpu}_active_data",
+                                                         cpu_time_series,
+                                                         self.config.get_argument("model_variables"),
+                                                         power_var=f"power_pkg{next_cpu_num}")
+
+                else:
+                    self.ts_plotter.plot_time_series(f"{model['name']}_train_data",
+                                                     self.time_series[model['prediction_method']],
+                                                     self.config.get_argument("model_variables"))
                 self.ts_plotter.plot_vars_vs_power(self.time_series[model['prediction_method']], self.config.get_argument("model_variables"))
 
         except Exception as e:
@@ -153,7 +175,11 @@ class ModelBuilder:
                     if ModelHandler.is_hw_aware_method(prediction_method):
                         # TODO: Add cores distribution and sockets from config
                         if self.is_hw_aware_compatible(train_file):
-                            model = self.model_handler.add_model(structure, prediction_method, train_file)
+                            kwargs = {
+                                "sockets": self.config.get_argument("sockets"),
+                                "cores_distribution": self.config.get_argument("cores_distribution")
+                            }
+                            model = self.model_handler.add_model(structure, prediction_method, train_file, **kwargs)
                         else:
                             model_name = f"{prediction_method}_{ModelHandler.get_file_name(train_file)}"
                             log(f"Train file {train_file} is not suitable for HW aware models. This file must "
@@ -163,8 +189,12 @@ class ModelBuilder:
                     else:
                         model = self.model_handler.add_model(structure, prediction_method, train_file)
                     self.initialize_model(structure, model)
-
-        if len(self.config.get_argument("test_files")) > 0:
-            self.test_models()
+        if self.model_handler.get_models():
+            if len(self.config.get_argument("test_files")) > 0:
+                self.test_models()
+            else:
+                log(f"The models won't be tested as no test files have been specified.", "WARN")
         else:
-            log(f"The models won't be tested as no test files have been specified.")
+            log(f"No model has been created because no valid combination of prediction "
+                f"method and training file has been found.", "ERR")
+            exit(1)

@@ -97,9 +97,9 @@ class MyConfig:
             for r in ranges_str.split(','):
                 if '-' in r:
                     start, end = map(int, r.split('-'))
-                    result.extend(range(start, end + 1))
+                    result.extend([str(i) for i in range(start, end + 1)])
                 else:
-                    result.append(int(r))
+                    result.append(r)
             new_dict[cpu] = result
         return new_dict
 
