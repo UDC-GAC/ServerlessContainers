@@ -22,4 +22,5 @@ DESIRED_POWER=${5}
 
 curl -G "http://${WATT_WIZARD_REST_URL}/inverse-predict/${STRUCTURE}/${MODEL_NAME}" --data-urlencode "user_load=${USER_LOAD}" \
                                                    --data-urlencode "system_load=${SYSTEM_LOAD}" \
+                                                   --data-urlencode "dynamic_var=user_load" \
                                                    --data-urlencode "desired_power=${DESIRED_POWER}"
