@@ -942,7 +942,12 @@ class Guardian:
                 if self.energy_model_name != self.last_used_energy_model:
                     self.last_power_budget = {}
                     self.last_used_energy_model = self.energy_model_name
-                    self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
+                    try:
+                        self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
+                    except Exception as e:
+                        self.model_is_hw_aware = False
+                        self.use_energy_model = False
+                        log_warning(f"Error checking if model is HW aware {0}".format(str(e)), debug)
 
                 hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
                 log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
