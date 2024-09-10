@@ -147,13 +147,17 @@ class Scaler:
                 continue
 
             max_cpu_limit = database_resources["cpu"]["max"]
-            real_resources = self.container_info_cache[container["name"]]["resources"]
             try:
+                real_resources = self.container_info_cache[container["name"]]["resources"]
                 current_cpu_limit = self.get_current_resource_value(real_resources, "cpu")
                 if current_cpu_limit > max_cpu_limit:
                     log_error("container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max "
                               "parameter in its configuration".format(container["name"], current_cpu_limit, max_cpu_limit), self.debug)
                     errors_detected = True
+            except KeyError:
+                log_error("container {0} not found, maybe is down or has been desubscribed"
+                          .format(container["name"]), self.debug)
+                errors_detected = True
             except ValueError as e:
                 log_error("Current value of structure {0} is not valid: {1}".format(container["name"], str(e)), self.debug)
                 errors_detected = True
