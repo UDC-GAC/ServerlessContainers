@@ -315,7 +315,8 @@ class Guardian:
 
     def get_core_usages(self, structure):
         """Get the usage of a structure disaggregated by core. The usage of each core will be used to predict power
-        with hardware aware models that need this information.
+        with hardware aware models that need this information. The models also need the host cores mapping to know
+        which cores are free in order to rescale up/down.
 
         *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
 
@@ -323,6 +324,7 @@ class Guardian:
             structure (dict): The dictionary containing all of the structure resource information
 
         Returns:
+            host_cores_mapping (dict): Dictionary containing the mapping between host cores and containers
             core_usages (dict): Dictionary containing the CPU cores as a key and their usage as values
 
         """
@@ -349,7 +351,7 @@ class Guardian:
                                                                             metrics_to_retieve, metrics_to_generate)
                 core_usages[core] = core_usage
 
-        return core_usages
+        return host_cores_mapping, core_usages
 
     def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type):
         """Get an amount that will be reduced from the current resource limit using an energy model that relates
@@ -381,9 +383,12 @@ class Guardian:
             self.last_power_budget[structure_name] = power_budget
             subtype = "host"  # TODO: Check uses cases of each structure subtype and manage them
             if self.model_is_hw_aware:
-                core_usages = self.get_core_usages(structure)
-                result = self.wattwizard_handler.get_usage_meeting_budget(subtype, self.energy_model_name,
-                                                                          power_budget, core_usages=core_usages)
+                host_cores_mapping, core_usages = self.get_core_usages(structure)
+                result = self.wattwizard_handler.get_usage_meeting_budget(subtype,
+                                                                          self.energy_model_name,
+                                                                          power_budget,
+                                                                          core_usages=core_usages,
+                                                                          host_cores_mapping=host_cores_mapping)
             else:
                 vars_usages = {
                     "user_load": usages[translator_dict["user"]],
