@@ -62,6 +62,7 @@ class WattTrainer:
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.config = MyConfig(CONFIG_DEFAULT_VALUES)
+        self.prev_models_to_train = None
         self.debug = True
 
     def get_container_usages(self, container_name):
@@ -109,34 +110,42 @@ class WattTrainer:
             except Exception as e:
                 log_error(str(e), debug=self.debug)
 
-    def train_all_models_with_containers_info(self, containers):
-        for container in containers:
-            success, container_usages = self.get_container_usages(container["name"])
-            if success:
-                for model in self.wattwizard_handler.get_models_structure("host", avoid_static=True):
-                    self.train_model(container["name"], "host", model, container_usages)
-
-    def train_config_models_with_containers_info(self, containers):
+    def train_models_with_containers_info(self, containers):
         for container in containers:
             success, container_usages = self.get_container_usages(container["name"])
             if success:
                 for model in self.models_to_train:
+                    self.train_model(container["name"], "host", model, container_usages)
+
+    def train_thread(self):
+        containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
+        if containers:
+            self.train_models_with_containers_info(containers)
+
+    def check_models_to_train(self, current_models_to_train):
+        # No changes
+        if current_models_to_train != self.prev_models_to_train:
+            self.prev_models_to_train = current_models_to_train
+            if len(current_models_to_train) == 1 and current_models_to_train[0] == "all":
+                # Train all available non-static models
+                return self.wattwizard_handler.get_models_structure("host", avoid_static=True)
+
+            else:
+                # Train all specified non-static models
+                models_to_train = []
+                for model in current_models_to_train:
                     if not self.wattwizard_handler.is_static("host", model):
-                        self.train_model(container["name"], "host", model, container_usages)
+                        models_to_train.append(model)
                     else:
                         log_warning(
                             "Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model),
                             debug=self.debug)
+                return models_to_train
 
-    def train_thread(self, ):
-        containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
-        if containers:
-            if len(self.models_to_train) == 1 and self.models_to_train[0] == "all":
-                self.train_all_models_with_containers_info(containers)
-            else:
-                self.train_config_models_with_containers_info(containers)
+        # If no changes we return the list already used in previous iteration
+        return self.models_to_train
 
-    def train(self, ):
+    def train(self):
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
 
         while True:
@@ -151,7 +160,7 @@ class WattTrainer:
             self.debug = self.config.get_value("DEBUG")
             self.window_difference = self.config.get_value("WINDOW_TIMELAPSE")
             self.window_delay = self.config.get_value("WINDOW_DELAY")
-            self.models_to_train = self.config.get_value("MODELS_TO_TRAIN")
+            self.models_to_train = self.check_models_to_train(self.config.get_value("MODELS_TO_TRAIN"))
             SERVICE_IS_ACTIVATED = self.config.get_value("ACTIVE")
 
             t0 = start_epoch(self.debug)

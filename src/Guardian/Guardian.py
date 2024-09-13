@@ -398,8 +398,8 @@ class Guardian:
                 }
                 result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
                                                                           power_budget, **vars_usages)
-            log_warning("First time rescaling with this power budget. Setting power model estimated CPU ({0}W = {1}% CPU)."
-                        .format(power_budget, result["value"]), self.debug)
+            log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = {2}% CPU)."
+                        .format(self.energy_model_name, power_budget, result["value"]), self.debug)
             amount = result["value"] - current_cpu_limit
 
             # If we want to rescale up, avoid rescaling down and vice versa
@@ -945,6 +945,7 @@ class Guardian:
                     try:
                         self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
                     except Exception as e:
+                        self.last_used_energy_model = None
                         self.model_is_hw_aware = False
                         self.use_energy_model = False
                         log_warning(f"Error checking if model is HW aware {0}".format(str(e)), debug)
