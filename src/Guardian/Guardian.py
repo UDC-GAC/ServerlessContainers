@@ -384,18 +384,19 @@ class Guardian:
         # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
         if self.last_power_budget[structure_name] != power_budget:
             self.last_power_budget[structure_name] = power_budget
+            vars_usages = {
+                "user_load": usages[translator_dict["user"]],
+                "system_load": usages[translator_dict["kernel"]]
+            }
             if self.model_is_hw_aware:
                 host_cores_mapping, core_usages = self.get_core_usages(structure)
                 result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE,
                                                                           self.energy_model_name,
                                                                           power_budget,
                                                                           core_usages=core_usages,
-                                                                          host_cores_mapping=host_cores_mapping)
+                                                                          host_cores_mapping=host_cores_mapping,
+                                                                          **vars_usages)
             else:
-                vars_usages = {
-                    "user_load": usages[translator_dict["user"]],
-                    "system_load": usages[translator_dict["kernel"]]
-                }
                 result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
                                                                           power_budget, **vars_usages)
             log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = {2}% CPU)."
