@@ -94,8 +94,7 @@ MODELS_STRUCTURE = "host"
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "USE_ENERGY_MODEL": False,
-                         "ENERGY_MODEL_NAME": "sgdregressor_General", "ACTIVE": True}
+                         "CPU_SHARES_PER_WATT": 5, "ENERGY_MODEL_NAME": "polyreg_General", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -109,7 +108,7 @@ class Guardian:
     time series with a subset of rules to generate Events and then, matches the event against another subset of rules
     to generate scaling Requests.
 
-    For more information you can visit: https://serverlesscontainers.readthedocs.io/en/latest/#architecture-and-microservices
+    For more information you can visit: https://bdwatchdog.dec.udc.es/ServerlessContainers/documentation/web/architecture
     """
 
     def __init__(self):
@@ -356,6 +355,32 @@ class Guardian:
 
         return host_cores_mapping, core_usages
 
+    def power_budget_is_new(self, structure):
+        """Check if we have already applied a rule with this power budget. This is useful for a 'modelling' rescaling
+        policy. The first time a power budget is applied the needed CPU is estimated through power models. Then, the
+        subsequent estimations will be done using a 'proportional' policy to adjust the model error.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+
+        Returns:
+            (bool) Whether the power budget has already been used or not
+
+        """
+        power_budget = structure["resources"]["energy"]["max"]
+        structure_name = structure['name']
+
+        # Initialise with a non-possible value
+        if structure_name not in self.last_power_budget:
+            self.last_power_budget[structure_name] = -1
+
+        if self.last_power_budget[structure_name] != power_budget:
+            return True
+
+        return False
+
     def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type):
         """Get an amount that will be reduced from the current resource limit using an energy model that relates
         resource usage with energy usage.
@@ -376,53 +401,68 @@ class Guardian:
         power_budget = structure["resources"][resource]["max"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
         structure_name = structure['name']
+        kwargs = {
+            "user_load": usages[translator_dict["user"]],
+            "system_load": usages[translator_dict["kernel"]]
+        }
+        self.last_power_budget[structure_name] = power_budget  # Update power budget
 
-        # Initialise with a non-possible value
-        if structure_name not in self.last_power_budget:
-            self.last_power_budget[structure_name] = -1
+        amount = 0
+        try:
+            if self.model_is_hw_aware:  # If model is HW aware it needs core usages information
+                kwargs["host_cores_mapping"], kwargs["core_usages"] = self.get_core_usages(structure)
 
-        # If it is the first time we rescale energy with this power budget, we get the initial CPU value from the model
-        if self.last_power_budget[structure_name] != power_budget:
-            self.last_power_budget[structure_name] = power_budget
-            vars_usages = {
-                "user_load": usages[translator_dict["user"]],
-                "system_load": usages[translator_dict["kernel"]]
-            }
-            if self.model_is_hw_aware:
-                host_cores_mapping, core_usages = self.get_core_usages(structure)
-                result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE,
-                                                                          self.energy_model_name,
-                                                                          power_budget,
-                                                                          core_usages=core_usages,
-                                                                          host_cores_mapping=host_cores_mapping,
-                                                                          **vars_usages)
-            else:
-                result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
-                                                                          power_budget, **vars_usages)
-            log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = {2}% CPU)."
-                        .format(self.energy_model_name, power_budget, result["value"]), self.debug)
+            result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
+                                                                      power_budget, **kwargs)
+
+            log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = "
+                        "{2}% CPU).".format(self.energy_model_name, power_budget, result["value"]), self.debug)
+
             amount = result["value"] - current_cpu_limit
 
             # If we want to rescale up, avoid rescaling down and vice versa
             if (rescale_type == "up" and amount < 0) or (rescale_type == "down" and amount > 0):
                 amount = 0
 
-        # If not, we adjust the CPU value previously retrieved from the model based on current error
-        else:
-            power_margin = 0.05
-            real_power = usages[translator_dict["energy"]]
-
-            # If power is within some reasonable limits we do nothing
-            if power_budget * (1 - power_margin) < real_power < power_budget * (1 + power_margin):
-                return 0
-
-            percentage_error = (power_budget - real_power) / power_budget
-            amount = current_cpu_limit * percentage_error
+        except Exception as e:
+            log_error("There was an error trying to get estimated CPU from power models {0}".format(str(e)), self.debug)
 
         return int(amount)
 
-    def get_amount_from_proportional_energy_rescaling(self, structure, resource):
+    @staticmethod
+    def get_amount_from_proportional_energy_rescaling(structure, usages, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
+        energy-based CPU scaling*.
+        With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
+        get closer to a limit.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            usages (dict): a dictionary with the usages of the resources
+            resource (string): The resource name, used for indexing purposes
+
+        Returns:
+            (int) The amount to be reduced using the fit to usage policy.
+
+        """
+        power_margin = 0.05
+        power_budget = structure["resources"][resource]["max"]
+        current_cpu_limit = structure["resources"]["cpu"]["current"]
+        current_energy_usage = usages[translator_dict["energy"]]
+
+        # If power is within some reasonable limits we do nothing
+        if power_budget * (1 - power_margin) < current_energy_usage < power_budget * (1 + power_margin):
+            return 0
+
+        percentage_error = (power_budget - current_energy_usage) / power_budget
+        amount = current_cpu_limit * percentage_error
+
+        return int(amount)
+
+    def get_amount_from_fixed_ratio(self, structure, resource):
+        """Get an amount that will be reduced from the current resource limit using a policy of *fixed ratio
         energy-based CPU scaling*.
         With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
         get closer to a limit.
@@ -437,10 +477,10 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        max_energy_limit = structure["resources"][resource]["max"]
+        power_budget = structure["resources"][resource]["max"]
         current_energy_usage = structure["resources"][resource]["usage"]
-        difference = max_energy_limit - current_energy_usage
-        energy_amplification = difference * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
+        error = power_budget - current_energy_usage
+        energy_amplification = error * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
         return int(energy_amplification)
 
     def get_container_energy_str(self, resources_dict):
@@ -670,16 +710,20 @@ class Guardian:
                             "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
                 continue
 
+            valid_rescale = True
             # Get the amount to be applied from the policy set
             if rule["rescale_type"] == "up":
                 if rule["rescale_policy"] == "amount":
                     amount = rule["amount"]
+                elif rule["rescale_policy"] == "fixed-ratio" and resource_label == "energy":
+                    amount = self.get_amount_from_fixed_ratio(structure, resource_label)
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
-                    if self.use_energy_model:
+                    amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
+                elif rule["rescale_policy"] == "modelling" and resource_label == "energy":
+                    if self.power_budget_is_new(structure):
                         amount = self.get_amount_from_energy_modelling(structure, usages, resource_label, "up")
                     else:
-                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
-                    self.print_energy_rescale_info(structure, usages, limits, amount)
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
                 elif rule["rescale_policy"] == "proportional":
                     amount = rule["amount"]
                     current_resource_limit = structure["resources"][resource_label]["current"]
@@ -690,6 +734,7 @@ class Guardian:
                     log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
                         current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
                 else:
+                    valid_rescale = False
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
             elif rule["rescale_type"] == "down":
@@ -700,18 +745,28 @@ class Guardian:
                     boundary = limits[resource_label]["boundary"]
                     usage = usages[translator_dict[resource_label]]
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                elif rule["rescale_policy"] == "fixed-ratio" and resource_label == "energy":
+                    amount = self.get_amount_from_fixed_ratio(structure, resource_label)
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
-                    if self.use_energy_model:
+                    amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
+                elif rule["rescale_policy"] == "modelling" and resource_label == "energy":
+                    if self.power_budget_is_new(structure):
                         amount = self.get_amount_from_energy_modelling(structure, usages, resource_label, "down")
                     else:
-                        amount = self.get_amount_from_proportional_energy_rescaling(structure, resource_label)
-                    self.print_energy_rescale_info(structure, usages, limits, amount)
+                        amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
                 else:
+                    valid_rescale = False
                     log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
+
             else:
+                valid_rescale = False
                 log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
                 continue
+
+            # Print extra information for energy rescaling
+            if valid_rescale and resource_label == "energy":
+                self.print_energy_rescale_info(structure, usages, limits, amount)
 
             # Ensure that amount is an integer, either by converting float -> int, or string -> int
             amount = int(amount)
@@ -921,7 +976,6 @@ class Guardian:
             debug = self.debug
             self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
-            self.use_energy_model = myConfig.get_value("USE_ENERGY_MODEL")
             self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
@@ -938,18 +992,16 @@ class Guardian:
             log_info("Event timeout -> {0}".format(self.event_timeout), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
-            if self.use_energy_model:
-                # If model is changed the power budgets must be restarted and we have to check if model is HW aware
-                if self.energy_model_name != self.last_used_energy_model:
-                    self.last_power_budget = {}
-                    self.last_used_energy_model = self.energy_model_name
-                    try:
-                        self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
-                    except Exception as e:
-                        self.last_used_energy_model = None
-                        self.model_is_hw_aware = False
-                        self.use_energy_model = False
-                        log_warning(f"Error checking if model is HW aware {0}".format(str(e)), debug)
+            # If model is changed the power budgets must be restarted and we have to check if model is HW aware
+            if self.energy_model_name != self.last_used_energy_model:
+                self.last_power_budget = {}
+                self.last_used_energy_model = self.energy_model_name
+                try:
+                    self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
+                except Exception as e:
+                    self.last_used_energy_model = None
+                    self.model_is_hw_aware = False
+                    log_warning(f"Error checking if model is HW aware, maybe WattWizard is down {0}.".format(str(e)), debug)
 
                 hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
                 log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
