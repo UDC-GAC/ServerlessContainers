@@ -48,41 +48,41 @@ class ModelBuilder:
     def clear_processed_files(self):
         self.processed_files.clear()
 
-    def add_processed_file(self, train_file, pred_method):
-        self.processed_files.append({"path": train_file, "prediction_method": pred_method})
+    def add_processed_file(self, train_file, model_name):
+        self.processed_files.append({"path": train_file, "model_name": model_name})
 
     def check_file_was_processed(self, train_file):
         for file in self.processed_files:
             if file["path"] == train_file:
-                return file["prediction_method"]
+                return file["model_name"]
         return None
 
-    def get_time_series_from_file(self, structure, train_file, pred_method):
+    def get_time_series_from_file(self, structure, model_name, train_file):
         # Check if same train timestamps file was already used
-        previous_method = self.check_file_was_processed(train_file)
+        previous_model = self.check_file_was_processed(train_file)
 
         # If same file was already used it isn't necessary to get time series again
-        if not previous_method:
+        if not previous_model:
             log(f"Processing timestamps file: {train_file}")
             train_timestamps = self.ts_collector.parse_timestamps(train_file)
-            self.time_series[pred_method] = self.ts_collector.get_time_series(train_timestamps, structure == "container")
-            self.idle_time_series[pred_method] = self.ts_collector.get_idle_consumption(train_timestamps)
+            self.time_series[model_name] = self.ts_collector.get_time_series(train_timestamps, structure == "container")
+            self.idle_time_series[model_name] = self.ts_collector.get_idle_consumption(train_timestamps)
         else:
-            log(f"File {train_file} was previously processed for method {previous_method}")
-            log(f"Reusing time series for method {pred_method}")
-            self.time_series[pred_method] = self.time_series[previous_method]
-            self.idle_time_series[pred_method] = self.idle_time_series[previous_method]
+            log(f"File {train_file} was previously processed for model {previous_model}")
+            log(f"Reusing time series for model {model_name}")
+            self.time_series[model_name] = self.time_series[previous_model]
+            self.idle_time_series[model_name] = self.idle_time_series[previous_model]
 
-        self.add_processed_file(train_file, pred_method)
+        self.add_processed_file(train_file, model_name)
 
     def pretrain_model(self, structure, model):
 
-        self.get_time_series_from_file(structure, model['train_file_path'], model['prediction_method'])
+        self.get_time_series_from_file(structure, model['name'], model['train_file_path'])
 
         # Pretrain model with collected time series
         try:
-            model['instance'].set_idle_consumption(self.idle_time_series[model['prediction_method']])
-            model['instance'].pretrain(time_series=self.time_series[model['prediction_method']], data_type="df")
+            model['instance'].set_idle_consumption(self.idle_time_series[model['name']])
+            model['instance'].pretrain(time_series=self.time_series[model['name']], data_type="df")
 
             log(f"Model using prediction method {model['prediction_method']} successfully pretrained using {model['train_file_name']} timestamps")
 
@@ -98,8 +98,8 @@ class ModelBuilder:
                         current_cpu = f"CPU{i}"
                         next_cpu_num = (i + 1) % sockets
                         next_cpu = f"CPU{next_cpu_num}"
-                        cpu_mask = self.time_series[model['prediction_method']]["exp_name"].str.startswith(current_cpu)
-                        cpu_time_series = self.time_series[model['prediction_method']].loc[cpu_mask, :]
+                        cpu_mask = self.time_series[model['name']]["exp_name"].str.startswith(current_cpu)
+                        cpu_time_series = self.time_series[model['name']].loc[cpu_mask, :]
                         # Plot running model CPU i
                         self.ts_plotter.plot_time_series(f"{model['name']}_{current_cpu}_running_data",
                                                          cpu_time_series,
@@ -113,16 +113,15 @@ class ModelBuilder:
 
                 else:
                     self.ts_plotter.plot_time_series(f"{model['name']}_train_data",
-                                                     self.time_series[model['prediction_method']],
+                                                     self.time_series[model['name']],
                                                      self.config.get_argument("model_variables"))
-                self.ts_plotter.plot_vars_vs_power(self.time_series[model['prediction_method']], self.config.get_argument("model_variables"))
+                self.ts_plotter.plot_vars_vs_power(self.time_series[model['name']], self.config.get_argument("model_variables"))
 
         except Exception as e:
             log(f"{str(e)}", "ERR")
 
     def initialize_model(self, structure, model):
         model_variables = self.config.get_argument("model_variables")
-
         if model and model['instance']:
             model['instance'].set_model_vars(model_variables)
             if model['train_file_path']:
