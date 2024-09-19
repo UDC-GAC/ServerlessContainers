@@ -33,6 +33,11 @@ from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 rules_routes = Blueprint('rules', __name__)
 
+SUPPORTED_POLICIES = {
+    "up": ["amount", "proportional", "modelling", "fixed-ratio"],
+    "down": ["amount", "proportional", "modelling", "fixed-ratio", "fit_to_usage"]
+}
+
 
 def retrieve_rule(rule_name):
     try:
@@ -126,15 +131,15 @@ def change_amount_rule(rule_name):
 def change_policy_rule(rule_name):
     rule = retrieve_rule(rule_name)
 
-    if rule["generates"] != "requests" or rule["rescale_type"] != "up":
+    if rule["generates"] != "requests":
         return abort(400, {"message": "This rule can't have its policy changed"})
 
     rescale_policy = request.json["value"]
     put_done = rule["rescale_policy"] == rescale_policy
     tries = 0
 
-    if rescale_policy not in ["amount", "proportional"]:
-        return abort(400, {"message": "Invalid policy"})
+    if rescale_policy not in SUPPORTED_POLICIES[rule["rescale_type"]]:
+        return abort(400, {"message": f"Invalid policy for a rescale {rule['rescale_type']} rule"})
     else:
         while not put_done:
             tries += 1
