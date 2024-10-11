@@ -117,7 +117,7 @@ class Guardian:
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.last_used_energy_model = None
         self.last_power_budget = {}
-        self.model_is_hw_aware = False
+        self.model_is_hw_aware = None
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
     @staticmethod
@@ -409,7 +409,15 @@ class Guardian:
 
         amount = 0
         try:
-            if self.model_is_hw_aware:  # If model is HW aware it needs core usages information
+            # CAUTION!! This could be a race condition if the order of the threads reading model_is_hw_aware mattered
+            # In this scenario the inconsistencies on the value of model_is_hw_aware should not be a problem, if several
+            # threads read the wrong value they will just check if the model is hw aware again unnecessarily, but the
+            # behaviour remains the same
+            if self.model_is_hw_aware is None:
+                self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
+
+            # If model is HW aware it needs core usages information
+            if self.model_is_hw_aware:
                 kwargs["host_cores_mapping"], kwargs["core_usages"] = self.get_core_usages(structure)
 
             result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
@@ -983,6 +991,12 @@ class Guardian:
             self.event_timeout = myConfig.get_value("EVENT_TIMEOUT")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
 
+            # If power model has changed all the power budgets are restarted (we try to rescale using the new model)
+            if self.energy_model_name != self.last_used_energy_model:
+                self.last_used_energy_model = self.energy_model_name
+                self.last_power_budget = {}
+                self.model_is_hw_aware = None
+
             t0 = start_epoch(self.debug)
 
             log_info("Config is as follows:", debug)
@@ -992,20 +1006,7 @@ class Guardian:
             log_info("Event timeout -> {0}".format(self.event_timeout), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
-            # If model is changed the power budgets must be restarted and we have to check if model is HW aware
-            if self.energy_model_name != self.last_used_energy_model:
-                self.last_power_budget = {}
-                self.last_used_energy_model = self.energy_model_name
-                try:
-                    self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
-                except Exception as e:
-                    self.last_used_energy_model = None
-                    self.model_is_hw_aware = False
-                    log_warning(f"Error checking if model is HW aware, maybe WattWizard is down {0}.".format(str(e)), debug)
-
-                hw_aware_info = "(HW aware)" if self.model_is_hw_aware else ""
-                log_info("Energy model name is -> {0} {1}".format(self.energy_model_name, hw_aware_info), debug)
-
+            log_info("Energy model name is -> {0}".format(self.energy_model_name), debug)
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##
