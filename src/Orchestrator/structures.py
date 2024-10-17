@@ -369,6 +369,8 @@ def free_container_resources(container, host):
             free_container_cores(cont_name, host)
         elif resource == 'disk':
             free_container_disks(container, host)
+        elif resource == 'energy':
+            host["resources"][resource]["free"] += container["resources"][resource]["max"]
         else:
             host["resources"][resource]["free"] += container["resources"][resource]["current"]
 
