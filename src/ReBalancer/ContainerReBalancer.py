@@ -92,6 +92,8 @@ class ContainerRebalancer:
                 for usage_metric in usages:
                     keys = usage_metric.split(".")
                     # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
+                    if keys[1] == "disk" and "disk" not in container["resources"]: continue
+                    if keys[1] == "energy" and "energy" not in container["resources"]: continue
                     container["resources"][keys[1]][keys[2]] = usages[usage_metric]
                 containers_with_resource_usages.append(container)
         return containers_with_resource_usages
