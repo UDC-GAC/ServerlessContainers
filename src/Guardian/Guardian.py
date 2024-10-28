@@ -40,10 +40,26 @@ import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 
+# Dictionaries containing the mapping between resources and BDWatchdog metrics
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'], "energy": ["structure.energy.usage"]}
 BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "disk": ['structure.disk.usage'], "energy": ['structure.energy.usage']}
 
+# Dictionaries containing the mapping between resources and Guardian metrics
 GUARDIAN_CONTAINER_METRICS = {
+    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
+    "mem": ['structure.mem.usage'],
+    "disk": ['structure.disk.usage'],
+    "energy": ["structure.energy.usage"]
+}
+GUARDIAN_APPLICATION_METRICS = {
+    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
+    "mem": ['structure.mem.usage'],
+    "disk": ['structure.disk.usage'],
+    "energy": ['structure.energy.usage']
+}
+
+# Dictionaries containing the mapping between Guardian metrics and BDWatchdog metrics
+BDWATCHDOG_TO_GUARDIAN_CONTAINER = {
     'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
     'structure.cpu.user': ['proc.cpu.user'],
     'structure.cpu.kernel': ['proc.cpu.kernel'],
@@ -51,8 +67,7 @@ GUARDIAN_CONTAINER_METRICS = {
     'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
     'structure.energy.usage': ["structure.energy.usage"]
 }
-
-GUARDIAN_APPLICATION_METRICS = {
+BDWATCHDOG_TO_GUARDIAN_APPLICATION = {
     'structure.cpu.usage': ['structure.cpu.usage'],
     'structure.cpu.user': ['structure.cpu.user'],
     'structure.cpu.kernel': ['structure.cpu.kernel'],
@@ -61,22 +76,8 @@ GUARDIAN_APPLICATION_METRICS = {
     'structure.energy.usage': ['structure.energy.usage']
 }
 
-BDWATCHDOG_TO_GUARDIAN_CONTAINER = {
-    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
-    "mem": ['structure.mem.usage'],
-    "disk": ['structure.disk.usage'],
-    "energy": ["structure.energy.usage"]
-}
-
-BDWATCHDOG_TO_GUARDIAN_APPLICATION = {
-    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
-    "mem": ['structure.mem.usage'],
-    "disk": ['structure.disk.usage'],
-    "energy": ['structure.energy.usage']
-}
-
-GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
+GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
 BDWATCHDOG_TO_GUARDIAN = {"container": BDWATCHDOG_TO_GUARDIAN_CONTAINER, "application": BDWATCHDOG_TO_GUARDIAN_APPLICATION}
 
 TAGS = {"container": "host", "application": "structure"}
@@ -890,7 +891,8 @@ class Guardian:
             return
 
         # Check if structure is being monitored, otherwise, ignore
-        if structure_subtype not in BDWATCHDOG_METRICS or structure_subtype not in GUARDIAN_METRICS or structure_subtype not in TAGS:
+        if structure_subtype not in BDWATCHDOG_METRICS or structure_subtype not in GUARDIAN_METRICS \
+                or structure_subtype not in BDWATCHDOG_TO_GUARDIAN or structure_subtype not in TAGS:
             log_error("Unknown structure subtype '{0}'".format(structure_subtype), self.debug)
             return
 
@@ -899,9 +901,9 @@ class Guardian:
             metrics_to_generate = dict()
             for res in struct_guarded_resources:
                 metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
-                if res in BDWATCHDOG_TO_GUARDIAN[structure_subtype]:
-                    for usage_metric in BDWATCHDOG_TO_GUARDIAN[structure_subtype][res]:
-                        metrics_to_generate[usage_metric] = GUARDIAN_METRICS[structure_subtype][usage_metric]
+                if res in GUARDIAN_METRICS[structure_subtype]:
+                    for usage_metric in GUARDIAN_METRICS[structure_subtype][res]:
+                        metrics_to_generate[usage_metric] = BDWATCHDOG_TO_GUARDIAN[structure_subtype][usage_metric]
             tag = TAGS[structure_subtype]
 
             # Remote database operation
