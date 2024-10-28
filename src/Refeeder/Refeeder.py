@@ -40,7 +40,7 @@ import src.StateDatabase.opentsdb as bdwatchdog
 from src.ReBalancer.Utils import get_user_apps
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.mem.resident', 'proc.disk.writes.mb',
-                      'proc.disk.reads.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb', 'sys.cpu.energy']
+                      'proc.disk.reads.mb', 'proc.net.tcp.in.mb', 'proc.net.tcp.out.mb', 'structure.energy.usage']
 BDWATCHDOG_ENERGY_METRICS = ['sys.cpu.user', 'sys.cpu.kernel', 'sys.cpu.energy']
 GUARDIAN_METRICS = {'proc.cpu.user': ['proc.cpu.user', 'proc.cpu.kernel'], 'proc.mem.resident': ['proc.mem.resident'],
                     'proc.disk.writes.mb': ['proc.disk.writes.mb'], 'proc.disk.reads.mb': ['proc.disk.reads.mb'],
@@ -51,7 +51,7 @@ REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
                                 'mem': ['proc.mem.resident'],
                                 'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
                                 # 'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
-                                'energy': ["sys.cpu.energy"]}
+                                'energy': ["structure.energy.usage"]}
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True}
 
@@ -86,7 +86,7 @@ class ReFeeder:
                                                                             REFEEDER_APPLICATION_METRICS)
 
             for metric in REFEEDER_APPLICATION_METRICS:
-                if metric not in CONFIG_DEFAULT_VALUES["GENERATED_METRICS"]:
+                if metric not in self.generated_metrics:
                     continue
                 if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     log_warning("No metric info for {0} in container {1}".format(metric, container_name), debug=True)
@@ -176,6 +176,7 @@ class ReFeeder:
             debug = self.debug
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
+            self.generated_metrics = myConfig.get_value("GENERATED_METRICS")
             SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
 
             t0 = start_epoch(self.debug)
