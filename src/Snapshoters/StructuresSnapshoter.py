@@ -208,7 +208,7 @@ def get_container_resources_dict():
             continue
         container_resources_dict[container_name] = container
         # Energy limit or "current" value is always max
-        if "energy" in resources_persisted and "energy" in container["resources"]:
+        if "energy" in container["resources"]:
             container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["max"]}
         container_resources_dict[container_name]["resources"] = container_info[container_name]
 
