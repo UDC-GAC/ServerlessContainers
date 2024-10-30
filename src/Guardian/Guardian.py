@@ -371,13 +371,13 @@ class Guardian:
 
         """
         power_budget = structure["resources"]["energy"]["max"]
-        structure_name = structure['name']
+        structure_id = structure['_id']
 
         # Initialise with a non-possible value
-        if structure_name not in self.last_power_budget:
-            self.last_power_budget[structure_name] = -1
+        if structure_id not in self.last_power_budget:
+            self.last_power_budget[structure_id] = -1
 
-        if self.last_power_budget[structure_name] != power_budget:
+        if self.last_power_budget[structure_id] != power_budget:
             return True
 
         return False
@@ -401,12 +401,12 @@ class Guardian:
         """
         power_budget = structure["resources"][resource]["max"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
-        structure_name = structure['name']
+        structure_id = structure['_id']
         kwargs = {
             "user_load": usages[translator_dict["user"]],
             "system_load": usages[translator_dict["kernel"]]
         }
-        self.last_power_budget[structure_name] = power_budget  # Update power budget
+        self.last_power_budget[structure_id] = power_budget  # Update power budget
 
         amount = 0
         try:
