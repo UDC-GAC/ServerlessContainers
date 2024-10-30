@@ -123,24 +123,31 @@ class WattTrainer:
             self.train_models_with_containers_info(containers)
 
     def check_models_to_train(self, current_models_to_train):
-        # No changes
+        # Models to train has been changed
         if current_models_to_train != self.prev_models_to_train:
-            self.prev_models_to_train = current_models_to_train
-            if len(current_models_to_train) == 1 and current_models_to_train[0] == "all":
-                # Train all available non-static models
-                return self.wattwizard_handler.get_models_structure("host", avoid_static=True)
+            try:
+                self.prev_models_to_train = current_models_to_train
+                if len(current_models_to_train) == 1 and current_models_to_train[0] == "all":
+                    # Train all available non-static models
+                    return self.wattwizard_handler.get_models_structure("host", avoid_static=True)
 
-            else:
-                # Train all specified non-static models
-                models_to_train = []
-                for model in current_models_to_train:
-                    if not self.wattwizard_handler.is_static("host", model):
-                        models_to_train.append(model)
-                    else:
-                        log_warning(
-                            "Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model),
-                            debug=self.debug)
-                return models_to_train
+                else:
+                    # Train all specified non-static models
+                    models_to_train = []
+                    for model in current_models_to_train:
+                        if not self.wattwizard_handler.is_static("host", model):
+                            models_to_train.append(model)
+                        else:
+                            log_warning(
+                                "Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model),
+                                debug=self.debug)
+                    return models_to_train
+
+            except Exception as e:
+                log_warning("Some problem ocurred checking models to train, "
+                            "probably connecting to WattWizard: {0}".format(str(e)), self.debug)
+                self.prev_models_to_train = None
+                return []
 
         # If no changes we return the list already used in previous iteration
         return self.models_to_train
@@ -176,7 +183,10 @@ class WattTrainer:
             if SERVICE_IS_ACTIVATED:
                 # Remote database operation
                 containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
-                if not containers:
+                if len(self.models_to_train) == 0:
+                    # Models to train couldn't be checked
+                    log_info("No models to train", self.debug)
+                elif not containers:
                     # As no container info is available, models can't be trained
                     log_info("No structures to process", self.debug)
                 else:
