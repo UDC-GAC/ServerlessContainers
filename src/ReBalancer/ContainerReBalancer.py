@@ -369,7 +369,7 @@ class ContainerRebalancer:
 
         for resource in resources_to_balance:
 
-            log_info("Going to rebalance {0} for {1} now".format(resource, host_name), self.__debug)
+            log_info("___Going to rebalance {0} for {1} now___".format(resource, host_name), self.__debug)
 
             requests = dict()
             donors, receivers = list(), list()
@@ -383,13 +383,12 @@ class ContainerRebalancer:
                     elif container["resources"][resource]["current"] - container["resources"][resource]["usage"] < resources_to_balance[resource]["diff_percentage"] * container["resources"][resource]["current"]:
                         receivers.append(container)
 
-            log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
-            log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
-
             if not receivers:
                 log_info("No containers in need of rebalancing for {0}".format(host_name), self.__debug)
-                return
+                continue
             else:
+                log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
+                log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
                 # Order the containers from lower to upper current resource limit
                 receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
 
