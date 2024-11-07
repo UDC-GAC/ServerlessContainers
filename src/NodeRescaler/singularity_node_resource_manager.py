@@ -205,13 +205,15 @@ class SingularityContainerManager:
                 source = output.split()[5]
                 if ":" in source:
                     ## Device mounted on NFS
-                    device, mount_point = source.split(":")
+                    #device, mount_point = source.split(":")
+                    ## Cant' access disk information of a remote disk
+                    disk_resources = None
                 else:
                     device = source.split("[")[0]
                     mount_point= re.findall(r'\[([^]]*)\]', source)[0]
+                    disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
+                    # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
 
-                disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
-                # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
                 if type(disk_resources) == list and len(disk_resources) > 0:
                     node_dict[DICT_DISK_LABEL] = disk_resources[0]
                 elif disk_resources:
@@ -219,12 +221,13 @@ class SingularityContainerManager:
                 else:
                     node_dict[DICT_DISK_LABEL] = []
 
-            except subprocess.TimeoutExpired:
-                print("Timeout")
+            except (subprocess.TimeoutExpired, PermissionError):
+                #print("Timeout")
+                pass
             except IndexError:
                 # If there are not subscribed containers that don't have a mount point on /opt/bind
                 # Subprocess will return an empty string and output.split()[5] will raise an IndexError
-                print("Container not subscribed")
+                print("Container {0} not subscribed".format(container['instance']))
 
             # TODO support multiple disks
             #
