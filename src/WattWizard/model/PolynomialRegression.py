@@ -10,8 +10,8 @@ class PolynomialRegression(Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        self.model = LinearRegression(fit_intercept=False)
-        self.poly_features = PolynomialFeatures(degree=2, include_bias=False)
+        self.model = LinearRegression(fit_intercept=True)
+        self.poly_features = PolynomialFeatures(degree=2, include_bias=True)
         self.required_kwargs_map.update({
             "pretrain": ['time_series', 'data_type'],
             "train": None,
@@ -25,15 +25,13 @@ class PolynomialRegression(Model):
         return None
 
     def get_intercept(self):
-        return self.idle_consumption
+        return self.model.intercept_
 
-    # TODO: Check if it could be better simply adding idle consumption to train data
     def pretrain(self, *args, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['pretrain'], kwargs)
         X_train, y_train = self.get_model_data(kwargs['time_series'], kwargs['data_type'])
         X_poly = self.poly_features.fit_transform(X_train)
-        y_adjusted = y_train - self.idle_consumption
-        self.model.fit(X_poly, y_adjusted)
+        self.model.fit(X_poly, y_train)
         self.pretrained = True
 
     def train(self, *args, **kwargs):
@@ -45,7 +43,7 @@ class PolynomialRegression(Model):
             raise TypeError("Model not fitted yet, first train the model, then predict")
         X_test, y_test = self.get_model_data(kwargs['time_series'], kwargs['data_type'])
         X_poly = self.poly_features.transform(X_test)
-        return self.model.predict(X_poly) + self.idle_consumption
+        return self.model.predict(X_poly)
 
     def predict(self, *args, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)
@@ -53,4 +51,4 @@ class PolynomialRegression(Model):
             raise TypeError("Model not fitted yet, first train the model, then predict")
         X_values = [[kwargs['X_dict'][var] for var in self.model_vars]]
         X_poly = self.poly_features.transform(X_values)
-        return self.idle_consumption + self.model.predict(X_poly)[0]
+        return self.model.predict(X_poly)[0]
