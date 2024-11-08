@@ -1,8 +1,13 @@
+import os
+import shutil
+
 from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 from src.WattWizard.data.TimeSeriesPlotter import TimeSeriesPlotter
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.model.ModelHandler import ModelHandler
+
+from sklearn.metrics import mean_squared_error, r2_score, max_error, mean_absolute_error, mean_absolute_percentage_error
 
 
 class ModelBuilder:
@@ -127,7 +132,31 @@ class ModelBuilder:
             if model['train_file_path']:
                 self.pretrain_model(structure, model)
 
+    @staticmethod
+    def write_results(expected, predicted, output_dir, test_name):
+        # TODO: Add more performance metrics
+        mape = mean_absolute_percentage_error(expected, predicted)
+        output_file = f"{output_dir}/results"
+        with open(output_file, "a") as f:
+            f.write(f"[{test_name}] MAPE: {mape}\n")
+
+    def clean_test_dirs(self, base_dir):
+        for structure in self.config.get_argument("structures"):
+            for model_name in self.model_handler.get_models_by_structure(structure):
+                model_dir = f"{base_dir}/{structure}/{model_name}/test/"
+                if os.path.exists(model_dir) and os.path.isdir(model_dir):
+                    for filename in os.listdir(model_dir):
+                        file_path = os.path.join(model_dir, filename)
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                else:
+                    os.makedirs(model_dir)
+
     def test_models(self):
+
+        self.clean_test_dirs(self.config.get_argument('plot_time_series_dir'))
         for test_file in self.config.get_argument("test_files"):
             # Get test time series
             log(f"Processing timestamps file for tests: {test_file}")
@@ -139,12 +168,17 @@ class ModelBuilder:
             for structure in self.config.get_argument("structures"):
                 for model_name in self.model_handler.get_models_by_structure(structure):
                     model = self.model_handler.get_model_by_name(structure, model_name)
+                    output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}/test"
+
+                    # Get predictions based on test data
                     power_predicted = model['instance'].test(time_series=test_time_series, data_type="df")
                     test_time_series['power_predicted'] = power_predicted.flatten()
 
+                    # Write results
+                    self.write_results(test_time_series['power'], test_time_series['power_predicted'], output_dir, test_name)
+
                     # Plot results
                     if self.config.get_argument("plot_time_series"):
-                        output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}/test"
                         self.ts_plotter.set_output_dir(output_dir)
                         log(f"Plotting test time series for model {model['name']} and test '{test_name}'.")
                         self.ts_plotter.plot_test_time_series(f"{model['name']}_{test_name}",
@@ -157,6 +191,7 @@ class ModelBuilder:
         for line in self.config.get_summary():
             log(line)
 
+        # For each structure, prediction method and train file we try to create and initialize a model
         for structure in self.config.get_argument("structures"):
             self.ts_collector.set_structure(structure)
             self.clear_processed_files()
