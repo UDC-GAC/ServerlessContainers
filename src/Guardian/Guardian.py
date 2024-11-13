@@ -117,7 +117,7 @@ class Guardian:
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.last_used_energy_model = None
-        self.last_power_budget = {}
+        self.power_budget = {}
         self.model_is_hw_aware = None
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
 
@@ -357,9 +357,9 @@ class Guardian:
         return host_cores_mapping, core_usages
 
     def power_budget_is_new(self, structure):
-        """Check if we have already applied a rule with this power budget. This is useful for a 'modelling' rescaling
-        policy. The first time a power budget is applied the needed CPU is estimated through power models. Then, the
-        subsequent estimations will be done using a 'proportional' policy to adjust the model error.
+        """Check if we have already applied a rule with this power budget. This is useful for a *modelling-based CPU
+        scaling* policy. The first time a power budget is applied the needed CPU is estimated through power models.
+        Then, the subsequent estimations will be done using a 'proportional' policy to adjust the model error.
 
         *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
 
@@ -374,17 +374,17 @@ class Guardian:
         structure_id = structure['_id']
 
         # Initialise with a non-possible value
-        if structure_id not in self.last_power_budget:
-            self.last_power_budget[structure_id] = -1
+        if structure_id not in self.power_budget:
+            self.power_budget[structure_id] = -1
 
-        if self.last_power_budget[structure_id] != power_budget:
+        if self.power_budget[structure_id] != power_budget:
             return True
 
         return False
 
     def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type):
-        """Get an amount that will be reduced from the current resource limit using an energy model that relates
-        resource usage with energy usage.
+        """Get an amount that will be reduced from the current resource limit using *modelling-based CPU scaling*
+        policy, that is, using a power model that relates resource usage with power usage.
         Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
         get closer to a limit.
 
@@ -406,7 +406,10 @@ class Guardian:
             "user_load": usages[translator_dict["user"]],
             "system_load": usages[translator_dict["kernel"]]
         }
-        self.last_power_budget[structure_id] = power_budget  # Update power budget
+        self.power_budget[structure_id] = power_budget  # Update power budget
+
+        # TODO: Take into account other containers are executed on the same host, the prediction of the model assigns the
+        # whole idle consumption to the container we are capping
 
         amount = 0
         try:
@@ -996,7 +999,7 @@ class Guardian:
             # If power model has changed all the power budgets are restarted (we try to rescale using the new model)
             if self.energy_model_name != self.last_used_energy_model:
                 self.last_used_energy_model = self.energy_model_name
-                self.last_power_budget = {}
+                self.power_budget = {}
                 self.model_is_hw_aware = None
 
             t0 = start_epoch(self.debug)
