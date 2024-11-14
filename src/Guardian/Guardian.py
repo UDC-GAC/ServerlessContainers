@@ -141,6 +141,27 @@ class Guardian:
                 "value for '{0}' in resource '{1}' is not set or is not available.".format(label, resource))
 
     @staticmethod
+    def check_invalid_boundary(value, resource="n/a"):
+        """ Check that boundary has a proper value set with the policy 0 <= boundary <= 100, otherwise raise ValueError
+
+        Args:
+            value (integer): Boundary value
+            resource (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns:
+            None
+
+        Raises:
+            ValueError if value < 0 or value > 100
+        """
+        if value < 0:
+            raise ValueError("in resources: {0} value for boundary percentage is below 0%: {1}%".format(
+                resource, str(value)))
+        if value > 100:
+            raise ValueError("in resources: {0} value for boundary percentage is above 100%: {1}%".format(
+                resource, str(value)))
+
+    @staticmethod
     def check_invalid_values(value1, label1, value2, label2, resource="n/a"):
         """ Check that two values have properly values set with the policy value1 < value2, otherwise raise ValueError
 
@@ -183,6 +204,31 @@ class Guardian:
             return int(d[key])
         except (KeyError, ValueError):
             return NOT_AVAILABLE_STRING
+
+    @staticmethod
+    def get_margin_from_boundary(boundary, boundary_type, resource_values, resource_label):
+        """
+        Get the margin value applying boundary percentage to a baseline value. The baseline value can be the max value
+        or the current value, depending on the boundary type.
+
+        Args:
+            boundary (integer): Boundary percentage
+            boundary_type (string): Type of boundary, either percentage_of_max or percentage_of_current
+            resource_values (dict): Dictionary containing the values (e.g., max, current) of the resource
+            resource_label (string): Resource name (e.g., cpu), used for the exception string creation
+
+        Returns:
+            (integer) Margin value
+
+        Raises:
+            ValueError if the boundary type is not valid
+        """
+        if boundary_type == "percentage_of_max":
+            return int(resource_values["max"] * boundary / 100)
+        elif boundary_type == "percentage_of_current":
+            return int(resource_values["current"] * boundary / 100)
+        else:
+            raise ValueError("Invalid boundary type for resource {0}: {1}".format(resource_label, boundary_type))
 
     @staticmethod
     def sort_events(structure_events, event_timeout):
@@ -291,7 +337,7 @@ class Guardian:
         return amount
 
     @staticmethod
-    def get_amount_from_fit_reduction(current_resource_limit, boundary, current_resource_usage):
+    def get_amount_from_fit_reduction(current_resource_limit, resource_margin, current_resource_usage):
         """Get an amount that will be reduced from the current resource limit using a policy of *fit to the usage*.
         With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
         to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
@@ -299,15 +345,15 @@ class Guardian:
 
         Args:
             current_resource_limit (integer): The current applied limit for this resource
-            boundary (integer): The boundary used between limits
+            resource_margin (integer): The margin used between limits
             current_resource_usage (integer): The usage value for this resource
 
         Returns:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        upper_to_lower_window = boundary
-        current_to_upper_window = boundary
+        upper_to_lower_window = resource_margin
+        current_to_upper_window = resource_margin
 
         # Set the limit so that the resource usage is placed in between the upper and lower limits
         # and keeping the boundary between the upper and the real resource limits
@@ -518,8 +564,12 @@ class Guardian:
         for resource in resources_to_adjust:
             if "boundary" not in limits[resource]:
                 raise RuntimeError("Missing boundary value for resource {0}".format(resource))
+            if "boundary_type" not in limits[resource]:
+                raise RuntimeError("Missing boundary type value for resource {0}".format(resource))
             if "current" not in resources[resource]:
                 raise RuntimeError("Missing current value for resource {0}".format(resource))
+            if "max" not in resources[resource]:
+                raise RuntimeError("Missing max value for resource {0}".format(resource))
 
             n_loop, errors = 0, True
             while errors:
@@ -529,16 +579,15 @@ class Guardian:
                     errors = False
                 except ValueError:
                     # Correct the chain current > upper > lower, including boundary between current and upper
-                    boundary = int(limits[resource]["boundary"])
-                    limits[resource]["upper"] = int(resources[resource]["current"] - boundary)
-                    limits[resource]["lower"] = int(limits[resource]["upper"] - boundary)
+                    margin_resource = self.get_margin_from_boundary(limits[resource]["boundary"], limits[resource]["boundary_type"], resources[resource], resource)
+                    limits[resource]["upper"] = int(resources[resource]["current"] - margin_resource)
+                    limits[resource]["lower"] = int(limits[resource]["upper"] - margin_resource)
                 except RuntimeError as e:
                     log_error(str(e), self.debug)
                     raise e
                 if n_loop >= 10:
-                    message = "Limits for {0} can't be adjusted, check the configuration (max:{1},current:{2}, boundary:{3}, min:{4})".format(
-                        resource, resources[resource]["max"], int(resources[resource]["current"]), limits[resource]["boundary"], resources[resource]["min"])
-                    raise RuntimeError(message)
+                    raise RuntimeError("Limits for {0} can't be adjusted, check the configuration (max:{1}, current:{2}, boundary:{3}, min:{4})".format(
+                        resource, resources[resource]["max"], int(resources[resource]["current"]), limits[resource]["boundary"], resources[resource]["min"]))
                     # TODO This prevents from checking other resources
         return limits
 
@@ -552,7 +601,6 @@ class Guardian:
         values = dict()
         for value, vtype in values_tuples:
             values[value] = self.try_get_value(data[vtype][resource], value)
-        values["boundary"] = data["lim"][resource]["boundary"]
 
         # Check values are set and valid, except for current as it may have not been persisted yet
         for value in values:
@@ -565,16 +613,21 @@ class Guardian:
         self.check_invalid_values(values["upper"], "upper", values["current"], "current", resource=resource)
         self.check_invalid_values(values["lower"], "lower", values["upper"], "upper", resource=resource)
 
-        # Check that there is a boundary between values, like the current and upper, so
+        # Check that boundary is a percentage (value between 0 and 100) and get margin applying boundary to max/current
+        boundary = int(limits[resource]["boundary"])
+        self.check_invalid_boundary(boundary, resource)
+        resource_margin = self.get_margin_from_boundary(boundary, limits[resource]["boundary_type"], values, resource)
+
+        # Check that there is a margin between values, like the current and upper, so
         # that the limit can be surpassed
         if values["current"] != NOT_AVAILABLE_STRING:
-            if values["current"] - values["boundary"] < values["upper"]:
+            if values["current"] - resource_margin < values["upper"]:
                 raise ValueError("value for 'current': {0} is too close (less than {1}) to value for 'upper': {2}".format(
-                    str(values["current"]), str(values["boundary"]), str(values["upper"])))
+                    str(values["current"]), str(resource_margin), str(values["upper"])))
 
-            elif values["current"] - values["boundary"] > values["upper"]:
+            elif values["current"] - resource_margin > values["upper"]:
                 raise ValueError("value for 'current': {0} is too far (more than {1}) from value for 'upper': {2}".format(
-                    str(values["current"]), str(values["boundary"]), str(values["upper"])))
+                    str(values["current"]), str(resource_margin), str(values["upper"])))
 
     @staticmethod
     def rule_triggers_event(rule, data, resources):
@@ -754,9 +807,12 @@ class Guardian:
                     amount = rule["amount"]
                 elif rule["rescale_policy"] == "fit_to_usage":
                     current_resource_limit = structure["resources"][resource_label]["current"]
-                    boundary = limits[resource_label]["boundary"]
+                    resource_margin = self.get_margin_from_boundary(limits[resource_label]["boundary"],
+                                                                    limits[resource_label]["boundary_type"],
+                                                                    structure["resources"][resource_label],
+                                                                    resource_label)
                     usage = usages[translator_dict[resource_label]]
-                    amount = self.get_amount_from_fit_reduction(current_resource_limit, boundary, usage)
+                    amount = self.get_amount_from_fit_reduction(current_resource_limit, resource_margin, usage)
                 elif rule["rescale_policy"] == "fixed-ratio" and resource_label == "energy":
                     amount = self.get_amount_from_fixed_ratio(structure, resource_label)
                 elif rule["rescale_policy"] == "proportional" and resource_label == "energy":

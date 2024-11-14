@@ -254,7 +254,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
 
     try:
         value = int(request.json["value"])
-        if value < 0:
+        if value < 0 or value > 100:
             return abort(400)
     except ValueError:
         return abort(500)
@@ -283,6 +283,50 @@ def set_structure_resource_limit_boundary(structure_name, resource):
             structure_limits = get_db().get_limits(structure)
 
             put_done = structure_limits["resources"][resource]["boundary"] == value
+
+            if tries >= MAX_TRIES:
+                return abort(400, {"message": "MAX_TRIES updating database document"})
+
+    return jsonify(201)
+
+
+# TODO: Merge with set_structure_resource_limit_boundary
+@structure_routes.route("/structure/<structure_name>/limits/<resource>/boundary_type", methods=['PUT'])
+def set_structure_resource_limit_boundary_type(structure_name, resource):
+    if not valid_resource(resource):
+        return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
+
+    try:
+        value = str(request.json["value"])
+        if value not in ["percentage_of_max", "percentage_of_current"]:
+            return abort(400)
+    except ValueError:
+        return abort(500)
+
+    structure = retrieve_structure(structure_name)
+    structure_limits = get_db().get_limits(structure)
+
+    if "boundary_type" not in structure_limits["resources"][resource]:
+        current_boundary_type = ""
+    else:
+        current_boundary_type = structure_limits["resources"][resource]["boundary_type"]
+
+    if current_boundary_type == value:
+        pass
+    else:
+        put_done = False
+        tries = 0
+        while not put_done:
+            tries += 1
+            structure_limits["resources"][resource]["boundary_type"] = value
+            get_db().update_limit(structure_limits)
+
+            time.sleep(BACK_OFF_TIME_MS / 1000)
+
+            structure = retrieve_structure(structure_name)
+            structure_limits = get_db().get_limits(structure)
+
+            put_done = structure_limits["resources"][resource]["boundary_type"] == value
 
             if tries >= MAX_TRIES:
                 return abort(400, {"message": "MAX_TRIES updating database document"})
@@ -596,7 +640,7 @@ def subscribe_container(structure_name):
     # Get data corresponding to container resource limits
     limits = {"resources": {}}
     for resource in req_limits["resources"]:
-        get_resource_keys_from_requested_structure(req_limits, limits, resource, ["boundary"])
+        get_resource_keys_from_requested_structure(req_limits, limits, resource, ["boundary", "boundary_type"])
     limits["type"] = 'limit'
     limits["name"] = container["name"]
 
@@ -730,7 +774,7 @@ def subscribe_app(structure_name):
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {}}
     for resource in req_limits["resources"]:
-        get_resource_keys_from_requested_structure(req_limits, limits, resource, ["boundary"])
+        get_resource_keys_from_requested_structure(req_limits, limits, resource, ["boundary", "boundary_type"])
     limits["type"] = 'limit'
     limits["name"] = app["name"]
 
