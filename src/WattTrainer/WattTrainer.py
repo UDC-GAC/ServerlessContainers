@@ -32,7 +32,7 @@ import time
 import traceback
 import logging
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT, \
     get_structures, wait_operation_thread, end_epoch, start_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -153,7 +153,7 @@ class WattTrainer:
         return self.models_to_train
 
     def train(self):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
 
         while True:
             # Get service info

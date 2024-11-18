@@ -41,7 +41,7 @@ import src.StateDatabase.opentsdb as bdwatchdog
 from src.Guardian.Guardian import Guardian
 from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT, \
     get_structures, update_structure, generate_request_name, structure_is_application, structure_is_container
 from src.StateDatabase import couchdb
 
@@ -858,7 +858,7 @@ class Scaler:
     ######################################################
 
     def scale(self, ):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
 
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
 

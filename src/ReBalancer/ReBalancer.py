@@ -54,7 +54,7 @@ class ReBalancer:
         self.config = {}
 
     def rebalance(self, ):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=MyUtils.LOGGING_FORMAT, datefmt=MyUtils.LOGGING_DATEFMT)
         while True:
             # Get service info
             service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)

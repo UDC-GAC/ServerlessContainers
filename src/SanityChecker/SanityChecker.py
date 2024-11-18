@@ -84,7 +84,7 @@ def check_unstable_configuration():
 
 
 def check_sanity():
-    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=MyUtils.LOGGING_FORMAT, datefmt=MyUtils.LOGGING_DATEFMT)
     global debug
     while True:
         # Get service info

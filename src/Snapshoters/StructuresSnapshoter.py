@@ -33,7 +33,7 @@ import traceback
 import logging
 
 import src.StateDatabase.couchdb as couchDB
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, \
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, LOGGING_FORMAT, LOGGING_DATEFMT, \
     update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning
 
 db_handler = couchDB.CouchDBServer()
@@ -238,7 +238,7 @@ def invalid_conf(config):
 
 
 def persist():
-    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
 
     global resources_persisted
     global debug

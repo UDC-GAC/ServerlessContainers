@@ -34,7 +34,7 @@ import logging
 from json_logic import jsonLogic
 from termcolor import colored
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, debug_info, log_info, log_warning, \
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, debug_info, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT, \
     get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, start_epoch, end_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -1036,7 +1036,7 @@ class Guardian:
 
     def guard(self, ):
         myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
 
         while True:
             # Get service info

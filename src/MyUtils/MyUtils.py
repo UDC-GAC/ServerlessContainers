@@ -90,6 +90,11 @@ def get_config_value(config, default_config, key):
         return default_config[key]
 
 
+# Logging configuration
+LOGGING_FORMAT = '[%(asctime)s]%(levelname)s:%(name)s:%(message)s'
+LOGGING_DATEFMT = '%H:%M:%S'
+
+
 # DON'T NEED TO TEST
 def debug_info(message, debug):
     if debug:
@@ -118,7 +123,7 @@ def log_error(message, debug):
 
 # DON'T NEED TO TEST
 def get_time_now_string():
-    return str(time.strftime("%H:%M:%S", time.localtime()))
+    return str(time.strftime(LOGGING_DATEFMT, time.localtime()))
 
 
 def get_host_containers(container_host_ip, container_host_port, rescaler_http_session, debug):

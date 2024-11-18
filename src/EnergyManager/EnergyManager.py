@@ -44,7 +44,7 @@ class EnergyManager:
         self.couchdb_handler = couchdb.CouchDBServer()
 
     def process(self, ):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=MyUtils.LOGGING_FORMAT, datefmt=MyUtils.LOGGING_DATEFMT)
         while True:
 
             # Get service info
