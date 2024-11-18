@@ -34,7 +34,7 @@ import logging
 from json_logic import jsonLogic
 from termcolor import colored
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, \
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, debug_info, log_info, log_warning, \
     get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, start_epoch, end_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -279,7 +279,7 @@ class Guardian:
                 events_reduced["action"][resource]["events"]["scale"][key] += value
         return events_reduced["action"]
 
-    def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict):
+    def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict, disable_color=False):
         """Produces a string to summarize the current state of a resource with all of its information and
         the following format: _[max, current, upper limit, usage, lower limit, min]_
 
@@ -288,6 +288,7 @@ class Guardian:
             resources_dict (dict): a dictionary with the metrics (e.g., max, min) of the resources
             limits_dict (dict): a dictionary with the limits (e.g., lower, upper) of the resources
             usages_dict (dict): a dictionary with the usages of the resources
+            disable_color (bool): disable coloured strings
 
         Returns:
             (string) A summary string that contains all of the appropriate values for all of the resources
@@ -304,8 +305,8 @@ class Guardian:
 
         strings = list()
         for key, values in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits), ("min", metrics)]:
-            strings.append(colored(str(self.try_get_value(values, key)), color_map[key]))
-        strings.insert(3, colored(usage_value_string, color_map["usage"]))  # Manually add the usage metric
+            strings.append(colored(str(self.try_get_value(values, key)), color_map[key], no_color=disable_color))
+        strings.insert(3, colored(usage_value_string, color_map["usage"], no_color=disable_color))  # Manually add the usage metric
 
         return ",".join(strings)
 
@@ -874,10 +875,12 @@ class Guardian:
         resources = container["resources"]
 
         container_name_str = "@" + container["name"]
-        resources_str = "| "
+        coloured_resources_str = "| "
+        uncoloured_resources_str = "| "
         for resource in self.guardable_resources:
             if container["resources"][resource]["guard"]:
-                resources_str += resource + "({0})".format(self.get_resource_summary(resource, resources, limits, usages)) + " | "
+                coloured_resources_str += resource + "({0})".format(self.get_resource_summary(resource, resources, limits, usages)) + " | "
+                uncoloured_resources_str += resource + "({0})".format(self.get_resource_summary(resource, resources, limits, usages, disable_color=True)) + " | "
 
         ev, req = list(), list()
         for event in triggered_events:
@@ -885,9 +888,12 @@ class Guardian:
         for request in triggered_requests:
             req.append(request["action"])
         triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
-        log_info(
-            " ".join([container_name_str, resources_str, triggered_requests_and_events]),
-            self.debug)
+
+        # Debug coloured string
+        debug_info(" ".join([container_name_str, coloured_resources_str, triggered_requests_and_events]), self.debug)
+
+        # Log uncoloured string
+        log_info(" ".join([container_name_str, uncoloured_resources_str, triggered_requests_and_events]), debug=False)
 
     def process_serverless_structure(self, structure, usages, limits, rules):
 

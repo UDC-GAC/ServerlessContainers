@@ -34,6 +34,7 @@ import requests
 import traceback
 from termcolor import colored
 
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -80,6 +81,7 @@ class MyConfig:
     def set_value(self, key, value):
         self.config[key] = value
 
+
 # DON'T NEED TO TEST
 def get_config_value(config, default_config, key):
     try:
@@ -89,10 +91,15 @@ def get_config_value(config, default_config, key):
 
 
 # DON'T NEED TO TEST
-def log_info(message, debug):
-    logging.info(message)
+def debug_info(message, debug):
     if debug:
         print("[{0}] INFO: {1}".format(get_time_now_string(), message))
+
+
+# DON'T NEED TO TEST
+def log_info(message, debug):
+    logging.info(message)
+    debug_info(message, debug)
 
 
 # DON'T NEED TO TEST
