@@ -63,8 +63,12 @@ class TimeSeriesParallelCollector:
                 lines = f.readlines()
         except FileNotFoundError:
             log(f"Error while parsing timestamps (file doesn't exists): {file}", "ERR")
+
         timestamps = []
-        for i in range(0, len(lines), 2):
+        total_lines = len(lines)
+        if total_lines % 2 != 0:
+            total_lines -= 1
+        for i in range(0, total_lines, 2):
             start_line = lines[i]
             stop_line = lines[i + 1]
             ts_line = TimeSeriesParallelCollector.get_timestamp_from_line(start_line, stop_line)
