@@ -94,8 +94,8 @@ translator_dict = {
 MODELS_STRUCTURE = "host"
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
-                         "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"],
-                         "CPU_SHARES_PER_WATT": 5, "ENERGY_MODEL_NAME": "polyreg_General", "ACTIVE": True}
+                         "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"], "CPU_SHARES_PER_WATT": 5,
+                         "ENERGY_MODEL_NAME": "polyreg_General", "ENERGY_MODEL_RELIABILITY": "low", "ACTIVE": True}
 SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
@@ -600,8 +600,85 @@ class Guardian:
 
         return int(amount)
 
-    @staticmethod
-    def get_amount_from_proportional_energy_rescaling(structure, usages, resource):
+    def check_power_modelling_rules(self, structure, rules, limits, usages):
+        """Manage power modelling rules, when power models are used to apply power budgets (*modelling-based CPU
+        scaling* policy), when the reliability of the model is high enough the current CPU value of all the structures
+        is initially limited to the value indicated in the power model (even if no rule has been activated), then a
+        *proportional energy-based CPU scaling* policy will be applied.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            rules (dict): Dictionary with the current active rules
+            limits (dict): Dictionary with the structure resource limit values (lower,upper)
+            usages (dict): Dictionary with the structure resource usage values
+
+        Returns:
+            None
+
+        """
+
+        # Power models are only used when power budgeting (using "energy" as a first class resource)
+        if "energy" not in structure["resources"] or "energy" not in limits:
+            return
+
+        # If Guardian don't trust energy models it is better to wait for events to rescale up/down
+        if self.energy_model_reliability == "low":
+            return
+
+        # When reliability is medium, we check if we exceed the power limit to avoid capping apps that are not surpassing
+        # any limit and will perform worse, leading to a higher energy consumption
+        if self.energy_model_reliability == "medium":
+            power_budget = structure["resources"]["energy"]["max"]
+            current_energy_usage = usages[translator_dict["energy"]] if translator_dict["energy"] in usages else None
+            if not current_energy_usage or current_energy_usage < power_budget:
+                return
+
+        # We check if there is at least one power modelling rule with high reliability active
+        apply_initial_model_rescaling = False
+        for rule in rules:
+            # Check here if model_reliability attribute is set to "low" or "high"
+            is_power_modelling_rule = (rule["generates"] == "requests" and
+                                       rule["rescale_type"] in ["up", "down"] and
+                                       rule["rescale_policy"] == "modelling" and
+                                       rule["resource"] == "energy")
+
+            if is_power_modelling_rule:
+                apply_initial_model_rescaling = True
+                break
+
+        if not apply_initial_model_rescaling:
+            return
+
+        # If structure has already applied a power budget there's nothing to do, i.e. its resources have already been
+        # limited according to the power model
+        if not self.power_budget_is_new(structure):
+            return
+
+        # At this point there's at least one power modelling rule and the structure has a power budget pending to apply
+        # Then, the new current CPU value is estimated using the power model
+        amount = self.get_amount_from_energy_modelling(structure, usages, "energy", "both")
+        self.print_energy_rescale_info(structure, usages, limits, amount)
+
+        # Ensure that amount is an integer, either by converting float -> int, or string -> int
+        amount = int(amount)
+
+        # Check CPU does not surpass any limit
+        new_amount = self.adjust_amount(amount, structure["resources"]["cpu"], limits["cpu"])
+        if new_amount != amount:
+            log_warning("Amount generated for structure {0} during initial rescaling through power models "
+                        "has been trimmed from {1} to {2}".format(structure["name"], amount, new_amount), self.debug)
+
+        # # If amount is 0 ignore this request else generate the request and append it
+        if new_amount == 0:
+            log_warning("Initial rescaling through power models for structure {0} will be ignored "
+                        "because amount is 0".format(structure["name"]), self.debug)
+        else:
+            request = self.generate_request(structure, new_amount, "energy")
+            self.couchdb_handler.add_request(request)
+
+    def get_amount_from_proportional_energy_rescaling(self, structure, usages, resource):
         """Get an amount that will be reduced from the current resource limit using a policy of *proportional
         energy-based CPU scaling*.
         With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
@@ -1013,6 +1090,9 @@ class Guardian:
         # Match usages and rules to generate events
         triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
 
+        # If energy model reliability is high power modelling rules are independent of events the first time they are applied
+        self.check_power_modelling_rules(structure, rules, limits, usages)
+
         # Remote database operation
         if triggered_events:
             self.couchdb_handler.add_events(triggered_events)
@@ -1159,6 +1239,7 @@ class Guardian:
             self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
             self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
             self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
+            self.energy_model_reliability = myConfig.get_value("ENERGY_MODEL_RELIABILITY")
             self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
             self.window_delay = myConfig.get_value("WINDOW_DELAY")
             self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
@@ -1180,7 +1261,7 @@ class Guardian:
             log_info("Event timeout -> {0}".format(self.event_timeout), debug)
             log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
             log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
-            log_info("Energy model name is -> {0}".format(self.energy_model_name), debug)
+            log_info("Energy model name is -> {0} ({1} reliability)".format(self.energy_model_name, self.energy_model_reliability), debug)
             log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##
