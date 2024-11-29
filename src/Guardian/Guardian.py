@@ -116,6 +116,7 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
+        self.current_structures = None
         self.last_used_energy_model = None
         self.power_budget = {}
         self.model_is_hw_aware = None
@@ -363,8 +364,88 @@ class Guardian:
 
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
+    @staticmethod
+    def get_metrics_to_retrieve_and_generate(resources, structure_subtype):
+        metrics_to_retrieve = list()
+        metrics_to_generate = dict()
+        for res in resources:
+            metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
+            if res in GUARDIAN_METRICS[structure_subtype]:
+                for usage_metric in GUARDIAN_METRICS[structure_subtype][res]:
+                    metrics_to_generate[usage_metric] = BDWATCHDOG_TO_GUARDIAN[structure_subtype][usage_metric]
+
+        return metrics_to_retrieve, metrics_to_generate
+
+    @staticmethod
+    def aggregate_containers_resource_info(containers, resource):
+        """Get the aggregated resource values of a list of container structures
+
+        Args:
+            containers (list): List of container structures
+
+        Returns:
+            (dict) Dictionary containing the aggregated values
+
+        """
+        agg_resource = {"max": 0, "min": 0, "current": 0}
+        for structure in containers:
+            if resource in structure["resources"]:
+                for key in ["max", "min", "current"]:
+                    if key in structure["resources"][resource]:
+                        agg_resource[key] += structure["resources"][resource][key]
+
+        return agg_resource
+
+    def get_host_containers(self, host):
+        """Get a list of container structures running on the specified host
+
+        Args:
+            host (string): Host name
+
+        Returns:
+            (list) List of container structures
+
+        """
+        host_containers = []
+        for structure in self.current_structures:
+            if structure["host"] == host and structure["subtype"] == "container":
+                host_containers.append(structure)
+
+        return host_containers
+
+    def get_aggregated_containers_usages(self, containers, resources):
+        """Get the aggregated usages of a list of container structures
+
+        Args:
+            containers (list): List of container structures
+            resources (list): List of resources to retrieve and aggregate
+
+        Returns:
+            (dict) Dictionary containing the aggregated resources
+
+        """
+        # Only containers are taken into account because apps show the aggregated usage of containers
+        structure_subtype = "container"
+
+        # Get list of metrics to retrieve and generate from TSDB
+        metrics_to_retrieve, metrics_to_generate = self.get_metrics_to_retrieve_and_generate(resources, structure_subtype)
+
+        # For each container in list sum its usages
+        total_usages = {}
+        for structure in containers:
+            tag = TAGS[structure["subtype"]]
+            structure_usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
+                                                                              self.window_difference, self.window_delay,
+                                                                              metrics_to_retrieve, metrics_to_generate)
+            for metric in structure_usages:
+                if metric not in total_usages:
+                    total_usages[metric] = 0
+                total_usages[metric] += structure_usages[metric]
+
+        return total_usages
+
     def get_core_usages(self, structure):
-        """Get the usage of a structure disaggregated by core. The usage of each core will be used to predict power
+        """Get the usage of a host disaggregated by core. The usage of each core will be used to predict power
         with hardware aware models that need this information. The models also need the host cores mapping to know
         which cores are free in order to rescale up/down.
 
@@ -393,13 +474,11 @@ class Guardian:
             raise KeyError("No available cores info for structure {0}. HW aware models can't predict power without this information".format(structure['name']), self.debug)
 
         for core in host_cores_mapping:
-            # If core is used by this structure then get core usage
-            if structure["name"] in host_cores_mapping[core] and host_cores_mapping[core][structure["name"]] > 0:
-                # Remote database operation
-                core_usage = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"], "core": core},
-                                                                            self.window_difference, self.window_delay,
-                                                                            metrics_to_retieve, metrics_to_generate)
-                core_usages[core] = core_usage
+            # Remote database operation
+            core_usage = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"], "core": core},
+                                                                        self.window_difference, self.window_delay,
+                                                                        metrics_to_retieve, metrics_to_generate)
+            core_usages[core] = core_usage
 
         return host_cores_mapping, core_usages
 
@@ -446,17 +525,25 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        power_budget = structure["resources"][resource]["max"]
-        current_cpu_limit = structure["resources"]["cpu"]["current"]
         structure_id = structure['_id']
-        kwargs = {
-            "user_load": usages[translator_dict["user"]],
-            "system_load": usages[translator_dict["kernel"]]
-        }
-        self.power_budget[structure_id] = power_budget  # Update power budget
+        self.power_budget[structure_id] = structure["resources"][resource]["max"]  # Update container power budget
 
-        # TODO: Take into account other containers are executed on the same host, the prediction of the model assigns the
-        # whole idle consumption to the container we are capping
+        # Check if other containers are running on the same host and take into account its usage and resource limits
+        host_containers = self.get_host_containers(structure["host"])
+        container_energy_usage = usages[translator_dict["energy"]]
+        host_energy_info = self.aggregate_containers_resource_info(host_containers, "energy")
+        host_cpu_info = self.aggregate_containers_resource_info(host_containers, "cpu")
+        host_usages = self.get_aggregated_containers_usages(host_containers, ["cpu", "energy"])
+        # Get the container's share of the whole CPU power consumption (container energy / total energy)
+        container_energy_proportionality = container_energy_usage / host_usages[translator_dict["energy"]]
+
+        # Set model prediction parameters
+        power_budget = host_energy_info["max"]  # PB is the sum of PBs for each container in host
+        current_cpu_limit = host_cpu_info["current"]  # Current is the sum of current limits for each container in host
+        kwargs = {
+            "user_load": host_usages[translator_dict["user"]],
+            "system_load": host_usages[translator_dict["kernel"]]
+        }
 
         amount = 0
         try:
@@ -467,7 +554,7 @@ class Guardian:
             if self.model_is_hw_aware is None:
                 self.model_is_hw_aware = self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name)
 
-            # If model is HW aware it needs core usages information
+            # If model is HW aware it also needs core usages information
             if self.model_is_hw_aware:
                 kwargs["host_cores_mapping"], kwargs["core_usages"] = self.get_core_usages(structure)
 
@@ -477,7 +564,7 @@ class Guardian:
             log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = "
                         "{2}% CPU).".format(self.energy_model_name, power_budget, result["value"]), self.debug)
 
-            amount = result["value"] - current_cpu_limit
+            amount = (result["value"] - current_cpu_limit) * container_energy_proportionality
 
             # If we want to rescale up, avoid rescaling down and vice versa
             if (rescale_type == "up" and amount < 0) or (rescale_type == "down" and amount > 0):
@@ -962,13 +1049,7 @@ class Guardian:
             return
 
         try:
-            metrics_to_retrieve = list()
-            metrics_to_generate = dict()
-            for res in struct_guarded_resources:
-                metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
-                if res in GUARDIAN_METRICS[structure_subtype]:
-                    for usage_metric in GUARDIAN_METRICS[structure_subtype][res]:
-                        metrics_to_generate[usage_metric] = BDWATCHDOG_TO_GUARDIAN[structure_subtype][usage_metric]
+            metrics_to_retrieve, metrics_to_generate = self.get_metrics_to_retrieve_and_generate(struct_guarded_resources, structure_subtype)
             tag = TAGS[structure_subtype]
 
             # Remote database operation
@@ -1093,6 +1174,7 @@ class Guardian:
                 structures = get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
                 if structures:
                     log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
+                    self.current_structures = structures
                     thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
                     thread.start()
                 else:
