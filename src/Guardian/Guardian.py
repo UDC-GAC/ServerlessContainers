@@ -508,6 +508,31 @@ class Guardian:
 
         return False
 
+    @staticmethod
+    def power_is_near_power_budget(structure, usages, limits):
+        """Check whether the current energy usage of a structure is close to its power budget.
+
+        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
+
+        Args:
+            structure (dict): The dictionary containing all of the structure resource information
+            usages (dict): A dictionary with the usages of the resources
+            limits (dict): Dictionary with the structure resource limit values
+
+        Returns:
+            (bool) If energy is close to PB or not
+
+        """
+        power_margin = limits["energy"]["boundary"] / 100
+        power_budget = structure["resources"]["energy"]["max"]
+        current_energy_usage = usages[translator_dict["energy"]]
+
+        # If power is within some reasonable limits we do nothing
+        if power_budget * (1 - power_margin) < current_energy_usage < power_budget * (1 + power_margin):
+            return True
+
+        return False
+
     def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type):
         """Get an amount that will be reduced from the current resource limit using *modelling-based CPU scaling*
         policy, that is, using a power model that relates resource usage with power usage.
@@ -593,14 +618,9 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        power_margin = 0.05
         power_budget = structure["resources"][resource]["max"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
         current_energy_usage = usages[translator_dict["energy"]]
-
-        # If power is within some reasonable limits we do nothing
-        if power_budget * (1 - power_margin) < current_energy_usage < power_budget * (1 + power_margin):
-            return 0
 
         percentage_error = (power_budget - current_energy_usage) / power_budget
         amount = current_cpu_limit * percentage_error
@@ -920,8 +940,14 @@ class Guardian:
                 log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
                 continue
 
-            # Print extra information for energy rescaling
+            # Adjust energy rescaling and print extra information
             if valid_rescale and resource_label == "energy":
+                # If power is within some reasonable limits we do nothing
+                if self.power_is_near_power_budget(structure, usages, limits):
+                    log_warning("Current energy usage ({0}) for structure {1} is close to its power budget ({2}), "
+                                "setting amount to 0".format(usages[translator_dict["energy"]], structure["name"],
+                                                             structure["resources"]["energy"]["max"]), self.debug)
+                    amount = 0
                 self.print_energy_rescale_info(structure, usages, limits, amount)
 
             # Ensure that amount is an integer, either by converting float -> int, or string -> int
