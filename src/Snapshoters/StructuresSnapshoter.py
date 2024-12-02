@@ -185,7 +185,7 @@ def get_container_resources_dict():
     # Remote database operation
     containers = get_structures(db_handler, debug, subtype="container")
     if not containers:
-        return
+        return dict()
 
     # Get all the different hosts of the containers
     hosts_info = dict()
