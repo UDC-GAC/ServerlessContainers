@@ -12,7 +12,8 @@ INSTANCE_CONSTRUCTORS = {
     "polyreg": lambda: PolynomialRegression(),
     "multisocket": lambda **kwargs: MultiSocketRegresion(**kwargs),
     "segmentedreg": lambda: SegmentedRegression(),
-    "interpolation": lambda: LinearInterpolation()
+    "interpolation": lambda: LinearInterpolation(),
+    "randomforest": lambda: RandomForest()
 }
 
 
