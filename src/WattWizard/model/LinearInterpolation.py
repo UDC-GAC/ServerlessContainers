@@ -7,6 +7,7 @@ from sklearn.preprocessing import PolynomialFeatures
 
 from src.WattWizard.model.Model import Model
 
+
 class LinearInterpolation(Model):
 
     def __init__(self, *args, **kwargs):
@@ -63,7 +64,7 @@ class LinearInterpolation(Model):
             X_test_poly = self.poly_features.transform(X_test[nan_indices])
             y_pred[nan_indices] = self.aux_model.predict(X_test_poly)
 
-        return self.idle_consumption + y_pred
+        return None, self.idle_consumption + y_pred
 
     def predict(self, *args, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)

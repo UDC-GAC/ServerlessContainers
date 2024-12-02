@@ -76,7 +76,7 @@ class SegmentedRegression(Model):
                 X_poly = self.poly_features[section].transform(X_test)
                 predictions.append(self.models[section].predict(X_poly) + self.idle_consumption)
 
-        return np.concatenate(predictions)
+        return None, np.concatenate(predictions)
 
     def predict(self, *args, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)

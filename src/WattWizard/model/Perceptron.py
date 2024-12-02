@@ -52,7 +52,7 @@ class Perceptron(Model):
         if not self.is_fitted('scaler'):
             self.scaler.fit(X_test)
         X_scaled = self.scaler.transform(X_test)
-        return self.model.predict(X_scaled)
+        return None, self.model.predict(X_scaled)
 
     def predict(self, *args, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)

@@ -115,7 +115,7 @@ class MultiSocketRegresion(Model):
         def _np_predict(X_dict, cores):
             return self.predict(X_dict=X_dict, core_usages=cores)
 
-        return _np_predict(time_series[self.model_vars].to_dict(orient='records'), core_usages)
+        return None, _np_predict(time_series[self.model_vars].to_dict(orient='records'), core_usages)
 
     def _create_core_usages(self, X_dict, cores):
         """Create a dictionary of cores by distributing the usage level of each variable sequentially among the

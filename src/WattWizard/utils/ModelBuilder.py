@@ -171,7 +171,10 @@ class ModelBuilder:
                     output_dir = f"{self.config.get_argument('plot_time_series_dir')}/{structure}/{model['name']}/test"
 
                     # Get predictions based on test data
-                    power_predicted = model['instance'].test(time_series=test_time_series, data_type="df")
+                    new_time_series, power_predicted = model['instance'].test(time_series=test_time_series, data_type="df")
+                    # Check if time series were modified during predictions
+                    if new_time_series is not None:
+                        test_time_series = new_time_series
                     test_time_series['power_predicted'] = power_predicted.flatten()
 
                     # Write results

@@ -60,7 +60,7 @@ class SGDRegression(Model):
         if not self.is_fitted('pipeline'):
             self.pipeline.fit(X_test)
         X_scaled = self.pipeline.transform(X_test)
-        return self.model.predict(X_scaled) + self.idle_consumption
+        return None, self.model.predict(X_scaled) + self.idle_consumption
 
     def predict(self, *args, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)
