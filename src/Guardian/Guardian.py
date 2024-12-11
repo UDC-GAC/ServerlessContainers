@@ -528,12 +528,12 @@ class Guardian:
         current_energy_usage = usages[translator_dict["energy"]]
 
         # If power is within some reasonable limits we do nothing
-        if power_budget * (1 - power_margin) < current_energy_usage < power_budget * (1 + power_margin):
+        if power_budget < current_energy_usage < power_budget * (1 + power_margin):
             return True
 
         return False
 
-    def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type):
+    def get_amount_from_energy_modelling(self, structure, usages, resource, rescale_type, ignore_system=False):
         """Get an amount that will be reduced from the current resource limit using *modelling-based CPU scaling*
         policy, that is, using a power model that relates resource usage with power usage.
         Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
@@ -567,7 +567,7 @@ class Guardian:
         current_cpu_limit = host_cpu_info["current"]  # Current is the sum of current limits for each container in host
         kwargs = {
             "user_load": host_usages[translator_dict["user"]],
-            "system_load": host_usages[translator_dict["kernel"]]
+            "system_load": host_usages[translator_dict["kernel"]] if not ignore_system else 0.0
         }
 
         amount = 0
@@ -658,7 +658,7 @@ class Guardian:
 
         # At this point there's at least one power modelling rule and the structure has a power budget pending to apply
         # Then, the new current CPU value is estimated using the power model
-        amount = self.get_amount_from_energy_modelling(structure, usages, "energy", "both")
+        amount = self.get_amount_from_energy_modelling(structure, usages, "energy", "both", ignore_system=True)
         self.print_energy_rescale_info(structure, usages, limits, amount)
 
         # Ensure that amount is an integer, either by converting float -> int, or string -> int
