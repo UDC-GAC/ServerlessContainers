@@ -92,7 +92,7 @@ def get_config_value(config, default_config, key):
 
 # Logging configuration
 LOGGING_FORMAT = '[%(asctime)s]%(levelname)s:%(name)s:%(message)s'
-LOGGING_DATEFMT = '%H:%M:%S'
+LOGGING_DATEFMT = '%Y-%m-%d %H:%M:%S%z'
 
 
 # DON'T NEED TO TEST
