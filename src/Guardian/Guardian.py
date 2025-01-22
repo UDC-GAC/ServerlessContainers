@@ -600,7 +600,7 @@ class Guardian:
 
         return int(amount)
 
-    def check_power_modelling_rules(self, structure, rules, limits, usages):
+    def check_power_modelling_rules(self, structure, rules, limits, usages, events):
         """Manage power modelling rules, when power models are used to apply power budgets (*modelling-based CPU
         scaling* policy), when the reliability of the model is high enough the current CPU value of all the structures
         is initially limited to the value indicated in the power model (even if no rule has been activated), then a
@@ -613,6 +613,7 @@ class Guardian:
             rules (dict): Dictionary with the current active rules
             limits (dict): Dictionary with the structure resource limit values (lower,upper)
             usages (dict): Dictionary with the structure resource usage values
+            events (list): List of triggered events
 
         Returns:
             None
@@ -627,18 +628,14 @@ class Guardian:
         if self.energy_model_reliability == "low":
             return
 
-        # When reliability is medium, we check if we exceed the power limit to avoid capping apps that are not surpassing
-        # any limit and will perform worse, leading to a higher energy consumption
-        if self.energy_model_reliability == "medium":
-            power_budget = structure["resources"]["energy"]["max"]
-            current_energy_usage = usages[translator_dict["energy"]] if translator_dict["energy"] in usages else None
-            if not current_energy_usage or current_energy_usage < power_budget:
-                return
+        # If structure has already applied a power budget there's nothing to do, i.e. its resources have already been
+        # limited according to the power model
+        if not self.power_budget_is_new(structure):
+            return
 
-        # We check if there is at least one power modelling rule with high reliability active
+        # We check if there exists at least one power modelling rule
         apply_initial_model_rescaling = False
         for rule in rules:
-            # Check here if model_reliability attribute is set to "low" or "high"
             is_power_modelling_rule = (rule["generates"] == "requests" and
                                        rule["rescale_type"] in ["up", "down"] and
                                        rule["rescale_policy"] == "modelling" and
@@ -648,12 +645,15 @@ class Guardian:
                 apply_initial_model_rescaling = True
                 break
 
-        if not apply_initial_model_rescaling:
-            return
+        # When reliability is set to medium, at least 1 event must have been generated to perform the rescaling
+        if self.energy_model_reliability == "medium":
+            apply_initial_model_rescaling = False
+            for event in events:
+                if "resource" in event and event["resource"] == "energy":
+                    apply_initial_model_rescaling = True
+                    break
 
-        # If structure has already applied a power budget there's nothing to do, i.e. its resources have already been
-        # limited according to the power model
-        if not self.power_budget_is_new(structure):
+        if not apply_initial_model_rescaling:
             return
 
         # At this point there's at least one power modelling rule and the structure has a power budget pending to apply
@@ -1091,7 +1091,7 @@ class Guardian:
         triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
 
         # If energy model reliability is high power modelling rules are independent of events the first time they are applied
-        self.check_power_modelling_rules(structure, rules, limits, usages)
+        self.check_power_modelling_rules(structure, rules, limits, usages, triggered_events)
 
         # Remote database operation
         if triggered_events:
