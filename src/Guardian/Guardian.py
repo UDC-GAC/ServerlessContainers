@@ -763,7 +763,10 @@ class Guardian:
                     self.check_invalid_container_state(resources, limits, resource)
                     errors = False
                 except ValueError:
-                    # Correct the chain current > upper > lower, including boundary between current and upper
+                    # Correct the chain max >= current > upper > lower, including boundary between current and upper
+                    if resources[resource]["current"] > resources[resource]["max"]:
+                        resources[resource]["current"] = resources[resource]["max"]
+                    # Compute boundary based on max or current
                     margin_resource = self.get_margin_from_boundary(limits[resource]["boundary"], limits[resource]["boundary_type"], resources[resource], resource)
                     limits[resource]["upper"] = int(resources[resource]["current"] - margin_resource)
                     limits[resource]["lower"] = int(limits[resource]["upper"] - margin_resource)
