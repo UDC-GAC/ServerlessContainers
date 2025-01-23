@@ -32,7 +32,10 @@ CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 30,
                          "REBALANCE_USERS": False,
                          "DEBUG": True,
                          "ENERGY_DIFF_PERCENTAGE": 0.40,
-                         "ENERGY_STOLEN_PERCENTAGE": 0.40
+                         "ENERGY_STOLEN_PERCENTAGE": 0.40,
+                         "RESOURCES_BALANCED": ["cpu"],
+                         "STRUCTURES_BALANCED": ["applications"],
+                         "BALANCING_METHOD": "pair_swapping"
                          }
 
 
