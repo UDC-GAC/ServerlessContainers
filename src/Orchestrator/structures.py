@@ -87,7 +87,7 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     if not valid_resource(resource):
         return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
 
-    if parameter not in ["max", "min"]:
+    if parameter not in ["max", "min", "weight"]:
         return abort(400, {"message": "Invalid parameter state"})
 
     try:
@@ -591,14 +591,17 @@ def check_resources_data_is_present(data, res_info_type=None):
                 return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
 
 
-def get_resource_keys_from_requested_structure(req_structure, structure, resource, keys):
+def get_resource_keys_from_requested_structure(req_structure, structure, resource, mandatory_keys, optional_keys=[]):
     structure["resources"][resource] = {}
-    for key in keys:
+    for key in mandatory_keys:
         if key not in req_structure["resources"][resource]:
             return abort(400, {"message": "Missing key '{0}' for '{1}' resource".format(key, resource)})
         else:
             structure["resources"][resource][key] = req_structure["resources"][resource][key]
 
+    for key in optional_keys:
+        if key in req_structure["resources"][resource]:
+            structure["resources"][resource][key] = req_structure["resources"][resource][key]
 
 @structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
 def subscribe_container(structure_name):
@@ -632,10 +635,12 @@ def subscribe_container(structure_name):
 
     # Get data corresponding to container resources
     container["resources"] = {}
-    resource_keys = ["max", "min", "current", "guard"]
-    keys = {"cpu": resource_keys, "mem": resource_keys, "energy": resource_keys, "disk": ["name", "path"] + resource_keys}
+    mandatory_resource_keys = ["max", "min", "current", "guard"]
+    optional_resource_keys = ["weight"]
+    mandatory_keys = {"cpu": mandatory_resource_keys, "mem": mandatory_resource_keys, "energy": mandatory_resource_keys, "disk": ["name", "path"] + mandatory_resource_keys}
+    optional_keys = {"cpu": optional_resource_keys, "mem": optional_resource_keys, "energy": optional_resource_keys, "disk": optional_resource_keys}
     for resource in req_cont["resources"]:
-        get_resource_keys_from_requested_structure(req_cont, container, resource, keys[resource])
+        get_resource_keys_from_requested_structure(req_cont, container, resource, mandatory_keys[resource], optional_keys[resource])
 
     # Get data corresponding to container resource limits
     limits = {"resources": {}}
@@ -766,7 +771,7 @@ def subscribe_app(structure_name):
     # Get data corresponding to app resources
     app["resources"] = {}
     for resource in req_app["resources"]:
-        get_resource_keys_from_requested_structure(req_app, app, resource, ["max", "min", "guard"])
+        get_resource_keys_from_requested_structure(req_app, app, resource, ["max", "min", "guard"], ["weight"])
 
     app["containers"] = list()
     app["type"] = "structure"
