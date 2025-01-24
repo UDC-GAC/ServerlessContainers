@@ -450,6 +450,12 @@ class Scaler:
             l = list()
             for core in cpu_list:
                 l.append((core, core_usage_map[core][structure_name]))
+
+            # First cores are ordered by number: cores with a higher number are picked first as they
+            # are likely to have been allocated a shorter time ago
+            l.sort(key=lambda tup: int(tup[0]), reverse=True)
+
+            # Then they are ordered by core allocation, which is the primary criterion
             l.sort(key=lambda tup: tup[1], reverse=False)
             less_allocated_cores = [i[0] for i in l]
 
