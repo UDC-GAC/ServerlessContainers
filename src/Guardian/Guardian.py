@@ -34,8 +34,9 @@ import logging
 from json_logic import jsonLogic
 from termcolor import colored
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, debug_info, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT, \
-    get_structures, generate_event_name, generate_request_name, wait_operation_thread, structure_is_container, generate_structure_usage_metric, start_epoch, end_epoch
+from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, debug_info, log_info, log_warning, \
+    LOGGING_FORMAT, LOGGING_DATEFMT, get_structures, generate_event_name, generate_request, wait_operation_thread, \
+    structure_is_container, start_epoch, end_epoch
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
@@ -675,7 +676,7 @@ class Guardian:
             log_warning("Initial rescaling through power models for structure {0} will be ignored "
                         "because amount is 0".format(structure["name"]), self.debug)
         else:
-            request = self.generate_request(structure, new_amount, "energy")
+            request = generate_request(structure, new_amount, "energy", priority=1)
             self.couchdb_handler.add_request(request)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, usages, resource):
@@ -885,31 +886,6 @@ class Guardian:
             timestamp=int(time.time()))
         return event
 
-    @staticmethod
-    def generate_request(structure, amount, resource_label):
-        action = generate_request_name(amount, resource_label)
-        request = dict(
-            type="request",
-            resource=resource_label,
-            amount=int(amount),
-            structure=structure["name"],
-            action=action,
-            timestamp=int(time.time()),
-            structure_type=structure["subtype"]
-        )
-        # For the moment, energy rescaling is uniquely mapped to cpu rescaling
-        if resource_label == "energy":
-            request["resource"] = "cpu"
-            request["for_energy"] = True
-
-        # If scaling a container, add its host information as it will be needed
-        if structure_is_container(structure):
-            request["host"] = structure["host"]
-            request["host_rescaler_ip"] = structure["host_rescaler_ip"]
-            request["host_rescaler_port"] = structure["host_rescaler_port"]
-
-        return request
-
     def print_energy_rescale_info(self, structure, usages, limits, amount):
         for res in ["energy", "cpu"]:
             current_limit = structure["resources"][res]["current"]
@@ -1053,7 +1029,7 @@ class Guardian:
                 log_warning("Request generated with rule {0} for structure {1} will be ignored because amount is 0".format(
                     rule["name"], structure["name"]), self.debug)
             else:
-                request = self.generate_request(structure, new_amount, resource_label)
+                request = generate_request(structure, new_amount, resource_label)
                 generated_requests.append(request)
 
             # Remove the events that triggered the request

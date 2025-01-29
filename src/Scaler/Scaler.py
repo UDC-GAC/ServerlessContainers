@@ -278,11 +278,19 @@ class Scaler:
             else:
                 # A previous request was found for this structure, remove old one and leave the newer one
                 stored_request = structure_requests_dict[structure][action]
-                if stored_request["timestamp"] > request["timestamp"]:
-                    # The stored request is newer, leave it and mark the retrieved one to be removed
+
+                if "priority" in stored_request and "priority" in request:
+                    # First, try comparing priorities
+                    higher_priority_request = stored_request if stored_request["priority"] > request["priority"] else request
+                else:
+                    # If no priorities available, compare timestamps (newer requests are prioritised)
+                    higher_priority_request = stored_request if stored_request["timestamp"] > request["timestamp"] else request
+
+                if higher_priority_request is stored_request:
+                    # The stored request has a higher priority or is newer, leave it and mark the retrieved one to be removed
                     purged_requests.append(request)
                 else:
-                    # The stored request is older, mark it to be remove and save the retrieved one
+                    # The stored request has a lower priority or is older, mark it to be removed and save the retrieved one
                     purged_requests.append(stored_request)
                     structure_requests_dict[structure][action] = request
 

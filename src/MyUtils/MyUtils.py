@@ -310,6 +310,32 @@ def generate_request_name(amount, resource):
         raise ValueError("Invalid amount")
 
 
+def generate_request(structure, amount, resource_label, priority=0):
+    action = generate_request_name(amount, resource_label)
+    request = dict(
+        type="request",
+        resource=resource_label,
+        amount=int(amount),
+        priority=int(priority),
+        structure=structure["name"],
+        action=action,
+        timestamp=int(time.time()),
+        structure_type=structure["subtype"]
+    )
+    # For the moment, energy rescaling is uniquely mapped to cpu rescaling
+    if resource_label == "energy":
+        request["resource"] = "cpu"
+        request["for_energy"] = True
+
+    # If scaling a container, add its host information as it will be needed
+    if structure_is_container(structure):
+        request["host"] = structure["host"]
+        request["host_rescaler_ip"] = structure["host_rescaler_ip"]
+        request["host_rescaler_port"] = structure["host_rescaler_port"]
+
+    return request
+
+
 def structure_is_application(structure):
     return structure["subtype"] == "application"
 
