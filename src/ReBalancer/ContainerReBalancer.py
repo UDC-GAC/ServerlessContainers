@@ -29,7 +29,7 @@ import traceback
 import requests
 from json_logic import jsonLogic
 
-from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures
+from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures, generate_request
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
@@ -134,53 +134,16 @@ class ContainerRebalancer:
                 receivers.append(container)
         return receivers
 
-
     def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
+        request = generate_request(container, int(amount_to_scale), resource)
+        if container["name"] not in requests:
+            requests[container["name"]] = list()
+        requests[container["name"]].append(request)
 
-        if amount_to_scale > 0:
-            ## Receiver
-            # TODO This should use Guardians method to generate requests
-            request = dict(
-                type="request",
-                resource=resource,
-                amount=int(amount_to_scale),
-                structure=container["name"],
-                action="{0}RescaleUp".format(resource.capitalize()),
-                timestamp=int(time.time()),
-                structure_type="container",
-                host=container["host"],
-                host_rescaler_ip=container["host_rescaler_ip"],
-                host_rescaler_port=container["host_rescaler_port"]
-            )
-
-            if container["name"] not in requests:
-                requests[container["name"]] = list()
-            requests[container["name"]].append(request)
-
+        if amount_to_scale > 0:  # Receiver
             log_info("Node {0} will receive: {1}".format(container["name"], amount_to_scale), self.__debug)
-
-        elif amount_to_scale < 0:
-            ## Donor
-            # TODO This should use Guardians method to generate requests
-            request = dict(
-                type="request",
-                resource=resource,
-                amount=int(amount_to_scale),
-                structure=container["name"],
-                action="{0}RescaleDown".format(resource.capitalize()),
-                timestamp=int(time.time()),
-                structure_type="container",
-                host=container["host"],
-                host_rescaler_ip=container["host_rescaler_ip"],
-                host_rescaler_port=container["host_rescaler_port"]
-            )
-
-            if container["name"] not in requests:
-                requests[container["name"]] = list()
-            requests[container["name"]].append(request)
-
+        elif amount_to_scale < 0:  # Donor
             log_info("Node {0} will give: {1}".format(container["name"], amount_to_scale), self.__debug)
-
         else:
             log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
 
