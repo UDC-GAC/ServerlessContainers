@@ -34,6 +34,8 @@ import requests
 import traceback
 from termcolor import colored
 
+from src.MyUtils.metrics import RESOURCE_TO_BDW, RESOURCE_TO_SC, SC_TO_BDW, TAGS
+
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -343,6 +345,7 @@ def structure_is_application(structure):
 def structure_is_container(structure):
     return structure["subtype"] == "container"
 
+
 # TESTED
 def generate_event_name(event, resource):
     if "scale" not in event:
@@ -370,5 +373,54 @@ def generate_event_name(event, resource):
 
     return final_string
 
+
 def generate_structure_usage_metric(resource):
     return "structure.{0}.usage".format(resource)
+
+
+def get_tag(structure_subtype):
+    return TAGS.get(structure_subtype, None)
+
+
+def structure_subtype_is_supported(structure_subtype):
+    return (structure_subtype in RESOURCE_TO_BDW and structure_subtype in RESOURCE_TO_SC
+            and structure_subtype in SC_TO_BDW and structure_subtype in TAGS)
+
+
+def get_metrics_to_retrieve_and_generate(resources, structure_subtype):
+    """Maps resources (e.g., cpu, mem) to the metrics that need to be retrieved from BDWatchdog (e.g., proc.cpu.user,
+    proc.mem.resident) and the metrics that need to be generated (e.g., structure.cpu.usage, structure.mem.usage)
+
+    Args:
+        resources (list): List of resources to map
+        structure_subtype (str): Type of structure (e.g., container, application)
+
+    Returns:
+        tuple: Tuple containing the list of metrics to retrieve and a dictionary mapping the metrics to generate
+
+    Example:
+
+        Running:
+            get_metrics_to_retrieve_and_generate(["cpu", "disk"], "container")
+
+        Returns:
+            metrics_to_retrieve = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.disk.reads.mb', 'proc.disk.writes.mb'],
+            metrics_to_generate = {
+                'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
+                'structure.cpu.user': ['proc.cpu.user'],
+                'structure.cpu.kernel': ['proc.cpu.kernel'],
+                'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb']
+                }
+    """
+
+    def get_mapping(d, subtype, key=None):
+        return d.get(subtype, {}).get(key, []) if key else d.get(subtype, {})
+
+    metrics_to_retrieve = list()
+    metrics_to_generate = dict()
+    for res in resources:
+        metrics_to_retrieve += get_mapping(RESOURCE_TO_BDW, structure_subtype, res)
+        for usage_metric in get_mapping(RESOURCE_TO_SC, structure_subtype, res):
+            metrics_to_generate[usage_metric] = get_mapping(SC_TO_BDW, structure_subtype, usage_metric)
+
+    return metrics_to_retrieve, metrics_to_generate

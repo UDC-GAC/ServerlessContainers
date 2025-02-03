@@ -39,47 +39,6 @@ import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 
-# Dictionaries containing the mapping between resources and BDWatchdog metrics
-BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'], "mem": ['proc.mem.resident', 'proc.mem.virtual'], "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'], "energy": ["structure.energy.usage"]}
-BDWATCHDOG_APPLICATION_METRICS = {"cpu": ['structure.cpu.usage'], "mem": ['structure.mem.usage'], "disk": ['structure.disk.usage'], "energy": ['structure.energy.usage']}
-
-# Dictionaries containing the mapping between resources and Guardian metrics
-GUARDIAN_CONTAINER_METRICS = {
-    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
-    "mem": ['structure.mem.usage'],
-    "disk": ['structure.disk.usage'],
-    "energy": ["structure.energy.usage"]
-}
-GUARDIAN_APPLICATION_METRICS = {
-    "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
-    "mem": ['structure.mem.usage'],
-    "disk": ['structure.disk.usage'],
-    "energy": ['structure.energy.usage']
-}
-
-# Dictionaries containing the mapping between Guardian metrics and BDWatchdog metrics
-BDWATCHDOG_TO_GUARDIAN_CONTAINER = {
-    'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
-    'structure.cpu.user': ['proc.cpu.user'],
-    'structure.cpu.kernel': ['proc.cpu.kernel'],
-    'structure.mem.usage': ['proc.mem.resident'],
-    'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
-    'structure.energy.usage': ["structure.energy.usage"]
-}
-BDWATCHDOG_TO_GUARDIAN_APPLICATION = {
-    'structure.cpu.usage': ['structure.cpu.usage'],
-    'structure.cpu.user': ['structure.cpu.user'],
-    'structure.cpu.kernel': ['structure.cpu.kernel'],
-    'structure.mem.usage': ['structure.mem.usage'],
-    'structure.disk.usage': ['structure.disk.usage'],
-    'structure.energy.usage': ['structure.energy.usage']
-}
-
-BDWATCHDOG_METRICS = {"container": BDWATCHDOG_CONTAINER_METRICS, "application": BDWATCHDOG_APPLICATION_METRICS}
-GUARDIAN_METRICS = {"container": GUARDIAN_CONTAINER_METRICS, "application": GUARDIAN_APPLICATION_METRICS}
-BDWATCHDOG_TO_GUARDIAN = {"container": BDWATCHDOG_TO_GUARDIAN_CONTAINER, "application": BDWATCHDOG_TO_GUARDIAN_APPLICATION}
-
-TAGS = {"container": "host", "application": "structure"}
 
 translator_dict = {
     "cpu": "structure.cpu.usage",
@@ -364,18 +323,6 @@ class Guardian:
         return -1 * (current_resource_limit - desired_applied_resource_limit)
 
     @staticmethod
-    def get_metrics_to_retrieve_and_generate(resources, structure_subtype):
-        metrics_to_retrieve = list()
-        metrics_to_generate = dict()
-        for res in resources:
-            metrics_to_retrieve += BDWATCHDOG_METRICS[structure_subtype][res]
-            if res in GUARDIAN_METRICS[structure_subtype]:
-                for usage_metric in GUARDIAN_METRICS[structure_subtype][res]:
-                    metrics_to_generate[usage_metric] = BDWATCHDOG_TO_GUARDIAN[structure_subtype][usage_metric]
-
-        return metrics_to_retrieve, metrics_to_generate
-
-    @staticmethod
     def aggregate_containers_resource_info(containers, resource):
         """Get the aggregated resource values of a list of container structures
 
@@ -427,12 +374,12 @@ class Guardian:
         structure_subtype = "container"
 
         # Get list of metrics to retrieve and generate from TSDB
-        metrics_to_retrieve, metrics_to_generate = self.get_metrics_to_retrieve_and_generate(resources, structure_subtype)
+        metrics_to_retrieve, metrics_to_generate = utils.get_metrics_to_retrieve_and_generate(resources, structure_subtype)
 
         # For each container in list sum its usages
         total_usages = {}
         for structure in containers:
-            tag = TAGS[structure["subtype"]]
+            tag = utils.get_tag(structure["subtype"])
             structure_usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
                                                                               self.window_difference, self.window_delay,
                                                                               metrics_to_retrieve, metrics_to_generate)
@@ -458,7 +405,7 @@ class Guardian:
             core_usages (dict): Dictionary containing the CPU cores as a key and their usage as values
 
         """
-        tag = TAGS[structure["subtype"]]
+        tag = utils.get_tag(structure["subtype"])
         metrics_to_retieve = ["sys.cpu.user", "sys.cpu.kernel"]
         metrics_to_generate = {
             "user_load": ["sys.cpu.user"],
@@ -1126,14 +1073,13 @@ class Guardian:
             return
 
         # Check if structure is being monitored, otherwise, ignore
-        if structure_subtype not in BDWATCHDOG_METRICS or structure_subtype not in GUARDIAN_METRICS \
-                or structure_subtype not in BDWATCHDOG_TO_GUARDIAN or structure_subtype not in TAGS:
-            log_error("Unknown structure subtype '{0}'".format(structure_subtype), self.debug)
+        if not utils.structure_subtype_is_supported(structure_subtype):
+            utils.log_error("Unknown structure subtype '{0}'".format(structure_subtype), self.debug)
             return
 
         try:
-            metrics_to_retrieve, metrics_to_generate = self.get_metrics_to_retrieve_and_generate(struct_guarded_resources, structure_subtype)
-            tag = TAGS[structure_subtype]
+            metrics_to_retrieve, metrics_to_generate = utils.get_metrics_to_retrieve_and_generate(struct_guarded_resources, structure_subtype)
+            tag = utils.get_tag(structure["subtype"])
 
             # Remote database operation
             usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
