@@ -30,7 +30,7 @@ import requests
 from json_logic import jsonLogic
 
 from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures, generate_request
-from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced
+from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, filter_rebalanceable_apps
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
 
@@ -170,9 +170,6 @@ class ContainerRebalancer:
         for r in final_requests:
             print(r)
             self.__couchdb_handler.add_request(r)
-
-    def __app_containers_can_be_rebalanced(self, application):
-        return app_can_be_rebalanced(application, "container", self.__couchdb_handler)
 
     ## Balancing methods
     # Apps by pair swapping
@@ -444,6 +441,9 @@ class ContainerRebalancer:
         ## ATM we are using the energy percentage parameters to balance other resources (such as disk)
         self.__DIFF_PERCENTAGE = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
         self.__STOLEN_PERCENTAGE = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
+        self.__structures_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "STRUCTURES_BALANCED")
+        self.__resources_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "RESOURCES_BALANCED")
+        self.__balancing_method = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "BALANCING_METHOD")
 
         log_info("_______________", self.__debug)
         log_info("Performing CONTAINER Balancing", self.__debug)
@@ -458,36 +458,18 @@ class ContainerRebalancer:
             log_error(str(e), self.__debug)
             return
 
-        self.__structures_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "STRUCTURES_BALANCED")
-        self.__resources_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "RESOURCES_BALANCED")
-        self.__balancing_method = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "BALANCING_METHOD")
-
         ## Apps Rebalancing (balancing the resources of the containers of each application, i.e., apps with only one container won't be affected)
         if "applications" in self.__structures_balanced:
 
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
-            rebalanceable_apps = list()
-            for app in applications:
-                # TODO Improve this management
-                if "rebalance" not in app or app["rebalance"] == True:
-                    pass
-                else:
-                    continue
-                if len(app["containers"]) <= 1:
-                    continue
-
-                if self.__app_containers_can_be_rebalanced(app):
-                    rebalanceable_apps.append(app)
+            rebalanceable_apps = filter_rebalanceable_apps(applications, "container", self.__couchdb_handler)
 
             # Sort them according to each application they belong
             app_containers = dict()
             for app in rebalanceable_apps:
                 app_name = app["name"]
-                app_containers[app_name] = list()
                 app_containers_names = app["containers"]
-                for container in containers:
-                    if container["name"] in app_containers_names:
-                        app_containers[app_name].append(container)
+                app_containers[app_name] = [c for c in containers if c["name"] in app_containers_names]
                 # Get the container usages
                 app_containers[app_name] = self.__fill_containers_with_usage_info(app_containers[app_name])
 

@@ -65,10 +65,7 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
     except KeyError:
         return False
 
-    if rebalancing_level != "container" and rebalancing_level != "application":
-        MyUtils.log_error("Invalid app rebalancing policy '{0}'".format(rebalancing_level), debug=True)
-        return False
-
+    # TODO: Review this, now it simply enables container balancing and disables app balancing
     # rule_low_usage = couchdb_handler.get_rule("energy_exceeded_upper")
     # if jsonLogic(rule_low_usage["rule"], data):
     #     # Application is overusing energy
@@ -96,3 +93,25 @@ def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
     elif rebalancing_level == "application":
         # It may need internal container rebalancing
         return False
+
+
+def filter_rebalanceable_apps(applications, rebalancing_level, couchdb_handler):
+    rebalanceable_apps = list()
+
+    # If a bad rebalancing level is specified, no app will be balanced
+    if rebalancing_level not in ["container", "application"]:
+        MyUtils.log_error("Invalid app rebalancing policy '{0}'".format(rebalancing_level), debug=True)
+        return rebalanceable_apps
+
+    for app in applications:
+        # Unless otherwise specified, all applications are rebalanced
+        if "rebalance" in app and not app["rebalance"]:
+            continue
+        # Single-container applications do not need rebalancing
+        if len(app["containers"]) <= 1:
+            continue
+        # If app match the criteria, it is added to the list
+        if app_can_be_rebalanced(app, rebalancing_level, couchdb_handler):
+            rebalanceable_apps.append(app)
+
+    return rebalanceable_apps
