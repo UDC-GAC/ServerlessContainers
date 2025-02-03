@@ -34,9 +34,7 @@ import logging
 from json_logic import jsonLogic
 from termcolor import colored
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, debug_info, log_info, log_warning, \
-    LOGGING_FORMAT, LOGGING_DATEFMT, get_structures, generate_event_name, generate_request, wait_operation_thread, \
-    structure_is_container, start_epoch, end_epoch
+import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
@@ -587,7 +585,7 @@ class Guardian:
             result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
                                                                       power_budget, **kwargs)
 
-            log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = "
+            utils.log_warning("First time rescaling with this power budget. Setting power model {0} estimated CPU ({1}W = "
                         "{2}% CPU).".format(self.energy_model_name, power_budget, result["value"]), self.debug)
 
             amount = (result["value"] - current_cpu_limit) * container_energy_proportionality
@@ -597,7 +595,7 @@ class Guardian:
                 amount = 0
 
         except Exception as e:
-            log_error("There was an error trying to get estimated CPU from power models {0}".format(str(e)), self.debug)
+            utils.log_error("There was an error trying to get estimated CPU from power models {0}".format(str(e)), self.debug)
 
         return int(amount)
 
@@ -668,15 +666,15 @@ class Guardian:
         # Check CPU does not surpass any limit
         new_amount = self.adjust_amount(amount, structure["resources"]["cpu"], limits["cpu"])
         if new_amount != amount:
-            log_warning("Amount generated for structure {0} during initial rescaling through power models "
+            utils.log_warning("Amount generated for structure {0} during initial rescaling through power models "
                         "has been trimmed from {1} to {2}".format(structure["name"], amount, new_amount), self.debug)
 
         # # If amount is 0 ignore this request else generate the request and append it
         if new_amount == 0:
-            log_warning("Initial rescaling through power models for structure {0} will be ignored "
+            utils.log_warning("Initial rescaling through power models for structure {0} will be ignored "
                         "because amount is 0".format(structure["name"]), self.debug)
         else:
-            request = generate_request(structure, new_amount, "energy", priority=1)
+            request = utils.generate_request(structure, new_amount, "energy", priority=1)
             self.couchdb_handler.add_request(request)
 
     def get_amount_from_proportional_energy_rescaling(self, structure, usages, resource):
@@ -772,7 +770,7 @@ class Guardian:
                     limits[resource]["upper"] = int(resources[resource]["current"] - margin_resource)
                     limits[resource]["lower"] = int(limits[resource]["upper"] - margin_resource)
                 except RuntimeError as e:
-                    log_error(str(e), self.debug)
+                    utils.log_error(str(e), self.debug)
                     raise e
                 if n_loop >= 10:
                     raise RuntimeError("Limits for {0} can't be adjusted, check the configuration (max:{1}, current:{2}, boundary:{3}, min:{4})".format(
@@ -842,7 +840,7 @@ class Guardian:
         useful_resources = list()
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
-                log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
+                utils.log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
             elif usages[translator_dict[resource]] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                 useful_resources.append(resource)
 
@@ -865,12 +863,12 @@ class Guardian:
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
                 if self.rule_triggers_event(rule, data, resources):
-                    event_name = generate_event_name(rule["action"]["events"], rule["resource"])
+                    event_name = utils.generate_event_name(rule["action"]["events"], rule["resource"])
                     event = self.generate_event(event_name, structure_name, rule["resource"], rule["action"])
                     events.append(event)
 
             except KeyError as e:
-                log_warning("rule: {0} is missing a parameter {1} {2}".format(
+                utils.log_warning("rule: {0} is missing a parameter {1} {2}".format(
                     rule["name"], str(e), str(traceback.format_exc())), self.debug)
 
         return events
@@ -893,9 +891,9 @@ class Guardian:
             upper_limit = limits[res]["upper"]
             res_usage = usages[translator_dict[res]]
             if res == "energy":
-                log_warning("POWER BUDGETING -> max : {0} | usa: {1}".format(max_limit, res_usage), self.debug)
+                utils.log_warning("POWER BUDGETING -> max : {0} | usa: {1}".format(max_limit, res_usage), self.debug)
             else:
-                log_warning("PROPORTIONAL CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
+                utils.log_warning("PROPORTIONAL CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
                     current_limit, upper_limit, res_usage, amount), self.debug)
 
     def match_rules_and_events(self, structure, rules, events, limits, usages):
@@ -907,18 +905,18 @@ class Guardian:
             rule_invalid = False
             for key in ["active", "resource", "generates", "name", ]:
                 if key not in rule:
-                    log_warning("Rule: {0} is missing a key parameter '{1}', skipping it".format(rule["name"], key), self.debug)
+                    utils.log_warning("Rule: {0} is missing a key parameter '{1}', skipping it".format(rule["name"], key), self.debug)
                     rule_invalid = True
             if rule_invalid:
                 continue
 
             if rule["generates"] == "requests":
                 if "rescale_policy" not in rule or "rescale_type" not in rule:
-                    log_warning("Rule: {0} is missing the 'rescale_type' or the 'rescale_policy' parameter, skipping it".format(rule["name"]), self.debug)
+                    utils.log_warning("Rule: {0} is missing the 'rescale_type' or the 'rescale_policy' parameter, skipping it".format(rule["name"]), self.debug)
                     continue
 
                 if rule["rescale_type"] == "up" and "amount" not in rule:
-                    log_warning("Rule: {0} is missing a the amount parameter, skipping it".format(rule["name"]), self.debug)
+                    utils.log_warning("Rule: {0} is missing a the amount parameter, skipping it".format(rule["name"]), self.debug)
                     continue
 
             resource_label = rule["resource"]
@@ -934,8 +932,8 @@ class Guardian:
             # RULE HAS BEEN ACTIVATED
 
             # If rescaling a container, check that the current resource value exists, otherwise there is nothing to rescale
-            if structure_is_container(structure) and "current" not in structure["resources"][resource_label]:
-                log_warning("No current value for container' {0}' and "
+            if utils.structure_is_container(structure) and "current" not in structure["resources"][resource_label]:
+                utils.log_warning("No current value for container' {0}' and "
                             "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
                 continue
 
@@ -960,11 +958,11 @@ class Guardian:
                     usage = usages[translator_dict[resource_label]]
                     ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
                     amount = int(ratio * amount)
-                    log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
+                    utils.log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
                         current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
                 else:
                     valid_rescale = False
-                    log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+                    utils.log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
             elif rule["rescale_type"] == "down":
                 if rule["rescale_policy"] == "amount":
@@ -988,19 +986,19 @@ class Guardian:
                         amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
                 else:
                     valid_rescale = False
-                    log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+                    utils.log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
                     continue
 
             else:
                 valid_rescale = False
-                log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
+                utils.log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
                 continue
 
             # Adjust energy rescaling and print extra information
             if valid_rescale and resource_label == "energy":
                 # If power is within some reasonable limits we do nothing
                 if self.power_is_near_power_budget(structure, usages, limits):
-                    log_warning("Current energy usage ({0}) for structure {1} is close to its power budget ({2}), "
+                    utils.log_warning("Current energy usage ({0}) for structure {1} is close to its power budget ({2}), "
                                 "setting amount to 0".format(usages[translator_dict["energy"]], structure["name"],
                                                              structure["resources"]["energy"]["max"]), self.debug)
                     amount = 0
@@ -1011,7 +1009,7 @@ class Guardian:
 
             # If it is 0, because there was a previous floating value between -1 and 1, set it to 0 so that it does not generate any Request
             if amount == 0:
-                log_warning("Amount generated for structure {0} with rule {1} is 0".format(structure["name"], rule["name"]), self.debug)
+                utils.log_warning("Amount generated for structure {0} with rule {1} is 0".format(structure["name"], rule["name"]), self.debug)
 
             # If the resource is susceptible to check, ensure that it does not surpass any limit
             new_amount = amount
@@ -1021,19 +1019,19 @@ class Guardian:
                 structure_limits = limits[resource_to_adjust]
                 new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
                 if new_amount != amount:
-                    log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
+                    utils.log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
                         structure["name"], rule["name"], amount, new_amount), self.debug)
 
             # # If amount is 0 ignore this request else generate the request and append it
             if new_amount == 0:
-                log_warning("Request generated with rule {0} for structure {1} will be ignored because amount is 0".format(
+                utils.log_warning("Request generated with rule {0} for structure {1} will be ignored because amount is 0".format(
                     rule["name"], structure["name"]), self.debug)
             else:
-                request = generate_request(structure, new_amount, resource_label)
+                request = utils.generate_request(structure, new_amount, resource_label)
                 generated_requests.append(request)
 
             # Remove the events that triggered the request
-            event_name = generate_event_name(events[resource_label]["events"], resource_label)
+            event_name = utils.generate_event_name(events[resource_label]["events"], resource_label)
             if event_name not in events_to_remove:
                 events_to_remove[event_name] = 0
             events_to_remove[event_name] += rule["events_to_remove"]
@@ -1059,10 +1057,10 @@ class Guardian:
         triggered_requests_and_events = "#TRIGGERED EVENTS {0} AND TRIGGERED REQUESTS {1}".format(str(ev), str(req))
 
         # Debug coloured string
-        debug_info(" ".join([container_name_str, coloured_resources_str, triggered_requests_and_events]), self.debug)
+        utils.debug_info(" ".join([container_name_str, coloured_resources_str, triggered_requests_and_events]), self.debug)
 
         # Log uncoloured string
-        log_info(" ".join([container_name_str, uncoloured_resources_str, triggered_requests_and_events]), debug=False)
+        utils.log_info(" ".join([container_name_str, uncoloured_resources_str, triggered_requests_and_events]), debug=False)
 
     def process_serverless_structure(self, structure, usages, limits, rules):
 
@@ -1115,7 +1113,7 @@ class Guardian:
 
         # Check if structure is guarded
         if "guard" not in structure or not structure["guard"]:
-            log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
+            utils.log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
             return
 
         # Check if the structure has any resource set to guarded
@@ -1124,7 +1122,7 @@ class Guardian:
             if res in structure["resources"] and "guard" in structure["resources"][res] and structure["resources"][res]["guard"]:
                 struct_guarded_resources.append(res)
         if not struct_guarded_resources:
-            log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
+            utils.log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
             return
 
         # Check if structure is being monitored, otherwise, ignore
@@ -1144,11 +1142,11 @@ class Guardian:
 
             for metric in usages:
                 if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
-                    log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
+                    utils.log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
 
             # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
+                utils.log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
                 return
 
             resources = structure["resources"]
@@ -1158,7 +1156,7 @@ class Guardian:
             limits_resources = limits["resources"]
 
             if not limits_resources:
-                log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
+                utils.log_warning("structure: {0} has no limits".format(structure["name"]), self.debug)
                 return
 
             # Adjust the structure limits according to the current value
@@ -1170,7 +1168,7 @@ class Guardian:
             self.process_serverless_structure(structure, usages, limits_resources, rules)
 
         except Exception as e:
-            log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
+            utils.log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
 
     def guard_structures(self, structures):
         # Remote database operation
@@ -1201,15 +1199,16 @@ class Guardian:
 
 
     def guard(self, ):
-        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
+        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
+                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
 
         while True:
             # Get service info
-            service = get_service(self.couchdb_handler, SERVICE_NAME)
+            service = utils.get_service(self.couchdb_handler, SERVICE_NAME)
 
             # Heartbeat
-            beat(self.couchdb_handler, SERVICE_NAME)
+            utils.beat(self.couchdb_handler, SERVICE_NAME)
 
             # CONFIG
             myConfig.set_config(service["config"])
@@ -1231,48 +1230,48 @@ class Guardian:
                 self.power_budget = {}
                 self.model_is_hw_aware = None
 
-            t0 = start_epoch(self.debug)
+            t0 = utils.start_epoch(self.debug)
 
-            log_info("Config is as follows:", debug)
-            log_info(".............................................", debug)
-            log_info("Time window lapse -> {0}".format(self.window_difference), debug)
-            log_info("Delay -> {0}".format(self.window_delay), debug)
-            log_info("Event timeout -> {0}".format(self.event_timeout), debug)
-            log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
-            log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
-            log_info("Energy model name is -> {0} ({1} reliability)".format(self.energy_model_name, self.energy_model_reliability), debug)
-            log_info(".............................................", debug)
+            utils.log_info("Config is as follows:", debug)
+            utils.log_info(".............................................", debug)
+            utils.log_info("Time window lapse -> {0}".format(self.window_difference), debug)
+            utils.log_info("Delay -> {0}".format(self.window_delay), debug)
+            utils.log_info("Event timeout -> {0}".format(self.event_timeout), debug)
+            utils.log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
+            utils.log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
+            utils.log_info("Energy model name is -> {0} ({1} reliability)".format(self.energy_model_name, self.energy_model_reliability), debug)
+            utils.log_info(".............................................", debug)
 
             ## CHECK INVALID CONFIG ##
             invalid, message = self.invalid_conf()
             if invalid:
-                log_error(message, debug)
+                utils.log_error(message, debug)
                 if self.window_difference < 5:
-                    log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
+                    utils.log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
                     self.window_difference = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
                 time.sleep(self.window_difference)
-                end_epoch(self.debug, self.window_difference, t0)
+                utils.end_epoch(self.debug, self.window_difference, t0)
                 continue
 
             thread = None
             if SERVICE_IS_ACTIVATED:
                 # Remote database operation
-                structures = get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
+                structures = utils.get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
                 if structures:
-                    log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
+                    utils.log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
                     self.current_structures = structures
                     thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
                     thread.start()
                 else:
-                    log_info("No structures to process", debug)
+                    utils.log_info("No structures to process", debug)
             else:
-                log_warning("Guardian is not activated", debug)
+                utils.log_warning("Guardian is not activated", debug)
 
             time.sleep(self.window_difference)
 
-            wait_operation_thread(thread, debug)
+            utils.wait_operation_thread(thread, debug)
 
-            end_epoch(t0, self.window_difference, t0)
+            utils.end_epoch(t0, self.window_difference, t0)
 
 
 def main():
@@ -1280,7 +1279,7 @@ def main():
         guardian = Guardian()
         guardian.guard()
     except Exception as e:
-        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        utils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
