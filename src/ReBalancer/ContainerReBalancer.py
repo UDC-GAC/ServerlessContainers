@@ -98,41 +98,36 @@ class ContainerRebalancer:
                 containers_with_resource_usages.append(container)
         return containers_with_resource_usages
 
-    def __get_container_donors(self, containers):
-        donors = list()
+    def __filter_containers_by_role(self, role, resource, containers):
+        filtered_containers = list()
+
+        # Check filter is valid
+        if role not in ["donors", "receivers"]:
+            log_warning("Invalid role '{0}' for containers. It must be donors or receivers.".format(role), self.__debug)
+            return filtered_containers
+
+        # Try getting the rule
+        rule_type = "low" if role == "donors" else "high"
+        try:
+            rule = self.__couchdb_handler.get_rule("{0}_usage_{1}".format(resource, rule_type))
+        except ValueError as e:
+            log_warning("No rule found for {0} usage {1}: {2}".format(resource, rule_type, str(e)), self.__debug)
+            return filtered_containers
+
         for container in containers:
             try:
-                data = {"cpu": {"structure": {"cpu": {
-                    "usage": container["resources"]["cpu"]["usage"],
-                    "min": container["resources"]["cpu"]["min"],
-                    "max": container["resources"]["cpu"]["max"],
-                    "current": container["resources"]["cpu"]["current"]}}}}
+                data = {resource: {"structure": {resource: {
+                    "usage": container["resources"][resource]["usage"],
+                    "min": container["resources"][resource]["min"],
+                    "max": container["resources"][resource]["max"],
+                    "current": container["resources"][resource]["current"]}}}}
             except KeyError:
                 continue
 
-            # containers that have low resource usage (donors)
-            rule_low_usage = self.__couchdb_handler.get_rule("cpu_usage_low")
-            if jsonLogic(rule_low_usage["rule"], data):
-                donors.append(container)
-        return donors
-
-    def __get_container_receivers(self, containers):
-        receivers = list()
-        for container in containers:
-            try:
-                data = {"cpu": {"structure": {"cpu": {
-                    "usage": container["resources"]["cpu"]["usage"],
-                    "min": container["resources"]["cpu"]["min"],
-                    "max": container["resources"]["cpu"]["max"],
-                    "current": container["resources"]["cpu"]["current"]}}}}
-            except KeyError:
-                continue
-
-            # containers that have a bottleneck (receivers)
-            rule_high_usage = self.__couchdb_handler.get_rule("cpu_usage_high")
-            if jsonLogic(rule_high_usage["rule"], data):
-                receivers.append(container)
-        return receivers
+            # Check if container activate the rule: it has low resource usage (donors) or a bottleneck (receivers)
+            if jsonLogic(rule["rule"], data):
+                filtered_containers.append(container)
+        return filtered_containers
 
     def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
         request = generate_request(container, int(amount_to_scale), resource)
@@ -148,7 +143,6 @@ class ContainerRebalancer:
             log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
 
     def __send_final_requests(self, requests):
-
         final_requests = list()
         for container in requests:
             # Copy the first request as the base request
@@ -184,8 +178,8 @@ class ContainerRebalancer:
                 continue
 
             # Filter the containers between donors and receivers, according to usage and rules
-            donors = self.__get_container_donors(containers)
-            receivers = self.__get_container_receivers(containers)
+            donors = self.__filter_containers_by_role("donors", resource, containers)
+            receivers = self.__filter_containers_by_role("receivers", resource, containers)
 
             log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
             log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
@@ -197,7 +191,7 @@ class ContainerRebalancer:
                 # Order the containers from lower to upper current CPU limit
                 receivers = sorted(receivers, key=lambda c: c["resources"]["cpu"]["current"])
 
-            # Steal resources from the low-usage containers (givers), create 'slices' of resources
+            # Steal resources from the low-usage containers (donors), create 'slices' of resources
             donor_slices = list()
             id = 0
             for container in donors:
@@ -225,7 +219,7 @@ class ContainerRebalancer:
             for c in donor_slices:
                 print(c[0]["name"], c[1])
 
-            # Remove those donors that are of no use (there are no possible receivers for them)
+            # Remove those donors that does not have a receiver in the same host
             viable_donors = list()
             for c in donor_slices:
                 viable = False
