@@ -58,10 +58,11 @@ class ContainerRebalancer:
         log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
         log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
 
-    def __print_donor_slices(self, donor_slices, msg="Donor slices are"):
+    def __print_donor_slices(self, donor_slices, msg="Donor slices are:"):
         debug_info(msg, self.__debug)
-        for donor, slice_amount in donor_slices:
-            debug_info("{0}\t{1}".format(donor["name"], slice_amount), self.__debug)
+        for host in donor_slices:
+            for donor, slice_amount in donor_slices[host]:
+                debug_info("({0})\t{1}\t{2}".format(host, donor["name"], slice_amount), self.__debug)
 
     def __fill_containers_with_usage_info(self, resources, containers):
         containers_with_usages = list()
@@ -176,38 +177,36 @@ class ContainerRebalancer:
             receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
 
             # Steal resources from the low-usage containers (donors), create 'slices' of resources
-            donor_slices = list()
+            donor_slices = dict()
             for container in donors:
                 # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
                 current_value = container["resources"]["cpu"]["current"]
                 min_value = container["resources"]["cpu"]["min"]
                 usage_value = container["resources"]["cpu"]["usage"]
+                host = container["host"]
                 stolen_amount = 0.5 * (current_value - max(min_value,  usage_value))
 
                 # Divide the total amount to donate in slices of 25 units
                 for slice_amount in self.__split_amount_in_slices(stolen_amount, 25):
-                    donor_slices.append((container, slice_amount))
+                    try:
+                        donor_slices[host].append((container, slice_amount))
+                    except KeyError:
+                        donor_slices[host] = [(container, slice_amount)]
 
             # Sort slices by donated amount
-            donor_slices = sorted(donor_slices, key=lambda c: c[1])
+            for host in donor_slices:
+                donor_slices[host] = sorted(donor_slices[host], key=lambda c: c[1])
 
             # Print current donor slices
             self.__print_donor_slices(donor_slices)
 
-            # Remove those donors that does not have a receiver in the same host
-            viable_donors = list()
-            for c in donor_slices:
-                viable = False
-                for r in receivers:
-                    if r["host"] == c[0]["host"]:
-                        viable = True
-                        break
-                if viable:
-                    viable_donors.append(c)
-            donor_slices = viable_donors
+            # Remove slices that can't be donated, as there is no receiver in the same host
+            for host in donor_slices:
+                if any(r["host"] == host for r in receivers):
+                    del donor_slices[host]
 
             # Print viable donor slices
-            self.__print_donor_slices(donor_slices, msg="VIABLE donor slices are")
+            self.__print_donor_slices(donor_slices, msg="VIABLE donor slices are:")
 
             # Give the resources to the bottlenecked containers
             requests = dict()
@@ -216,33 +215,31 @@ class ContainerRebalancer:
                 self.__print_donor_slices(donor_slices)
 
                 for receiver in receivers:
-                    # Look for a donor container on the same host
-                    donor_index = None
-                    for index, _slice in enumerate(donor_slices):
-                        if _slice[0]["host"] == receiver["host"]:
-                            donor_index = index
-                            break
-
-                    if not donor_index:
-                        log_info("No more donors on its host, container {0} left out".format(receiver["name"]), self.__debug)
+                    receiver_host = receiver["host"]
+                    if receiver_host not in donor_slices:
+                        log_info("No more donors on its host ({0}), container {1} left out".format(
+                            receiver_host, receiver["name"]), self.__debug)
                         continue
-
-                    # Remove this slice from the list
-                    donor, amount_to_scale = donor_slices.pop(donor_index)
 
                     max_receiver_amount = receiver["resources"]["cpu"]["max"] - receiver["resources"]["cpu"]["current"]
                     # If this container can't be scaled anymore, skip
                     if max_receiver_amount == 0:
                         continue
 
+                    # Get and remove one slice from the list
+                    donor, amount_to_scale = donor_slices[receiver_host].pop()
+                    # If no more slices left in this host, the host is removed
+                    if not donor_slices[receiver_host]:
+                        del donor_slices[receiver_host]
+
                     # Trim the amount to scale if needed
-                    if amount_to_scale > max_receiver_amount:
-                        amount_to_scale = max_receiver_amount
+                    amount_to_scale = min(amount_to_scale, max_receiver_amount)
 
                     # Create the pair of scaling requests
                     self.__generate_scaling_request(receiver, resource, amount_to_scale, requests)
                     self.__generate_scaling_request(donor, resource, -amount_to_scale, requests)
-                    log_info("Resource swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]), self.__debug)
+                    log_info("Resource swap between {0}(donor) and {1}(receiver)".format(
+                        donor["name"], receiver["name"]), self.__debug)
 
             log_info("No more donors", self.__debug)
             self.__send_final_requests(requests)
