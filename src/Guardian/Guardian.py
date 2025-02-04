@@ -370,23 +370,17 @@ class Guardian:
             (dict) Dictionary containing the aggregated resources
 
         """
-        # Only containers are taken into account because apps show the aggregated usage of containers
-        structure_subtype = "container"
-
-        # Get list of metrics to retrieve and generate from TSDB
-        metrics_to_retrieve, metrics_to_generate = utils.get_metrics_to_retrieve_and_generate(resources, structure_subtype)
-
-        # For each container in list sum its usages
+        # For each container in list get and sum its usages
         total_usages = {}
-        for structure in containers:
-            tag = utils.get_tag(structure["subtype"])
-            structure_usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
-                                                                              self.window_difference, self.window_delay,
-                                                                              metrics_to_retrieve, metrics_to_generate)
-            for metric in structure_usages:
+        for c in containers:
+            container_usages = utils.get_container_usages(resources, c, self.window_difference,
+                                                          self.window_delay, self.opentsdb_handler, self.debug)
+
+            # Aggregate container data into a global dictionary
+            for metric in container_usages:
                 if metric not in total_usages:
                     total_usages[metric] = 0
-                total_usages[metric] += structure_usages[metric]
+                total_usages[metric] += container_usages[metric]
 
         return total_usages
 
