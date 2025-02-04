@@ -29,18 +29,15 @@ import traceback
 import requests
 from json_logic import jsonLogic
 
-from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures, generate_request
+from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures, generate_request, \
+                                get_container_usages
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, filter_rebalanceable_apps
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
 
-BDWATCHDOG_CONTAINER_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'proc.disk.reads.mb', 'proc.disk.writes.mb']
-GUARDIAN_CONTAINER_METRICS = {
-    'structure.cpu.usage': ['proc.cpu.user', 'proc.cpu.kernel'],
-    'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb']}
-
 
 class ContainerRebalancer:
+
     def __init__(self):
         self.__opentsdb_handler = opentsdb.OpenTSDBServer()
         self.__couchdb_handler = couchdb.CouchDBServer()
@@ -48,55 +45,23 @@ class ContainerRebalancer:
         self.__debug = True
         self.__config = {}
 
-    # @staticmethod
-    # def __generate_request(structure_name, amount, resource, action):
-    #     request = dict(
-    #         type="request",
-    #         resource=resource,
-    #         amount=int(amount),
-    #         structure=structure_name,
-    #         action=action,
-    #         timestamp=int(time.time()))
-    #     return request
-
-    def __get_container_usages(self, container):
-        window_difference = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-        window_delay = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
-
-        try:
-            # Remote database operation
-            usages = self.__opentsdb_handler.get_structure_timeseries({"host": container["name"]},
-                                                                      window_difference,
-                                                                      window_delay,
-                                                                      BDWATCHDOG_CONTAINER_METRICS,
-                                                                      GUARDIAN_CONTAINER_METRICS)
-
-            # Skip this structure if all the usage metrics are unavailable
-            if all([usages[metric] == self.__NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                log_warning("container: {0} has no usage data".format(container["name"]), self.__debug)
-                return None
-
-            return usages
-        except Exception as e:
-            log_error("error with structure: {0} {1} {2}".format(container["name"], str(e), str(traceback.format_exc())),
-                      self.__debug)
-
-            return None
-
-    def __fill_containers_with_usage_info(self, containers):
-        # Get the usages
-        containers_with_resource_usages = list()
+    def __fill_containers_with_usage_info(self, resources, containers):
+        containers_with_usages = list()
         for container in containers:
-            usages = self.__get_container_usages(container)
+            # Get the usages for each balanced resource
+            usages = get_container_usages(resources, container, self.__window_difference,
+                                          self.__window_delay, self.__opentsdb_handler, self.__debug)
+            # Save data following the format ["resources"][<resource>]["usage"]
+            # e.g., structure.mem.usage -> container["resources"]["mem"]["usage"]
             if usages:
                 for usage_metric in usages:
+                    # Split the key from the retrieved data
                     keys = usage_metric.split(".")
-                    # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
                     if keys[1] == "disk" and "disk" not in container["resources"]: continue
                     if keys[1] == "energy" and "energy" not in container["resources"]: continue
                     container["resources"][keys[1]][keys[2]] = usages[usage_metric]
-                containers_with_resource_usages.append(container)
-        return containers_with_resource_usages
+                containers_with_usages.append(container)
+        return containers_with_usages
 
     def __filter_containers_by_role(self, role, resource, containers):
         filtered_containers = list()
@@ -174,7 +139,8 @@ class ContainerRebalancer:
         for resource in self.__resources_balanced:
 
             if resource not in balanceable_resources:
-                log_warning("'{0}' not yet supported in app '{1}' balancing, only '{2}' available at the moment".format(resource, self.__balancing_method, list(balanceable_resources.keys())), self.__debug)
+                log_warning("'{0}' not yet supported in app '{1}' balancing, only '{2}' available at the moment".format(
+                    resource, self.__balancing_method, list(balanceable_resources)), self.__debug)
                 continue
 
             # Filter the containers between donors and receivers, according to usage and rules
@@ -438,6 +404,8 @@ class ContainerRebalancer:
         self.__structures_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "STRUCTURES_BALANCED")
         self.__resources_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "RESOURCES_BALANCED")
         self.__balancing_method = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "BALANCING_METHOD")
+        self.__window_difference = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+        self.__window_delay = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
 
         log_info("_______________", self.__debug)
         log_info("Performing CONTAINER Balancing", self.__debug)
@@ -465,7 +433,7 @@ class ContainerRebalancer:
                 app_containers_names = app["containers"]
                 app_containers[app_name] = [c for c in containers if c["name"] in app_containers_names]
                 # Get the container usages
-                app_containers[app_name] = self.__fill_containers_with_usage_info(app_containers[app_name])
+                app_containers[app_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, app_containers[app_name])
 
             # Rebalance applications
             for app in rebalanceable_apps:
@@ -491,7 +459,7 @@ class ContainerRebalancer:
                     if container["name"] in host_containers_names:
                         host_containers[host_name].append(container)
                 # Get the container usages
-                host_containers[host_name] = self.__fill_containers_with_usage_info(host_containers[host_name])
+                host_containers[host_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, host_containers[host_name])
 
             # Rebalance hosts
             for host in hosts:

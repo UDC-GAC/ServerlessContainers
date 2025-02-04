@@ -424,3 +424,29 @@ def get_metrics_to_retrieve_and_generate(resources, structure_subtype):
             metrics_to_generate[usage_metric] = get_mapping(SC_TO_BDW, structure_subtype, usage_metric)
 
     return metrics_to_retrieve, metrics_to_generate
+
+
+def get_container_usages(resources, container, window_difference, window_delay, opentsdb_handler, debug):
+    structure_subtype = "container"
+    metrics_to_retrieve, metrics_to_generate = get_metrics_to_retrieve_and_generate(resources, "container")
+    tag = get_tag(structure_subtype)
+
+    try:
+        # Remote database operation
+        usages = opentsdb_handler.get_structure_timeseries({tag: container["name"]},
+                                                           window_difference,
+                                                           window_delay,
+                                                           metrics_to_retrieve,
+                                                           metrics_to_generate)
+
+        # Skip this structure if all the usage metrics are unavailable
+        if all([usages[metric] == opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
+            log_warning("container: {0} has no usage data".format(container["name"]), debug)
+            return None
+
+        return usages
+    except Exception as e:
+        log_error("error with structure: {0} {1} {2}".format(container["name"],
+                                                             str(e), str(traceback.format_exc())), debug)
+
+    return None
