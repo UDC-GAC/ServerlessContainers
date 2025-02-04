@@ -29,8 +29,8 @@ import traceback
 import requests
 from json_logic import jsonLogic
 
-from src.MyUtils.MyUtils import log_info, get_config_value, log_error, log_warning, get_structures, generate_request, \
-                                get_container_usages
+from src.MyUtils.MyUtils import log_info, debug_info, get_config_value, log_error, log_warning, get_structures, \
+                                generate_request, get_container_usages
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, filter_rebalanceable_apps
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
@@ -44,6 +44,24 @@ class ContainerRebalancer:
         self.__NO_METRIC_DATA_DEFAULT_VALUE = self.__opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.__debug = True
         self.__config = {}
+
+    @staticmethod
+    def __split_amount_in_slices(total_amount, slice_amount):
+        number_of_slices = total_amount // slice_amount
+        last_slice_amount = total_amount % slice_amount
+        slices = [slice_amount for _ in range(number_of_slices)]
+        if last_slice_amount > 0:
+            slices.append(last_slice_amount)
+        return slices
+
+    def __print_donors_and_receivers(self, donors, receivers):
+        log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
+        log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
+
+    def __print_donor_slices(self, donor_slices, msg="Donor slices are"):
+        debug_info(msg, self.__debug)
+        for donor, slice_amount in donor_slices:
+            debug_info("{0}\t{1}".format(donor["name"], slice_amount), self.__debug)
 
     def __fill_containers_with_usage_info(self, resources, containers):
         containers_with_usages = list()
@@ -147,43 +165,34 @@ class ContainerRebalancer:
             donors = self.__filter_containers_by_role("donors", resource, containers)
             receivers = self.__filter_containers_by_role("receivers", resource, containers)
 
-            log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
-            log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
-
             if not receivers:
                 log_info("No containers in need of rebalancing for {0}".format(app_name), self.__debug)
-                return
-            else:
-                # Order the containers from lower to upper current CPU limit
-                receivers = sorted(receivers, key=lambda c: c["resources"]["cpu"]["current"])
+                continue
+
+            # Print info about current donors and receivers
+            self.__print_donors_and_receivers(donors, receivers)
+
+            # Order the containers from lower to upper current resource limit
+            receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
 
             # Steal resources from the low-usage containers (donors), create 'slices' of resources
             donor_slices = list()
-            id = 0
             for container in donors:
-                # Ensure that this request will be successfully processed, otherwise we are 'giving' away extra resources
+                # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
                 current_value = container["resources"]["cpu"]["current"]
                 min_value = container["resources"]["cpu"]["min"]
                 usage_value = container["resources"]["cpu"]["usage"]
                 stolen_amount = 0.5 * (current_value - max(min_value,  usage_value))
 
-                slice_amount = 25
-                acum = 0
-                while acum + slice_amount < stolen_amount:
-                    donor_slices.append((container, slice_amount, id))
-                    acum += slice_amount
-                    id += 1
+                # Divide the total amount to donate in slices of 25 units
+                for slice_amount in self.__split_amount_in_slices(stolen_amount, 25):
+                    donor_slices.append((container, slice_amount))
 
-                # Remaining
-                if acum < stolen_amount:
-                    donor_slices.append((container, int(stolen_amount-acum), id))
-                    acum += slice_amount
-                    id += 1
-
+            # Sort slices by donated amount
             donor_slices = sorted(donor_slices, key=lambda c: c[1])
-            print("Donor slices are")
-            for c in donor_slices:
-                print(c[0]["name"], c[1])
+
+            # Print current donor slices
+            self.__print_donor_slices(donor_slices)
 
             # Remove those donors that does not have a receiver in the same host
             viable_donors = list()
@@ -195,34 +204,31 @@ class ContainerRebalancer:
                         break
                 if viable:
                     viable_donors.append(c)
-            print("VIABLE donor slices are")
-            for c in viable_donors:
-                print(c[0]["name"], c[1], c[2])
             donor_slices = viable_donors
+
+            # Print viable donor slices
+            self.__print_donor_slices(donor_slices, msg="VIABLE donor slices are")
 
             # Give the resources to the bottlenecked containers
             requests = dict()
             while donor_slices:
-                print("Donor slices are")
-                for c in donor_slices:
-                    print(c[0]["name"], c[1], c[2])
+                # Print current donor slices
+                self.__print_donor_slices(donor_slices)
 
                 for receiver in receivers:
                     # Look for a donor container on the same host
-                    amount_to_scale, donor, id = None, None, None
-                    for c, amount, i in donor_slices:
-                        if c["host"] == receiver["host"]:
-                            amount_to_scale = amount
-                            donor = c
-                            id = i
+                    donor_index = None
+                    for index, _slice in enumerate(donor_slices):
+                        if _slice[0]["host"] == receiver["host"]:
+                            donor_index = index
                             break
 
-                    if not amount_to_scale:
+                    if not donor_index:
                         log_info("No more donors on its host, container {0} left out".format(receiver["name"]), self.__debug)
                         continue
 
                     # Remove this slice from the list
-                    donor_slices = list(filter(lambda x: x[2] != id, donor_slices))
+                    donor, amount_to_scale = donor_slices.pop(donor_index)
 
                     max_receiver_amount = receiver["resources"]["cpu"]["max"] - receiver["resources"]["cpu"]["current"]
                     # If this container can't be scaled anymore, skip
@@ -271,11 +277,12 @@ class ContainerRebalancer:
             if not receivers:
                 log_info("No containers in need of rebalancing for {0}".format(host["name"]), self.__debug)
                 continue
-            else:
-                log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
-                log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
-                # Order the containers from lower to upper current resource limit
-                receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
+
+            # Print info about current donors and receivers
+            self.__print_donors_and_receivers(donors, receivers)
+
+            # Order the containers from lower to upper current resource limit
+            receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
 
             shuffling_tuples = list()
             for donor in donors:
@@ -392,7 +399,6 @@ class ContainerRebalancer:
             self.__send_final_requests(requests)
 
         log_info("_______________", self.__debug)
-
 
     def rebalance_containers(self, config):
         self.__config = config
