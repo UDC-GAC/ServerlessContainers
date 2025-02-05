@@ -26,7 +26,6 @@
 import time
 import traceback
 
-import requests
 from json_logic import jsonLogic
 
 from src.MyUtils.MyUtils import log_info, debug_info, get_config_value, log_error, log_warning, get_structures, \
@@ -414,13 +413,13 @@ class ContainerRebalancer:
         log_info("Performing CONTAINER Balancing", self.__debug)
 
         # Get the structures
-        try:
-            applications = get_structures(self.__couchdb_handler, self.__debug, subtype="application")
-            containers = get_structures(self.__couchdb_handler, self.__debug, subtype="container")
-            hosts = get_structures(self.__couchdb_handler, self.__debug, subtype="host")
-        except requests.exceptions.HTTPError as e:
+        containers = get_structures(self.__couchdb_handler, self.__debug, subtype="container")
+        applications = get_structures(self.__couchdb_handler, self.__debug, subtype="application")
+        hosts = get_structures(self.__couchdb_handler, self.__debug, subtype="host")
+
+        # If some of the needed structures couldn't be retrieved, no rebalancing is performed
+        if any(var is None for var in (containers, applications, hosts)):
             log_error("Couldn't get structures", self.__debug)
-            log_error(str(e), self.__debug)
             return
 
         ## Apps Rebalancing (balancing the resources of the containers of each application, i.e., apps with only one container won't be affected)
