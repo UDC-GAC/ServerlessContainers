@@ -48,10 +48,7 @@ class ContainerRebalancer:
     def __split_amount_in_slices(total_amount, slice_amount):
         number_of_slices = total_amount // slice_amount
         last_slice_amount = total_amount % slice_amount
-        slices = [slice_amount for _ in range(number_of_slices)]
-        if last_slice_amount > 0:
-            slices.append(last_slice_amount)
-        return slices
+        return [slice_amount] * number_of_slices + ([last_slice_amount] if last_slice_amount > 0 else [])
 
     def __print_donors_and_receivers(self, donors, receivers):
         log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
@@ -126,30 +123,29 @@ class ContainerRebalancer:
             log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
 
     def __send_final_requests(self, requests):
+        # For each container, aggregate all its requests in a single request
         final_requests = list()
         for container in requests:
             # Copy the first request as the base request
             flat_request = dict(requests[container][0])
-            flat_request["amount"] = 0
-            for request in requests[container]:
-                flat_request["amount"] += request["amount"]
+            flat_request["amount"] = sum(req["amount"] for req in requests[container])
             final_requests.append(flat_request)
 
         log_info("REQUESTS ARE:", self.__debug)
         for c in requests.values():
             for r in c:
-                print(r)
+                debug_info(r, self.__debug)
 
-        # TODO
-        # Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed but not the scaling up, and shares will be lost
+        # TODO: Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed
+        #  but not the scaling up, and shares will be lost
 
         log_info("FINAL REQUESTS ARE:", self.__debug)
         for r in final_requests:
-            print(r)
+            debug_info(r, self.__debug)
             self.__couchdb_handler.add_request(r)
 
-    ## Balancing methods
-    # Apps by pair swapping
+    ## BALANCING METHODS
+    # APPS BY PAIR SWAPPING
     def __rebalance_containers_by_pair_swapping(self, containers, app_name):
 
         balanceable_resources = {"cpu"}
@@ -173,6 +169,7 @@ class ContainerRebalancer:
             self.__print_donors_and_receivers(donors, receivers)
 
             # Order the containers from lower to upper current resource limit
+            # TODO: Maybe is better to order by (max - current) -> Those containers with a bigger gap receive first
             receivers = sorted(receivers, key=lambda c: c["resources"][resource]["current"])
 
             # Steal resources from the low-usage containers (donors), create 'slices' of resources
@@ -207,7 +204,7 @@ class ContainerRebalancer:
             # Print viable donor slices
             self.__print_donor_slices(donor_slices, msg="VIABLE donor slices are:")
 
-            # Give the resources to the bottlenecked containers
+            # Give the resources to the bottlenecked containers (receivers)
             requests = dict()
             while donor_slices:
                 # Print current donor slices
@@ -243,7 +240,7 @@ class ContainerRebalancer:
             log_info("No more donors", self.__debug)
             self.__send_final_requests(requests)
 
-    # Hosts by pair swapping
+    # HOSTS BY PAIR SWAPPING
     def __rebalance_host_containers_by_pair_swapping(self, containers, host):
 
         balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}, 
@@ -265,8 +262,10 @@ class ContainerRebalancer:
             for container in containers:
                 if resource in container["resources"]:
                     diff = container["resources"][resource]["max"] - container["resources"][resource]["current"]
+                    # If current its near its maximum it is a donor -> (max - current) < diff_percentage * max
                     if diff < balanceable_resources[resource]["diff_percentage"] * container["resources"][resource]["max"]:
                         donors.append(container)
+                    # If usage its near its current it is a receiver -> (current - usage) < diff_percentage * current
                     elif container["resources"][resource]["current"] - container["resources"][resource]["usage"] < balanceable_resources[resource]["diff_percentage"] * container["resources"][resource]["current"]:
                         receivers.append(container)
 
@@ -332,7 +331,7 @@ class ContainerRebalancer:
 
         log_info("_______________", self.__debug)
 
-    # Hosts by weight
+    # HOSTS BY WEIGHT
     def __rebalance_host_containers_by_weight(self, containers, host):
 
         balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}, 
@@ -422,7 +421,7 @@ class ContainerRebalancer:
             log_error("Couldn't get structures", self.__debug)
             return
 
-        ## Apps Rebalancing (balancing the resources of the containers of each application, i.e., apps with only one container won't be affected)
+        # APPS REBALANCING: Balancing the resources between containers of the same application
         if "applications" in self.__structures_balanced:
 
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
@@ -448,7 +447,7 @@ class ContainerRebalancer:
                 else:
                     log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.__debug)
 
-        ## Hosts Rebalancing (balancing the resources of the containers of each host)
+        # HOSTS REBALANCING: Balancing the resources between container on the same host
         if "hosts" in self.__structures_balanced:
 
             # Get hosts' containers

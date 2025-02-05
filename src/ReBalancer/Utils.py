@@ -27,16 +27,17 @@ from json_logic import jsonLogic
 
 from src.MyUtils import MyUtils
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 30,
-                         "WINDOW_DELAY": 10,
-                         "REBALANCE_USERS": False,
-                         "DEBUG": True,
-                         "ENERGY_DIFF_PERCENTAGE": 0.40,
-                         "ENERGY_STOLEN_PERCENTAGE": 0.40,
-                         "RESOURCES_BALANCED": ["cpu"],
-                         "STRUCTURES_BALANCED": ["applications"],
-                         "BALANCING_METHOD": "pair_swapping"
-                         }
+CONFIG_DEFAULT_VALUES = {
+    "WINDOW_TIMELAPSE": 30,
+    "WINDOW_DELAY": 10,
+    "REBALANCE_USERS": False,
+    "DEBUG": True,
+    "ENERGY_DIFF_PERCENTAGE": 0.40,
+    "ENERGY_STOLEN_PERCENTAGE": 0.40,
+    "RESOURCES_BALANCED": ["cpu"],
+    "STRUCTURES_BALANCED": ["applications"],
+    "BALANCING_METHOD": "pair_swapping"
+}
 
 
 def get_user_apps(applications, user):
@@ -49,7 +50,7 @@ def get_user_apps(applications, user):
 
 def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
     try:
-        data = {
+        _ = {
                 # "energy":
                 #     {"structure":
                 #          {"energy":
