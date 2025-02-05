@@ -206,34 +206,50 @@ class ContainerRebalancer:
 
             # Give the resources to the bottlenecked containers (receivers)
             requests = dict()
+            received_amount = dict()
             while donor_slices:
                 # Print current donor slices
                 self.__print_donor_slices(donor_slices)
 
                 for receiver in receivers:
+                    receiver_name = receiver["name"]
                     receiver_host = receiver["host"]
                     if receiver_host not in donor_slices:
                         log_info("No more donors on its host ({0}), container {1} left out".format(
                             receiver_host, receiver["name"]), self.__debug)
                         continue
 
-                    max_receiver_amount = receiver["resources"]["cpu"]["max"] - receiver["resources"]["cpu"]["current"]
+                    if receiver_name not in received_amount:
+                        received_amount[receiver_name] = 0
+
+                    # Container can't receive more than its maximum also taking into account its previous donations
+                    max_receiver_amount = (receiver["resources"]["cpu"]["max"] -
+                                           receiver["resources"]["cpu"]["current"] -
+                                           received_amount[receiver_name])
+
                     # If this container can't be scaled anymore, skip
-                    if max_receiver_amount == 0:
+                    if max_receiver_amount <= 0:
                         continue
 
                     # Get and remove one slice from the list
                     donor, amount_to_scale = donor_slices[receiver_host].pop()
-                    # If no more slices left in this host, the host is removed
+
+                    # Trim the amount to scale if needed and return the remaining amount to the donor slices
+                    if amount_to_scale > max_receiver_amount:
+                        donor_slices[receiver_host].append((donor, amount_to_scale - max_receiver_amount))
+                        amount_to_scale = max_receiver_amount
+
+                    # If all the resources from the donors on this host have been donated, the host is removed
                     if not donor_slices[receiver_host]:
                         del donor_slices[receiver_host]
-
-                    # Trim the amount to scale if needed
-                    amount_to_scale = min(amount_to_scale, max_receiver_amount)
 
                     # Create the pair of scaling requests
                     self.__generate_scaling_request(receiver, resource, amount_to_scale, requests)
                     self.__generate_scaling_request(donor, resource, -amount_to_scale, requests)
+
+                    # Update the received amount for this container
+                    received_amount[receiver_name] += amount_to_scale
+
                     log_info("Resource swap between {0}(donor) and {1}(receiver)".format(
                         donor["name"], receiver["name"]), self.__debug)
 
