@@ -591,6 +591,22 @@ def check_resources_data_is_present(data, res_info_type=None):
                 return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
 
 
+def get_keys_from_requested_structure(req_structure, mandatory_keys, optional_keys=[]):
+    structure = {}
+    for key in mandatory_keys:
+        if key not in req_structure:
+            return abort(400, {"message": "Missing key '{0}'".format(key)})
+        else:
+            structure[key] = req_structure[key]
+
+    for key in optional_keys:
+        if key in req_structure:
+            structure[key] = req_structure[key]
+
+    structure["type"] = "structure"
+
+    return structure
+
 def get_resource_keys_from_requested_structure(req_structure, structure, resource, mandatory_keys, optional_keys=[]):
     structure["resources"][resource] = {}
     for key in mandatory_keys:
@@ -610,13 +626,7 @@ def subscribe_container(structure_name):
     req_limits = request.json["limits"]
 
     # Check that all the needed container data is present on the request
-    container = {}
-    for key in CONTAINER_KEYS:
-        if key not in req_cont:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
-        else:
-            container[key] = req_cont[key]
-    container["type"] = "structure"
+    container = get_keys_from_requested_structure(req_cont, CONTAINER_KEYS)
 
     # Check that all the needed data for resources is present on the request
     check_resources_data_is_present(request.json, ["container", "limits"])
@@ -685,13 +695,7 @@ def subscribe_host(structure_name):
     node_scaler_session = requests.Session()
 
     # Check that all the needed data is present on the request
-    host = {}
-    for key in HOST_KEYS:
-        if key not in req_host:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
-        else:
-            host[key] = req_host[key]
-    host["type"] = "structure"
+    host = get_keys_from_requested_structure(req_host, HOST_KEYS)
 
     # Check host name in payload and host name in URL are the same
     check_name_mismatch(host["name"], structure_name)
@@ -752,12 +756,7 @@ def subscribe_app(structure_name):
     req_limits = request.json["limits"]
 
     # Check that all the needed data is present on the request
-    app = {}
-    for key in APP_KEYS:
-        if key not in req_app:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
-        else:
-            app[key] = req_app[key]
+    app = get_keys_from_requested_structure(req_app, APP_KEYS, ["framework"])
 
     # Check app name in payload and app name in URL are the same
     check_name_mismatch(app["name"], structure_name)
@@ -774,7 +773,6 @@ def subscribe_app(structure_name):
         get_resource_keys_from_requested_structure(req_app, app, resource, ["max", "min", "guard"], ["weight"])
 
     app["containers"] = list()
-    app["type"] = "structure"
 
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {}}
