@@ -70,6 +70,7 @@ def set_container_resources(rescaler_http_session, container, resources, debug):
     if r.status_code == 201:
         return dict(r.json())
     else:
+        log_error("Error processing container resource change in host in IP {0}".format(rescaler_ip), debug)
         log_error(str(json.dumps(r.json())), debug)
         r.raise_for_status()
 
