@@ -28,8 +28,8 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
   "limits":
   {
     "resources": {
-      "cpu": {"boundary": 20},
-      "mem": {"boundary": 256}
+      "cpu": {"boundary": 10, "boundary_type": "percentage_of_max"},
+      "mem": {"boundary": 10, "boundary_type": "percentage_of_max"}
     }
   }
 }'

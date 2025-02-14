@@ -15,8 +15,8 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
   {
     "name": "'$1'",
     "resources": {
-      "cpu": {"max": 1600,  "min": 20,   "guard": false},
-      "mem": {"max": 24576, "min": 512,  "guard": false}
+      "cpu": {"max": 1600,  "min": 20,   "guard": false, "weight": 1},
+      "mem": {"max": 24576, "min": 512,  "guard": false, "weight": 1}
     },
     "guard": false,
     "subtype": "application",
@@ -24,13 +24,14 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
     "install_script": "",
     "start_script": "",
     "stop_script": "",
-    "app_jar": ""
+    "app_jar": "",
+    "framework": ""
   },
   "limits":
   {
     "resources": {
-      "cpu": {"boundary": 50},
-      "mem": {"boundary": 1024}
+      "cpu": {"boundary": 5, "boundary_type": "percentage_of_max"},
+      "mem": {"boundary": 5, "boundary_type": "percentage_of_max"}
     }
   }
 }'
