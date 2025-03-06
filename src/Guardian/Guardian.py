@@ -58,8 +58,6 @@ SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
 
-NON_ADJUSTABLE_RESOURCES = ["energy"]
-
 
 class Guardian:
     """
@@ -291,6 +289,31 @@ class Guardian:
 
         if lower_limit < min_limit:
             amount += min_limit - lower_limit
+        elif expected_value > max_limit:
+            amount -= expected_value - max_limit
+
+        return amount
+
+    @staticmethod
+    def adjust_cpu_amount_to_manage_energy(amount, structure_resources):
+        """Pre-check and, if needed, adjust the scaled amount with the policy:
+
+        * If new applied value < min value -> Amount to reduce too large, adjust it so that the current value is set to the minimum
+        * If new applied value > max value -> Amount to increase too large, adjust it so that the current value is set to the maximum
+
+        Args:
+            amount (integer): A number representing the amount to reduce or increase from the current value
+            structure_resources (dict): Dictionary with the structure resource control values (min,current,max)
+
+        Returns:
+            (integer) The amount adjusted (trimmed) in case it would exceed any limit
+        """
+        expected_value = structure_resources["current"] + amount
+        max_limit = structure_resources["max"]
+        min_limit = structure_resources["min"]
+
+        if expected_value < min_limit:
+            amount += min_limit - expected_value
         elif expected_value > max_limit:
             amount -= expected_value - max_limit
 
@@ -605,10 +628,11 @@ class Guardian:
         amount = int(amount)
 
         # Check CPU does not surpass any limit
-        new_amount = self.adjust_amount(amount, structure["resources"]["cpu"], limits["cpu"])
+        new_amount = self.adjust_cpu_amount_to_manage_energy(amount, structure["resources"]["cpu"])
         if new_amount != amount:
-            utils.log_warning("Amount generated for structure {0} during initial rescaling through power models "
-                        "has been trimmed from {1} to {2}".format(structure["name"], amount, new_amount), self.debug)
+            utils.log_warning("Amount generated for structure {0} during initial rescaling "
+                              "through power models has been trimmed from {1} to {2}"
+                              .format(structure["name"], amount, new_amount), self.debug)
 
         # # If amount is 0 ignore this request else generate the request and append it
         if new_amount == 0:
@@ -952,21 +976,21 @@ class Guardian:
             if amount == 0:
                 utils.log_warning("Amount generated for structure {0} with rule {1} is 0".format(structure["name"], rule["name"]), self.debug)
 
-            # If the resource is susceptible to check, ensure that it does not surpass any limit
-            new_amount = amount
-            resource_to_adjust = "cpu" if resource_label == "energy" else resource_label
-            if resource_to_adjust not in NON_ADJUSTABLE_RESOURCES:
-                structure_resources = structure["resources"][resource_to_adjust]
-                structure_limits = limits[resource_to_adjust]
-                new_amount = self.adjust_amount(amount, structure_resources, structure_limits)
-                if new_amount != amount:
-                    utils.log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}".format(
-                        structure["name"], rule["name"], amount, new_amount), self.debug)
+            # Ensure that the resource does not surpass any limit
+            if resource_label == "energy":
+                # Energy is governed by different rules (it is adjusted indirectly via CPU throttling)
+                new_amount = self.adjust_cpu_amount_to_manage_energy(amount, structure["resources"]["cpu"])
+            else:
+                new_amount = self.adjust_amount(amount, structure["resources"][resource_label], limits[resource_label])
+
+            if new_amount != amount:
+                utils.log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}"
+                                  .format(structure["name"], rule["name"], amount, new_amount), self.debug)
 
             # # If amount is 0 ignore this request else generate the request and append it
             if new_amount == 0:
-                utils.log_warning("Request generated with rule {0} for structure {1} will be ignored because amount is 0".format(
-                    rule["name"], structure["name"]), self.debug)
+                utils.log_warning("Request generated with rule {0} for structure {1} will be ignored "
+                                  "because amount is 0".format(rule["name"], structure["name"]), self.debug)
             else:
                 request = utils.generate_request(structure, new_amount, resource_label)
                 generated_requests.append(request)
