@@ -375,12 +375,7 @@ class Guardian:
             (list) List of container structures
 
         """
-        host_containers = []
-        for structure in self.current_structures:
-            if structure["host"] == host and structure["subtype"] == "container":
-                host_containers.append(structure)
-
-        return host_containers
+        return [c for c in self.current_structures if c["host"] == host and c["subtype"] == "container"]
 
     def get_aggregated_containers_usages(self, containers, resources):
         """Get the aggregated usages of a list of container structures
@@ -396,7 +391,7 @@ class Guardian:
         # For each container in list get and sum its usages
         total_usages = {}
         for c in containers:
-            container_usages = utils.get_container_usages(resources, c, self.window_difference,
+            container_usages = utils.get_container_usages(resources, c["name"], self.window_difference,
                                                           self.window_delay, self.opentsdb_handler, self.debug)
 
             # Aggregate container data into a global dictionary
