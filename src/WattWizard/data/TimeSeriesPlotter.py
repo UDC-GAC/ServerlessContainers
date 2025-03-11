@@ -163,7 +163,7 @@ class TimeSeriesPlotter:
     def plot_vars_vs_power(self, time_series, model_variables):
         for var in model_variables:
             fig, ax = plt.subplots(figsize=(14, 6))
-            sns.lineplot(x=time_series[var], y=time_series["power"], color="#fdae61")
+            sns.scatterplot(x=time_series[var], y=time_series["power"], color="#fdae61")
             self.set_basic_labels(f"{var} VS power", DEFAULT_LABELS[var], DEFAULT_LABELS["power"], ax)
             ax.set_title(f"{var} VS power")
             self.save_plot(f"{var}_vs_power")
