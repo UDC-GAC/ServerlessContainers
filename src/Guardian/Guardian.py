@@ -26,7 +26,8 @@
 
 from __future__ import print_function
 
-from threading import Thread
+from threading import Thread, Lock, Condition
+from collections import Counter
 import time
 import traceback
 import logging
@@ -75,8 +76,52 @@ class Guardian:
         self.current_structures = None
         self.last_used_energy_model = None
         self.power_budget = {}
+        self.current_scalings = None
         self.model_is_hw_aware = None
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+
+    def __init_iteration_vars(self, structures):
+        def _create_dict_value(count):
+            lock = Lock()
+            return {"lock": lock, "condition": Condition(lock), "up": [], "down": [], "expected_count": count, "register": []}
+        if structures != self.current_structures:
+            host_counter = Counter(s["host"] for s in structures)
+            self.current_scalings = {host: _create_dict_value(count) for host, count in host_counter.items()}
+            self.current_structures = dict(structures)
+        else:
+            for scaling in self.current_scalings.values():
+                scaling["register"].clear()
+                scaling["up"].clear()
+                scaling["down"].clear()
+
+    def __do_condition_register(self, structure, value=None):
+        current_host = structure["host"]
+        name = structure["name"]
+
+        # If structure was already registered, skip
+        if name in self.current_scalings[current_host]["register"]:
+            return False
+
+        # Update the register with current structure
+        self.current_scalings[current_host]["register"].append(name)
+
+        # If some scaling was performed save its value
+        if value:
+            rescale_type = "up" if value > 0 else "down"
+            self.current_scalings[current_host][rescale_type].append(value)
+
+        return True
+
+    def __do_condition_wakeup(self, structure):
+        current_host = structure["host"]
+        if len(self.current_scalings[current_host]["register"]) == self.current_scalings[current_host]["expected_count"]:
+            self.current_scalings[current_host]["condition"].notify_all()
+            return True
+        return False
+
+    def __do_condition_wait(self, structure, wait=True):
+        current_host = structure["host"]
+        self.current_scalings[current_host]["condition"].wait()
 
     @staticmethod
     def check_unset_values(value, label, resource):
@@ -364,6 +409,14 @@ class Guardian:
                         agg_resource[key] += structure["resources"][resource][key]
 
         return agg_resource
+
+    def register_scaling(self, structure, value=None, wait=True):
+        current_host = structure["host"]
+        # Take the lock to update the register
+        with self.current_scalings[current_host]["lock"]:
+            # If structure was registered, check the wake up condition and wait in case it is not met
+            if self.__do_condition_register(structure, value) and not self.__do_condition_wakeup(structure) and wait:
+                self.__do_condition_wait(structure)
 
     def get_host_containers(self, host):
         """Get a list of container structures running on the specified host
@@ -1074,6 +1127,7 @@ class Guardian:
         # Check if structure is guarded
         if "guard" not in structure or not structure["guard"]:
             utils.log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
+            self.register_scaling(structure, wait=False)  # Ensure the structure is registered, even when no scaling is performed
             return
 
         # Check if the structure has any resource set to guarded
@@ -1083,11 +1137,13 @@ class Guardian:
                 struct_guarded_resources.append(res)
         if not struct_guarded_resources:
             utils.log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
+            self.register_scaling(structure, wait=False)
             return
 
         # Check if structure is being monitored, otherwise, ignore
         if not utils.structure_subtype_is_supported(structure_subtype):
             utils.log_error("Unknown structure subtype '{0}'".format(structure_subtype), self.debug)
+            self.register_scaling(structure, wait=False)
             return
 
         try:
@@ -1128,13 +1184,18 @@ class Guardian:
 
         except Exception as e:
             utils.log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
+        finally:
+            self.register_scaling(structure, wait=False)
 
     def guard_structures(self, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
+        # Initialise iteration dependent variables
+        self.__init_iteration_vars(structures)
+
         threads = []
-        for structure in structures:
+        for structure in self.current_structures:
             thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
                             args=(structure, rules,))
             thread.start()
@@ -1218,7 +1279,6 @@ class Guardian:
                 structures = utils.get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
                 if structures:
                     utils.log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
-                    self.current_structures = structures
                     thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
                     thread.start()
                 else:
