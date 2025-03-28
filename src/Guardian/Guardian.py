@@ -119,7 +119,7 @@ class Guardian:
             return True
         return False
 
-    def __do_condition_wait(self, structure, wait=True):
+    def __do_condition_wait(self, structure):
         current_host = structure["host"]
         self.current_scalings[current_host]["condition"].wait()
 
