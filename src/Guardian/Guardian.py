@@ -711,7 +711,7 @@ class Guardian:
         # # If amount is 0 ignore this request else generate the request and append it
         if new_amount == 0:
             utils.log_warning("Initial rescaling through power models for structure {0} will be ignored "
-                        "because amount is 0".format(structure["name"]), self.debug)
+                              "because amount is 0".format(structure["name"]), self.debug)
         else:
             request = utils.generate_request(structure, new_amount, "energy", priority=1)
             self.couchdb_handler.add_request(request)
@@ -973,7 +973,7 @@ class Guardian:
             # If rescaling a container, check that the current resource value exists, otherwise there is nothing to rescale
             if utils.structure_is_container(structure) and "current" not in structure["resources"][resource_label]:
                 utils.log_warning("No current value for container' {0}' and "
-                            "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
+                                  "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
                 continue
 
             valid_rescale = True
@@ -1037,9 +1037,9 @@ class Guardian:
             if valid_rescale and resource_label == "energy":
                 # If power is within some reasonable limits we do nothing
                 if self.power_is_near_power_budget(structure, usages, limits):
-                    utils.log_warning("Current energy usage ({0}) for structure {1} is close to its power budget ({2}), "
-                                "setting amount to 0".format(usages[translator_dict["energy"]], structure["name"],
-                                                             structure["resources"]["energy"]["max"]), self.debug)
+                    utils.log_warning("Current energy usage ({0:.2f}) for structure {1} is close to its power budget ({2:.2f}), "
+                                      "setting amount to 0".format(usages[translator_dict["energy"]], structure["name"],
+                                                                   structure["resources"]["energy"]["max"]), self.debug)
                     amount = 0
                 self.print_energy_rescale_info(structure, usages, limits, amount)
 
