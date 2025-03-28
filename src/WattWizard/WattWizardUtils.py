@@ -58,6 +58,25 @@ class WattWizardUtils:
             else:
                 self.is_hw_aware(structure, model_name, tries)
 
+    def predict_power(self, structure, model_name, tries=3, **kwargs):
+        try:
+            params = kwargs
+            if 'core_usages' in params:
+                params['core_usages'] = json.dumps(params['core_usages'])
+            if 'host_cores_mapping' in params:
+                params['host_cores_mapping'] = json.dumps(params['host_cores_mapping'])
+            r = self.session.get("{0}/{1}/{2}/{3}".format(self.server, "predict", structure, model_name), params=params)
+            if r.status_code == 200:
+                return r.json()
+            else:
+                r.raise_for_status()
+        except requests.ConnectionError as e:
+            tries -= 1
+            if tries <= 0:
+                raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
+            else:
+                self.predict_power(structure, model_name, tries, **kwargs)
+
     # TODO: Adapt to different model variables + add dynamic var parameter
     def get_usage_meeting_budget(self, structure, model_name, power_budget, tries=3, **kwargs):
         try:
