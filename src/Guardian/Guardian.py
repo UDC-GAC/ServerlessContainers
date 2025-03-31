@@ -87,7 +87,7 @@ class Guardian:
         if structures != self.current_structures:
             host_counter = Counter(s["host"] for s in structures)
             self.current_scalings = {host: _create_dict_value(count) for host, count in host_counter.items()}
-            self.current_structures = dict(structures)
+            self.current_structures = list(structures)
         else:
             for scaling in self.current_scalings.values():
                 scaling["register"].clear()
