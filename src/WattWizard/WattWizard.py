@@ -11,18 +11,20 @@ app = Flask(__name__)
 app.register_blueprint(routes)
 
 if __name__ == '__main__':
-    # Parse arguments
+    # Parse arguments from CLI
     cli_parser = CLIParser()
     cli_args = cli_parser.parse_args()
 
+    # Parse arguments from configuration file
     config_file_parser = ConfigFileParser()
     config_file_args = config_file_parser.parse_args()
 
+    # Process and validate arguments
     args_manager = ArgsManager(cli_args, config_file_args)
     args_manager.manage_args()
     args_manager.validate_args()
 
-    # Create models and pretrain them (if specified)
+    # Build, train and test models
     model_builder = ModelBuilder()
     model_builder.build_models()
 

@@ -1,4 +1,4 @@
-import re
+import os
 
 from src.WattWizard.model import *
 
@@ -24,9 +24,8 @@ class ModelHandler:
     @staticmethod
     def get_file_name(file):
         if file:
-            pattern = r'\/([^/]+)\.'
-            occurrences = re.findall(pattern, file)
-            return occurrences[-1]
+            name, _ = os.path.splitext(os.path.basename(file))
+            return name
         else:
             return "NPT"
 
@@ -59,7 +58,8 @@ class ModelHandler:
         self.models = {}
 
     def add_model(self, structure, prediction_method, train_file, **kwargs):
-        model_name = f"{prediction_method}_{self.get_file_name(train_file)}"
+        train_file_name = self.get_file_name(train_file)
+        model_name = f"{prediction_method}_{train_file_name}"
         if structure in self.models and model_name in self.models[structure]:
             raise Exception(f"Model with name {model_name} already exists")
         else:
@@ -69,12 +69,22 @@ class ModelHandler:
                 "name": model_name,
                 "prediction_method": prediction_method,
                 "train_file_path": train_file,
-                "train_file_name": self.get_file_name(train_file),
+                "train_file_name": train_file_name,
                 "instance": self.create_model_instance(prediction_method, **kwargs),
                 "is_static": prediction_method in STATIC_PREDICTION_METHODS,
                 "hw_aware": prediction_method in HW_AWARE_PREDICTION_METHODS
             }
         return self.models[structure][model_name]
+
+    def get_model_names_by_structure(self, structure):
+        if structure in self.models:
+            return list(self.models[structure].keys())
+        raise Exception(f"Structure {structure} doesn\'t exists")
+
+    def get_non_static_model_names_by_structure(self, structure):
+        if structure in self.models:
+            return [model_name for model_name in self.models[structure] if not self.is_static(structure, model_name)]
+        raise Exception(f"Structure {structure} doesn\'t exists")
 
     def get_model_names(self):
         models_dict = {}
@@ -82,22 +92,11 @@ class ModelHandler:
             models_dict[structure] = self.get_model_names_by_structure(structure)
         return models_dict
 
-    def get_model_names_by_structure(self, structure):
-        if structure in self.models:
-            return list(self.models[structure].keys())
-        raise Exception(f"Structure {structure} doesn\'t exists")
-
     def get_non_static_model_names(self):
         models_dict = {}
         for structure in self.models:
             models_dict[structure] = self.get_non_static_model_names_by_structure(structure)
         return models_dict
-
-    def get_non_static_model_names_by_structure(self, structure):
-        if structure in self.models:
-            return [self.models[structure][model_name]['name'] for model_name in self.models[structure]
-                    if not self.is_static(structure, model_name)]
-        raise Exception(f"Structure {structure} doesn\'t exists")
 
     def get_models(self):
         return self.models

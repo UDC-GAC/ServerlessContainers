@@ -7,7 +7,6 @@ WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 COMMA_SEPARATED_LIST_ARGS = ['structures', 'prediction_methods', 'model_variables', 'train_files', 'test_files']
 DIRECTORY_ARGS = ['train_timestamps_dir', 'test_timestamps_dir', 'plot_time_series_dir']
 FILE_ARGS = ['train_files', 'test_files']
-DICT_ARGS = ['cores_distribution']
 
 DASHED_LINE = "".join(["-" for _ in range(1, 200)])
 
@@ -32,12 +31,6 @@ class MyConfig:
     args = None
     cpu_limits = None
 
-    @staticmethod
-    def get_instance():
-        if MyConfig.__instance is None:
-            MyConfig()
-        return MyConfig.__instance
-
     def __init__(self):
         if MyConfig.__instance is not None:
             raise Exception(
@@ -46,7 +39,13 @@ class MyConfig:
             MyConfig.__instance = self
 
         self.args = {}
-        self.cpu_limits = DEFAULT_CPU_LIMITS
+        self.cpu_limits = dict(DEFAULT_CPU_LIMITS)
+
+    @staticmethod
+    def get_instance():
+        if MyConfig.__instance is None:
+            MyConfig()
+        return MyConfig.__instance
 
     @staticmethod
     def get_logo():
@@ -64,30 +63,34 @@ class MyConfig:
         return WATTWIZARD_DIR
 
     @staticmethod
-    def adjust_filenames_list(filenames_list, timestamps_dir):
-        if len(filenames_list) == 1 and filenames_list[0] == "":
-            filenames_list = []
-        if len(filenames_list) == 1 and filenames_list[0] == "all":
-            filenames_list = [f for f in os.listdir(timestamps_dir) if f.endswith('.timestamps')]
-        return filenames_list
+    def get_file_paths(file_arg, timestamps_dir):
+        # If the arg was an empty string no files are used
+        if len(file_arg) == 1 and file_arg[0] == "":
+            return []
 
-    @staticmethod
-    def get_files_list(filenames_list, timestamps_dir):
-        files_list = []
-        for filename in filenames_list:
-            if filename != "NPT":
-                _, extension = os.path.splitext(filename)
-                if extension == '':
-                    filename += ".timestamps"
+        filenames = file_arg
+        if len(file_arg) == 1 and file_arg[0] == "all":
+            # If "all" is indicated, all the files in timestamps_dir is used
+            filenames = [f for f in os.listdir(timestamps_dir) if f.endswith('.timestamps')]
 
-                file = f"{timestamps_dir}/{filename}"
-                if os.path.isfile(file):
-                    files_list.append(file)
-                else:
-                    raise Exception(f"While making files list: File path {file} is not a file")
+        file_paths = []
+        for name in filenames:
+            # NPT stands for Not Pre-Trained: Useful to build models without a previous training
+            if name == "NPT":
+                file_paths.append("NPT")
+                continue
+
+            _, ext = os.path.splitext(name)
+            if ext == '':
+                name += ".timestamps"
+
+            full_path = os.path.normpath(os.path.join(timestamps_dir, name))
+            if os.path.isfile(full_path):
+                file_paths.append(full_path)
             else:
-                files_list.append("NPT")
-        return files_list
+                raise Exception(f"While building files list: File path {full_path} is not a valid file")
+
+        return file_paths
 
     @staticmethod
     def convert_distribution_dict(dict_arg):
@@ -103,6 +106,9 @@ class MyConfig:
             new_dict[cpu] = result
         return new_dict
 
+    def get_summary(self):
+        return [DASHED_LINE, "WATTWIZARD CONFIGURATION"] + [f"{k}: {v}" for k, v in self.args.items()] + [DASHED_LINE]
+
     def set_resource_cpu_limit(self, resource, limit_type, value):
         if limit_type not in ["min", "max"]:
             raise Exception(f"Bad cpu limit type '{limit_type}' it must be 'min' or 'max'")
@@ -110,25 +116,6 @@ class MyConfig:
             self.cpu_limits[resource][limit_type] = value
         else:
             raise Exception(f"Resource '{resource}' not found in cpu limits")
-
-    def add_argument(self, arg_name, arg_value):
-        if arg_name in COMMA_SEPARATED_LIST_ARGS:
-            arg_value = arg_value.split(',')
-
-        if arg_name in DICT_ARGS:
-            arg_value = self.convert_distribution_dict(arg_value)
-
-        if arg_name in DIRECTORY_ARGS and arg_value.startswith("."):
-            # Convert relative path to full path
-            self.args[arg_name] = f"{USER_DIR}/{arg_value[2:]}"
-
-        elif arg_name in FILE_ARGS:
-            suffix = arg_name.split('_')[0]  # Train or test
-            # Set full path for timestamp files
-            filenames_list = self.adjust_filenames_list(arg_value, self.args[f"{suffix}_timestamps_dir"])
-            self.args[arg_name] = self.get_files_list(filenames_list, self.args[f"{suffix}_timestamps_dir"])
-        else:
-            self.args[arg_name] = arg_value
 
     def get_resource_cpu_limit(self, resource, limit_type):
         if limit_type not in ["min", "max"]:
@@ -145,6 +132,23 @@ class MyConfig:
     def get_cpu_limits(self):
         return self.cpu_limits
 
+    def add_argument(self, arg_name, arg_value):
+        if arg_name in COMMA_SEPARATED_LIST_ARGS:
+            arg_value = arg_value.split(',')
+
+        if arg_name in DIRECTORY_ARGS and arg_value.startswith("./"):
+            # Convert relative path to full path
+            arg_value = os.path.normpath(os.path.join(USER_DIR, arg_value[2:]))
+
+        if arg_name in FILE_ARGS:
+            suffix = arg_name.split('_')[0]  # Train or test
+            arg_value = self.get_file_paths(arg_value, self.args[f'{suffix}_timestamps_dir'])
+
+        if arg_name == 'cores_distribution':
+            arg_value = self.convert_distribution_dict(arg_value)
+
+        self.args[arg_name] = arg_value
+
     def get_argument(self, arg_name):
         if arg_name in self.args:
             return self.args[arg_name]
@@ -152,14 +156,6 @@ class MyConfig:
 
     def get_arguments(self):
         return self.args
-
-    def get_summary(self):
-        summary = [DASHED_LINE]
-        summary.append("WATTWIZARD CONFIGURATION")
-        for arg_name in self.args:
-            summary.append(f"{arg_name}: {self.args[arg_name]}")
-        summary.append(DASHED_LINE)
-        return summary
 
     def check_resources_limits(self, resources):
         for var in resources:
