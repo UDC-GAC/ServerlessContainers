@@ -1,5 +1,6 @@
 import os
 import shutil
+import pandas as pd
 
 from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 from src.WattWizard.data.TimeSeriesPlotter import TimeSeriesPlotter
@@ -62,7 +63,30 @@ class ModelBuilder:
                 return file["model_name"]
         return None
 
-    def get_time_series_from_file(self, structure, model_name, train_file):
+    def save_time_series_to_csv(self, train_file_name, train_dataset):
+        dest = os.path.join(self.config.get_argument("train_timestamps_dir"), train_file_name + ".csv")
+        if not os.path.exists(dest):
+            log(f"Saving train dataset to CSV file: {dest}")
+            train_dataset.to_csv(dest)
+
+    def get_time_series_from_csv(self, model_name, train_file, train_file_name):
+        csv_file = os.path.join(self.config.get_argument("train_timestamps_dir"), train_file_name + ".csv")
+        idle_csv_file = os.path.join(self.config.get_argument("train_timestamps_dir"), train_file_name + "_idle" + ".csv")
+        if os.path.exists(csv_file) and os.path.exists(idle_csv_file):
+            try:
+                self.time_series[model_name] = pd.read_csv(csv_file)
+                self.idle_time_series[model_name] = pd.read_csv(idle_csv_file)
+                self.add_processed_file(train_file, model_name)
+                return True
+            except Exception as e:
+                log(f"Some exception ocurred reading time series from CSV file {csv_file}: {str(e)}", "WARN")
+                return False
+        else:
+            log(f"Can't get time series from CSV files {csv_file} and {idle_csv_file}. Some of the files doesn't exist, "
+                f"getting data from InfluxDB through timestamps file")
+            return False
+
+    def get_time_series_from_file(self, structure, model_name, train_file, train_file_name):
         # Check if same train timestamps file was already used
         previous_model = self.check_file_was_processed(train_file)
 
@@ -72,6 +96,9 @@ class ModelBuilder:
             train_timestamps = self.ts_collector.parse_timestamps(train_file)
             self.time_series[model_name] = self.ts_collector.get_time_series(train_timestamps, structure == "container")
             self.idle_time_series[model_name] = self.ts_collector.get_idle_consumption(train_timestamps)
+            log("Saving time series to CSV")
+            self.save_time_series_to_csv(train_file_name, self.time_series[model_name])
+            self.save_time_series_to_csv(train_file_name + "_idle", self.idle_time_series[model_name])
         else:
             log(f"File {train_file} was previously processed for model {previous_model}")
             log(f"Reusing time series for model {model_name}")
@@ -82,7 +109,8 @@ class ModelBuilder:
 
     def pretrain_model(self, structure, model):
 
-        self.get_time_series_from_file(structure, model['name'], model['train_file_path'])
+        if not self.get_time_series_from_csv(model['name'], model['train_file_path'], model['train_file_name']):
+            self.get_time_series_from_file(structure, model['name'], model['train_file_path'], model['train_file_name'])
 
         # Pretrain model with collected time series
         try:
