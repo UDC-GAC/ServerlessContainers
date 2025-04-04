@@ -141,7 +141,7 @@ class TimeSeriesPlotter:
 
         plt.close(fig)
 
-    def plot_test_time_series(self, test_app_name, title, time_series, model_variables):
+    def plot_test_time_series(self, test_app_name, time_series, model_variables):
         fig, ax1 = plt.subplots(figsize=(14, 6))
         ax2 = ax1.twinx()
 
@@ -153,7 +153,7 @@ class TimeSeriesPlotter:
         self.set_line_plot("power", time_series, ax2)
         self.set_line_plot("power_predicted", time_series, ax2)
 
-        self.set_basic_labels(title, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
+        self.set_basic_labels(None, f"Time ({time_series['time_unit'].iloc[0]})", "CPU Model Variables", ax1)
         self.set_basic_labels(None, None, "Power Consumption (W)", ax2)
         self.set_legend_with_markers(ax1, ax2)
         self.save_plot(test_app_name)

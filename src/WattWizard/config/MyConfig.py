@@ -77,7 +77,7 @@ class MyConfig:
         for name in filenames:
             # NPT stands for Not Pre-Trained: Useful to build models without a previous training
             if name == "NPT":
-                file_paths.append("NPT")
+                file_paths.append(None)
                 continue
 
             _, ext = os.path.splitext(name)

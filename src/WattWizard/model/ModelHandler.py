@@ -24,8 +24,7 @@ class ModelHandler:
     @staticmethod
     def get_file_name(file):
         if file:
-            name, _ = os.path.splitext(os.path.basename(file))
-            return name
+            return os.path.splitext(os.path.basename(file))[0]
         else:
             return "NPT"
 

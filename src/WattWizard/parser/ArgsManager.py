@@ -127,7 +127,7 @@ class ArgsManager:
                     log(f"No train files have been specified. At least one file (or NPT) must be indicated. "
                         f"Otherwise, no model would be created.", "ERR")
                     exit(1)
-                self.check_files_exist(list(set(args[arg_name]) - {"NPT"}))
+                self.check_files_exist(list(set(args[arg_name]) - {None}))
 
             elif arg_name == "test_timestamps_dir":
                 pass  # Nothing to do for test_timestamps_dir (already checked in test_files)
