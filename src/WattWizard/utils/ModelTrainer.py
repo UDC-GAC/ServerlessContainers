@@ -10,22 +10,6 @@ class ModelTrainer:
         self.ts_plotter = ts_plotter
         self.data_loader = data_loader
 
-    def pretrain_model(self, structure, model):
-        # Load train data (idle + running)
-        idle_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=True)
-        ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=False)
-        try:
-            # Set idle consumption and train model
-            model['instance'].set_idle_consumption(idle_data)
-            model['instance'].pretrain(time_series=ts_data, data_type="df")
-            log(f"Model {model['name']} successfully pretrained")
-
-            # Plot train time series if specified
-            if self.config.get_argument("plot_time_series"):
-                self._plot_train_data(model, structure, ts_data)
-        except Exception as e:
-            log(f"Error while training model {model['name']}: {str(e)}", "ERR")
-
     def _plot_train_data(self, model, structure, ts_data):
         output_dir = os.path.join(self.config.get_argument("plot_time_series_dir"), structure, model['name'], "train")
         self.ts_plotter.set_output_dir(output_dir)
@@ -49,3 +33,19 @@ class ModelTrainer:
 
         # Generate plots comparing power with each model variable
         self.ts_plotter.plot_vars_vs_power(ts_data, self.config.get_argument("model_variables"))
+
+    def pretrain_model(self, structure, model):
+        # Load train data (idle + running)
+        idle_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=True)
+        ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=False)
+        try:
+            # Set idle consumption and train model
+            model['instance'].set_idle_consumption(idle_data)
+            model['instance'].pretrain(time_series=ts_data, data_type="df")
+            log(f"Model {model['name']} successfully pretrained")
+
+            # Plot train time series if specified
+            if self.config.get_argument("plot_time_series"):
+                self._plot_train_data(model, structure, ts_data)
+        except Exception as e:
+            log(f"Error while training model {model['name']}: {str(e)}", "ERR")
