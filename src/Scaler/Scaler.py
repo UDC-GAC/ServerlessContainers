@@ -337,7 +337,7 @@ class Scaler:
                 set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
 
                 ## Update container info in cache (useful if there are multiple requests for the same container)
-                self.container_info_cache[request["structure"]]["resources"] = new_resources
+                self.container_info_cache[request["structure"]]["resources"][request["resource"]] = new_resources[request["resource"]]
 
         except (ValueError) as e:
             log_error("Error with container {0} in applying the request -> {1}".format(request["structure"], str(e)), self.debug)
