@@ -849,6 +849,7 @@ def add_disks_to_host(structure_name):
 
     return jsonify(201)
 
+## Used when extending LV
 @structure_routes.route("/structure/host/<structure_name>/disks", methods=['POST'])
 def update_host_disks(structure_name):
     data = request.json
