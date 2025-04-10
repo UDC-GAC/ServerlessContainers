@@ -110,17 +110,20 @@ class ContainerRebalancer:
         return filtered_containers
 
     def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
-        request = generate_request(container, int(amount_to_scale), resource)
-        if container["name"] not in requests:
-            requests[container["name"]] = list()
-        requests[container["name"]].append(request)
 
         if amount_to_scale > 0:  # Receiver
+            request = generate_request(container, int(amount_to_scale), resource, priority=2)
             log_info("Node {0} will receive: {1}".format(container["name"], amount_to_scale), self.__debug)
         elif amount_to_scale < 0:  # Donor
+            request = generate_request(container, int(amount_to_scale), resource, priority=-1)
             log_info("Node {0} will give: {1}".format(container["name"], amount_to_scale), self.__debug)
         else:
             log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
+            return
+
+        if container["name"] not in requests:
+            requests[container["name"]] = list()
+        requests[container["name"]].append(request)
 
     def __send_final_requests(self, requests):
         # For each container, aggregate all its requests in a single request

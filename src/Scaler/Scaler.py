@@ -280,7 +280,7 @@ class Scaler:
                 # A previous request was found for this structure, remove old one and leave the newer one
                 stored_request = structure_requests_dict[structure][action]
 
-                if "priority" in stored_request and "priority" in request:
+                if "priority" in stored_request and "priority" in request and stored_request["priority"] != request["priority"]:
                     # First, try comparing priorities
                     higher_priority_request = stored_request if stored_request["priority"] > request["priority"] else request
                 else:
@@ -782,7 +782,7 @@ class Scaler:
             resource_translated = translation_dict[resource]
 
         if resource not in real_resources:
-            raise ValueError("Resource '{0}' info missing from host".format(resource))
+            raise ValueError("Resource '{0}' info missing from host ({1})".format(resource, real_resources))
 
         if resource_translated not in real_resources[resource]:
             raise ValueError("Current value for resource '{0}' missing from host resource info".format(resource))
@@ -821,8 +821,11 @@ class Scaler:
             self.db_handler.delete_request(request)
 
     def split_requests(self, all_requests):
+        ## Sort requests by priority
+        sorted_requests = sorted(all_requests, key=lambda request: request["priority"] if "priority" in request else 0)
+
         scale_down, scale_up = list(), list()
-        for request in all_requests:
+        for request in sorted_requests:
             if "action" not in request or not request["action"]:
                 continue
             elif request["action"].endswith("Down"):
