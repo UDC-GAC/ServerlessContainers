@@ -48,12 +48,12 @@ from src.NodeRescaler.node_resource_manager import set_node_net
 # Getters
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_cpus as get_node_cpus_cgroupsv2
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_mem as get_node_mem_cgroupsv2
-#from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_disks as cgroups_get_node_disks_cgroupsv2
+from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_disks as cgroups_get_node_disks_cgroupsv2
 #from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_networks as cgroups_get_node_networks_cgroupsv2
 # Setters
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_cpus as set_node_cpus_cgroupsv2
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_mem as set_node_mem_cgroupsv2
-#from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_disk as set_node_disk_cgroupsv2
+from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_disk as set_node_disk_cgroupsv2
 #from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_net as set_node_net_cgroupsv2
 
 urllib3.disable_warnings()
@@ -81,7 +81,8 @@ class SingularityContainerManager:
         if self.cgroups_version == "v1":
             process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            #process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
         parsed = json.loads(stdout)
@@ -92,7 +93,8 @@ class SingularityContainerManager:
         if self.cgroups_version == "v1":
             process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            #process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
         parsed = json.loads(stdout)
@@ -148,8 +150,8 @@ class SingularityContainerManager:
                     if self.cgroups_version == "v1":
                         disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], device, self.container_engine)
                     else:
-                        #disk_success, disk_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_LABEL], self.container_engine)
-                        pass
+                        disk_success, disk_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_LABEL], device, self.container_engine)
+
                     node_dict[DICT_DISK_LABEL] = disk_resource
                     # disks_changed = list()
                     # for disk in resources[DICT_DISK_LABEL]:
@@ -211,8 +213,11 @@ class SingularityContainerManager:
                 else:
                     device = source.split("[")[0]
                     mount_point= re.findall(r'\[([^]]*)\]', source)[0]
-                    disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
-                    # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                    if self.cgroups_version == "v1":
+                        disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
+                        # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                    else:
+                        disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
 
                 if type(disk_resources) == list and len(disk_resources) > 0:
                     node_dict[DICT_DISK_LABEL] = disk_resources[0]

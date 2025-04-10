@@ -359,7 +359,7 @@ def set_node_disk(container_id, disk_resource, device, container_engine):
         try:
 
             script_dir = os.path.dirname(os.path.realpath(__file__))
-            set_bandwidth_script_path = "/".join([script_dir, "..", "..", "scripts", container_engine, "set_bandwidth.sh"])
+            set_bandwidth_script_path = "/".join([script_dir, "..", "..", "scripts", container_engine, "set_bandwidth_cgroupsv1.sh"])
             set_disk_bandwidth = subprocess.Popen(
                 ["/bin/bash", set_bandwidth_script_path, str(container_id), "{0}:{1}".format(major, minor), str(limit_write)],
                 stderr=subprocess.PIPE)
