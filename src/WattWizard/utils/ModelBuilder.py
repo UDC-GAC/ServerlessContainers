@@ -1,3 +1,5 @@
+import os
+import shutil
 import src.WattWizard.utils.utils as utils
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
@@ -6,7 +8,6 @@ from src.WattWizard.utils.ModelTrainer import ModelTrainer
 from src.WattWizard.utils.ModelTester import ModelTester
 from src.WattWizard.utils.DataLoader import DataLoader
 from src.WattWizard.data.TimeSeriesPlotter import TimeSeriesPlotter
-from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 
 
 class ModelBuilder:
@@ -14,20 +15,16 @@ class ModelBuilder:
     def __init__(self):
         self.config = MyConfig.get_instance()
         self.model_handler = ModelHandler.get_instance()
-        data_loader = DataLoader(config, TimeSeriesParallelCollector(
-                                         self.config.get_argument("model_variables") + ["power_pkg0", "power_pkg1"],
-                                         self.config.get_argument("influxdb_host"),
-                                         self.config.get_argument("influxdb_bucket"),
-                                         self.config.get_argument("influxdb_token"),
-                                         self.config.get_argument("influxdb_org")))
-        self.ts_plotter = TimeSeriesPlotter()
-        self.trainer = ModelTrainer(self.config, self.ts_plotter, data_loader)
-        self.tester = ModelTester(self.config, self.ts_plotter, data_loader)
         ts_plotter = TimeSeriesPlotter()
         data_loader = DataLoader(self.config)
         self.trainer = ModelTrainer(self.config, ts_plotter, data_loader)
         self.tester = ModelTester(self.config, ts_plotter, data_loader)
 
+    def _clean_model_test_dir(self, structure, model):
+        output_dir = os.path.join(self.config.get_argument("plot_time_series_dir"), structure, model['name'], "test")
+        if os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+        os.makedirs(output_dir)
 
     def _check_valid_combination(self, prediction_method, train_file):
         kwargs = {}
@@ -79,6 +76,7 @@ class ModelBuilder:
             exit(1)
 
         # Test models that have been previously trained
-        for test_file in self.config.get_argument("test_files"):
-            for structure, model in models_to_test:
+        for structure, model in models_to_test:
+            self._clean_model_test_dir(structure, model)
+            for test_file in self.config.get_argument("test_files"):
                 self.tester.test_model(structure, model, test_file)

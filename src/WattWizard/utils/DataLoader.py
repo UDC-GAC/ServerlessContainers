@@ -8,13 +8,17 @@ class DataLoader:
 
     def __init__(self, config):
         self.config = config
-        self.ts_collector = ts_collector
         self.ts_collector = TimeSeriesParallelCollector(
             self.config.get_argument("model_variables"),
             self.config.get_argument("influxdb_host"),
             self.config.get_argument("influxdb_bucket"),
             self.config.get_argument("influxdb_token"),
             self.config.get_argument("influxdb_org"))
+
+    @staticmethod
+    def _read_from_csv(path):
+        log(f"Reading CSV file: {path}")
+        return pd.read_csv(path)
 
     @staticmethod
     def _save_to_csv(path, df):
