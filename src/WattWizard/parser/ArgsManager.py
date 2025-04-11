@@ -26,7 +26,7 @@ SUPPORTED_ARGS = [
 ]
 
 SUPPORTED_STRUCTURES = ["container", "host", "core"]
-SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg", "interpolation", "multisocket", "randomforest"]
+SUPPORTED_PRED_METHODS = ["mlpregressor", "sgdregressor", "polyreg", "interpolation", "multisocket", "randomforest", "arxmodel"]
 SUPPORTED_VARS = ["load", "user_load", "system_load", "avgfreq", "sumfreq", "p_user_load", "p_system_load", "l_user_load", "l_system_load", "wait_load", "temp"]
 
 WATTWIZARD_DIR = MyConfig.get_project_dir()

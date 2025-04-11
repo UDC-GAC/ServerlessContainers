@@ -5,3 +5,4 @@ from .MultiSocketRegresion import MultiSocketRegresion
 from .SegmentedRegression import SegmentedRegression
 from .LinearInterpolation import LinearInterpolation
 from .RandomForest import RandomForest
+from .ARXModel import ARXModel

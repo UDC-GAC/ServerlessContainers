@@ -3,7 +3,7 @@ import os
 from src.WattWizard.model import *
 import src.WattWizard.utils.utils as utils
 
-STATIC_PREDICTION_METHODS = ["polyreg", "interpolation", "multisocket"]
+STATIC_PREDICTION_METHODS = ["polyreg", "interpolation", "multisocket", "randomforest", "arxmodel"]
 
 HW_AWARE_PREDICTION_METHODS = ["multisocket"]
 
@@ -14,7 +14,8 @@ INSTANCE_CONSTRUCTORS = {
     "multisocket": lambda **kwargs: MultiSocketRegresion(**kwargs),
     "segmentedreg": lambda: SegmentedRegression(),
     "interpolation": lambda: LinearInterpolation(),
-    "randomforest": lambda: RandomForest()
+    "randomforest": lambda: RandomForest(),
+    "arxmodel": lambda: ARXModel()
 }
 
 

@@ -22,7 +22,8 @@ DEFAULT_CPU_LIMITS = {
     "wait_load": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
     "avgfreq": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
     "sumfreq": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
-    "temp": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT}
+    "temp": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
+    "power": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT}
 }
 
 
