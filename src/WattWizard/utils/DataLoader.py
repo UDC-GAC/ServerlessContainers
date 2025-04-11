@@ -1,13 +1,20 @@
 import os
 import pandas as pd
 from src.WattWizard.logs.logger import log
+from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
 
 
 class DataLoader:
 
-    def __init__(self, config, ts_collector):
+    def __init__(self, config):
         self.config = config
         self.ts_collector = ts_collector
+        self.ts_collector = TimeSeriesParallelCollector(
+            self.config.get_argument("model_variables"),
+            self.config.get_argument("influxdb_host"),
+            self.config.get_argument("influxdb_bucket"),
+            self.config.get_argument("influxdb_token"),
+            self.config.get_argument("influxdb_org"))
 
     @staticmethod
     def _save_to_csv(path, df):
@@ -32,13 +39,12 @@ class DataLoader:
 
         # If CSV not available, get data from InfluxDB
         timestamps_path = self._build_path(base_dir, filename, "timestamps", idle)
-        self.ts_collector.set_structure(structure)
-        train_timestamps = self.ts_collector.parse_timestamps(timestamps_path)
         log(f"Retrieving data from InfluxDB using timestamps file: {timestamps_path}")
-        if idle:
-            df = self.ts_collector.get_idle_consumption(train_timestamps)
-        else:
-            df = self.ts_collector.get_time_series(train_timestamps, include_idle=False)
+        # Parse file with the timestamps corresponding to InfluxDB data
+        train_timestamps = self.ts_collector.parse_timestamps(timestamps_path)
+        # Get time series from InfluxDB
+        df = self.ts_collector.get_time_series(structure, train_timestamps, mode="only_idle" if idle else "no_idle")
+        # Save time series to CSV for future reuse
         self._save_to_csv(csv_path, df)
 
         return df

@@ -24,13 +24,19 @@ class TimeSeriesParallelCollector:
 
     def __init__(self, model_variables, influxdb_host, influxdb_bucket, influxdb_token, influxdb_org):
         self.max_cores = round(multiprocessing.cpu_count() * MAX_CPU_USAGE_RATIO)
-        self.model_variables = model_variables
+        self.power_variables = ["power_pkg0", "power_pkg1"]
+        self._set_model_variables(model_variables)
         self.influxdb_info = {
             "host": influxdb_host,
             "bucket": influxdb_bucket,
             "token": influxdb_token,
             "org": influxdb_org
         }
+
+    def _set_model_variables(self, v):
+        if not v:
+            raise Exception(f"Trying to set model variables from {self.__class__.__name__} with a bad value '{v}'")
+        self.model_variables = v
 
     # Remove outliers for a specified column
     @staticmethod
@@ -95,16 +101,8 @@ class TimeSeriesParallelCollector:
             df["time_diff"] = time_diff.dt.total_seconds() / 3600
             df["time_unit"] = 'hours'
 
-    def __set_model_variables(self, v):
-        if v is not None:
-            self.model_variables = v
-        raise Exception("Trying to set model variables from TimeSeriesCollector as None")
-
-    def set_structure(self, structure):
-        self.structure = structure
-
     # Get data for a given period (obtained from timestamps)
-    def get_experiment_data(self, timestamp, influxdb_info):
+    def get_experiment_data(self, structure, metrics, timestamp, influxdb_info):
         start_date, stop_date, exp_name, exp_type, cores = timestamp
         start_str = start_date.strftime("%Y-%m-%dT%H:%M:%SZ")
         stop_str = stop_date.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -113,40 +111,53 @@ class TimeSeriesParallelCollector:
                              influxdb_info["token"], influxdb_info["org"]) as conn:
             # Get model variables time series and merge data
             exp_data = pd.DataFrame()
-            for var in self.model_variables:
+            for metric in metrics:
 
-                df = conn.query_influxdb(var, self.structure, start_str, stop_str)
+                df = conn.query_influxdb(metric, structure, start_str, stop_str)
 
                 if not df.empty:
                     df = self.remove_outliers(df, "_value")
-                    df.rename(columns={'_value': var}, inplace=True)
-                    df = df.loc[:, ("_time", var)]
+                    df.rename(columns={'_value': metric}, inplace=True)
+                    df = df.loc[:, ("_time", metric)]
                     if exp_data.empty:
                         exp_data = df
                     else:
                         exp_data = pd.merge(exp_data, df, on='_time')
-            exp_data.rename(columns={'_time': 'time'}, inplace=True)
-            exp_data.loc[:, "exp_name"] = exp_name
-            exp_data.loc[:, "exp_type"] = exp_type
-            exp_data.loc[:, "cores"] = cores
+        exp_data.rename(columns={'_time': 'time'}, inplace=True)
+        exp_data.loc[:, "exp_name"] = exp_name
+        exp_data.loc[:, "exp_type"] = exp_type
+        exp_data.loc[:, "cores"] = cores
 
         # Remove DataFrame useless variables
         try:
             exp_data["power"] = exp_data.loc[:, "power_pkg0"] + exp_data.get("power_pkg1", 0)
-            exp_data = exp_data[self.model_variables + ["power", "exp_name", "exp_type", "cores", "time"]]
+            exp_data = exp_data[metrics + ["power", "exp_name", "exp_type", "cores", "time"]]
         except KeyError as e:
             log(f"Error getting data between {start_date} and {stop_date}: {str(e)}", "ERR")
             log(f"Data causing the error: {exp_data}", "ERR")
             exit(1)
         return exp_data
 
+    def _filter_timestamps_and_metrics(self, timestamps, mode):
+        # only_idle: Include only time series corresponding to idle periods, don't include model variables as metrics
+        if mode == "only_idle":
+            return [t for t in timestamps if t[3] == "IDLE"], self.power_variables
+        # no_idle: Include only time series corresponding to active periods, include all metrics
+        if mode == "no_idle":
+            return [t for t in timestamps if t[3] != "IDLE"], self.model_variables + self.power_variables
+        # all: Include all time series and all metrics
+        if mode == "all":
+            return timestamps, self.model_variables + self.power_variables
+
+        raise ValueError(f"Unknown mode {mode} when trying to get time series in {self.__class__.__name__}")
+
     # Get model variables time series from timestamps
-    def get_time_series(self, timestamps, include_idle=False):
-        # Remove idle periods when include_idle is False
-        filtered_timestamps = [t for t in timestamps if include_idle or t[3] != "IDLE"]
+    def get_time_series(self, structure, timestamps, mode="all"):
+        # Filter timestamps and metrics to get from InfluxDB according to mode
+        filtered_timestamps, metrics = self._filter_timestamps_and_metrics(timestamps, mode)
 
         if len(filtered_timestamps) == 0:
-            log(f"Timestamps to obtain {'idle ' if include_idle else ''}time series have not been provided or are mislabelled", "ERR")
+            log(f"Timestamps not valid to get time series in mode '{mode}'", "ERR")
             log("Timestamps must follow the format: <EXP_NAME> <EXP_TYPE> ... <START|STOP> <TIMESTAMP>", "ERR")
             exit(1)
 
@@ -154,26 +165,11 @@ class TimeSeriesParallelCollector:
         workers = min(len(timestamps), self.max_cores)
         with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
             thread_to_timestamp = {
-                executor.submit(self.get_experiment_data, ts, self.influxdb_info): ts for ts in filtered_timestamps}
+                executor.submit(self.get_experiment_data, structure, metrics, ts, self.influxdb_info): ts for ts in filtered_timestamps}
             for thread in concurrent.futures.as_completed(thread_to_timestamp):
                 result_dfs.append(thread.result())
 
         time_series = pd.concat(result_dfs, ignore_index=True)
         self.set_time_diff(time_series, "time")
 
-        return time_series
-
-    def get_idle_consumption(self, timestamps):
-        # Set power as the only model variable temporarily
-        model_variables = self.model_variables
-        self.model_variables = ["power_pkg0", "power_pkg1"]
-
-        # Get power only from idle periods
-        filtered_timestamps = [t for t in timestamps if t[3] == "IDLE"]
-        time_series = self.get_time_series(filtered_timestamps, include_idle=True)
-
-        # Set the model variables to their original value
-        self.model_variables = model_variables
-
-        # Return idle consumption as mean power in idle periods
         return time_series

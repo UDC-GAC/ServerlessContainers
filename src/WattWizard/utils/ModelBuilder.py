@@ -11,7 +11,7 @@ from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCo
 
 class ModelBuilder:
 
-    def __init__(self, config=None):
+    def __init__(self):
         self.config = MyConfig.get_instance()
         self.model_handler = ModelHandler.get_instance()
         data_loader = DataLoader(config, TimeSeriesParallelCollector(
@@ -23,6 +23,11 @@ class ModelBuilder:
         self.ts_plotter = TimeSeriesPlotter()
         self.trainer = ModelTrainer(self.config, self.ts_plotter, data_loader)
         self.tester = ModelTester(self.config, self.ts_plotter, data_loader)
+        ts_plotter = TimeSeriesPlotter()
+        data_loader = DataLoader(self.config)
+        self.trainer = ModelTrainer(self.config, ts_plotter, data_loader)
+        self.tester = ModelTester(self.config, ts_plotter, data_loader)
+
 
     def _check_valid_combination(self, prediction_method, train_file):
         kwargs = {}
