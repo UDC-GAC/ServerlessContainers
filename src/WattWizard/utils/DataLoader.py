@@ -22,22 +22,23 @@ class DataLoader:
 
     @staticmethod
     def _save_to_csv(path, df):
-        if not os.path.exists(path):
-            log(f"Saving time series to CSV for future reuse: {path}")
-            df.to_csv(path)
+        log(f"Saving time series to CSV for future reuse: {path}")
+        df.to_csv(path)
 
     @staticmethod
     def _build_path(base_dir, filename, ext, idle=False):
-        return os.path.join(base_dir, f"{filename}{'_idle' if idle else ''}.{ext}")
+        return os.path.join(base_dir, f"{filename}{'_idle' if idle and ext == 'csv' else ''}.{ext}")
 
     def load_time_series(self, structure, base_dir, filename, idle=False):
         # First, try getting data from CSV file
         csv_path = self._build_path(base_dir, filename, "csv", idle)
         if os.path.exists(csv_path):
             try:
-                log(f"Reading CSV file: {csv_path}")
-                df = pd.read_csv(csv_path)
-                return df
+                df = self._read_from_csv(csv_path)
+                # Check all the model variables are present in train time series (not idle)
+                if idle or all(v in df for v in self.config.get_argument("model_variables")):
+                    return df
+                log(f"Some model variables are missing in CSV file. Getting data from InfluxDB and updating CSV file")
             except Exception as e:
                 log(f"Error while reading {csv_path}: {str(e)}", "WARN")
 
