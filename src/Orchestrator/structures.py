@@ -399,9 +399,14 @@ def free_container_disks(container, host):
         return abort(400, {"message": "Host does not have disks"})
     else:
         try:
-            current_disk_bw = container["resources"]["disk"]["current"]
+            if "disk_read" not in container["resources"] or "disk_write" not in container["resources"]: 
+                return abort(400, {"message": "Missing disk read or write bandwidth in container {0}".format(container)})
 
-            host["resources"]["disks"][disk_name]["free"] += current_disk_bw
+            current_disk_read_bw = container["resources"]["disk_read"]["current"]
+            current_disk_write_bw = container["resources"]["disk_write"]["current"]
+
+            host["resources"]["disks"][disk_name]["free_read"] += current_disk_read_bw
+            host["resources"]["disks"][disk_name]["free_write"] += current_disk_write_bw
             host["resources"]["disks"][disk_name]["load"] -= 1
         except KeyError:
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
@@ -515,26 +520,35 @@ def map_container_to_host_disks(resource_dict, container, host):
         return abort(400, {"message": "Host does not have disks"})
     else:
         try:
-            needed_disk_bw = container["resources"]["disk"]["current"]
-            free_disk_bw = host["resources"]["disks"][disk_name]["free"]
+            needed_disk_read_bw = container["resources"]["disk_read"]["current"]
+            needed_disk_write_bw = container["resources"]["disk_write"]["current"]
+            free_disk_read_bw = host["resources"]["disks"][disk_name]["free_read"]
+            free_disk_write_bw = host["resources"]["disks"][disk_name]["free_write"]
 
-            if needed_disk_bw > free_disk_bw:
+            consumed_disk_read_bw = host["resources"]["disks"][disk_name]["max_read"] - free_disk_read_bw
+            consumed_disk_write_bw = host["resources"]["disks"][disk_name]["max_write"] - free_disk_write_bw
+            total_free = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"]) - consumed_disk_read_bw - consumed_disk_write_bw
+
+            if needed_disk_read_bw > free_disk_read_bw and needed_disk_write_bw > free_disk_write_bw and needed_disk_read_bw + needed_disk_write_bw > total_free:
                 return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
 
-            host["resources"]["disks"][disk_name]["free"] -= needed_disk_bw
+            host["resources"]["disks"][disk_name]["free_read"] -= needed_disk_read_bw
+            host["resources"]["disks"][disk_name]["free_write"] -= needed_disk_write_bw
             host["resources"]["disks"][disk_name]["load"] += 1
         except KeyError:
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
-    resource_dict["disk"] = {"disk_read_limit": needed_disk_bw, "disk_write_limit": needed_disk_bw}
-
+    resource_dict["disk_read"] = {"disk_read_limit": needed_disk_read_bw}
+    resource_dict["disk_write"] = {"disk_write_limit": needed_disk_write_bw}
 
 def map_container_to_host_resources(container, host):
     cont_name = container["name"]
     resource_dict = {}
     for resource in container["resources"]:
         resource_dict[resource] = {}
-        if resource == 'disk':
+        if resource = 'disk_read' or resource == 'disk_write':
+            continue
+        elif resource == 'disk':
             map_container_to_host_disks(resource_dict, container, host)
         else:
             needed_amount = container["resources"][resource]["current"]
@@ -582,6 +596,10 @@ def check_resources_data_is_present(data, res_info_type=None):
             for resource in MANDATORY_RESOURCES:
                 if resource not in data[res_info]["resources"]:
                     return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
+
+            if "disk" in data[res_info]["resources"] and ("disk_read" not in data[res_info]["resources"] or "disk_write" not in data[res_info]["resources"]):
+                return abort(400, {"message": "Missing disk read or write bandwidth for structure {0}".format(data[res_info])})
+
     else:
         res_info = res_info_type[0]
         if "resources" not in data:
@@ -647,8 +665,22 @@ def subscribe_container(structure_name):
     container["resources"] = {}
     mandatory_resource_keys = ["max", "min", "current", "guard"]
     optional_resource_keys = ["weight"]
-    mandatory_keys = {"cpu": mandatory_resource_keys, "mem": mandatory_resource_keys, "energy": mandatory_resource_keys, "disk": ["name", "path"] + mandatory_resource_keys}
-    optional_keys = {"cpu": optional_resource_keys, "mem": optional_resource_keys, "energy": optional_resource_keys, "disk": optional_resource_keys}
+    mandatory_keys = {
+        "cpu": mandatory_resource_keys, 
+        "mem": mandatory_resource_keys, 
+        "energy": mandatory_resource_keys, 
+        "disk": ["name", "path"], 
+        "disk_read": mandatory_resource_keys, 
+        "disk_write": mandatory_resource_keys
+    }
+    optional_keys = {
+        "cpu": optional_resource_keys, 
+        "mem": optional_resource_keys, 
+        "energy": optional_resource_keys, 
+        "disk": [],
+        "disk_read": optional_resource_keys, 
+        "disk_write": optional_resource_keys  
+    }
     for resource in req_cont["resources"]:
         get_resource_keys_from_requested_structure(req_cont, container, resource, mandatory_keys[resource], optional_keys[resource])
 
@@ -721,7 +753,7 @@ def subscribe_host(structure_name):
             host["resources"][resource] = {}
             for disk in req_host["resources"][resource]:
                 new_disk = {}
-                for key in ["type", "load", "path", "max", "free"]:
+                for key in ["type", "load", "path", "max_read", "free_read", "max_write", "free_write"]:
                     if key not in disk:
                         return abort(400, {"message": "Missing key '{0}' in disk resource information".format(key)})
                     else:
@@ -837,7 +869,7 @@ def add_disks_to_host(structure_name):
         if disk['name'] in host['resources']['disks']: continue
 
         new_disk = {}
-        for key in ["type", "load", "path", "max", "free"]:
+        for key in ["type", "load", "path", "max_read", "free_read", "max_write", "free_write"]:
             if key not in disk:
                 return abort(400, {"message": "Missing key {0} for disk resource".format(key)})
             else:
@@ -849,6 +881,7 @@ def add_disks_to_host(structure_name):
 
     return jsonify(201)
 
+## Used when extending LV
 @structure_routes.route("/structure/host/<structure_name>/disks", methods=['POST'])
 def update_host_disks(structure_name):
     data = request.json
@@ -875,18 +908,15 @@ def update_host_disks(structure_name):
 
         disk_info = host['resources']['disks'][disk['name']]
 
-        busy_bw = 0
-        if 'free' in disk_info:
-            busy_bw = disk_info['max'] - disk_info['free']
+        for max_key, free_key in [("max_read", "free_read"), ("max_write", "free_write")]:
+            if max_key not in disk:
+                return abort(400, {"message": "Missing key '{0}'".format(max_key)})
 
-        for key in ["max"]:
-            if key not in disk:
-                return abort(400, {"message": "Missing key '{0}'".format(key)})
-            else:
-                disk_info[key] = disk[key]
+            busy_bw = disk_info[max_key] - disk_info[free_key]
+            disk_info[max_key] = disk[max_key]
 
-        ## Update free BW
-        disk_info['free'] = disk_info['max'] - busy_bw
+            ## Update free BW
+            disk_info[free_key] = disk_info[max_key] - busy_bw
 
     get_db().update_structure(host)
 

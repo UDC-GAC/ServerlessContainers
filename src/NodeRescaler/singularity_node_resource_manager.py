@@ -60,7 +60,8 @@ urllib3.disable_warnings()
 
 DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
-DICT_DISK_LABEL = "disk"
+DICT_DISK_READ_LABEL = "disk_read"
+DICT_DISK_WRITE_LABEL = "disk_write"
 DICT_NET_LABEL = "net"
 
 # TODO: get container mount point from vars file
@@ -116,7 +117,7 @@ class SingularityContainerManager:
                 node_pid = container['pid']
 
                 node_dict = dict()
-                (cpu_success, mem_success, disk_success, net_success) = (True, True, True, True)
+                (cpu_success, mem_success, disk_read_success, disk_write_success, net_success) = (True, True, True, True, True)
                 if DICT_CPU_LABEL in resources:
                     if self.cgroups_version == "v1":
                         cpu_success, cpu_resources = set_node_cpus(node_pid, resources[DICT_CPU_LABEL], self.container_engine)
@@ -133,7 +134,7 @@ class SingularityContainerManager:
 
                     node_dict[DICT_MEM_LABEL] = mem_resources
 
-                if DICT_DISK_LABEL in resources:
+                if DICT_DISK_READ_LABEL in resources or DICT_DISK_WRITE_LABEL in resources:
 
                     # TODO: maybe pass disk path as parameter from an HTTP request instead of getting it here
                     command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
@@ -147,12 +148,20 @@ class SingularityContainerManager:
                     else:
                         device = source.split("[")[0]
 
-                    if self.cgroups_version == "v1":
-                        disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], device, self.container_engine)
-                    else:
-                        disk_success, disk_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_LABEL], device, self.container_engine)
+                    if DICT_DISK_READ_LABEL in resources:
+                        if self.cgroups_version == "v1":
+                            disk_read_success, disk_read_resource = set_node_disk(node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
+                        else:
+                            disk_read_success, disk_read_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
+                        node_dict[DICT_DISK_READ_LABEL] = disk_read_resource
 
-                    node_dict[DICT_DISK_LABEL] = disk_resource
+                    if DICT_DISK_WRITE_LABEL in resources:
+                        if self.cgroups_version == "v1":
+                            disk_write_success, disk_write_resource = set_node_disk(node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
+                        else:
+                            disk_write_success, disk_write_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
+                        node_dict[DICT_DISK_WRITE_LABEL] = disk_write_resource
+
                     # disks_changed = list()
                     # for disk in resources[DICT_DISK_LABEL]:
                     #     disk_success, disk_resource = set_node_disk(node_name, disk)
@@ -203,7 +212,7 @@ class SingularityContainerManager:
             command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
             try:
                 output = subprocess.run(
-                                command, universal_newlines=True, shell=True, capture_output=True, timeout=1).stdout
+                                command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout
                 source = output.split()[5]
                 if ":" in source:
                     ## Device mounted on NFS
@@ -220,11 +229,14 @@ class SingularityContainerManager:
                         disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
 
                 if type(disk_resources) == list and len(disk_resources) > 0:
-                    node_dict[DICT_DISK_LABEL] = disk_resources[0]
+                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[0][DICT_DISK_READ_LABEL]
+                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[0][DICT_DISK_WRITE_LABEL]
                 elif disk_resources:
-                    node_dict[DICT_DISK_LABEL] = disk_resources
+                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
+                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
                 else:
-                    node_dict[DICT_DISK_LABEL] = []
+                    node_dict[DICT_DISK_READ_LABEL] = []
+                    node_dict[DICT_DISK_WRITE_LABEL] = []
 
             except (subprocess.TimeoutExpired, PermissionError):
                 #print("Timeout")

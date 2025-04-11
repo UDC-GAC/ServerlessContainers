@@ -42,7 +42,8 @@ translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
     "energy": {"metric": "structure.energy.max", "limit_label": "energy_limit"},
-    "disk": {"metric": "structure.disk.current", "limit_label": "disk_write_limit"},  # FIXME missing read value
+    "disk_read": {"metric": "structure.disk_read.current", "limit_label": "disk_read_limit"},
+    "disk_write": {"metric": "structure.disk_write.current", "limit_label": "disk_write_limit"},
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
 SERVICE_NAME = "structures_snapshoter"
@@ -71,6 +72,13 @@ def update_container_current_values(container_name, limits):
             structure["resources"][resource]["current"] = limits[resource][translate_map[resource]["limit_label"]]
 
         structure["resources"][resource]["current"] = int(structure["resources"][resource]["current"])
+
+    if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
+        if "disk_read" not in limits or not limits["disk_read"] or "disk_write" not in limits or not limits["disk_write"]:
+            log_error("Unable to get info for {0} for container {1}".format(str(["disk_read", "disk_write"]), container_name), debug)
+            structure["resources"]["disk"]["current"] = 0
+        else:
+            structure["resources"]["disk"]["current"] = structure["resources"]["disk_read"]["current"] + structure["resources"]["disk_write"]["current"]
 
     # Remote database operation
     update_structure(structure, db_handler, debug)
@@ -133,6 +141,13 @@ def persist_applications(container_resources_dict):
             else:
                 app["resources"][resource]["current"] = 0
 
+        if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
+            if "disk_read" not in app["resources"] or not app["resources"]["disk_read"] or "disk_write" not in app["resources"] or not app["resources"]["disk_write"]:
+                log_error("Application {0} is missing info of resource {1}".format(app["name"], str(["disk_read", "disk_write"])), debug)
+            else:
+                if "disk" not in app["resources"]: app["resources"]["disk"] = {}
+                app["resources"]["disk"]["current"] = 0
+
         application_containers = app["containers"]
         for container_name in application_containers:
 
@@ -154,6 +169,18 @@ def persist_applications(container_resources_dict):
                     if "name" in container_resources_dict[container_name] and "name" in app:
                         log_error("Container info {0} is missing for app: {1} and resource {2} resource,".format(
                             container_name, app["name"], resource) + " app info will not be totally accurate", debug)
+
+            if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
+                try:
+                    container_resources = container_resources_dict[container_name]["resources"]
+                    if "disk_read" not in container_resources or not container_resources["disk_read"] or "disk_write" not in container_resources or not container_resources["disk_write"]:
+                        log_error("Unable to get info for resource {0} for container {1} when computing app {2} resources".format(str(["disk_read", "disk_write"]), container_name, app["name"]), debug)
+                    else:
+                        app["resources"]["disk"]["current"] += app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
+                except KeyError:
+                    if "name" in container_resources_dict[container_name] and "name" in app:
+                        log_error("Container info {0} is missing for app: {1} and resource {2} resource,".format(
+                            container_name, app["name"], str(["disk_read", "disk_write"])) + " app info will not be totally accurate", debug)
 
         # Remote database operation
         update_structure(app, db_handler, debug)

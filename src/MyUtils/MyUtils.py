@@ -232,7 +232,7 @@ def copy_structure_base(structure):
 
 
 def valid_resource(resource):
-    if resource not in ["cpu", "mem", "disk", "net", "energy"]:
+    if resource not in ["cpu", "mem", "disk", "disk_read", "disk_write", "net", "energy"]:
         return False
     else:
         return True

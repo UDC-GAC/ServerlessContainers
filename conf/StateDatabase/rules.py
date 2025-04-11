@@ -240,23 +240,23 @@ MemRescaleDown = dict(
     active=True
 )
 
-## Disk I/O Bandwidth
-disk_exceeded_upper = dict(
-    _id='disk_exceeded_upper',
+## Disk READ
+disk_read_exceeded_upper = dict(
+    _id='disk_read_exceeded_upper',
     type='rule',
-    resource="disk",
-    name='disk_exceeded_upper',
+    resource="disk_read",
+    name='disk_read_exceeded_upper',
     rule=dict(
         {"and": [
             {">": [
-                {"var": "disk.structure.disk.usage"},
-                {"var": "disk.limits.disk.upper"}]},
+                {"var": "disk_read.structure.disk_read.usage"},
+                {"var": "disk_read.limits.disk_read.upper"}]},
             {"<": [
-                {"var": "disk.limits.disk.upper"},
-                {"var": "disk.structure.disk.max"}]},
+                {"var": "disk_read.limits.disk_read.upper"},
+                {"var": "disk_read.structure.disk_read.max"}]},
             {"<": [
-                {"var": "disk.structure.disk.current"},
-                {"var": "disk.structure.disk.max"}]}
+                {"var": "disk_read.structure.disk_read.current"},
+                {"var": "disk_read.structure.disk_read.max"}]}
 
         ]
         }),
@@ -265,67 +265,159 @@ disk_exceeded_upper = dict(
     active=True
 )
 
-disk_dropped_lower = dict(
-    _id='disk_dropped_lower',
+disk_read_dropped_lower = dict(
+    _id='disk_read_dropped_lower',
     type='rule',
-    resource="disk",
-    name='disk_dropped_lower',
+    resource="disk_read",
+    name='disk_read_dropped_lower',
     rule=dict(
         {"and": [
             {">=": [
-                {"var": "disk.structure.disk.usage"},
+                {"var": "disk_read.structure.disk_read.usage"},
                 0]},
             {"<": [
-                {"var": "disk.structure.disk.usage"},
-                {"var": "disk.limits.disk.lower"}]},
+                {"var": "disk_read.structure.disk_read.usage"},
+                {"var": "disk_read.limits.disk_read.lower"}]},
             {">": [
-                {"var": "disk.limits.disk.lower"},
-                {"var": "disk.structure.disk.min"}]}]}),
+                {"var": "disk_read.limits.disk_read.lower"},
+                {"var": "disk_read.structure.disk_read.min"}]}]}),
     generates="events",
     action={"events": {"scale": {"down": 1}}},
     active=True
 )
 
-DiskRescaleUp = dict(
-    _id='DiskRescaleUp',
+Disk_readRescaleUp = dict(
+    _id='Disk_readRescaleUp',
     type='rule',
-    resource="disk",
-    name='DiskRescaleUp',
+    resource="disk_read",
+    name='Disk_readRescaleUp',
     rule=dict(
         {"and": [
             {">=": [
                 {"var": "events.scale.up"},
-                2]},
+                1]},
             {"<=": [
                 {"var": "events.scale.down"},
                 6]}
         ]}),
     generates="requests",
-    events_to_remove=2,
-    action={"requests": ["DiskRescaleUp"]},
-    amount=10,
+    events_to_remove=1,
+    action={"requests": ["Disk_readRescaleUp"]},
+    amount=450,
     rescale_policy="amount",
     rescale_type="up",
     active=True
 )
 
-DiskRescaleDown = dict(
-    _id='DiskRescaleDown',
+Disk_readRescaleDown = dict(
+    _id='Disk_readRescaleDown',
     type='rule',
-    resource="disk",
-    name='DiskRescaleDown',
+    resource="disk_read",
+    name='Disk_readRescaleDown',
     rule=dict(
         {"and": [
             {">=": [
                 {"var": "events.scale.down"},
-                8]},
+                6]},
             {"<=": [
                 {"var": "events.scale.up"},
                 0]}
         ]}),
     generates="requests",
-    events_to_remove=8,
-    action={"requests": ["DiskRescaleDown"]},
+    events_to_remove=6,
+    action={"requests": ["Disk_readRescaleDown"]},
+    rescale_policy="fit_to_usage",
+    rescale_type="down",
+    active=True
+)
+
+
+## Disk WRITE
+disk_write_exceeded_upper = dict(
+    _id='disk_write_exceeded_upper',
+    type='rule',
+    resource="disk_write",
+    name='disk_write_exceeded_upper',
+    rule=dict(
+        {"and": [
+            {">": [
+                {"var": "disk_write.structure.disk_write.usage"},
+                {"var": "disk_write.limits.disk_write.upper"}]},
+            {"<": [
+                {"var": "disk_write.limits.disk_write.upper"},
+                {"var": "disk_write.structure.disk_write.max"}]},
+            {"<": [
+                {"var": "disk_write.structure.disk_write.current"},
+                {"var": "disk_write.structure.disk_write.max"}]}
+
+        ]
+        }),
+    generates="events",
+    action={"events": {"scale": {"up": 1}}},
+    active=True
+)
+
+disk_write_dropped_lower = dict(
+    _id='disk_write_dropped_lower',
+    type='rule',
+    resource="disk_write",
+    name='disk_write_dropped_lower',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "disk_write.structure.disk_write.usage"},
+                0]},
+            {"<": [
+                {"var": "disk_write.structure.disk_write.usage"},
+                {"var": "disk_write.limits.disk_write.lower"}]},
+            {">": [
+                {"var": "disk_write.limits.disk_write.lower"},
+                {"var": "disk_write.structure.disk_write.min"}]}]}),
+    generates="events",
+    action={"events": {"scale": {"down": 1}}},
+    active=True
+)
+
+Disk_writeRescaleUp = dict(
+    _id='Disk_writeRescaleUp',
+    type='rule',
+    resource="disk_write",
+    name='Disk_writeRescaleUp',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.scale.up"},
+                1]},
+            {"<=": [
+                {"var": "events.scale.down"},
+                6]}
+        ]}),
+    generates="requests",
+    events_to_remove=1,
+    action={"requests": ["Disk_writeRescaleUp"]},
+    amount=450,
+    rescale_policy="amount",
+    rescale_type="up",
+    active=True
+)
+
+Disk_writeRescaleDown = dict(
+    _id='Disk_writeRescaleDown',
+    type='rule',
+    resource="disk_write",
+    name='Disk_writeRescaleDown',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.scale.down"},
+                6]},
+            {"<=": [
+                {"var": "events.scale.up"},
+                0]}
+        ]}),
+    generates="requests",
+    events_to_remove=6,
+    action={"requests": ["Disk_writeRescaleDown"]},
     rescale_policy="fit_to_usage",
     rescale_type="down",
     active=True
@@ -432,11 +524,17 @@ if __name__ == "__main__":
         handler.add_rule(MemRescaleUp)
         handler.add_rule(MemRescaleDown)
 
-        # Disk
-        handler.add_rule(disk_exceeded_upper)
-        handler.add_rule(disk_dropped_lower)
-        handler.add_rule(DiskRescaleUp)
-        handler.add_rule(DiskRescaleDown)
+        ## Disk
+        # Read
+        handler.add_rule(disk_read_exceeded_upper)
+        handler.add_rule(disk_read_dropped_lower)
+        handler.add_rule(Disk_readRescaleUp)
+        handler.add_rule(Disk_readRescaleDown)
+        # Write
+        handler.add_rule(disk_write_exceeded_upper)
+        handler.add_rule(disk_write_dropped_lower)
+        handler.add_rule(Disk_writeRescaleUp)
+        handler.add_rule(Disk_writeRescaleDown)
 
         # Energy
         handler.add_rule(energy_exceeded_upper)

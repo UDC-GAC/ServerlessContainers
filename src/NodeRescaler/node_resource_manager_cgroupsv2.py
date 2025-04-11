@@ -328,24 +328,25 @@ def set_node_disk(userid, container_id, disk_resource, device, container_engine)
         # None was returned
         return False, {"error": "No major and minor found for device {0}".format(device)}
 
-    if DISK_WRITE_LIMIT_LABEL in disk_resource:
-        limit_write = int(disk_resource[DISK_WRITE_LIMIT_LABEL]) * 1048576
-        try:
+    for label, operation in [(DISK_READ_LIMIT_LABEL, 0), (DISK_WRITE_LIMIT_LABEL, 1)]:
+        if label in disk_resource:
+            io_limit = int(disk_resource[label]) * 1048576
+            try:
 
-            script_dir = os.path.dirname(os.path.realpath(__file__))
-            set_bandwidth_script_path = "/".join([script_dir, "..", "..", "scripts", container_engine, "set_bandwidth_cgroupsv2.sh"])
-            set_disk_bandwidth = subprocess.Popen(
-                ["/bin/bash", set_bandwidth_script_path, str(userid), str(container_id), "{0}:{1}".format(major, minor), str(limit_write)],
-                stderr=subprocess.PIPE)
+                script_dir = os.path.dirname(os.path.realpath(__file__))
+                set_bandwidth_script_path = "/".join([script_dir, "..", "..", "scripts", container_engine, "set_bandwidth_cgroupsv2.sh"])
+                set_disk_bandwidth = subprocess.Popen(
+                    ["/bin/bash", set_bandwidth_script_path, str(userid), str(container_id), "{0}:{1}".format(major, minor), operation, str(io_limit)],
+                    stderr=subprocess.PIPE)
 
-            out, err = set_disk_bandwidth.communicate()
-            if set_disk_bandwidth.returncode == 0:
-                pass
-            else:
-                return False, {"error": "exit code of set_disk_bandwidth was: {0} with error message: {1}".format(str(
-                    set_disk_bandwidth.returncode), str(err))}
-        except subprocess.CalledProcessError as e:
-            return False, {"error": str(e)}
+                out, err = set_disk_bandwidth.communicate()
+                if set_disk_bandwidth.returncode == 0:
+                    pass
+                else:
+                    return False, {"error": "exit code of set_disk_bandwidth was: {0} with error message: {1}".format(str(
+                        set_disk_bandwidth.returncode), str(err))}
+            except subprocess.CalledProcessError as e:
+                return False, {"error": str(e)}
 
     # Nothing bad happened
     return True, disk_resource
@@ -396,15 +397,23 @@ def get_node_disks(userid, container_id, device, device_mountpoint, container_en
     else:
         device_write_limit = -1
 
-    disk_dict = {
-        "mountpoint": device_mountpoint,
-        "device_path": device,
-        "major": major,
-        "minor": minor,
-        "unit": "Mbit",
-        DISK_READ_LIMIT_LABEL: device_read_limit,
-        DISK_WRITE_LIMIT_LABEL: device_write_limit
-    }
+    disk_dict = dict()
+
+    disk_dict["disk_read"] = dict()
+    disk_dict["disk_read"]["mountpoint"] = device_mountpoint
+    disk_dict["disk_read"]["device_path"] = device
+    disk_dict["disk_read"]["major"] = major
+    disk_dict["disk_read"]["minor"] = minor
+    disk_dict["disk_read"]["unit"] = "Mbit"
+    disk_dict["disk_read"][DISK_READ_LIMIT_LABEL] = device_read_limit
+
+    disk_dict["disk_write"] = dict()
+    disk_dict["disk_write"]["mountpoint"] = device_mountpoint
+    disk_dict["disk_write"]["device_path"] = device
+    disk_dict["disk_write"]["major"] = major
+    disk_dict["disk_write"]["minor"] = minor
+    disk_dict["disk_write"]["unit"] = "Mbit"
+    disk_dict["disk_write"][DISK_WRITE_LIMIT_LABEL] = device_write_limit
 
     retrieved_disks.append(disk_dict)
 

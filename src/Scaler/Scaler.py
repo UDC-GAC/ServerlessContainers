@@ -50,10 +50,14 @@ SERVICE_NAME = "scaler"
 
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
                                 "mem": ['proc.mem.resident'],
-                                "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+                                #"disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+                                "disk_read": ['proc.disk.reads.mb'],
+                                "disk_write": ['proc.disk.writes.mb'],
                                 "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident'],
-                              'disk': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+                              #'disk': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+                              'disk_read': ['proc.disk.reads.mb'],
+                              'disk_write': ['proc.disk.writes.mb'],
                               'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
 APP_SCALING_SPLIT_AMOUNT = 5
@@ -87,7 +91,8 @@ class Scaler:
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
         self.host_info_cache = dict()
         self.container_info_cache = dict()
-        self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk": self.apply_disk_request, "net": self.apply_net_request}
+        #self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk": self.apply_disk_request, "net": self.apply_net_request}
+        self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk_read": self.apply_disk_read_request, "disk_write": self.apply_disk_write_request, "net": self.apply_net_request}
 
     #### CHECKS ####
     def fix_container_cpu_mapping(self, container, cpu_used_cores, cpu_used_shares):
@@ -122,9 +127,12 @@ class Scaler:
         return container["resources"]["disk"]["name"]
 
     def check_host_has_enough_free_resources(self, host_info, needed_resources, resource, container_name):
-        if resource == "disk":
+        if resource == "disk_read" or resource == "disk_write":
             bound_disk = self.get_bound_disk(container_name)
-            host_shares = host_info["resources"]["disks"][bound_disk]["free"]
+            if resource == "disk_read":
+                host_shares = host_info["resources"]["disks"][bound_disk]["free_read"]
+            else:
+                host_shares = host_info["resources"]["disks"][bound_disk]["free_write"]
         else:
             host_shares = host_info["resources"][resource]["free"]
 
@@ -136,6 +144,18 @@ class Scaler:
             log_warning(
                 "Beware, there are not enough free shares for resource {0} in the host, there are {1},  missing {2}".format(resource, host_shares, missing_shares),
                 self.debug)
+
+        if resource == "disk_read" or resource == "disk_write":
+            max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
+            max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
+            consumed_read = max_read - host_info["resources"]["disks"][bound_disk]["free_read"]
+            consumed_write = max_write - host_info["resources"]["disks"][bound_disk]["free_write"]
+            current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
+            if current_disk_free < needed_resources:
+                missing_shares = needed_resources - current_disk_free
+                log_warning(
+                    "Beware, there are not enough free total bandwidth for resource {0} in the host, there are {1},  missing {2}".format(resource, current_disk_free, missing_shares),
+                    self.debug)
 
     def check_containers_cpu_limits(self, containers):
         errors_detected = False
@@ -337,7 +357,7 @@ class Scaler:
                 set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
 
                 ## Update container info in cache (useful if there are multiple requests for the same container)
-                self.container_info_cache[request["structure"]]["resources"] = new_resources
+                self.container_info_cache[request["structure"]]["resources"][request["resource"]] = new_resources[request["resource"]]
 
         except (ValueError) as e:
             log_error("Error with container {0} in applying the request -> {1}".format(request["structure"], str(e)), self.debug)
@@ -515,22 +535,59 @@ class Scaler:
 
         return resource_dict
 
-    def apply_disk_request(self, request, database_resources, real_resources, amount):
+    def apply_disk_read_request(self, request, database_resources, real_resources, amount):
         resource_dict = {request["resource"]: {}}
         bound_disk = self.get_bound_disk(request['structure'])
-        current_disk_limit = self.get_current_resource_value(real_resources, request["resource"])
-        current_disk_free = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free"]
+        current_read_free = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_read"]
+        current_write_free = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_write"]
 
-        if amount > current_disk_free:
+        if amount > current_read_free:
             ## It is trying to get more resources than available
+            amount = current_read_free
+
+        max_read = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["max_read"]
+        max_write = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["max_write"]
+        consumed_read = max_read - current_read_free
+        consumed_write = max_write - current_write_free
+        current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
+        if amount > current_disk_free:
+            ## It is trying to get more resources than total available bandwidth
             amount = current_disk_free
 
         # No error thrown, so persist the new mapping to the cache
-        self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free"] -= amount
+        self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_read"] -= amount
 
         # Return the dictionary to set the resources
-        resource_dict["disk"]["disk_read_limit"] = str(int(amount + current_disk_limit))
-        resource_dict["disk"]["disk_write_limit"] = str(int(amount + current_disk_limit))
+        current_read_limit = self.get_current_resource_value(real_resources, request["resource"])
+        resource_dict["disk_read"]["disk_read_limit"] = str(int(amount + current_read_limit))
+
+        return resource_dict
+
+    def apply_disk_write_request(self, request, database_resources, real_resources, amount):
+        resource_dict = {request["resource"]: {}}
+        bound_disk = self.get_bound_disk(request['structure'])
+        current_read_free = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_read"]
+        current_write_free = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_write"]
+
+        if amount > current_write_free:
+            ## It is trying to get more resources than available
+            amount = current_write_free
+
+        max_read = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["max_read"]
+        max_write = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["max_write"]
+        consumed_read = max_read - current_read_free
+        consumed_write = max_write - current_write_free
+        current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
+        if amount > current_disk_free:
+            ## It is trying to get more resources than total available bandwidth
+            amount = current_disk_free
+
+        # No error thrown, so persist the new mapping to the cache
+        self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_write"] -= amount
+
+        # Return the dictionary to set the resources
+        current_write_limit = self.get_current_resource_value(real_resources, request["resource"])
+        resource_dict["disk_write"]["disk_write_limit"] = str(int(amount + current_write_limit))
 
         return resource_dict
 
@@ -774,7 +831,7 @@ class Scaler:
         return cpu_list
 
     def get_current_resource_value(self, real_resources, resource):
-        translation_dict = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk": "disk_write_limit"}
+        translation_dict = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk_read": "disk_read_limit", "disk_write": "disk_write_limit"}
 
         if resource not in translation_dict:
             raise ValueError("Resource '{0}' unknown".format(resource))

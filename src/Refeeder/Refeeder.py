@@ -49,8 +49,10 @@ REFEEDER_ENERGY_METRICS = {'cpu': ['sys.cpu.user', 'sys.cpu.kernel'], 'energy': 
 
 REFEEDER_APPLICATION_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'],
                                 'mem': ['proc.mem.resident'],
-                                'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
+                                #'disk': ['proc.disk.writes.mb', 'proc.disk.reads.mb'],
                                 # 'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
+                                'disk_read': ['proc.disk.reads.mb'],
+                                'disk_write': ['proc.disk.writes.mb'],
                                 'energy': ["structure.energy.usage"]}
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True}
@@ -110,6 +112,9 @@ class ReFeeder:
                     application["resources"][resource]["usage"] = application_info[resource]
                 else:
                     log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
+
+            if "disk_read" in application_info and "disk_write" in application_info:
+                application["resources"]["disk"]["usage"] = application_info["disk_read"] + application_info["disk_write"]
         else:
             for resource in application["resources"]:
                 application["resources"][resource]["usage"] = 0

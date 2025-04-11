@@ -353,8 +353,10 @@ class ContainerRebalancer:
     # HOSTS BY WEIGHT
     def __rebalance_host_containers_by_weight(self, containers, host):
 
-        balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}, 
-                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}
+        balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE}, 
+                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                "disk_read": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                "disk_write": {"diff_percentage":self.__DIFF_PERCENTAGE},
                                 }
 
         def get_new_allocations(resource, containers, requests):
@@ -388,6 +390,68 @@ class ContainerRebalancer:
                     amount_to_scale = new_alloc - container["resources"][resource]["current"]
                     self.__generate_scaling_request(container, resource, amount_to_scale, requests)
 
+        def get_new_allocations_by_disk(containers, requests, disk_name):
+            total_allocated_bw = 0
+            weight_sum = 0
+            weight_read_sum = 0
+            weight_write_sum = 0
+            
+            for container in containers:
+                if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]): 
+                    read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < resources_to_balance["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
+                    write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < resources_to_balance["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
+
+                    if read_usage_threshold:
+                        total_allocated_bw += container["resources"]["disk_read"]["current"]
+                        weight_sum      += container["resources"]["disk_read"]["weight"]
+                        weight_read_sum += container["resources"]["disk_read"]["weight"]
+
+                    if write_usage_threshold:
+                        total_allocated_bw += container["resources"]["disk_write"]["current"]
+                        weight_sum       += container["resources"]["disk_write"]["weight"]
+                        weight_write_sum += container["resources"]["disk_write"]["weight"]
+
+            if weight_sum > 0:
+                read_distribution = total_allocated_bw * (weight_read_sum / weight_sum)
+                write_distribution = total_allocated_bw * (weight_write_sum / weight_sum)
+
+                ## Adjust distributions to host maximums
+                read_adjusted, write_adjusted, surplus_io = False, False, 0
+                while not read_adjusted or not write_adjusted:
+                    write_distribution += surplus_io
+                    surplus_io = 0
+                    write_adjusted = write_distribution <= host["resources"]["disks"][disk_name]["max_write"]
+                    if not write_adjusted:
+                        surplus_io = write_distribution - host["resources"]["disks"][disk_name]["max_write"]
+                        write_distribution = host["resources"]["disks"][disk_name]["max_write"]
+
+                    read_distribution += surplus_io
+                    surplus_io = 0
+                    read_adjusted = read_distribution <= host["resources"]["disks"][disk_name]["max_read"]
+                    if not read_adjusted:
+                        surplus_io = read_distribution - host["resources"]["disks"][disk_name]["max_read"]
+                        read_distribution = host["resources"]["disks"][disk_name]["max_read"]
+
+                    if read_distribution == host["resources"]["disks"][disk_name]["max_read"] and write_distribution == host["resources"]["disks"][disk_name]["max_write"]:
+                        break
+                ##
+                if weight_read_sum > 0: read_slice = read_distribution / weight_read_sum
+                else: read_slice = 0
+                if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum 
+                else: write_slice = 0
+                for container in containers:
+                    if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]):
+
+                        for res, alloc_slice in [("disk_read", read_slice), ("disk_write", write_slice)]:
+                            usage_threshold = container["resources"][res]["current"] - container["resources"][res]["usage"] < resources_to_balance[resource]["diff_percentage"] * container["resources"][res]["current"]
+
+                            if usage_threshold:
+                                new_alloc = round(alloc_slice * container["resources"][res]["weight"])
+                                # TODO: consider that new_alloc may be higher than max for some containers
+
+                                amount_to_scale = new_alloc - container["resources"][res]["current"]
+                                self.__generate_scaling_request(container, resource, amount_to_scale, requests)
+
         for resource in self.__resources_balanced:
 
             if resource not in balanceable_resources:
@@ -398,7 +462,24 @@ class ContainerRebalancer:
 
             requests = dict()
 
-            if resource == "disk" and "disks" in host and host["disks"] > 1:
+            if resource == "disk":
+                if "disks" not in host: 
+                    log_error("There are no disks in host {0}".format(host["name"]))
+                    continue
+                if host["disks"] > 1:
+                    ## if host has more than one disk the balancing needs to be performed on each disk
+                    for disk in host["disks"]:
+                        disk_containers = []
+                        for container in containers:
+                            if "disk" in container["resources"] and container["resources"]["disk"]["name"] == disk: disk_containers.append(container)
+
+                        get_new_allocations_by_disk(disk_containers, requests, disk)
+                else:
+                    ## There is only one disk in the host
+                    disk_name = next(iter(host["resources"]["disks"]))
+                    get_new_allocations_by_disk(containers, requests, disk_name)
+
+            elif (resource == "disk_read" or resource == "disk_write") and "disks" in host and host["disks"] > 1:
                 ## if host has more than one disk the balancing needs to be performed on each disk
                 for disk in host["disks"]:
                     disk_containers = []
@@ -480,6 +561,12 @@ class ContainerRebalancer:
                         host_containers[host_name].append(container)
                 # Get the container usages
                 host_containers[host_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, host_containers[host_name])
+
+            ## Workaround to manage disk_read and disk_write at the same time if both are requested
+            if "disk_read" in self.__resources_balanced and "disk_write" in self.__resources_balanced:
+                self.__resources_balanced.remove("disk_read")
+                self.__resources_balanced.remove("disk_write")
+                self.__resources_balanced.append("disk")
 
             # Rebalance hosts
             for host in hosts:

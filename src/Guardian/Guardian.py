@@ -45,7 +45,9 @@ translator_dict = {
     "user": "structure.cpu.user",
     "kernel": "structure.cpu.kernel",
     "mem": "structure.mem.usage",
-    "disk": "structure.disk.usage",
+    #"disk": "structure.disk.usage",
+    "disk_read": "structure.disk_read.usage",
+    "disk_write": "structure.disk_write.usage",
     "energy": "structure.energy.usage"
 }
 
@@ -1126,7 +1128,7 @@ class Guardian:
 
     def invalid_conf(self, ):
         for res in self.guardable_resources:
-            if res not in ["cpu", "mem", "disk", "net", "energy"]:
+            if res not in ["cpu", "mem", "disk_read", "disk_write", "net", "energy"]:
                 return True, "Resource to be guarded '{0}' is invalid".format(res)
 
         if self.structure_guarded not in ["container", "application"]:
