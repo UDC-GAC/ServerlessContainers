@@ -25,6 +25,24 @@ system_load_query = '''
         |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
 '''
 
+avgfreq_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "avgfreq" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
+sumfreq_query = '''
+    from(bucket: "{influxdb_bucket}")
+        |> range(start: {start_date}, stop: {stop_date})
+        |> filter(fn: (r) => r["_measurement"] == "cpu_metrics")
+        |> filter(fn: (r) => r["_field"] == "sumfreq" )
+        |> filter(fn: (r) => r["core"] == "all")
+        |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+'''
+
 p_user_load_query = '''
     from(bucket: "{influxdb_bucket}")
         |> range(start: {start_date}, stop: {stop_date})
@@ -113,6 +131,8 @@ INFLUXDB_QUERIES = {
     "load": load_query,
     "user_load": user_load_query,
     "system_load": system_load_query,
+    "avgfreq": avgfreq_query,
+    "sumfreq": sumfreq_query,
     "p_user_load": p_user_load_query,
     "p_system_load": p_system_load_query,
     "l_user_load": l_user_load_query,
@@ -123,7 +143,5 @@ INFLUXDB_QUERIES = {
     "power_pkg0": power_pkg0_query,
     "power_pkg1": power_pkg1_query,
     "wait_load": None,
-    "freq": None,
-    "sumfreq": None,
     "temp": None
 }

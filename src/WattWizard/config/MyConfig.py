@@ -20,7 +20,7 @@ DEFAULT_CPU_LIMITS = {
     "l_user_load": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
     "l_system_load": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
     "wait_load": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
-    "freq": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
+    "avgfreq": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
     "sumfreq": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT},
     "temp": {"min": 0, "max": DEFAULT_MAX_RESOURCE_LIMIT}
 }
