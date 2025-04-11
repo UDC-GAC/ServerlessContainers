@@ -57,10 +57,9 @@ class Model(object):
     def df_to_model_data(self, df, *args, **kwargs):
         x_values = []
         for var in self.model_vars:
-            if var in df:
-                x_values.append(df[var].values.reshape(-1, 1))
-            else:
+            if var not in df:
                 raise TypeError(f"Missing variable {var} in DataFrame")
+            x_values.append(df[var].values.reshape(-1, 1))
         x_stack = np.hstack(x_values)
         if "power" in df:
             y = df["power"].values
@@ -90,21 +89,6 @@ class Model(object):
             return self.json_to_model_data(time_series)
         else:
             raise TypeError(f"Not supported data type {data_type}. It must be DataFrame or JSON.")
-
-    # def get_inverse_prediction(self, desired_power, dynamic_var, limits, **kwargs):
-    #     self.check_required_kwargs(self.required_kwargs_map['get_inverse_prediction'], kwargs)
-    #     estimated_power = self.predict(**kwargs)
-    #     error = abs(desired_power - estimated_power)
-    #     count_iters = 0
-    #     while error > MAX_ERROR and count_iters < MAX_ITERS and limits["min"] < kwargs['X_dict'][dynamic_var] < limits["max"]:
-    #         kwargs['X_dict'][dynamic_var] = desired_power * kwargs['X_dict'][dynamic_var] / estimated_power
-    #         estimated_power = self.predict(**kwargs)
-    #         error = abs(desired_power - estimated_power)
-    #         count_iters += 1
-    #
-    #     return {
-    #         "value": max(limits["min"], min(limits["max"], kwargs['X_dict'][dynamic_var]))
-    #     }
 
     def get_inverse_prediction(self, desired_power, dynamic_var, limits, **kwargs):
         self.check_required_kwargs(self.required_kwargs_map['get_inverse_prediction'], kwargs)

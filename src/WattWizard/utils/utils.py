@@ -1,4 +1,12 @@
+import os
 from src.WattWizard.logs.logger import log
+
+
+def get_file_name(file):
+    if file:
+        return os.path.splitext(os.path.basename(file))[0]
+    else:
+        return "NPT"
 
 
 def is_hw_aware_compatible(file):

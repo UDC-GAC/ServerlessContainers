@@ -1,6 +1,7 @@
 import os
 
 from src.WattWizard.model import *
+import src.WattWizard.utils.utils as utils
 
 STATIC_PREDICTION_METHODS = ["polyreg", "interpolation", "multisocket"]
 
@@ -20,13 +21,6 @@ INSTANCE_CONSTRUCTORS = {
 class ModelHandler:
     __instance = None
     models = None
-
-    @staticmethod
-    def get_file_name(file):
-        if file:
-            return os.path.splitext(os.path.basename(file))[0]
-        else:
-            return "NPT"
 
     @staticmethod
     def get_instance():
@@ -57,7 +51,7 @@ class ModelHandler:
         self.models = {}
 
     def add_model(self, structure, prediction_method, train_file, **kwargs):
-        train_file_name = self.get_file_name(train_file)
+        train_file_name = utils.get_file_name(train_file)
         model_name = f"{prediction_method}_{train_file_name}"
         if structure in self.models and model_name in self.models[structure]:
             raise Exception(f"Model with name {model_name} already exists")
