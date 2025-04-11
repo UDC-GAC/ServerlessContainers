@@ -109,6 +109,7 @@ class MultiSocketRegresion(Model):
             raise TypeError("Model not fitted yet, first train the model, then predict")
 
         time_series = kwargs['time_series']
+        time_series['cores'] = time_series['cores'].astype(str)
         core_usages = time_series['cores'].apply(lambda c: c.split(',')).values
 
         @np.vectorize
