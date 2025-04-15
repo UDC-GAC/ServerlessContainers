@@ -136,7 +136,7 @@ def get_model_attributes(structure=None, model_name=None):
 def get_model_variables(structure=None, model_name=None):
     try:
         model_instance = model_handler.get_model_instance(structure, model_name)
-        model_variables = model_instance.get_model_vars
+        model_variables = model_instance.get_model_vars()
         if model_variables is None:
             return jsonify({'ERROR': 'Model doesn\'t have variables. Something weird has happened.'}), 400
         else:

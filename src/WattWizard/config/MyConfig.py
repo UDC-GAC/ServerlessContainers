@@ -121,14 +121,13 @@ class MyConfig:
     def get_resource_cpu_limit(self, resource, limit_type):
         if limit_type not in ["min", "max"]:
             raise Exception(f"Bad cpu limit type '{limit_type}' it must be 'min' or 'max'")
-        if resource in self.cpu_limits:
-            return self.cpu_limits[resource][limit_type]
-        raise Exception(f"Resource '{resource}' not found in cpu limits")
+        return self.get_resource_cpu_limits(resource)[limit_type]
 
     def get_resource_cpu_limits(self, resource):
-        if resource in self.cpu_limits:
-            return self.cpu_limits[resource]
-        raise Exception(f"Resource '{resource}' not found in cpu limits")
+        for key in self.cpu_limits:
+            if resource.startswith(key):
+                return self.cpu_limits[key]
+        raise Exception(f"Resource starting with '{resource}' not found in cpu limits")
 
     def get_cpu_limits(self):
         return self.cpu_limits
