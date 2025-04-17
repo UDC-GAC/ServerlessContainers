@@ -546,7 +546,7 @@ def map_container_to_host_resources(container, host):
     resource_dict = {}
     for resource in container["resources"]:
         resource_dict[resource] = {}
-        if resource = 'disk_read' or resource == 'disk_write':
+        if resource == 'disk_read' or resource == 'disk_write':
             continue
         elif resource == 'disk':
             map_container_to_host_disks(resource_dict, container, host)

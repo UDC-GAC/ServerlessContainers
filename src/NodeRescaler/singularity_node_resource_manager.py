@@ -182,7 +182,7 @@ class SingularityContainerManager:
                     #     networks_changed.append(net_resource)
                     #     node_dict[DICT_NET_LABEL] = networks_changed
 
-                global_success = cpu_success and mem_success and disk_success and net_success
+                global_success = cpu_success and mem_success and disk_read_success and disk_write_success and net_success
                 return global_success, node_dict
 
             except AttributeError:
