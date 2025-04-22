@@ -142,7 +142,7 @@ class Scaler:
             missing_shares = needed_resources - host_shares
             # raise ValueError("Error in setting {0}, couldn't get the resources needed, missing {1} shares".format(resource, missing_shares))
             log_warning(
-                "Beware, there are not enough free shares for resource {0} in the host, there are {1},  missing {2}".format(resource, host_shares, missing_shares),
+                "Beware, there are not enough free shares for container {0} for resource {1} in the host, there are {2},  missing {3}".format(container_name, resource, host_shares, missing_shares),
                 self.debug)
 
         if resource == "disk_read" or resource == "disk_write":
@@ -154,7 +154,7 @@ class Scaler:
             if current_disk_free < needed_resources:
                 missing_shares = needed_resources - current_disk_free
                 log_warning(
-                    "Beware, there are not enough free total bandwidth for resource {0} in the host, there are {1},  missing {2}".format(resource, current_disk_free, missing_shares),
+                    "Beware, there are not enough free total bandwidth for container {0} for resource {1} in the host, there are {2},  missing {3}".format(container_name, resource, current_disk_free, missing_shares),
                     self.debug)
 
     def check_containers_cpu_limits(self, containers):
@@ -879,7 +879,7 @@ class Scaler:
 
     def split_requests(self, all_requests):
         ## Sort requests by priority
-        sorted_requests = sorted(all_requests, key=lambda request: request["priority"] if "priority" in request else 0)
+        sorted_requests = sorted(all_requests, key=lambda request: request["priority"] if "priority" in request else 0, reverse=True)
 
         scale_down, scale_up = list(), list()
         for request in sorted_requests:

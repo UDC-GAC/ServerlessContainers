@@ -416,6 +416,8 @@ def free_container_resources(container, host):
     for resource in container["resources"]:
         if resource == 'cpu':
             free_container_cores(cont_name, host)
+        elif resource in ['disk_read', 'disk_write']:
+            continue
         elif resource == 'disk':
             free_container_disks(container, host)
         elif resource == 'energy':
@@ -520,36 +522,38 @@ def map_container_to_host_disks(resource_dict, container, host):
         return abort(400, {"message": "Host does not have disks"})
     else:
         try:
-            needed_disk_read_bw = container["resources"]["disk_read"]["current"]
-            needed_disk_write_bw = container["resources"]["disk_write"]["current"]
             free_disk_read_bw = host["resources"]["disks"][disk_name]["free_read"]
             free_disk_write_bw = host["resources"]["disks"][disk_name]["free_write"]
-
-            consumed_disk_read_bw = host["resources"]["disks"][disk_name]["max_read"] - free_disk_read_bw
-            consumed_disk_write_bw = host["resources"]["disks"][disk_name]["max_write"] - free_disk_write_bw
-            total_free = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"]) - consumed_disk_read_bw - consumed_disk_write_bw
-
-            if needed_disk_read_bw > free_disk_read_bw and needed_disk_write_bw > free_disk_write_bw and needed_disk_read_bw + needed_disk_write_bw > total_free:
-                return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
-
-            host["resources"]["disks"][disk_name]["free_read"] -= needed_disk_read_bw
-            host["resources"]["disks"][disk_name]["free_write"] -= needed_disk_write_bw
-            host["resources"]["disks"][disk_name]["load"] += 1
         except KeyError:
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
-    resource_dict["disk_read"] = {"disk_read_limit": needed_disk_read_bw}
-    resource_dict["disk_write"] = {"disk_write_limit": needed_disk_write_bw}
+        needed_disk_read_bw = container["resources"]["disk_read"]["current"]
+        needed_disk_write_bw = container["resources"]["disk_write"]["current"]
+
+        consumed_disk_read_bw = host["resources"]["disks"][disk_name]["max_read"] - free_disk_read_bw
+        consumed_disk_write_bw = host["resources"]["disks"][disk_name]["max_write"] - free_disk_write_bw
+        total_free = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"]) - consumed_disk_read_bw - consumed_disk_write_bw
+
+        if needed_disk_read_bw > free_disk_read_bw or needed_disk_write_bw > free_disk_write_bw or needed_disk_read_bw + needed_disk_write_bw > total_free:
+            return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
+
+        host["resources"]["disks"][disk_name]["free_read"] -= needed_disk_read_bw
+        host["resources"]["disks"][disk_name]["free_write"] -= needed_disk_write_bw
+        host["resources"]["disks"][disk_name]["load"] += 1
+
+        return needed_disk_read_bw, needed_disk_write_bw
 
 def map_container_to_host_resources(container, host):
     cont_name = container["name"]
     resource_dict = {}
     for resource in container["resources"]:
-        resource_dict[resource] = {}
-        if resource == 'disk_read' or resource == 'disk_write':
+        if resource in ['disk_read', 'disk_write']:
             continue
-        elif resource == 'disk':
-            map_container_to_host_disks(resource_dict, container, host)
+        resource_dict[resource] = {}
+        if resource == 'disk':
+            read_limit, write_limit = map_container_to_host_disks(resource_dict, container, host)
+            resource_dict["disk_read"] = {"disk_read_limit": read_limit}
+            resource_dict["disk_write"] = {"disk_write_limit": write_limit}
         else:
             needed_amount = container["resources"][resource]["current"]
             if host["resources"][resource]["free"] < needed_amount:
