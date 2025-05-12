@@ -369,7 +369,7 @@ class ContainerRebalancer:
                 if resource in container["resources"]:
                     usage_threshold = container["resources"][resource]["current"] - container["resources"][resource]["usage"] < balanceable_resources[resource]["diff_percentage"] * container["resources"][resource]["current"]
                     if "weight" in container["resources"][resource] and usage_threshold:
-                        participants.append(container)
+                        participants.append({"container_info": container})
                         total_allocation_amount += container["resources"][resource]["current"]
                         weight_sum += container["resources"][resource]["weight"]
                     # else: containers with low usage that won't participate in the distribution
@@ -377,37 +377,53 @@ class ContainerRebalancer:
             if weight_sum > 0:
                 alloc_slice = total_allocation_amount / weight_sum
 
-                ## Distribute slices between containers considering their weights
+                ## Adjust alloc until every container is allocated an amount below their maximum
+                adjust_finished = False
+                while not adjust_finished:
+                    adjust_finished = True
+
+                    for container in participants:
+
+                        ## Update new_alloc if needed
+                        if "new_alloc" not in container or container["new_alloc"] < container["container_info"]["resources"][resource]["max"]:
+                            container["new_alloc"] = round(alloc_slice * container["container_info"]["resources"][resource]["weight"])
+
+                        ## Check if new_alloc exceeds container maximum
+                        if container["new_alloc"] > container["container_info"]["resources"][resource]["max"]:
+                            ## Set new_alloc to max and recalculate allocs
+                            container["new_alloc"] = container["container_info"]["resources"][resource]["max"]
+                            total_allocation_amount -= container["container_info"]["resources"][resource]["max"]
+                            weight_sum -= container["container_info"]["resources"][resource]["weight"]
+                            if weight_sum > 0: alloc_slice = total_allocation_amount / weight_sum
+                            else: alloc_slice = 0
+
+                            adjust_finished = False
+                            break # try again adjusting allocs
+
+                ## Send scaling requests
                 for container in participants:
-                    new_alloc = round(alloc_slice * container["resources"][resource]["weight"])
-
-                    # TODO: consider that new_alloc may be higher than the max for some containers
-                    # if new_alloc > container["resources"][resource]["max"]:
-                    #     new_alloc = container["resources"][resource]["max"]
-                    #     total_allocation_amount -= container["resources"][resource]["max"]
-                    #     weight_sum -= container["resources"][resource]["weight"]
-                    #     alloc_slice = total_allocation_amount / weight_sum
-
-                    amount_to_scale = new_alloc - container["resources"][resource]["current"]
-                    self.__generate_scaling_request(container, resource, amount_to_scale, requests)
+                    amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
+                    self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
         def get_new_allocations_by_disk(containers, requests, disk_name):
             total_allocated_bw = 0
             weight_sum = 0
             weight_read_sum = 0
             weight_write_sum = 0
-            
+            participants = {"disk_read": [], "disk_write": []}
             for container in containers:
                 if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]): 
                     read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < balanceable_resources["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
                     write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < balanceable_resources["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
 
                     if read_usage_threshold:
+                        participants["disk_read"].append({"container_info": container})
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
                         weight_sum      += container["resources"]["disk_read"]["weight"]
                         weight_read_sum += container["resources"]["disk_read"]["weight"]
 
                     if write_usage_threshold:
+                        participants["disk_write"].append({"container_info": container})
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
                         weight_sum       += container["resources"]["disk_write"]["weight"]
                         weight_write_sum += container["resources"]["disk_write"]["weight"]
@@ -440,18 +456,44 @@ class ContainerRebalancer:
                 else: read_slice = 0
                 if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum 
                 else: write_slice = 0
-                for container in containers:
-                    if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]):
 
-                        for res, alloc_slice in [("disk_read", read_slice), ("disk_write", write_slice)]:
-                            usage_threshold = container["resources"][res]["current"] - container["resources"][res]["usage"] < balanceable_resources[resource]["diff_percentage"] * container["resources"][res]["current"]
+                ## Adjust alloc until every container is allocated an amount below their maximum
+                adjust_finished = False
+                while not adjust_finished:
+                    adjust_finished = True
 
-                            if usage_threshold:
-                                new_alloc = round(alloc_slice * container["resources"][res]["weight"])
-                                # TODO: consider that new_alloc may be higher than max for some containers
+                    for resource, alloc_slice in [("disk_read", read_slice), ("disk_write", write_slice)]:
+                        for container in participants[resource]:
 
-                                amount_to_scale = new_alloc - container["resources"][res]["current"]
-                                self.__generate_scaling_request(container, res, amount_to_scale, requests)
+                            ## Update new_alloc if needed
+                            if "new_alloc" not in container or container["new_alloc"] < container["container_info"]["resources"][resource]["max"]:
+                                container["new_alloc"] = round(alloc_slice * container["container_info"]["resources"][resource]["weight"])
+
+                            ## Check if new_alloc exceeds container maximum
+                            if container["new_alloc"] > container["container_info"]["resources"][resource]["max"]:
+                                ## Set new_alloc to max and recalculate allocs
+                                container["new_alloc"] = container["container_info"]["resources"][resource]["max"]
+                                if resource == "disk_read":
+                                    read_distribution -= container["container_info"]["resources"][resource]["max"]
+                                    weight_read_sum -= container["container_info"]["resources"][resource]["weight"]
+                                    if weight_read_sum > 0: read_slice = read_distribution / weight_read_sum
+                                    else: read_slice = 0
+                                elif resource == "disk_write":
+                                    write_distribution -= container["container_info"]["resources"][resource]["max"]
+                                    weight_write_sum -= container["container_info"]["resources"][resource]["weight"]
+                                    if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum
+                                    else: write_slice = 0
+
+                                adjust_finished = False
+                                break # try again adjusting allocs
+
+                        if not adjust_finished: break
+
+                ## Send scaling requests
+                for resource in ["disk_read", "disk_write"]:
+                    for container in participants[resource]:
+                        amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
+                        self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
         for resource in self.__resources_balanced:
 
