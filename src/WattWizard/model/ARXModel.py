@@ -19,20 +19,21 @@ class ARXModel(Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        self.model = LinearRegression(fit_intercept=False)
+        self.model = LinearRegression(fit_intercept=True)
         self.required_kwargs_map.update({
             "pretrain": ['time_series', 'data_type'],
             "train": None,
             "test": ['time_series', 'data_type'],
             "predict": ['X_dict']
         })
-        self.lag = 1
+        self.x_lag = 1
+        self.y_lag = 1
+        self.max_lag = max(self.x_lag, self.y_lag)
 
     def get_model_vars(self):
-        # Power is also a variable in autoregressive models
-        if self.lag > 1:
-            return [f"{var}_{lag}" for lag in range(0, self.lag) for var in self.model_vars + ["power"]]
-        return self.model_vars + ["power"]
+        ylags = [f"power(k-{lag})" for lag in range(1, self.y_lag + 1)]
+        xlags = [f"{var}(k-{lag})" for lag in range(1, self.x_lag + 1) for var in self.model_vars]
+        return ylags + xlags
 
     def get_coefs(self):
         if self.pretrained or self.times_trained > 0:
@@ -40,14 +41,19 @@ class ARXModel(Model):
         return None
 
     def get_intercept(self):
-        return self.idle_consumption
+        if self.pretrained or self.times_trained > 0:
+            return self.model.intercept_
 
     def _lag_input_features(self, X, y):
-        # Add all x values from x(k) to x(k+lag-1) and y values from y(k) to y(k+lag-1)
+        # Add all x values from x(k-1) to x(k-x_lag) and y values from y(k-1) to y(k-y_lag)
         x_values = []
-        for i in range(0, self.lag):
-            x_values.append(X[i:-(self.lag-i)])     # x(k+i)
-            x_values.append(y[i:-(self.lag-i)])     # y(k+i)
+        # Append y(k-1) to y(k-y_lag)
+        for i in range(1, self.y_lag+1):
+            x_values.append(y[(self.max_lag - i):-i])       # y(k-i)
+        # Append x(k-1) to x(k-y_lag)
+        for i in range(1, self.x_lag+1):
+            x_values.append(X[(self.max_lag - i):-i])       # x(k-i)
+
         return np.hstack(x_values)
 
     def pretrain(self, *args, **kwargs):
@@ -69,7 +75,7 @@ class ARXModel(Model):
         X_train = self._lag_input_features(X_train, y_adjusted.reshape(-1, 1))
 
         # Set y(k+lag) as y(k)
-        y_adjusted = y_adjusted[self.lag:]
+        y_adjusted = y_adjusted[self.max_lag:]
 
         self.model.fit(X_train, y_adjusted)
         self.pretrained = True
@@ -100,8 +106,8 @@ class ARXModel(Model):
         # Get predictions
         y_pred = self.idle_consumption + self.model.predict(X_test)
 
-        # Insert the actual value in the first <lag> positions, as first prediction is y(k+lag) (value in the <lag> position)
-        for i in range(0, self.lag):
+        # Insert the actual value in the first max_lag positions, as first max_lag test values are used as input data
+        for i in range(0, self.max_lag):
             y_pred = np.insert(y_pred, i, y_test[i])
 
         return kwargs['time_series'], y_pred
