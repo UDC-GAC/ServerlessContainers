@@ -8,6 +8,7 @@ class ModelTester:
     def __init__(self, config, ts_plotter, data_loader):
         self.config = config
         self.timestamps_dir = self.config.get_argument("test_timestamps_dir")
+        self.join_timestamps = self.config.get_argument("join_test_timestamps")
         self.ts_plotter = ts_plotter
         self.data_loader = data_loader
         # Formatting variables
@@ -53,7 +54,7 @@ class ModelTester:
     def test_model(self, structure, model, test_file):
         test_name = os.path.splitext(os.path.basename(test_file))[0]
         log(f"Evaluating model {model['name']} with test {test_name}")
-        test_data = self.data_loader.load_time_series(structure, self.timestamps_dir, test_name, idle=False)
+        test_data = self.data_loader.load_time_series(structure, self.timestamps_dir, test_name, idle=False, join=self.join_timestamps)
 
         # Get model predictions for test dataset
         new_data, power_pred = model['instance'].test(time_series=test_data, data_type="df")

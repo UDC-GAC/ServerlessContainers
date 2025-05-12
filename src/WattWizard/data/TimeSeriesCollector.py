@@ -42,7 +42,7 @@ class TimeSeriesCollector:
         stop_str = " ".join(stop_line.split(" ")[-2:]).strip()
         start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=start_offset)
         stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=stop_offset)
-        return [(start, stop, exp_name, exp_type)]
+        return start, stop, exp_name, exp_type
 
     # Add time_diff column which represents time instead of dates
     @staticmethod
@@ -82,7 +82,7 @@ class TimeSeriesCollector:
             start_line = lines[i]
             stop_line = lines[i + 1]
             ts_line = self.get_timestamp_from_line(start_line, stop_line)
-            timestamps.append(ts_line[0])
+            timestamps.append(ts_line)
         log(f"Timestamps belong to period [{timestamps[0][0]}, {timestamps[-1][1]}]")
         return timestamps
 

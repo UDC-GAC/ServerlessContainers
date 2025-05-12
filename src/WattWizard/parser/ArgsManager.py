@@ -17,8 +17,10 @@ SUPPORTED_ARGS = [
     'model_variables',
     'sockets',
     'cores_distribution',
+    'join_train_timestamps',
     'train_timestamps_dir',
     'train_files',
+    'join_test_timestamps',
     'test_timestamps_dir',
     'test_files',
     'plot_time_series',
@@ -119,6 +121,9 @@ class ArgsManager:
             elif arg_name == "cores_distribution":
                 pass  # Nothing to do here for cores_distribution (it will be checked below)
 
+            elif arg_name == "join_train_timestamps":
+                pass  # Nothing to do for join_train_timestamps
+
             elif arg_name == "train_timestamps_dir":
                 pass  # Nothing to do for train_timestamps_dir (already checked in train_files)
 
@@ -128,6 +133,9 @@ class ArgsManager:
                         f"Otherwise, no model would be created.", "ERR")
                     exit(1)
                 self.check_files_exist(list(set(args[arg_name]) - {None}))
+
+            elif arg_name == "join_test_timestamps":
+                pass  # Nothing to do for join_test_timestamps
 
             elif arg_name == "test_timestamps_dir":
                 pass  # Nothing to do for test_timestamps_dir (already checked in test_files)

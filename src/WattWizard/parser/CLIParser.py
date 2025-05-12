@@ -96,6 +96,13 @@ Example: CPU0=0-15,32-47;CPU1=16-31,48-63",
         )
 
         self.parser.add_argument(
+            "--join-train-timestamps",
+            action="store_const",
+            const=True,
+            help="Get just the first start timestamp and the last stop timestamp from train timestamp files.",
+        )
+
+        self.parser.add_argument(
             "--train-timestamps-dir",
             help="Directory in which the timestamp files to train models are stored. By default is ./conf/WattWizard/timestamps/train.",
         )
@@ -105,6 +112,13 @@ Example: CPU0=0-15,32-47;CPU1=16-31,48-63",
             help="Comma-separated list of train file names stored under train timestamps directory (or 'all' keyword to use all files in this directory). \n\
 One model per train file and prediction method will be created if possible. Each file must store time series timestamps from pretrain \n\
 data in proper format. Check README.md to see timestamps proper format.",
+        )
+
+        self.parser.add_argument(
+            "--join-test-timestamps",
+            action="store_const",
+            const=True,
+            help="Get just the first start timestamp and the last stop timestamp from test timestamp files.",
         )
 
         self.parser.add_argument(

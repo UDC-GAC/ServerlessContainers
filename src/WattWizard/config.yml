@@ -12,17 +12,19 @@ structures: "host"
 prediction_methods: "polyreg,sgdregressor"
 model_variables: "user_load,system_load"
 
-# Harware info: Only required when using HW aware models
+# Hardware info: Only required when using HW aware models
 sockets: 2
 cores_distribution:
   CPU0: "0-15,32-47"
   CPU1: "16-31,48-63"
 
 # Train configuration
+join_train_timestamps: no
 train_timestamps_dir: "./conf/WattWizard/timestamps/train/default"
 train_files: "all"
 
 # Test configuration
+join_test_timestamps: no
 test_timestamps_dir: "./conf/WattWizard/timestamps/test"
 test_files: "all"
 

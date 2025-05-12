@@ -2,14 +2,14 @@ import warnings
 import pandas as pd
 import concurrent.futures
 import multiprocessing
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.WattWizard.logs.logger import log
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
 
 OUT_RANGE = 1.5
 MAX_CPU_USAGE_RATIO = 1.0  # Use up to MAX_CPU_USAGE_RATIO of total CPU cores to retrieve InfluxDB time series
-START_OFFSET = 60  # Offset to start timestamp
+START_OFFSET = 20  # Offset to start timestamp
 STOP_OFFSET = 10  # Offset to stop timestamp
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -60,7 +60,7 @@ class TimeSeriesParallelCollector:
         stop_str = " ".join(stop_line.split(" ")[-2:]).strip()
         start = datetime.strptime(start_str, '%Y-%m-%d %H:%M:%S%z') + timedelta(seconds=start_offset)
         stop = datetime.strptime(stop_str, '%Y-%m-%d %H:%M:%S%z') - timedelta(seconds=stop_offset)
-        return [(start, stop, exp_name, exp_type, cores)]
+        return start, stop, exp_name, exp_type, cores
 
     @staticmethod
     def parse_timestamps(file):
@@ -78,9 +78,21 @@ class TimeSeriesParallelCollector:
             start_line = lines[i]
             stop_line = lines[i + 1]
             ts_line = TimeSeriesParallelCollector.get_timestamp_from_line(start_line, stop_line)
-            timestamps.append(ts_line[0])
-        log(f"Timestamps belong to period [{timestamps[0][0]}, {timestamps[-1][1]}]")
+            timestamps.append(ts_line)
+        log(f"First and last timestamps are [{timestamps[0][0]}, {timestamps[-1][1]}]")
         return timestamps
+
+    @staticmethod
+    def join_timestamps(timestamps):
+        exp_name, exp_type, cores = None, None, None
+        first_start = datetime.max.replace(tzinfo=timezone.utc)
+        last_stop = datetime.min.replace(tzinfo=timezone.utc)
+        for ts in timestamps:
+            if ts[0] < first_start:
+                first_start, exp_name, exp_type, cores = ts[0], ts[2], ts[3], ts[4]
+            if ts[1] > last_stop:
+                last_stop = ts[1]
+        return [(first_start, last_stop, exp_name, exp_type, cores)]
 
     # Add time_diff column which represents time instead of dates
     @staticmethod
@@ -152,7 +164,7 @@ class TimeSeriesParallelCollector:
         raise ValueError(f"Unknown mode {mode} when trying to get time series in {self.__class__.__name__}")
 
     # Get model variables time series from timestamps
-    def get_time_series(self, structure, timestamps, mode="all"):
+    def get_time_series(self, structure, timestamps, mode="all", join=False):
         # Filter timestamps and metrics to get from InfluxDB according to mode
         filtered_timestamps, metrics = self._filter_timestamps_and_metrics(timestamps, mode)
 
@@ -160,6 +172,11 @@ class TimeSeriesParallelCollector:
             log(f"Timestamps not valid to get time series in mode '{mode}'", "ERR")
             log("Timestamps must follow the format: <EXP_NAME> <EXP_TYPE> ... <START|STOP> <TIMESTAMP>", "ERR")
             exit(1)
+
+        # Join all timestamps taking the earliest and the oldest timestamps if specified
+        if join:
+            filtered_timestamps = self.join_timestamps(filtered_timestamps)
+            print(filtered_timestamps)
 
         result_dfs = []
         workers = min(len(timestamps), self.max_cores)

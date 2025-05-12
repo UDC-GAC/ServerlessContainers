@@ -7,6 +7,7 @@ class ModelTrainer:
     def __init__(self, config, ts_plotter, data_loader):
         self.config = config
         self.timestamps_dir = self.config.get_argument("train_timestamps_dir")
+        self.join_timestamps = self.config.get_argument("join_train_timestamps")
         self.ts_plotter = ts_plotter
         self.data_loader = data_loader
 
@@ -37,7 +38,7 @@ class ModelTrainer:
     def pretrain_model(self, structure, model):
         # Load train data (idle + running)
         idle_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=True)
-        ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=False)
+        ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=False, join=self.join_timestamps)
         try:
             # Set idle consumption and train model
             model['instance'].set_idle_consumption(idle_data)
