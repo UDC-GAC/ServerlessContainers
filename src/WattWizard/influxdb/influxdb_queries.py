@@ -5,6 +5,13 @@ load_query = '''
         |> filter(fn: (r) => r["_field"] == "user" or r["_field"] == "system")
         |> filter(fn: (r) => r["core"] == "all")
         |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)
+        |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+        |> map(fn: (r) => ({{
+            _time: r._time,
+            _measurement: r._measurement,
+            _field: "load",
+            _value:  r.user + r.system,
+        }}))
 '''
 
 user_load_query = '''
