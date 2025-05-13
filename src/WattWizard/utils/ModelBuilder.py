@@ -65,14 +65,13 @@ class ModelBuilder:
                     # If model was succesfully created and has a train file, train the model
                     if train_file and model.get('instance', None):
                         model['instance'].set_model_vars(self.config.get_argument("model_variables"))
-                        self.trainer.pretrain_model(structure, model)
-
-                        # If model is trained it can also be tested
-                        models_to_test.append((structure, model))
+                        if self.trainer.pretrain_model(structure, model):
+                            # If model was successfully trained it can also be tested
+                            models_to_test.append((structure, model))
 
         # If no model exists, there is nothing else to do
         if not self.model_handler.get_models():
-            log("No valid model has been created. You need a suitable prediction_method-train_file combination", "ERR")
+            log("No valid model has been created. You need a suitable <prediction_method>-<train_file> combination", "ERR")
             exit(1)
 
         # Test models that have been previously trained

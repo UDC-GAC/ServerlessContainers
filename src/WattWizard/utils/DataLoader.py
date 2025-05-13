@@ -54,6 +54,7 @@ class DataLoader:
         df = self.ts_collector.get_time_series(structure, train_timestamps,
                                                mode="only_idle" if idle else "no_idle", join=join)
         # Save time series to CSV for future reuse
-        self._save_to_csv(csv_path, df)
+        if df is not None:
+            self._save_to_csv(csv_path, df)
 
         return df

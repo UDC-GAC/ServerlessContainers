@@ -11,6 +11,7 @@ OUT_RANGE = 1.5
 MAX_CPU_USAGE_RATIO = 1.0  # Use up to MAX_CPU_USAGE_RATIO of total CPU cores to retrieve InfluxDB time series
 START_OFFSET = 20  # Offset to start timestamp
 STOP_OFFSET = 10  # Offset to stop timestamp
+MIN_PERIOD_LENGTH = START_OFFSET + STOP_OFFSET + 10  # Period should have at least 10 seconds substracting offsets
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -94,6 +95,10 @@ class TimeSeriesParallelCollector:
                 last_stop = ts[1]
         return [(first_start, last_stop, exp_name, exp_type, cores)]
 
+    @staticmethod
+    def filter_timestamps_by_period_length(timestamps):
+        return [ts for ts in timestamps if (ts[1] - ts[0]).total_seconds() >= MIN_PERIOD_LENGTH]
+
     # Add time_diff column which represents time instead of dates
     @staticmethod
     def set_time_diff(df, time_column, initial_date=None):
@@ -171,12 +176,18 @@ class TimeSeriesParallelCollector:
         if len(filtered_timestamps) == 0:
             log(f"Timestamps not valid to get time series in mode '{mode}'", "ERR")
             log("Timestamps must follow the format: <EXP_NAME> <EXP_TYPE> ... <START|STOP> <TIMESTAMP>", "ERR")
-            exit(1)
+            return None
 
         # Join all timestamps taking the earliest and the oldest timestamps if specified
         if join:
             filtered_timestamps = self.join_timestamps(filtered_timestamps)
-            print(filtered_timestamps)
+
+        # Ensure all the timestamps have a minimum period length
+        filtered_timestamps = self.filter_timestamps_by_period_length(filtered_timestamps)
+        if not filtered_timestamps:
+            log(f"Timestamps not valid, they must have a minimum period length of {MIN_PERIOD_LENGTH} seconds. "
+                f"Try using --join-<train|test>-timestamps option.", "ERR")
+            return None
 
         result_dfs = []
         workers = min(len(timestamps), self.max_cores)

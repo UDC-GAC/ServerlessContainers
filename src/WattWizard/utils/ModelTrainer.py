@@ -39,6 +39,11 @@ class ModelTrainer:
         # Load train data (idle + running)
         idle_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=True)
         ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=False, join=self.join_timestamps)
+        if idle_data is None or ts_data is None:
+            log(f"Some problem has ocurred while getting metrics for model {model['name']} "
+                f"using file {model['train_file_name']}. Skipping model training...", "WARN")
+            return False
+
         try:
             # Set idle consumption and train model
             model['instance'].set_idle_consumption(idle_data)
@@ -50,3 +55,6 @@ class ModelTrainer:
                 self._plot_train_data(model, structure, ts_data)
         except Exception as e:
             log(f"Error while training model {model['name']}: {str(e)}", "ERR")
+            return False
+
+        return True
