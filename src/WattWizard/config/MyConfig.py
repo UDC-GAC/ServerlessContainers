@@ -1,4 +1,5 @@
 import os
+import shutil
 
 USER_DIR = os.getcwd()
 SCRIPT_PATH = os.path.abspath(__file__)
@@ -7,8 +8,6 @@ WATTWIZARD_DIR = os.path.dirname(os.path.dirname(SCRIPT_PATH))
 COMMA_SEPARATED_LIST_ARGS = ['structures', 'prediction_methods', 'model_variables', 'train_files', 'test_files']
 DIRECTORY_ARGS = ['train_timestamps_dir', 'test_timestamps_dir', 'plot_time_series_dir']
 FILE_ARGS = ['train_files', 'test_files']
-
-DASHED_LINE = "".join(["-" for _ in range(1, 200)])
 
 DEFAULT_MAX_RESOURCE_LIMIT = float('1e+30')
 DEFAULT_CPU_LIMITS = {
@@ -60,6 +59,10 @@ class MyConfig:
         '''
 
     @staticmethod
+    def get_dashed_line():
+        return "".join(["-" for _ in range(30, shutil.get_terminal_size(fallback=(120, 30)).columns)])
+
+    @staticmethod
     def get_project_dir():
         return WATTWIZARD_DIR
 
@@ -108,7 +111,7 @@ class MyConfig:
         return new_dict
 
     def get_summary(self):
-        return [DASHED_LINE, "WATTWIZARD CONFIGURATION"] + [f"{k}: {v}" for k, v in self.args.items()] + [DASHED_LINE]
+        return [self.get_dashed_line(), "WATTWIZARD CONFIGURATION"] + [f"{k.upper() + ':':<30} {v}" for k, v in self.args.items()] + [self.get_dashed_line()]
 
     def set_resource_cpu_limit(self, resource, limit_type, value):
         if limit_type not in ["min", "max"]:
