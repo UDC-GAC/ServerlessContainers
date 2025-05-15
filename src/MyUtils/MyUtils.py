@@ -34,7 +34,7 @@ import requests
 import traceback
 from termcolor import colored
 
-from src.MyUtils.metrics import RESOURCE_TO_BDW, RESOURCE_TO_SC, SC_TO_BDW, TAGS
+from src.MyUtils.metrics import RESOURCE_TO_BDW, RESOURCE_TO_SC, SC_TO_BDW, TAGS, TRANSLATOR_DICT
 
 
 def eprint(*args, **kwargs):
@@ -237,6 +237,7 @@ def valid_resource(resource):
     else:
         return True
 
+
 # DON'T NEED TO TEST
 def get_resource(structure, resource):
     return structure["resources"][resource]
@@ -272,6 +273,7 @@ def start_epoch(debug):
     log_info("----------------------", debug)
     log_info("Starting Epoch", debug)
     return time.time()
+
 
 def end_epoch(debug, window_difference, t0):
     t1 = time.time()
@@ -382,6 +384,10 @@ def get_tag(structure_subtype):
     return TAGS.get(structure_subtype, None)
 
 
+def res_to_metric(res):
+    return TRANSLATOR_DICT.get(res, None)
+
+
 def structure_subtype_is_supported(structure_subtype):
     return (structure_subtype in RESOURCE_TO_BDW and structure_subtype in RESOURCE_TO_SC
             and structure_subtype in SC_TO_BDW and structure_subtype in TAGS)
@@ -426,14 +432,13 @@ def get_metrics_to_retrieve_and_generate(resources, structure_subtype):
     return metrics_to_retrieve, metrics_to_generate
 
 
-def get_container_usages(resources, container_name, window_difference, window_delay, opentsdb_handler, debug):
-    structure_subtype = "container"
-    metrics_to_retrieve, metrics_to_generate = get_metrics_to_retrieve_and_generate(resources, "container")
-    tag = get_tag(structure_subtype)
+def get_structure_usages(resources, structure, window_difference, window_delay, opentsdb_handler, debug):
+    metrics_to_retrieve, metrics_to_generate = get_metrics_to_retrieve_and_generate(resources, structure["subtype"])
+    tag = get_tag(structure["subtype"])
 
     try:
         # Remote database operation
-        usages = opentsdb_handler.get_structure_timeseries({tag: container_name},
+        usages = opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
                                                            window_difference,
                                                            window_delay,
                                                            metrics_to_retrieve,
@@ -441,12 +446,12 @@ def get_container_usages(resources, container_name, window_difference, window_de
 
         # Skip this structure if all the usage metrics are unavailable
         if all([usages[metric] == opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-            log_warning("container: {0} has no usage data".format(container_name), debug)
+            log_warning("structure: {0} has no usage data".format(structure["name"]), debug)
             return None
 
         return usages
     except Exception as e:
-        log_error("error with structure: {0} {1} {2}".format(container_name,
+        log_error("error with structure: {0} {1} {2}".format(structure["name"],
                                                              str(e), str(traceback.format_exc())), debug)
 
     return None

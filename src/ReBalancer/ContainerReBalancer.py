@@ -29,7 +29,7 @@ import traceback
 from json_logic import jsonLogic
 
 from src.MyUtils.MyUtils import log_info, debug_info, get_config_value, log_error, log_warning, get_structures, \
-                                generate_request, get_container_usages
+                                generate_request, get_structure_usages
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, filter_rebalanceable_apps
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
@@ -64,7 +64,7 @@ class ContainerRebalancer:
         containers_with_usages = list()
         for container in containers:
             # Get the usages for each balanced resource
-            usages = get_container_usages(resources, container, self.__window_difference,
+            usages = get_structure_usages(resources, container, self.__window_difference,
                                           self.__window_delay, self.__opentsdb_handler, self.__debug)
             # Save data following the format ["resources"][<resource>]["usage"]
             # e.g., structure.mem.usage -> container["resources"]["mem"]["usage"]
@@ -447,8 +447,7 @@ class ContainerRebalancer:
             app_containers = dict()
             for app in rebalanceable_apps:
                 app_name = app["name"]
-                app_containers_names = app["containers"]
-                app_containers[app_name] = [c for c in containers if c["name"] in app_containers_names]
+                app_containers[app_name] = [c for c in containers if c["name"] in app["containers"]]
                 # Get the container usages
                 app_containers[app_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, app_containers[app_name])
 

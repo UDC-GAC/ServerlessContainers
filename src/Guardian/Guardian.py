@@ -40,16 +40,6 @@ import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 
-
-translator_dict = {
-    "cpu": "structure.cpu.usage",
-    "user": "structure.cpu.user",
-    "kernel": "structure.cpu.kernel",
-    "mem": "structure.mem.usage",
-    "disk": "structure.disk.usage",
-    "energy": "structure.energy.usage"
-}
-
 MODELS_STRUCTURE = "host"
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
@@ -300,10 +290,10 @@ class Guardian:
         limits = limits_dict[resource_label]
         color_map = {"max": "red", "current": "magenta", "upper": "yellow", "usage": "cyan", "lower": "green", "min": "blue"}
 
-        if not usages_dict or usages_dict[translator_dict[resource_label]] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+        if not usages_dict or usages_dict[utils.res_to_metric(resource_label)] == self.NO_METRIC_DATA_DEFAULT_VALUE:
             usage_value_string = NOT_AVAILABLE_STRING
         else:
-            usage_value_string = str("%.2f" % usages_dict[translator_dict[resource_label]])
+            usage_value_string = str("%.2f" % usages_dict[utils.res_to_metric(resource_label)])
 
         strings = list()
         for key, values in [("max", metrics), ("current", metrics), ("upper", limits), ("lower", limits), ("min", metrics)]:
@@ -444,7 +434,7 @@ class Guardian:
         # For each container in list get and sum its usages
         total_usages = {}
         for c in containers:
-            container_usages = utils.get_container_usages(resources, c["name"], self.window_difference,
+            container_usages = utils.get_structure_usages(resources, c, self.window_difference,
                                                           self.window_delay, self.opentsdb_handler, self.debug)
 
             # Aggregate container data into a global dictionary
@@ -536,7 +526,7 @@ class Guardian:
         """
         power_margin = limits["energy"]["boundary"] / 100
         power_budget = structure["resources"]["energy"]["max"]
-        current_energy_usage = usages[translator_dict["energy"]]
+        current_energy_usage = usages[utils.res_to_metric("energy")]
 
         # If power is within some reasonable limits we do nothing
         if power_budget < current_energy_usage < power_budget * (1 + power_margin):
@@ -569,7 +559,7 @@ class Guardian:
         structure_name = structure['name']
         container_power_budget = structure["resources"]["energy"]["max"]
         container_cpu_limit = structure["resources"]["cpu"]["current"]
-        container_power_usage = usages[translator_dict["energy"]]
+        container_power_usage = usages[utils.res_to_metric("energy")]
         container_power_diff = container_power_budget - container_power_usage
 
         # Check that the needed scaling is coherent with the rescale type
@@ -586,9 +576,10 @@ class Guardian:
         cpu_usage_limit = host_cpu_info["current"]
 
         # Get host power consumption (RAPL)
-        rapl_report = utils.get_container_usages(["energy"], f"{current_host}-rapl", self.window_difference,
+        rapl_structure = {"name": f"{current_host}-rapl", "subtype": "container"}
+        rapl_report = utils.get_structure_usages(["energy"], rapl_structure, self.window_difference,
                                                  self.window_delay, self.opentsdb_handler, self.debug)
-        cpu_power_usage = rapl_report[translator_dict["energy"]]
+        cpu_power_usage = rapl_report[utils.res_to_metric("energy")]
 
         # Register scaling and wait for other containers on this host to be registered
         self.register_scaling(structure, value=container_power_diff)
@@ -602,8 +593,8 @@ class Guardian:
         try:
             # Set model prediction parameters
             kwargs = {
-                "user_load": host_usages[translator_dict["user"]],
-                "system_load": host_usages[translator_dict["kernel"]] if not ignore_system else 0.0
+                "user_load": host_usages[utils.res_to_metric("user")],
+                "system_load": host_usages[utils.res_to_metric("kernel")] if not ignore_system else 0.0
             }
             # If model is HW aware it also needs core usages information
             if self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name):
@@ -735,7 +726,7 @@ class Guardian:
         """
         power_budget = structure["resources"][resource]["max"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
-        current_energy_usage = usages[translator_dict["energy"]]
+        current_energy_usage = usages[utils.res_to_metric("energy")]
 
         percentage_error = (power_budget - current_energy_usage) / power_budget
         amount = current_cpu_limit * percentage_error
@@ -880,7 +871,7 @@ class Guardian:
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
                 utils.log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
-            elif usages[translator_dict[resource]] != self.NO_METRIC_DATA_DEFAULT_VALUE:
+            elif usages[utils.res_to_metric(resource)] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                 useful_resources.append(resource)
 
         data = dict()
@@ -928,7 +919,7 @@ class Guardian:
             current_limit = structure["resources"][res]["current"]
             max_limit = structure["resources"][res]["max"]
             upper_limit = limits[res]["upper"]
-            res_usage = usages[translator_dict[res]]
+            res_usage = usages[utils.res_to_metric(res)]
             if res == "energy":
                 utils.log_warning("POWER BUDGETING -> max : {0} | usa: {1}".format(max_limit, res_usage), self.debug)
             else:
@@ -994,7 +985,7 @@ class Guardian:
                     amount = rule["amount"]
                     current_resource_limit = structure["resources"][resource_label]["current"]
                     upper_limit = limits[resource_label]["upper"]
-                    usage = usages[translator_dict[resource_label]]
+                    usage = usages[utils.res_to_metric(resource_label)]
                     ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
                     amount = int(ratio * amount)
                     utils.log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
@@ -1012,7 +1003,7 @@ class Guardian:
                                                                     limits[resource_label]["boundary_type"],
                                                                     structure["resources"][resource_label],
                                                                     resource_label)
-                    usage = usages[translator_dict[resource_label]]
+                    usage = usages[utils.res_to_metric(resource_label)]
                     amount = self.get_amount_from_fit_reduction(current_resource_limit, resource_margin, usage)
                 elif rule["rescale_policy"] == "fixed-ratio" and resource_label == "energy":
                     amount = self.get_amount_from_fixed_ratio(structure, resource_label)
@@ -1038,7 +1029,7 @@ class Guardian:
                 # If power is within some reasonable limits we do nothing
                 if self.power_is_near_power_budget(structure, usages, limits):
                     utils.log_warning("Current energy usage ({0:.2f}) for structure {1} is close to its power budget ({2:.2f}), "
-                                      "setting amount to 0".format(usages[translator_dict["energy"]], structure["name"],
+                                      "setting amount to 0".format(usages[utils.res_to_metric("energy")], structure["name"],
                                                                    structure["resources"]["energy"]["max"]), self.debug)
                     amount = 0
                 self.print_energy_rescale_info(structure, usages, limits, amount)

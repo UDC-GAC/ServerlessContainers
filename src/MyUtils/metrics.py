@@ -4,12 +4,14 @@ RESOURCE_TO_BDW = {
         "cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
         "mem": ['proc.mem.resident', 'proc.mem.virtual'],
         "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
-        "energy": ["structure.energy.usage"]
+        "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
+        "energy": ['structure.energy.usage']
     },
     "application": {
         "cpu": ['structure.cpu.usage'],
         "mem": ['structure.mem.usage'],
         "disk": ['structure.disk.usage'],
+        "net": ['structure.net.usage'],
         "energy": ['structure.energy.usage']
     }
 }
@@ -20,12 +22,14 @@ RESOURCE_TO_SC = {
         "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
         "mem": ['structure.mem.usage'],
         "disk": ['structure.disk.usage'],
+        "net": ['structure.net.usage'],
         "energy": ["structure.energy.usage"]
     },
     "application": {
         "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
         "mem": ['structure.mem.usage'],
         "disk": ['structure.disk.usage'],
+        "net": ['structure.net.usage'],
         "energy": ['structure.energy.usage']
     }
 }
@@ -38,6 +42,7 @@ SC_TO_BDW = {
         'structure.cpu.kernel': ['proc.cpu.kernel'],
         'structure.mem.usage': ['proc.mem.resident'],
         'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+        "structure.net.usage": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
         'structure.energy.usage': ["structure.energy.usage"]
     },
     "application": {
@@ -46,9 +51,21 @@ SC_TO_BDW = {
         'structure.cpu.kernel': ['structure.cpu.kernel'],
         'structure.mem.usage': ['structure.mem.usage'],
         'structure.disk.usage': ['structure.disk.usage'],
+        "structure.net.usage": ['structure.net.usage'],
         'structure.energy.usage': ['structure.energy.usage']
     }
 }
 
 # Dictionary containing the mapping between structure subtypes and tags
 TAGS = {"container": "host", "application": "structure"}
+
+# Dictionary containing the mapping between resource names and ServerlessContainers metrics
+TRANSLATOR_DICT = {
+    "cpu": "structure.cpu.usage",
+    "user": "structure.cpu.user",
+    "kernel": "structure.cpu.kernel",
+    "mem": "structure.mem.usage",
+    "disk": "structure.disk.usage",
+    "net": "structure.net.usage",
+    "energy": "structure.energy.usage"
+}
