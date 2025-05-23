@@ -96,6 +96,13 @@ Example: CPU0=0-15,32-47;CPU1=16-31,48-63",
         )
 
         self.parser.add_argument(
+            "--csv-caching",
+            action="store_const",
+            const=True,
+            help="Cache time series in CSV files for future reuse",
+        )
+
+        self.parser.add_argument(
             "--join-train-timestamps",
             action="store_const",
             const=True,

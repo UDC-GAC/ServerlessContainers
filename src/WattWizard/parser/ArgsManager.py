@@ -17,6 +17,7 @@ SUPPORTED_ARGS = [
     'model_variables',
     'sockets',
     'cores_distribution',
+    'csv_caching',
     'join_train_timestamps',
     'train_timestamps_dir',
     'train_files',
@@ -120,6 +121,9 @@ class ArgsManager:
 
             elif arg_name == "cores_distribution":
                 pass  # Nothing to do here for cores_distribution (it will be checked below)
+
+            elif arg_name == "csv_caching":
+                pass  # Nothing to do here for csv_caching
 
             elif arg_name == "join_train_timestamps":
                 pass  # Nothing to do for join_train_timestamps

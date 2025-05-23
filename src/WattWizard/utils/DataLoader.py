@@ -31,19 +31,22 @@ class DataLoader:
         return os.path.join(base_dir, f"{filename}{suffix}.{ext}")
 
     def load_time_series(self, structure, base_dir, filename, idle=False, join=False):
-        # Create separate directory for CSV files
-        os.makedirs(f"{base_dir}/.csv_cache", exist_ok=True)
-        # First, try getting data from CSV file if already exists
-        csv_path = self._build_path(f"{base_dir}/.csv_cache", filename, "csv", idle, join)
-        if os.path.exists(csv_path):
-            try:
-                df = self._read_from_csv(csv_path)
-                # Check all the model variables are present in train time series (not idle)
-                if idle or all(v in df for v in self.config.get_argument("model_variables")):
-                    return df
-                log(f"Some model variables are missing in CSV file. Getting data from InfluxDB and updating CSV file")
-            except Exception as e:
-                log(f"Error while reading {csv_path}: {str(e)}", "WARN")
+        csv_path = None
+
+        # Try getting data from CSV file if CSV caching is active
+        if self.config.get_argument("csv_caching"):
+            # Create separate directory to cache time series in CSV files
+            os.makedirs(f"{base_dir}/.csv_cache", exist_ok=True)
+            csv_path = self._build_path(f"{base_dir}/.csv_cache", filename, "csv", idle, join)
+            if os.path.exists(csv_path):
+                try:
+                    df = self._read_from_csv(csv_path)
+                    # Check all the model variables are present in train time series (not idle)
+                    if idle or all(v in df for v in self.config.get_argument("model_variables")):
+                        return df
+                    log(f"Some model variables are missing in CSV file. Getting data from InfluxDB and updating CSV file")
+                except Exception as e:
+                    log(f"Error while reading {csv_path}: {str(e)}", "WARN")
 
         # If CSV not available, get data from InfluxDB
         timestamps_path = self._build_path(base_dir, filename, "timestamps")
@@ -53,8 +56,9 @@ class DataLoader:
         # Get time series from InfluxDB
         df = self.ts_collector.get_time_series(structure, train_timestamps,
                                                mode="only_idle" if idle else "no_idle", join=join)
-        # Save time series to CSV for future reuse
-        if df is not None:
+
+        # Save time series to CSV for future reuse if CSV caching is active
+        if df is not None and csv_path:
             self._save_to_csv(csv_path, df)
 
         return df

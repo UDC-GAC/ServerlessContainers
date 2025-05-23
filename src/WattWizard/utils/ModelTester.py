@@ -56,6 +56,10 @@ class ModelTester:
         log(f"Evaluating model {model['name']} with test {test_name}")
         test_data = self.data_loader.load_time_series(structure, self.timestamps_dir, test_name, idle=False, join=self.join_timestamps)
 
+        if test_data is None:
+            log(f"Some problem has ocurred getting data for model {test_name}. Skipping test... ", "WARN")
+            return
+
         # Get model predictions for test dataset
         new_data, power_pred = model['instance'].test(time_series=test_data, data_type="df")
 
