@@ -26,15 +26,14 @@ class ARXModel(Model):
             "test": ['time_series', 'data_type'],
             "predict": ['X_dict']
         })
-        self.x_offset = None
-        self.y_offset = None
-        self.x_lag = 1
-        self.y_lag = 1
+        self.x_offset, self.y_offset = None, None
+        self.x_degree, self.y_degree = 1, 1
+        self.x_lag, self.y_lag = 1, 1
         self.max_lag = max(self.x_lag, self.y_lag)
 
     def get_model_vars(self):
-        ylags = [f"power(k-{lag})" for lag in range(1, self.y_lag + 1)]
-        xlags = [f"{var}(k-{lag})" for lag in range(1, self.x_lag + 1) for var in self.model_vars]
+        ylags = [f"power(k-{i})^{d}" for i in range(1, self.y_lag + 1) for d in range(1, self.y_degree + 1)]
+        xlags = [f"{var}(k-{i})^{d}" for i in range(1, self.x_lag + 1) for d in range(1, self.x_degree + 1) for var in self.model_vars]
         return ylags + xlags
 
     def get_coefs(self):
@@ -51,10 +50,13 @@ class ARXModel(Model):
         x_values = []
         # Append y(k-1) to y(k-y_lag)
         for i in range(1, self.y_lag+1):
-            x_values.append(y[(self.max_lag - i):-i])       # y(k-i)
+            for d in range(1, self.y_degree + 1):
+                x_values.append(y[(self.max_lag - i):-i] ** d)       # y(k-i)^d
+
         # Append x(k-1) to x(k-y_lag)
         for i in range(1, self.x_lag+1):
-            x_values.append(X[(self.max_lag - i):-i])       # x(k-i)
+            for d in range(1, self.x_degree + 1):
+                x_values.append(X[(self.max_lag - i):-i] ** d)       # x(k-i)^d
 
         return np.hstack(x_values)
 
@@ -121,5 +123,6 @@ class ARXModel(Model):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)
         if not self.pretrained:
             raise TypeError("Model not fitted yet, first train the model, then predict")
-        X_values = [[kwargs['X_dict'][var] - self.x_offset for var in self.get_model_vars()]]
+        X_values = [[(kwargs['X_dict'][f"{var}(k-{i})"] ** d) - self.x_offset
+                     for i in range(1, self.x_lag + 1) for d in range(1, self.x_degree + 1) for var in self.model_vars]]
         return self.model.predict(X_values)[0] + self.y_offset
