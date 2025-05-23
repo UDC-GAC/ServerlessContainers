@@ -19,13 +19,15 @@ class ARXModel(Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__()
-        self.model = LinearRegression(fit_intercept=True)
+        self.model = LinearRegression(fit_intercept=False)
         self.required_kwargs_map.update({
             "pretrain": ['time_series', 'data_type'],
             "train": None,
             "test": ['time_series', 'data_type'],
             "predict": ['X_dict']
         })
+        self.x_offset = None
+        self.y_offset = None
         self.x_lag = 1
         self.y_lag = 1
         self.max_lag = max(self.x_lag, self.y_lag)
@@ -68,16 +70,19 @@ class ARXModel(Model):
         # Get data properly formatted
         X_train, y_train = self.get_model_data(kwargs['time_series'], kwargs['data_type'])
 
-        # Remove idle consumption (predict only active consumption)
-        y_adjusted = y_train - self.idle_consumption
+        self.x_offset = np.mean(X_train, axis=0)
+        self.y_offset = np.mean(y_train)
+
+        X_centered = X_train - self.x_offset
+        y_centered = y_train - self.y_offset
 
         # Add lagged x and y values to train data
-        X_train = self._lag_input_features(X_train, y_adjusted.reshape(-1, 1))
+        X_lagged = self._lag_input_features(X_centered, y_centered.reshape(-1, 1))
 
         # Set y(k+lag) as y(k)
-        y_adjusted = y_adjusted[self.max_lag:]
+        y_lagged = y_centered[self.max_lag:]
 
-        self.model.fit(X_train, y_adjusted)
+        self.model.fit(X_lagged, y_lagged)
         self.pretrained = True
 
     def train(self, *args, **kwargs):
@@ -97,14 +102,14 @@ class ARXModel(Model):
         # Get data properly formatted
         X_test, y_test = self.get_model_data(kwargs['time_series'], kwargs['data_type'])
 
-        # Remove idle consumption (predict only active consumption)
-        y_adjusted = y_test - self.idle_consumption
+        X_centered = X_test - self.x_offset
+        y_centered = y_test - self.y_offset
 
         # Add lagged x and y values to test data
-        X_test = self._lag_input_features(X_test, y_adjusted.reshape(-1, 1))
+        X_lagged = self._lag_input_features(X_centered, y_centered.reshape(-1, 1))
 
         # Get predictions
-        y_pred = self.idle_consumption + self.model.predict(X_test)
+        y_pred = self.model.predict(X_lagged) + self.y_offset
 
         # Insert the actual value in the first max_lag positions, as first max_lag test values are used as input data
         for i in range(0, self.max_lag):
@@ -116,6 +121,5 @@ class ARXModel(Model):
         self.check_required_kwargs(self.required_kwargs_map['predict'], kwargs)
         if not self.pretrained:
             raise TypeError("Model not fitted yet, first train the model, then predict")
-        X_values = [[kwargs['X_dict'][var] - self.idle_consumption if var.startswith("power") else kwargs['X_dict'][var]
-                    for var in self.get_model_vars()]]
-        return self.idle_consumption + self.model.predict(X_values)[0]
+        X_values = [[kwargs['X_dict'][var] - self.x_offset for var in self.get_model_vars()]]
+        return self.model.predict(X_values)[0] + self.y_offset
