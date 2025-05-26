@@ -8,6 +8,7 @@ class ModelTrainer:
         self.config = config
         self.timestamps_dir = self.config.get_argument("train_timestamps_dir")
         self.join_timestamps = self.config.get_argument("join_train_timestamps")
+        self.csv_caching = self.config.get_argument("csv_caching_train")
         self.ts_plotter = ts_plotter
         self.data_loader = data_loader
 
@@ -37,8 +38,11 @@ class ModelTrainer:
 
     def pretrain_model(self, structure, model):
         # Load train data (idle + running)
-        idle_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=True)
-        ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'], idle=False, join=self.join_timestamps)
+        idle_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'],
+                                                      idle=True, csv_caching=self.csv_caching)
+        ts_data = self.data_loader.load_time_series(structure, self.timestamps_dir, model['train_file_name'],
+                                                    idle=False, join=self.join_timestamps, csv_caching=self.csv_caching)
+
         if idle_data is None or ts_data is None:
             log(f"Some problem has ocurred while getting metrics for model {model['name']} "
                 f"using file {model['train_file_name']}. Skipping model training...", "WARN")

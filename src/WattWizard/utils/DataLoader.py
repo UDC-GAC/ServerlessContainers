@@ -30,11 +30,11 @@ class DataLoader:
         suffix = ('_IDLE' if idle else '') + ('_JOIN' if join and not idle else '') if ext == 'csv' else ''
         return os.path.join(base_dir, f"{filename}{suffix}.{ext}")
 
-    def load_time_series(self, structure, base_dir, filename, idle=False, join=False):
+    def load_time_series(self, structure, base_dir, filename, idle=False, join=False, csv_caching=False):
         csv_path = None
 
         # Try getting data from CSV file if CSV caching is active
-        if self.config.get_argument("csv_caching"):
+        if csv_caching:
             # Create separate directory to cache time series in CSV files
             os.makedirs(f"{base_dir}/.csv_cache", exist_ok=True)
             csv_path = self._build_path(f"{base_dir}/.csv_cache", filename, "csv", idle, join)
@@ -58,7 +58,7 @@ class DataLoader:
                                                mode="only_idle" if idle else "no_idle", join=join)
 
         # Save time series to CSV for future reuse if CSV caching is active
-        if df is not None and csv_path:
+        if df is not None and csv_caching:
             self._save_to_csv(csv_path, df)
 
         return df

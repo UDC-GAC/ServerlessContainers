@@ -9,6 +9,7 @@ class ModelTester:
         self.config = config
         self.timestamps_dir = self.config.get_argument("test_timestamps_dir")
         self.join_timestamps = self.config.get_argument("join_test_timestamps")
+        self.csv_caching = self.config.get_argument("csv_caching_test")
         self.ts_plotter = ts_plotter
         self.data_loader = data_loader
         # Formatting variables
@@ -54,7 +55,8 @@ class ModelTester:
     def test_model(self, structure, model, test_file):
         test_name = os.path.splitext(os.path.basename(test_file))[0]
         log(f"Evaluating model {model['name']} with test {test_name}")
-        test_data = self.data_loader.load_time_series(structure, self.timestamps_dir, test_name, idle=False, join=self.join_timestamps)
+        test_data = self.data_loader.load_time_series(structure, self.timestamps_dir, test_name, idle=False,
+                                                      join=self.join_timestamps, csv_caching=self.csv_caching)
 
         if test_data is None:
             log(f"Some problem has ocurred getting data for model {test_name}. Skipping test... ", "WARN")

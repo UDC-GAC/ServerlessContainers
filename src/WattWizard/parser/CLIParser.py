@@ -96,10 +96,17 @@ Example: CPU0=0-15,32-47;CPU1=16-31,48-63",
         )
 
         self.parser.add_argument(
-            "--csv-caching",
+            "--csv-caching-train",
             action="store_const",
             const=True,
-            help="Cache time series in CSV files for future reuse",
+            help="Cache training time series in CSV files for future reuse",
+        )
+
+        self.parser.add_argument(
+            "--csv-caching-test",
+            action="store_const",
+            const=True,
+            help="Cache test time series in CSV files for future reuse",
         )
 
         self.parser.add_argument(

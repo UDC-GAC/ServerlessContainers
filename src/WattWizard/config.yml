@@ -19,7 +19,8 @@ cores_distribution:
   CPU1: "16-31,48-63"
 
 # Cache time series in CSV files
-csv_caching: yes
+csv_caching_train: yes
+csv_caching_test: yes
 
 # Train configuration
 join_train_timestamps: no
