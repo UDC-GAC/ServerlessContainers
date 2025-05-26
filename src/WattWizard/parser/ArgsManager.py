@@ -41,6 +41,15 @@ class ArgsManager:
     def __init__(self, cli_args=None, config_file_args=None):
         self.cli_args = cli_args
         self.config_file_args = config_file_args
+        # Add here all the arguments that must be validated
+        self.arg_validators = {
+            "structures":             lambda v: self.check_supported_values("structures", v, SUPPORTED_STRUCTURES),
+            "prediction_methods":     lambda v: self.check_supported_values("prediction_methods", v, SUPPORTED_PRED_METHODS),
+            "model_variables":        lambda v: self.check_supported_values("model_variables", v, SUPPORTED_VARS),
+            "sockets":                lambda v: self.check_supported_values("sockets", [v], [2]),
+            "train_files":            lambda v: self.check_train_files(v),
+            "test_files":             lambda v: self.check_test_files(v),
+        }
 
     @staticmethod
     def check_files_exist(files):
@@ -51,6 +60,18 @@ class ArgsManager:
             if not os.access(file, os.R_OK):
                 log(f"File {file} is not accesible: check file permissions", "ERR")
                 exit(1)
+
+    def check_train_files(self, arg_value):
+        if len(arg_value) == 0:
+            log(f"No train files have been specified. At least one file (or NPT) must be indicated. "
+                f"Otherwise, no model would be created.", "ERR")
+            exit(1)
+        # Remove duplicates and None values through set subtraction
+        self.check_files_exist(list(set(arg_value) - {None}))
+
+    def check_test_files(self, arg_value):
+        if len(arg_value) > 0:
+            self.check_files_exist(arg_value)
 
     @staticmethod
     def check_dirs_exist(dirs):
@@ -74,8 +95,9 @@ class ArgsManager:
                 exit(1)
 
     @staticmethod
-    def check_influxdb_args(args, num_args):
-        if num_args == 4:
+    def check_influxdb_args(args):
+        influxdb_args = sum(1 for name in args if name.startswith("influxdb"))
+        if influxdb_args == 4:
             with InfluxDBHandler(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:
                 conn.check_influxdb_connection()
                 conn.check_bucket_exists()
@@ -96,74 +118,20 @@ class ArgsManager:
         my_config = MyConfig.get_instance()
         args = my_config.get_arguments()
 
-        influxdb_args = 0
-        for arg_name in args:
-
-            if arg_name == "verbose":
-                pass  # Nothing to do for verbose
-
-            elif arg_name == "server_mode":
-                pass  # Nothing to do for server_mode
-
-            elif arg_name.startswith("influxdb"):
-                influxdb_args += 1  # Count InfluxDB arguments
-
-            elif arg_name == "structures":
-                self.check_supported_values(arg_name, args[arg_name], SUPPORTED_STRUCTURES)
-
-            elif arg_name == "prediction_methods":
-                self.check_supported_values(arg_name, args[arg_name], SUPPORTED_PRED_METHODS)
-
-            elif arg_name == "model_variables":
-                self.check_supported_values(arg_name, args[arg_name], SUPPORTED_VARS)
-
-            elif arg_name == "sockets":
-                self.check_supported_values(arg_name, [args[arg_name]], [2])
-
-            elif arg_name == "cores_distribution":
-                pass  # Nothing to do here for cores_distribution (it will be checked below)
-
-            elif arg_name == "csv_caching_train":
-                pass  # Nothing to do here for csv_caching_train
-
-            elif arg_name == "csv_caching_test":
-                pass  # Nothing to do here for csv_caching_test
-
-            elif arg_name == "join_train_timestamps":
-                pass  # Nothing to do for join_train_timestamps
-
-            elif arg_name == "train_timestamps_dir":
-                pass  # Nothing to do for train_timestamps_dir (already checked in train_files)
-
-            elif arg_name == "train_files":
-                if len(args[arg_name]) == 0:
-                    log(f"No train files have been specified. At least one file (or NPT) must be indicated. "
-                        f"Otherwise, no model would be created.", "ERR")
-                    exit(1)
-                self.check_files_exist(list(set(args[arg_name]) - {None}))
-
-            elif arg_name == "join_test_timestamps":
-                pass  # Nothing to do for join_test_timestamps
-
-            elif arg_name == "test_timestamps_dir":
-                pass  # Nothing to do for test_timestamps_dir (already checked in test_files)
-
-            elif arg_name == "test_files":
-                if len(args[arg_name]) > 0:
-                    self.check_files_exist(args[arg_name])
-
-            elif arg_name == "plot_time_series":
-                pass
-
-            elif arg_name == "plot_time_series_dir":
-                pass
-
-            else:
-                log(f"Argument {arg_name} is not supported", "ERR")
+        for name, value in args.items():
+            # Check if the argument is supported
+            if name not in SUPPORTED_ARGS:
+                log(f"Argument {name} is not supported", "ERR")
                 exit(1)
 
+            # Check if the argument must be validated
+            validate = self.arg_validators.get(name)
+            if validate:
+                validate(value)
+
+        # Perform additional validations that require information from more than one argument
+        self.check_influxdb_args(args)
         self.check_cores_distribution(args)
-        self.check_influxdb_args(args, influxdb_args)
 
     def manage_args(self):
         my_config = MyConfig.get_instance()
