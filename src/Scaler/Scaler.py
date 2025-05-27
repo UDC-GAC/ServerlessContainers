@@ -35,17 +35,16 @@ import traceback
 import logging
 
 from requests import HTTPError
-
-import src.StateDatabase.couchdb as couchDB
-import src.StateDatabase.opentsdb as bdwatchdog
 from src.Guardian.Guardian import Guardian
 from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT, \
-    get_structures, update_structure, generate_request_name, structure_is_application, structure_is_container
-from src.StateDatabase import couchdb
+import src.MyUtils.MyUtils as utils
+import src.StateDatabase.couchdb as couchDB
+from src.StateDatabase import couchdb  # TODO: Remove duplicate import
+import src.StateDatabase.opentsdb as bdwatchdog
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "self.debug": True, "CHECK_CORE_MAP": True, "ACTIVE": True}
+
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True, "ACTIVE": True}
 SERVICE_NAME = "scaler"
 
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
@@ -70,8 +69,8 @@ def set_container_resources(rescaler_http_session, container, resources, debug):
     if r.status_code == 201:
         return dict(r.json())
     else:
-        log_error("Error processing container resource change in host in IP {0}".format(rescaler_ip), debug)
-        log_error(str(json.dumps(r.json())), debug)
+        utils.log_error("Error processing container resource change in host in IP {0}".format(rescaler_ip), debug)
+        utils.log_error(str(json.dumps(r.json())), debug)
         r.raise_for_status()
 
 
@@ -81,17 +80,19 @@ class Scaler:
     """
 
     def __init__(self):
+        # TODO: CouchDB handler is duplicated
         self.couchdb_handler = couchdb.CouchDBServer()
         self.db_handler = couchDB.CouchDBServer()
         self.rescaler_http_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
-        self.host_info_cache = dict()
-        self.container_info_cache = dict()
+        self.host_info_cache, self.container_info_cache = dict(), dict()
         self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk": self.apply_disk_request, "net": self.apply_net_request}
+        self.polling_frequency, self.request_timeout, self.debug, self.check_core_map, self.active = None, None, None, None, None
 
-    #### CHECKS ####
+    ####################################################################################################################
+    # CHECKS
+    ####################################################################################################################
     def fix_container_cpu_mapping(self, container, cpu_used_cores, cpu_used_shares):
-
         resource_dict = {"cpu": {}}
         resource_dict["cpu"]["cpu_num"] = ",".join(cpu_used_cores)
         resource_dict["cpu"]["cpu_allowance_limit"] = int(cpu_used_shares)
@@ -100,7 +101,7 @@ class Scaler:
             set_container_resources(self.rescaler_http_session, container, resource_dict, self.debug)
             return True
         except (Exception, RuntimeError, ValueError, requests.HTTPError) as e:
-            log_error("Error when setting container resources: {0}".format(str(e)), self.debug)
+            utils.log_error("Error when setting container resources: {0}".format(str(e)), self.debug)
             return False
 
     def check_host_cpu_limits(self):
@@ -113,7 +114,7 @@ class Scaler:
                     if container != "free":
                         all_accounted_shares += core[container]
             if all_accounted_shares > host["resources"]["cpu"]["max"]:
-                log_error("Host {0} has more mapped shares than its maximum".format(host["name"]), self.debug)
+                utils.log_error("Host {0} has more mapped shares than its maximum".format(host["name"]), self.debug)
                 errors_detected = True
         return errors_detected
 
@@ -133,7 +134,7 @@ class Scaler:
         elif host_shares < needed_resources:
             missing_shares = needed_resources - host_shares
             # raise ValueError("Error in setting {0}, couldn't get the resources needed, missing {1} shares".format(resource, missing_shares))
-            log_warning(
+            utils.log_warning(
                 "Beware, there are not enough free shares for resource {0} in the host, there are {1},  missing {2}".format(resource, host_shares, missing_shares),
                 self.debug)
 
@@ -143,7 +144,7 @@ class Scaler:
             database_resources = container["resources"]
 
             if "max" not in database_resources["cpu"]:
-                log_error("container {0} has not a maximum value set, check its configuration".format(container["name"]), self.debug)
+                utils.log_error("container {0} has not a maximum value set, check its configuration".format(container["name"]), self.debug)
                 errors_detected = True
                 continue
 
@@ -152,15 +153,15 @@ class Scaler:
                 real_resources = self.container_info_cache[container["name"]]["resources"]
                 current_cpu_limit = self.get_current_resource_value(real_resources, "cpu")
                 if current_cpu_limit > max_cpu_limit:
-                    log_error("container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max "
+                    utils.log_error("container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max "
                               "parameter in its configuration".format(container["name"], current_cpu_limit, max_cpu_limit), self.debug)
                     errors_detected = True
             except KeyError:
-                log_error("container {0} not found, maybe is down or has been desubscribed"
+                utils.log_error("container {0} not found, maybe is down or has been desubscribed"
                           .format(container["name"]), self.debug)
                 errors_detected = True
             except ValueError as e:
-                log_error("Current value of structure {0} is not valid: {1}".format(container["name"], str(e)), self.debug)
+                utils.log_error("Current value of structure {0} is not valid: {1}".format(container["name"], str(e)), self.debug)
                 errors_detected = True
 
         return errors_detected
@@ -190,7 +191,7 @@ class Scaler:
         database_resources = container["resources"]
 
         if container["host"] not in self.host_info_cache:
-            log_error("Host info '{0}' for container {1} is missing".format(container["host"], container["name"]), self.debug)
+            utils.log_error("Host info '{0}' for container {1} is missing".format(container["host"], container["name"]), self.debug)
             return True
         elif "max" not in database_resources["cpu"]:
             # This error should have been previously detected
@@ -199,7 +200,7 @@ class Scaler:
             try:
                 current_cpu_limit = self.get_current_resource_value(real_resources, "cpu")
             except ValueError as e:
-                log_error(e, self.debug)
+                utils.log_error(e, self.debug)
                 return True
 
         host_info = self.host_info_cache[container["host"]]
@@ -210,16 +211,16 @@ class Scaler:
         map_host_valid, actual_used_cores, actual_used_shares = self.check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
 
         if not map_host_valid:
-            log_error(
+            utils.log_error(
                 "Detected invalid core mapping for container {0}, has {1}-{2}, should be {3}-{4}".format(c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares),
                 self.debug)
-            log_error("trying to automatically fix", self.debug)
+            utils.log_error("trying to automatically fix", self.debug)
             success = self.fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares)
             if success:
-                log_error("Succeeded fixing {0} container's core mapping".format(container["name"]), self.debug)
+                utils.log_error("Succeeded fixing {0} container's core mapping".format(container["name"]), self.debug)
                 errors_detected = True
             else:
-                log_error("Failed in fixing {0} container's core mapping".format(container["name"]), self.debug)
+                utils.log_error("Failed in fixing {0} container's core mapping".format(container["name"]), self.debug)
                 errors_detected = False
         return errors_detected
 
@@ -227,9 +228,9 @@ class Scaler:
         errors_detected = False
         for container in containers:
             c_name = container["name"]
-            log_info("Checking container {0}".format(c_name), self.debug)
+            utils.log_info("Checking container {0}".format(c_name), self.debug)
             if c_name not in self.container_info_cache or "resources" not in self.container_info_cache[c_name]:
-                log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), self.debug)
+                utils.log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), self.debug)
                 continue
             real_resources = self.container_info_cache[c_name]["resources"]
             errors = self.check_container_core_mapping(container, real_resources)
@@ -248,9 +249,9 @@ class Scaler:
         elif resource_limit > max_resource_limit:
             raise ValueError("Error in setting {0}, new value {1} it would be higher than max {2}".format(resource, resource_limit, max_resource_limit))
 
-    ######################################################
-
-    #### REQUEST MANAGEMENT ####
+    ####################################################################################################################
+    # REQUEST MANAGEMENT
+    ####################################################################################################################
     def filter_requests(self, request_timeout):
         fresh_requests, purged_requests, final_requests = list(), list(), list()
         # Remote database operation
@@ -303,7 +304,7 @@ class Scaler:
             for action in structure_requests_dict[structure]:
                 final_requests.append(structure_requests_dict[structure][action])
 
-        log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter), True)
+        utils.log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter), True)
         return final_requests
 
     def sort_requests(self, new_requests):
@@ -317,9 +318,9 @@ class Scaler:
                 pass
         return container_reqs, app_reqs
 
-    ######################################################
-
-    #### RESOURCE REQUEST MANAGEMENT ####
+    ####################################################################################################################
+    # RESOURCE REQUEST MANAGEMENT
+    ####################################################################################################################
     def process_request(self, request, real_resources, database_resources):
         # Create a 'fake' container structure with only the required info
         container = {"host_rescaler_ip": request["host_rescaler_ip"],
@@ -330,7 +331,7 @@ class Scaler:
         try:
             new_resources = self.apply_request(request, real_resources, database_resources)
             if new_resources:
-                log_info("Request: {0} for container : {1} for new resources : {2}".format(
+                utils.log_info("Request: {0} for container : {1} for new resources : {2}".format(
                     request["action"], request["structure"], json.dumps(new_resources)), self.debug)
 
                 # Apply changes through a REST call
@@ -340,13 +341,13 @@ class Scaler:
                 self.container_info_cache[request["structure"]]["resources"][request["resource"]] = new_resources[request["resource"]]
 
         except (ValueError) as e:
-            log_error("Error with container {0} in applying the request -> {1}".format(request["structure"], str(e)), self.debug)
+            utils.log_error("Error with container {0} in applying the request -> {1}".format(request["structure"], str(e)), self.debug)
             return
         except (HTTPError) as e:
-            log_error("Error setting container {0} resources -> {1}".format(request["structure"], str(e)), self.debug)
+            utils.log_error("Error setting container {0} resources -> {1}".format(request["structure"], str(e)), self.debug)
             return
         except (Exception) as e:
-            log_error("Error with container {0} -> {1}".format(request["structure"], str(e)), self.debug)
+            utils.log_error("Error with container {0} -> {1}".format(request["structure"], str(e)), self.debug)
             return
 
     def apply_request(self, request, real_resources, database_resources):
@@ -446,7 +447,7 @@ class Scaler:
 
             if needed_shares > 0:
                 # raise ValueError("Error in setting cpu, couldn't get the resources needed, missing {0} shares".format(needed_shares))
-                log_warning("Structure {0} couldn't get as much CPU shares as intended ({1}), "
+                utils.log_warning("Structure {0} couldn't get as much CPU shares as intended ({1}), "
                             "instead it got {2}".format(structure_name, amount, amount - needed_shares), self.debug)
                 amount = amount - needed_shares
                 # FIXME couldn't do rescale up properly as shares to get remain
@@ -543,9 +544,9 @@ class Scaler:
 
         return resource_dict
 
-    ######################################################
-
-    ##### CONTAINER SCALING ######
+    ####################################################################################################################
+    # CONTAINER SCALING
+    ####################################################################################################################
     def rescale_container(self, request, structure):
         try:
             # Needed for the resources reported in the database (the 'max, min' values)
@@ -554,18 +555,18 @@ class Scaler:
             # Get the resources the container is using from its host NodeScaler (the 'current' value)
             c_name = structure["name"]
             if c_name not in self.container_info_cache or "resources" not in self.container_info_cache[c_name]:
-                log_error("Couldn't get container's {0} resources, can't rescale".format(c_name), self.debug)
+                utils.log_error("Couldn't get container's {0} resources, can't rescale".format(c_name), self.debug)
                 return
             real_resources = self.container_info_cache[c_name]["resources"]
 
             # Process the request
             self.process_request(request, real_resources, database_resources)
         except Exception as e:
-            log_error(str(e) + " " + str(traceback.format_exc()), self.debug)
+            utils.log_error(str(e) + " " + str(traceback.format_exc()), self.debug)
 
-    ######################################################
-
-    ##### APPLICATION SCALING ######
+    ####################################################################################################################
+    # APPLICATION SCALING
+    ####################################################################################################################
     def sort_containers_by_usage_margin(self, container1, container2, resource):
         """
         Parameters:
@@ -603,7 +604,7 @@ class Scaler:
             self.db_handler.add_request(req)
             rescaled_containers.append((req["structure"], req["amount"]))
             total_amount += req["amount"]
-        log_info("App {0} rescaled {1} shares by rescaling containers: {2}".format(app_label, total_amount, str(rescaled_containers)), self.debug)
+        utils.log_info("App {0} rescaled {1} shares by rescaling containers: {2}".format(app_label, total_amount, str(rescaled_containers)), self.debug)
 
     def single_container_rescale(self, request, app_containers, resource_usage_cache):
         amount, resource_label = request["amount"], request["resource"]
@@ -627,7 +628,7 @@ class Scaler:
                     pass
                 elif current_value + amount < container["resources"][resource_label]["min"]:
                     # Container can't free that amount without dropping under the minimum
-                    # log_error("Container {0} can't free that amount without dropping under the minimum".format(container["name"]), self.debug)
+                    # utils.log_error("Container {0} can't free that amount without dropping under the minimum".format(container["name"]), self.debug)
                     pass
                 else:
                     scalable_containers.append(container)
@@ -640,11 +641,11 @@ class Scaler:
 
                 if self.host_info_cache[container_host]["resources"][resource_label]["free"] < resource_shares:
                     # Container's host doesn't have enough free resources
-                    # log_error("Container's host doesn't have enough free resources", self.debug)
+                    # utils.log_error("Container's host doesn't have enough free resources", self.debug)
                     pass
                 elif current_value + amount > container["resources"][resource_label]["max"]:
                     # Container can't get that amount without exceeding the maximum
-                    # log_error("Container can't get that amount without exceeding the maximum", self.debug)
+                    # utils.log_error("Container can't get that amount without exceeding the maximum", self.debug)
                     pass
                 else:
                     scalable_containers.append(container)
@@ -747,15 +748,15 @@ class Scaler:
 
         if len(requests) > 0:
             # Couldn't completely rescale the application as some split of a major rescaling operation could not be completed
-            log_warning("App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been scaled".format(
+            utils.log_warning("App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been scaled".format(
                 request["structure"], str(int(iterations * split_amount)), request["resource"]), self.debug)
 
-    ######################################################
-
-    ### SERVICE METHODS ####
-    def invalid_conf(self, config):
+    ####################################################################################################################
+    # SERVICE METHODS
+    ####################################################################################################################
+    def invalid_conf(self, ):
         # TODO This code is duplicated on the structures and database snapshoters
-        for key, num in [("POLLING_FREQUENCY", config.get_value("POLLING_FREQUENCY")), ("REQUEST_TIMEOUT", config.get_value("REQUEST_TIMEOUT"))]:
+        for key, num in [("POLLING_FREQUENCY", self.polling_frequency), ("REQUEST_TIMEOUT", self.request_timeout)]:
             if num < 5:
                 return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
         return False, ""
@@ -806,16 +807,16 @@ class Scaler:
             try:
                 structure = self.db_handler.get_structure(structure_name)
             except (requests.exceptions.HTTPError, ValueError):
-                log_error("Error, couldn't find structure {0} in database".format(structure_name), self.debug)
+                utils.log_error("Error, couldn't find structure {0} in database".format(structure_name), self.debug)
                 continue
 
             # Rescale the structure accordingly, whether it is a container or an application
-            if structure_is_container(structure):
+            if utils.structure_is_container(structure):
                 self.rescale_container(request, structure)
-            elif structure_is_application(structure):
+            elif utils.structure_is_application(structure):
                 self.rescale_application(request, structure)
             else:
-                log_error("Unknown type of structure '{0}'".format(structure["subtype"]), self.debug)
+                utils.log_error("Unknown type of structure '{0}'".format(structure["subtype"]), self.debug)
 
             # Remove the request from the database
             self.db_handler.delete_request(request)
@@ -841,7 +842,7 @@ class Scaler:
     def persist_new_host_information(self, ):
         def persist_thread(self, host):
             data = self.host_info_cache[host]
-            update_structure(data, self.db_handler, self.debug)
+            utils.update_structure(data, self.db_handler, self.debug)
 
         threads = list()
         for host in self.host_info_cache:
@@ -853,7 +854,7 @@ class Scaler:
             t.join()
 
     def scale_structures(self, new_requests):
-        log_info("Processing requests", self.debug)
+        utils.log_info("Processing requests", self.debug)
 
         t0 = time.time()
 
@@ -868,121 +869,109 @@ class Scaler:
         self.persist_new_host_information()
 
         t1 = time.time()
-        log_info("It took {0} seconds to process requests".format(str("%.2f" % (t1 - t0))), self.debug)
+        utils.log_info("It took {0} seconds to process requests".format(str("%.2f" % (t1 - t0))), self.debug)
 
-    ######################################################
-
+    ####################################################################################################################
+    # MAIN LOOP
+    ####################################################################################################################
     def scale(self, ):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
-
-        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
+                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
 
         # Remove previous requests
-        log_info("Purging any previous requests", True)
+        utils.log_info("Purging any previous requests", True)
         self.filter_requests(0)
-        log_info("----------------------\n", True)
+        utils.log_info("----------------------\n", True)
 
         while True:
-            # Remote database operation
-            service = get_service(self.db_handler, SERVICE_NAME)
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.db_handler)
 
-            # Heartbeat
-            beat(self.db_handler, SERVICE_NAME)
+            t0 = utils.start_epoch(self.debug)
 
-            # CONFIG
-            myConfig.set_config(service["config"])
-            polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
-            request_timeout = myConfig.get_value("REQUEST_TIMEOUT")
-            self.debug = myConfig.get_value("self.debug")
-            CHECK_CORE_MAP = myConfig.get_value("CHECK_CORE_MAP")
-            SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
-
-            log_info("----------------------", self.debug)
-            log_info("Starting Epoch", self.debug)
-            t0 = time.time()
+            utils.print_service_config(self, myConfig, self.debug)
 
             ## CHECK INVALID CONFIG ##
             # TODO This code is duplicated on the structures and database snapshoters
-            invalid, message = self.invalid_conf(myConfig)
+            invalid, message = self.invalid_conf()
             if invalid:
-                log_error(message, self.debug)
-                time.sleep(polling_frequency)
-                if polling_frequency < 5:
-                    log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), self.debug)
-                    polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
+                utils.log_error(message, self.debug)
+                time.sleep(self.polling_frequency)
+                if self.polling_frequency < 5:
+                    utils.log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), self.debug)
+                    self.polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
 
-                log_info("----------------------\n", self.debug)
-                time.sleep(polling_frequency)
+                utils.log_info("----------------------\n", self.debug)
+                time.sleep(self.polling_frequency)
                 continue
 
-            if SERVICE_IS_ACTIVATED:
-
+            if self.active:
                 # Get the container structures and their resource information as such data is going to be needed
-                containers = get_structures(self.db_handler, self.debug, subtype="container")
+                containers = utils.get_structures(self.db_handler, self.debug, subtype="container")
                 try:
                     self.container_info_cache = get_container_resources_dict()  # Reset the cache
                 except (Exception, RuntimeError) as e:
-                    log_error("Error getting host document, skipping epoch altogether", self.debug)
-                    log_error(str(e), self.debug)
-                    time.sleep(polling_frequency)
+                    utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
+                    utils.log_error(str(e), self.debug)
+                    time.sleep(self.polling_frequency)
                     continue
 
                 # Fill the host information cache
-                log_info("Getting host and container info", self.debug)
+                utils.log_info("Getting host and container info", self.debug)
                 try:
                     self.fill_host_info_cache(containers)
                 except (Exception, RuntimeError) as e:
-                    log_error("Error getting host document, skipping epoch altogether", self.debug)
-                    log_error(str(e), self.debug)
-                    time.sleep(polling_frequency)
+                    utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
+                    utils.log_error(str(e), self.debug)
+                    time.sleep(self.polling_frequency)
                     continue
 
                 # Do the core mapping check-up
-                if CHECK_CORE_MAP:
-                    log_info("Doing container CPU limits check", self.debug)
-                    log_info("First hosts", self.debug)
+                if self.check_core_map:
+                    utils.log_info("Doing container CPU limits check", self.debug)
+                    utils.log_info("First hosts", self.debug)
                     errors_detected = self.check_host_cpu_limits()
                     if errors_detected:
-                        log_error("Errors detected during host CPU limits check", self.debug)
+                        utils.log_error("Errors detected during host CPU limits check", self.debug)
 
-                    log_info("Second containers", self.debug)
+                    utils.log_info("Second containers", self.debug)
                     errors_detected = self.check_containers_cpu_limits(containers)
                     if errors_detected:
-                        log_error("Errors detected during container CPU limits check", self.debug)
+                        utils.log_error("Errors detected during container CPU limits check", self.debug)
 
-                    log_info("Doing core mapping check", self.debug)
+                    utils.log_info("Doing core mapping check", self.debug)
                     errors_detected = self.check_core_mapping(containers)
                     if errors_detected:
-                        log_error("Errors detected during container CPU map check", self.debug)
+                        utils.log_error("Errors detected during container CPU map check", self.debug)
                 else:
-                    log_warning("Core map check has been disabled", self.debug)
+                    utils.log_warning("Core map check has been disabled", self.debug)
 
                 # Get the requests
-                new_requests = self.filter_requests(request_timeout)
+                new_requests = self.filter_requests(self.request_timeout)
                 container_reqs, app_reqs = self.sort_requests(new_requests)
 
                 # Process first the application requests, as they generate container ones
                 if app_reqs:
-                    log_info("Processing applications requests", self.debug)
+                    utils.log_info("Processing applications requests", self.debug)
                     self.scale_structures(app_reqs)
                 else:
-                    log_info("No applications requests", self.debug)
+                    utils.log_info("No applications requests", self.debug)
 
                 # Then process container ones
                 if container_reqs:
-                    log_info("Processing container requests", self.debug)
+                    utils.log_info("Processing container requests", self.debug)
                     self.scale_structures(container_reqs)
                 else:
-                    log_info("No container requests", self.debug)
+                    utils.log_info("No container requests", self.debug)
 
                 t1 = time.time()
-                log_info("Epoch processed in {0} seconds".format(str("%.2f" % (t1 - t0))), self.debug)
+                utils.log_info("Epoch processed in {0} seconds".format(str("%.2f" % (t1 - t0))), self.debug)
 
             else:
-                log_warning("Scaler service is not activated", self.debug)
+                utils.log_warning("Scaler service is not activated", self.debug)
 
-            log_info("----------------------\n", self.debug)
-            time.sleep(polling_frequency)
+            utils.log_info("----------------------\n", self.debug)
+            time.sleep(self.polling_frequency)
 
 
 def main():
@@ -990,7 +979,7 @@ def main():
         scaler = Scaler()
         scaler.scale()
     except Exception as e:
-        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        utils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

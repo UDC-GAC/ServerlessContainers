@@ -62,26 +62,23 @@ def beat(db_handler, service_name):
 
 
 class MyConfig:
-    DEFAULTS_CONFIG = None
-    config = None
 
-    def __init__(self, DEFAULTS_CONFIG):
-        self.DEFAULTS_CONFIG = DEFAULTS_CONFIG
+    _config = None
+
+    def __init__(self, config):
+        self._config = config.copy()
 
     def get_config(self):
-        return self.config
+        return self._config
 
     def set_config(self, config):
-        self.config = config
+        self._config.update(config)
 
     def get_value(self, key):
-        try:
-            return self.config[key]
-        except KeyError:
-            return self.DEFAULTS_CONFIG[key]
+        return self._config.get(key, None)
 
     def set_value(self, key, value):
-        self.config[key] = value
+        self._config[key] = value
 
 
 # DON'T NEED TO TEST
@@ -267,6 +264,32 @@ def get_structures(db_handler, debug, subtype="application"):
     except (requests.exceptions.HTTPError, ValueError):
         log_warning("Couldn't retrieve " + subtype + " info.", debug=debug)
         return None
+
+
+def update_service_config(service_instance, service_name, service_config, couchdb_handler):
+    # Get service info
+    service = get_service(couchdb_handler, service_name)
+
+    # Heartbeat
+    beat(couchdb_handler, service_name)
+
+    # Update service configuration
+    service_config.set_config(service["config"])
+
+    # Update service instance attributes according to new configuration
+    for k, v in service_config.get_config().items():
+        setattr(service_instance, k.lower(), v)
+
+
+def print_service_config(service_instance, service_config, debug):
+    log_info("Config is as follows:", debug)
+    log_info(".............................................", debug)
+
+    for key in service_config.get_config().keys():
+        value = getattr(service_instance, key.lower(), None)
+        log_info(f"{key.replace('_', ' ').capitalize()} -> {value}", debug)
+
+    log_info(".............................................", debug)
 
 
 def start_epoch(debug):

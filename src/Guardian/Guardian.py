@@ -63,12 +63,12 @@ class Guardian:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
-        self.current_structures = None
-        self.last_used_energy_model = None
-        self.power_budget = {}
-        self.current_scalings = None
-        self.model_is_hw_aware = None
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.power_budget = {}
+        self.window_timelapse, self.window_delay, self.event_timeout, self.debug = None, None, None, None
+        self.structure_guarded, self.guardable_resources, self.cpu_shares_per_watt, self.active = None, None, None, None
+        self.energy_model_name, self.energy_model_reliability, self.current_structures = None, None, None
+        self.last_used_energy_model, self.current_scalings, self.model_is_hw_aware = None, None, None
 
     def __init_iteration_vars(self, structures):
         def _create_dict_value(count):
@@ -434,7 +434,7 @@ class Guardian:
         # For each container in list get and sum its usages
         total_usages = {}
         for c in containers:
-            container_usages = utils.get_structure_usages(resources, c, self.window_difference,
+            container_usages = utils.get_structure_usages(resources, c, self.window_timelapse,
                                                           self.window_delay, self.opentsdb_handler, self.debug)
 
             # Aggregate container data into a global dictionary
@@ -477,7 +477,7 @@ class Guardian:
         for core in host_cores_mapping:
             # Remote database operation
             core_usage = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"], "core": core},
-                                                                        self.window_difference, self.window_delay,
+                                                                        self.window_timelapse, self.window_delay,
                                                                         metrics_to_retieve, metrics_to_generate)
             core_usages[core] = core_usage
 
@@ -577,7 +577,7 @@ class Guardian:
 
         # Get host power consumption (RAPL)
         rapl_structure = {"name": f"{current_host}-rapl", "subtype": "container"}
-        rapl_report = utils.get_structure_usages(["energy"], rapl_structure, self.window_difference,
+        rapl_report = utils.get_structure_usages(["energy"], rapl_structure, self.window_timelapse,
                                                  self.window_delay, self.opentsdb_handler, self.debug)
         cpu_power_usage = rapl_report[utils.res_to_metric("energy")]
 
@@ -1169,7 +1169,7 @@ class Guardian:
 
             # Remote database operation
             usages = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
-                                                                    self.window_difference, self.window_delay,
+                                                                    self.window_timelapse, self.window_delay,
                                                                     metrics_to_retrieve, metrics_to_generate)
 
             for metric in usages:
@@ -1229,11 +1229,10 @@ class Guardian:
         if self.structure_guarded not in ["container", "application"]:
             return True, "Structure to be guarded '{0}' is invalid".format(self.structure_guarded)
 
-        for key, num in [("WINDOW_TIMELAPSE", self.window_difference), ("WINDOW_DELAY", self.window_delay), ("EVENT_TIMEOUT", self.event_timeout)]:
+        for key, num in [("WINDOW_TIMELAPSE", self.window_timelapse), ("WINDOW_DELAY", self.window_delay), ("EVENT_TIMEOUT", self.event_timeout)]:
             if num < 5:
                 return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
         return False, ""
-
 
     def guard(self, ):
         myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
@@ -1241,25 +1240,8 @@ class Guardian:
                             format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
 
         while True:
-            # Get service info
-            service = utils.get_service(self.couchdb_handler, SERVICE_NAME)
 
-            # Heartbeat
-            utils.beat(self.couchdb_handler, SERVICE_NAME)
-
-            # CONFIG
-            myConfig.set_config(service["config"])
-            self.debug = myConfig.get_value("DEBUG")
-            debug = self.debug
-            self.guardable_resources = myConfig.get_value("GUARDABLE_RESOURCES")
-            self.cpu_shares_per_watt = myConfig.get_value("CPU_SHARES_PER_WATT")
-            self.energy_model_name = myConfig.get_value("ENERGY_MODEL_NAME")
-            self.energy_model_reliability = myConfig.get_value("ENERGY_MODEL_RELIABILITY")
-            self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
-            self.window_delay = myConfig.get_value("WINDOW_DELAY")
-            self.structure_guarded = myConfig.get_value("STRUCTURE_GUARDED")
-            self.event_timeout = myConfig.get_value("EVENT_TIMEOUT")
-            SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
 
             # If power model has changed all the power budgets are restarted (we try to rescale using the new model)
             if self.energy_model_name != self.last_used_energy_model:
@@ -1269,45 +1251,37 @@ class Guardian:
 
             t0 = utils.start_epoch(self.debug)
 
-            utils.log_info("Config is as follows:", debug)
-            utils.log_info(".............................................", debug)
-            utils.log_info("Time window lapse -> {0}".format(self.window_difference), debug)
-            utils.log_info("Delay -> {0}".format(self.window_delay), debug)
-            utils.log_info("Event timeout -> {0}".format(self.event_timeout), debug)
-            utils.log_info("Resources guarded are -> {0}".format(self.guardable_resources), debug)
-            utils.log_info("Structure type guarded is -> {0}".format(self.structure_guarded), debug)
-            utils.log_info("Energy model name is -> {0} ({1} reliability)".format(self.energy_model_name, self.energy_model_reliability), debug)
-            utils.log_info(".............................................", debug)
+            utils.print_service_config(self, myConfig, self.debug)
 
             ## CHECK INVALID CONFIG ##
             invalid, message = self.invalid_conf()
             if invalid:
-                utils.log_error(message, debug)
-                if self.window_difference < 5:
+                utils.log_error(message, self.debug)
+                if self.window_timelapse < 5:
                     utils.log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
-                    self.window_difference = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
-                time.sleep(self.window_difference)
-                utils.end_epoch(self.debug, self.window_difference, t0)
+                    self.window_timelapse = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
+                time.sleep(self.window_timelapse)
+                utils.end_epoch(self.debug, self.window_timelapse, t0)
                 continue
 
             thread = None
-            if SERVICE_IS_ACTIVATED:
+            if self.active:
                 # Remote database operation
-                structures = utils.get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
+                structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
                 if structures:
-                    utils.log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
+                    utils.log_info("{0} Structures to process, launching threads".format(len(structures)), self.debug)
                     thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
                     thread.start()
                 else:
-                    utils.log_info("No structures to process", debug)
+                    utils.log_info("No structures to process", self.debug)
             else:
-                utils.log_warning("Guardian is not activated", debug)
+                utils.log_warning("Guardian is not activated", self.debug)
 
-            time.sleep(self.window_difference)
+            time.sleep(self.window_timelapse)
 
-            utils.wait_operation_thread(thread, debug)
+            utils.wait_operation_thread(thread, self.debug)
 
-            utils.end_epoch(t0, self.window_difference, t0)
+            utils.end_epoch(t0, self.window_timelapse, t0)
 
 
 def main():

@@ -51,7 +51,7 @@ class ReFeeder:
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.debug = True
+        self.window_timelapse, self.window_delay, self.generated_metrics, self.debug, self.active = None, None, None, None, None
         self.config = {}
 
     @staticmethod
@@ -93,7 +93,7 @@ class ReFeeder:
         # Get all containers belonging to application and aggregate metrics
         for c in application["containers"]:
             container_info = utils.get_structure_usages(self.generated_metrics, {"name": c, "subtype": "container"},
-                                                        self.window_difference, self.window_delay,
+                                                        self.window_timelapse, self.window_delay,
                                                         self.opentsdb_handler, self.debug)
             application_info = self.merge_dicts(container_info, application_info)
 
@@ -130,45 +130,28 @@ class ReFeeder:
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
 
         while True:
-            # Get service info
-            service = utils.get_service(self.couchdb_handler, SERVICE_NAME)
 
-            # Heartbeat
-            utils.beat(self.couchdb_handler, SERVICE_NAME)
-
-            # CONFIG
-            myConfig.set_config(service["config"])
-            self.debug = myConfig.get_value("DEBUG")
-            debug = self.debug
-            self.window_difference = myConfig.get_value("WINDOW_TIMELAPSE")
-            self.window_delay = myConfig.get_value("WINDOW_DELAY")
-            self.generated_metrics = myConfig.get_value("GENERATED_METRICS")
-            SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
 
             t0 = utils.start_epoch(self.debug)
 
-            utils.log_info("Config is as follows:", debug)
-            utils.log_info(".............................................", debug)
-            utils.log_info("Time window lapse -> {0}".format(self.window_difference), debug)
-            utils.log_info("Delay -> {0}".format(self.window_delay), debug)
-            utils.log_info("Generated metrics are -> {0}".format(self.generated_metrics), debug)
-            utils.log_info(".............................................", debug)
+            utils.print_service_config(self, myConfig, self.debug)
 
             thread = None
-            if SERVICE_IS_ACTIVATED:
+            if self.active:
                 # Remote database operation
                 host_info_cache = dict()
                 thread = Thread(target=self.refeed_thread, args=())
                 thread.start()
             else:
-                utils.log_warning("Refeeder is not activated", debug)
+                utils.log_warning("Refeeder is not activated", self.debug)
 
-            time.sleep(self.window_difference)
+            time.sleep(self.window_timelapse)
 
-            utils.wait_operation_thread(thread, debug)
-            utils.log_info("Refeed processed", debug)
+            utils.wait_operation_thread(thread, self.debug)
+            utils.log_info("Refeed processed", self.debug)
 
-            utils.end_epoch(self.debug, self.window_difference, t0)
+            utils.end_epoch(self.debug, self.window_timelapse, t0)
 
 
 def main():

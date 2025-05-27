@@ -32,8 +32,7 @@ import time
 import traceback
 import logging
 
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT, \
-    get_structures, wait_operation_thread, end_epoch, start_epoch
+import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
@@ -61,40 +60,39 @@ class WattTrainer:
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.config = MyConfig(CONFIG_DEFAULT_VALUES)
-        self.prev_models_to_train = None
-        self.debug = True
+        self.window_timelapse, self.window_delay, self.usage_threshold, self.generated_metrics = None, None, None, None
+        self.prev_models_to_train, self.models_to_train, self.debug, self.active,  = None, None, None, None
 
     def get_container_usages(self, container_name):
         success = False
         try:
             container_info = self.opentsdb_handler.get_structure_timeseries({"host": container_name},
-                                                                            self.window_difference,
+                                                                            self.window_timelapse,
                                                                             self.window_delay,
                                                                             BDWATCHDOG_METRICS,
                                                                             WATT_TRAINER_METRICS)
             for metric in WATT_TRAINER_METRICS:
-                if metric not in self.config.get_value("GENERATED_METRICS"):
+                if metric not in self.generated_metrics:
                     continue
                 if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
-                    log_warning("No info for {0} in container {1}".format(metric, container_name), debug=self.debug)
+                    utils.log_warning("No info for {0} in container {1}".format(metric, container_name), debug=self.debug)
                     return False, {}
 
-            success = container_info["cpu_user"] > self.config.get_value("USAGE_THRESHOLD") or \
-                      container_info["cpu_kernel"] > self.config.get_value("USAGE_THRESHOLD")
+            success = container_info["cpu_user"] > self.usage_threshold or \
+                      container_info["cpu_kernel"] > self.usage_threshold
 
         except requests.ConnectionError as e:
-            log_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=self.debug)
+            utils.log_error("Connection error: {0} {1}".format(str(e), str(traceback.format_exc())), debug=self.debug)
             raise e
 
         return success, container_info
 
     def train_model(self, structure, structure_type, model_name, usages):
         missing_values = False
-        for resource in self.config.get_value("GENERATED_METRICS"):
+        for resource in self.generated_metrics:
             if resource not in usages:
                 missing_values = True
-                log_error(
+                utils.log_error(
                     "Missing {0} value for structure {1} to train model {2}".format(resource, structure, model_name),
                     debug=self.debug)
 
@@ -105,10 +103,10 @@ class WattTrainer:
                                                         [usages['cpu_user']],
                                                         [usages['cpu_kernel']],
                                                         [usages['energy']])
-                log_info("Structure = {0} | Model name = {1} | Msg = {2}".format(structure, model_name, r["INFO"]),
-                         self.debug)
+                utils.log_info("Structure = {0} | Model name = {1} | Msg = {2}".format(structure, model_name, r["INFO"]),
+                               self.debug)
             except Exception as e:
-                log_error(str(e), debug=self.debug)
+                utils.log_error(str(e), debug=self.debug)
 
     def train_models_with_containers_info(self, containers):
         for container in containers:
@@ -118,7 +116,7 @@ class WattTrainer:
                     self.train_model(container["name"], "host", model, container_usages)
 
     def train_thread(self):
-        containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
+        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
         if containers:
             self.train_models_with_containers_info(containers)
 
@@ -138,14 +136,14 @@ class WattTrainer:
                         if not self.wattwizard_handler.is_static("host", model):
                             models_to_train.append(model)
                         else:
-                            log_warning(
+                            utils.log_warning(
                                 "Model {0} uses a static prediction method, it can't be retrained, ignoring".format(model),
                                 debug=self.debug)
                     return models_to_train
 
             except Exception as e:
-                log_warning("Some problem ocurred checking models to train, "
-                            "probably connecting to WattWizard: {0}".format(str(e)), self.debug)
+                utils.log_warning("Some problem ocurred checking models to train, "
+                                  "probably connecting to WattWizard: {0}".format(str(e)), self.debug)
                 self.prev_models_to_train = None
                 return []
 
@@ -153,54 +151,40 @@ class WattTrainer:
         return self.models_to_train
 
     def train(self):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
+        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
+                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
 
         while True:
-            # Get service info
-            service = get_service(self.couchdb_handler, SERVICE_NAME)
 
-            # Heartbeat
-            beat(self.couchdb_handler, SERVICE_NAME)
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
 
-            # CONFIG
-            self.config.set_config(service["config"])
-            self.debug = self.config.get_value("DEBUG")
-            self.window_difference = self.config.get_value("WINDOW_TIMELAPSE")
-            self.window_delay = self.config.get_value("WINDOW_DELAY")
-            self.models_to_train = self.check_models_to_train(self.config.get_value("MODELS_TO_TRAIN"))
-            SERVICE_IS_ACTIVATED = self.config.get_value("ACTIVE")
+            t0 = utils.start_epoch(self.debug)
 
-            t0 = start_epoch(self.debug)
-
-            log_info("Config is as follows:", self.debug)
-            log_info(".............................................", self.debug)
-            log_info("Models to train -> {0}".format(self.models_to_train), self.debug)
-            log_info("Time window lapse -> {0}".format(self.window_difference), self.debug)
-            log_info("Delay -> {0}".format(self.window_delay), self.debug)
-            log_info(".............................................", self.debug)
+            utils.print_service_config(self, myConfig, self.debug)
 
             thread = None
-            if SERVICE_IS_ACTIVATED:
+            if self.active:
                 # Remote database operation
-                containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
+                containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
                 if len(self.models_to_train) == 0:
                     # Models to train couldn't be checked
-                    log_info("No models to train", self.debug)
+                    utils.log_info("No models to train", self.debug)
                 elif not containers:
                     # As no container info is available, models can't be trained
-                    log_info("No structures to process", self.debug)
+                    utils.log_info("No structures to process", self.debug)
                 else:
                     thread = Thread(target=self.train_thread, args=())
                     thread.start()
-                    log_info("Model trained", self.debug)
+                    utils.log_info("Model trained", self.debug)
             else:
-                log_warning("WattTrainer is not activated", self.debug)
+                utils.log_warning("WattTrainer is not activated", self.debug)
 
-            time.sleep(self.window_difference)
+            time.sleep(self.window_timelapse)
 
-            wait_operation_thread(thread, self.debug)
+            utils.wait_operation_thread(thread, self.debug)
 
-            end_epoch(self.debug, self.window_difference, t0)
+            utils.end_epoch(self.debug, self.window_timelapse, t0)
 
 
 def main():
@@ -208,7 +192,7 @@ def main():
         watt_trainer = WattTrainer()
         watt_trainer.train()
     except Exception as e:
-        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        utils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
