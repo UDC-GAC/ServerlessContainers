@@ -39,8 +39,7 @@ from src.Guardian.Guardian import Guardian
 from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchDB
-from src.StateDatabase import couchdb  # TODO: Remove duplicate import
+import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 
 
@@ -80,9 +79,7 @@ class Scaler:
     """
 
     def __init__(self):
-        # TODO: CouchDB handler is duplicated
         self.couchdb_handler = couchdb.CouchDBServer()
-        self.db_handler = couchDB.CouchDBServer()
         self.rescaler_http_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
         self.host_info_cache, self.container_info_cache = dict(), dict()
@@ -119,7 +116,7 @@ class Scaler:
         return errors_detected
 
     def get_bound_disk(self, container_name):
-        container = self.db_handler.get_structure(container_name)
+        container = self.couchdb_handler.get_structure(container_name)
         return container["resources"]["disk"]["name"]
 
     def check_host_has_enough_free_resources(self, host_info, needed_resources, resource, container_name):
@@ -255,7 +252,7 @@ class Scaler:
     def filter_requests(self, request_timeout):
         fresh_requests, purged_requests, final_requests = list(), list(), list()
         # Remote database operation
-        all_requests = self.db_handler.get_requests()
+        all_requests = self.couchdb_handler.get_requests()
         purged_counter = 0
         duplicated_counter = 0
 
@@ -298,7 +295,7 @@ class Scaler:
 
                 duplicated_counter += 1
 
-        self.db_handler.delete_requests(purged_requests)
+        self.couchdb_handler.delete_requests(purged_requests)
 
         for structure in structure_requests_dict:
             for action in structure_requests_dict[structure]:
@@ -601,7 +598,7 @@ class Scaler:
         rescaled_containers = list()
         total_amount = 0
         for req in new_requests:
-            self.db_handler.add_request(req)
+            self.couchdb_handler.add_request(req)
             rescaled_containers.append((req["structure"], req["amount"]))
             total_amount += req["amount"]
         utils.log_info("App {0} rescaled {1} shares by rescaling containers: {2}".format(app_label, total_amount, str(rescaled_containers)), self.debug)
@@ -677,12 +674,12 @@ class Scaler:
 
         for cont_name in app_containers_names:
             # Get the container
-            container = self.db_handler.get_structure(cont_name)
+            container = self.couchdb_handler.get_structure(cont_name)
             app_containers.append(container)
 
             # Retrieve host info and cache it in case other containers or applications need it
             if container["host"] not in self.host_info_cache:
-                self.host_info_cache[container["host"]] = self.db_handler.get_structure(container["host"])
+                self.host_info_cache[container["host"]] = self.couchdb_handler.get_structure(container["host"])
 
         total_amount = request["amount"]
 
@@ -805,7 +802,7 @@ class Scaler:
 
             # Retrieve structure info
             try:
-                structure = self.db_handler.get_structure(structure_name)
+                structure = self.couchdb_handler.get_structure(structure_name)
             except (requests.exceptions.HTTPError, ValueError):
                 utils.log_error("Error, couldn't find structure {0} in database".format(structure_name), self.debug)
                 continue
@@ -819,7 +816,7 @@ class Scaler:
                 utils.log_error("Unknown type of structure '{0}'".format(structure["subtype"]), self.debug)
 
             # Remove the request from the database
-            self.db_handler.delete_request(request)
+            self.couchdb_handler.delete_request(request)
 
     def split_requests(self, all_requests):
         scale_down, scale_up = list(), list()
@@ -836,13 +833,13 @@ class Scaler:
         self.host_info_cache = dict()
         for container in containers:
             if container["host"] not in self.host_info_cache:
-                self.host_info_cache[container["host"]] = self.db_handler.get_structure(container["host"])
+                self.host_info_cache[container["host"]] = self.couchdb_handler.get_structure(container["host"])
         return
 
     def persist_new_host_information(self, ):
         def persist_thread(self, host):
             data = self.host_info_cache[host]
-            utils.update_structure(data, self.db_handler, self.debug)
+            utils.update_structure(data, self.couchdb_handler, self.debug)
 
         threads = list()
         for host in self.host_info_cache:
@@ -885,7 +882,7 @@ class Scaler:
         utils.log_info("----------------------\n", True)
 
         while True:
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.db_handler)
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
 
             t0 = utils.start_epoch(self.debug)
 
@@ -907,7 +904,7 @@ class Scaler:
 
             if self.active:
                 # Get the container structures and their resource information as such data is going to be needed
-                containers = utils.get_structures(self.db_handler, self.debug, subtype="container")
+                containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
                 try:
                     self.container_info_cache = get_container_resources_dict()  # Reset the cache
                 except (Exception, RuntimeError) as e:
