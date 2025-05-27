@@ -234,7 +234,6 @@ def valid_resource(resource):
     else:
         return True
 
-
 # DON'T NEED TO TEST
 def get_resource(structure, resource):
     return structure["resources"][resource]
@@ -376,27 +375,17 @@ def generate_event_name(event, resource):
     if "scale" not in event:
         raise ValueError("Missing 'scale' key")
 
-    if "up" not in event["scale"] and "down" not in event["scale"]:
-        raise ValueError("Must have an 'up' or 'down count")
+    up = event["scale"].get("up", 0)
+    down = event["scale"].get("down", 0)
 
-    elif "up" in event["scale"] and event["scale"]["up"] > 0 \
-            and "down" in event["scale"] and event["scale"]["down"] > 0:
-        # SPECIAL CASE OF HEAVY HYSTERESIS
-        # raise ValueError("HYSTERESIS detected -> Can't have both up and down counts")
-        if event["scale"]["up"] > event["scale"]["down"]:
-            final_string = resource.title() + "Bottleneck"
-        else:
-            final_string = resource.title() + "Underuse"
+    if up <= 0 and down <= 0:
+        raise ValueError("Must have an 'up' or 'down' count with positive values")
 
-    elif "down" in event["scale"] and event["scale"]["down"] > 0:
-        final_string = resource.title() + "Underuse"
+    if up > 0 and down > 0:
+        # Hysteresis
+        return resource.title() + ("Bottleneck" if up > down else "Underuse")
 
-    elif "up" in event["scale"] and event["scale"]["up"] > 0:
-        final_string = resource.title() + "Bottleneck"
-    else:
-        raise ValueError("Error generating event name")
-
-    return final_string
+    return resource.title() + ("Bottleneck" if up > 0 else "Underuse")
 
 
 def generate_structure_usage_metric(resource):
