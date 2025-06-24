@@ -113,7 +113,8 @@ class ReFeeder:
                 else:
                     log_warning("No resource {0} info for application {1}".format(resource, application["name"]), debug=True)
 
-            if "disk_read" in application_info and "disk_write" in application_info:
+            if "disk" in application["resources"] and "disk_read" in application_info and "disk_write" in application_info:
+                ## Useful to get aggregated I/O usage
                 application["resources"]["disk"]["usage"] = application_info["disk_read"] + application_info["disk_write"]
         else:
             for resource in application["resources"]:
