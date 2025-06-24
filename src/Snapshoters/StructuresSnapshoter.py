@@ -62,23 +62,25 @@ def update_container_current_values(container_name, limits):
 
     for resource in resources_persisted:
 
-        if resource not in structure["resources"]:
-            structure["resources"][resource] = dict()
+        ## Update each resource only if it already exists in the structure; structures are already initialized with their resources in Orchestrator.
+        # This allows to have structures without resources that are in the resources_persisted list
+        if resource in structure["resources"]:
+            if resource not in limits or not limits[resource]:
+                log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name), debug)
+                structure["resources"][resource]["current"] = 0
+            else:
+                structure["resources"][resource]["current"] = limits[resource][translate_map[resource]["limit_label"]]
 
-        if resource not in limits or not limits[resource]:
-            log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name), debug)
-            structure["resources"][resource]["current"] = 0
-        else:
-            structure["resources"][resource]["current"] = limits[resource][translate_map[resource]["limit_label"]]
-
-        structure["resources"][resource]["current"] = int(structure["resources"][resource]["current"])
+            structure["resources"][resource]["current"] = int(structure["resources"][resource]["current"])
 
     if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
-        if "disk_read" not in limits or not limits["disk_read"] or "disk_write" not in limits or not limits["disk_write"]:
-            log_error("Unable to get info for {0} for container {1}".format(str(["disk_read", "disk_write"]), container_name), debug)
-            structure["resources"]["disk"]["current"] = 0
-        else:
-            structure["resources"]["disk"]["current"] = structure["resources"]["disk_read"]["current"] + structure["resources"]["disk_write"]["current"]
+        if "disk" in structure["resources"]:
+            if "disk_read" not in limits or not limits["disk_read"] or "disk_write" not in limits or not limits["disk_write"]:
+                log_error("Unable to get info for {0} for container {1}".format(str(["disk_read", "disk_write"]), container_name), debug)
+                structure["resources"]["disk"]["current"] = 0
+            else:
+                ## Useful to get aggregated I/O current allocation
+                structure["resources"]["disk"]["current"] = structure["resources"]["disk_read"]["current"] + structure["resources"]["disk_write"]["current"]
 
     # Remote database operation
     update_structure(structure, db_handler, debug)
@@ -111,13 +113,11 @@ def persist_containers(container_resources_dict):
     for container in containers:
         # Check that the document has been properly initialized, otherwise it might be overwritten with just
         # the "current" value without possibility of correcting it
-        skip = False
+        # However, do not skip the whole container just because it lacks some resources
+        # There should not be any overwriting problems since the container is already initialized in the Orchestrator.
         for resource in resources_persisted:
             if resource not in container["resources"] or "max" not in container["resources"][resource]:
-                log_error("Container {0} has not a proper config for the resource {1}".format(container["name"], resource), debug)
-                skip = True
-        if skip:
-            continue
+                log_warning("Container {0} has not a proper config for the resource {1}".format(container["name"], resource), debug)
 
         process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
         process.start()
@@ -176,6 +176,7 @@ def persist_applications(container_resources_dict):
                     if "disk_read" not in container_resources or not container_resources["disk_read"] or "disk_write" not in container_resources or not container_resources["disk_write"]:
                         log_error("Unable to get info for resource {0} for container {1} when computing app {2} resources".format(str(["disk_read", "disk_write"]), container_name, app["name"]), debug)
                     else:
+                        ## Useful to get aggregated I/O current allocation
                         app["resources"]["disk"]["current"] += app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
                 except KeyError:
                     if "name" in container_resources_dict[container_name] and "name" in app:
@@ -294,7 +295,7 @@ def persist():
         log_info("Config is as follows:", debug)
         log_info(".............................................", debug)
         log_info("Polling frequency -> {0}".format(polling_frequency), debug)
-        log_info("Resources to be snapshoter are -> {0}".format(resources_persisted), debug)
+        log_info("Resources to be snapshoted are -> {0}".format(resources_persisted), debug)
         log_info(".............................................", debug)
 
         ## CHECK INVALID CONFIG ##
