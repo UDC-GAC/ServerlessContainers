@@ -784,7 +784,7 @@ class Guardian:
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
                 utils.log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
-            elif usages[translator_dict[resource]] != self.NO_METRIC_DATA_DEFAULT_VALUE:
+            else:
                 useful_resources.append(resource)
 
         data = dict()
@@ -988,7 +988,7 @@ class Guardian:
         coloured_resources_str = "| "
         uncoloured_resources_str = "| "
         for resource in self.guardable_resources:
-            if container["resources"][resource]["guard"]:
+            if resource in container["resources"] and container["resources"][resource]["guard"]:
                 coloured_resources_str += resource + "({0})".format(self.get_resource_summary(resource, resources, limits, usages)) + " | "
                 uncoloured_resources_str += resource + "({0})".format(self.get_resource_summary(resource, resources, limits, usages, disable_color=True)) + " | "
 
@@ -1086,10 +1086,10 @@ class Guardian:
                 if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     utils.log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
 
-            # Skip this structure if all the usage metrics are unavailable
+            ## All the usage metrics are unavailable
+            # However, do not skip this structure, unavailable metrics could mean zero usage.
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                utils.log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
-                return
+                utils.log_warning("structure: {0} has no usage data for any metric".format(structure["name"]), self.debug)
 
             resources = structure["resources"]
 
@@ -1102,7 +1102,7 @@ class Guardian:
                 return
 
             # Adjust the structure limits according to the current value
-            limits["resources"] = self.adjust_container_state(resources, limits_resources, self.guardable_resources)
+            limits["resources"] = self.adjust_container_state(resources, limits_resources, struct_guarded_resources)
 
             # Remote database operation
             self.couchdb_handler.update_limit(limits)
