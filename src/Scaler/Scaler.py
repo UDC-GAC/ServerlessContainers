@@ -154,7 +154,7 @@ class Scaler:
             if current_disk_free < needed_resources:
                 missing_shares = needed_resources - current_disk_free
                 log_warning(
-                    "Beware, there are not enough free total bandwidth for container {0} for resource {1} in the host, there are {2},  missing {3}".format(container_name, resource, current_disk_free, missing_shares),
+                    "Beware, there is not enough free total bandwidth for container {0} for resource {1} in the host, there are {2},  missing {3}".format(container_name, resource, current_disk_free, missing_shares),
                     self.debug)
 
     def check_containers_cpu_limits(self, containers):
@@ -879,6 +879,9 @@ class Scaler:
 
     def split_requests(self, all_requests):
         ## Sort requests by priority
+        # This is important for prioritizing requests of different structures
+        # Example: ReBalancer requests to scale down container1 and scale up container2, while Guardian requests to scale up both containers
+        # The scaling down of container1 is executed first. Then, if no priority order is enforced, the scaling up of container1 could be executed before the scaling up of container2, thus making the ReBalancer scale down request useless
         sorted_requests = sorted(all_requests, key=lambda request: request["priority"] if "priority" in request else 0, reverse=True)
 
         scale_down, scale_up = list(), list()
