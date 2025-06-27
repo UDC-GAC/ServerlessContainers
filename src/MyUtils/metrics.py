@@ -3,14 +3,18 @@ RESOURCE_TO_BDW = {
     "container": {
         "cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
         "mem": ['proc.mem.resident', 'proc.mem.virtual'],
-        "disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+        #"disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+        "disk_read": ['proc.disk.reads.mb'],
+        "disk_write": ['proc.disk.writes.mb'],
         "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
         "energy": ['structure.energy.usage']
     },
     "application": {
         "cpu": ['structure.cpu.usage'],
         "mem": ['structure.mem.usage'],
-        "disk": ['structure.disk.usage'],
+        #"disk": ['structure.disk.usage'],
+        "disk_read": ['structure.disk_read.usage'],
+        "disk_write": ['structure.disk_write.usage'],
         "net": ['structure.net.usage'],
         "energy": ['structure.energy.usage']
     }
@@ -21,14 +25,18 @@ RESOURCE_TO_SC = {
     "container": {
         "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
         "mem": ['structure.mem.usage'],
-        "disk": ['structure.disk.usage'],
+        #"disk": ['structure.disk.usage'],
+        "disk_read": ['structure.disk_read.usage'],
+        "disk_write": ['structure.disk_write.usage'],
         "net": ['structure.net.usage'],
         "energy": ["structure.energy.usage"]
     },
     "application": {
         "cpu": ['structure.cpu.usage', 'structure.cpu.user', 'structure.cpu.kernel'],
         "mem": ['structure.mem.usage'],
-        "disk": ['structure.disk.usage'],
+        #"disk": ['structure.disk.usage'],
+        "disk_read": ['structure.disk_read.usage'],
+        "disk_write": ['structure.disk_write.usage'],
         "net": ['structure.net.usage'],
         "energy": ['structure.energy.usage']
     }
@@ -41,7 +49,9 @@ SC_TO_BDW = {
         'structure.cpu.user': ['proc.cpu.user'],
         'structure.cpu.kernel': ['proc.cpu.kernel'],
         'structure.mem.usage': ['proc.mem.resident'],
-        'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+        #'structure.disk.usage': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
+        'structure.disk_read.usage': ['proc.disk.reads.mb'],
+        'structure.disk_write.usage': ['proc.disk.writes.mb'],
         "structure.net.usage": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
         'structure.energy.usage': ["structure.energy.usage"]
     },
@@ -50,7 +60,9 @@ SC_TO_BDW = {
         'structure.cpu.user': ['structure.cpu.user'],
         'structure.cpu.kernel': ['structure.cpu.kernel'],
         'structure.mem.usage': ['structure.mem.usage'],
-        'structure.disk.usage': ['structure.disk.usage'],
+        #'structure.disk.usage': ['structure.disk.usage'],
+        'structure.disk_read.usage': ['structure.disk_read.usage'],
+        'structure.disk_write.usage': ['structure.disk_write.usage'],
         "structure.net.usage": ['structure.net.usage'],
         'structure.energy.usage': ['structure.energy.usage']
     }
@@ -65,7 +77,9 @@ TRANSLATOR_DICT = {
     "user": "structure.cpu.user",
     "kernel": "structure.cpu.kernel",
     "mem": "structure.mem.usage",
-    "disk": "structure.disk.usage",
+    #"disk": "structure.disk.usage",
+    "disk_read": "structure.disk_read.usage",
+    "disk_write": "structure.disk_write.usage",
     "net": "structure.net.usage",
     "energy": "structure.energy.usage"
 }

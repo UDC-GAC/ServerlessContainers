@@ -48,19 +48,20 @@ from src.NodeRescaler.node_resource_manager import set_node_net
 # Getters
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_cpus as get_node_cpus_cgroupsv2
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_mem as get_node_mem_cgroupsv2
-#from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_disks as cgroups_get_node_disks_cgroupsv2
+from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_disks as cgroups_get_node_disks_cgroupsv2
 #from src.NodeRescaler.node_resource_manager_cgroupsv2 import get_node_networks as cgroups_get_node_networks_cgroupsv2
 # Setters
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_cpus as set_node_cpus_cgroupsv2
 from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_mem as set_node_mem_cgroupsv2
-#from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_disk as set_node_disk_cgroupsv2
+from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_disk as set_node_disk_cgroupsv2
 #from src.NodeRescaler.node_resource_manager_cgroupsv2 import set_node_net as set_node_net_cgroupsv2
 
 urllib3.disable_warnings()
 
 DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
-DICT_DISK_LABEL = "disk"
+DICT_DISK_READ_LABEL = "disk_read"
+DICT_DISK_WRITE_LABEL = "disk_write"
 DICT_NET_LABEL = "net"
 
 # TODO: get container mount point from vars file
@@ -81,7 +82,8 @@ class SingularityContainerManager:
         if self.cgroups_version == "v1":
             process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            #process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
         parsed = json.loads(stdout)
@@ -92,7 +94,8 @@ class SingularityContainerManager:
         if self.cgroups_version == "v1":
             process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            #process = subprocess.Popen([self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j", instance_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
         parsed = json.loads(stdout)
@@ -114,7 +117,7 @@ class SingularityContainerManager:
                 node_pid = container['pid']
 
                 node_dict = dict()
-                (cpu_success, mem_success, disk_success, net_success) = (True, True, True, True)
+                (cpu_success, mem_success, disk_read_success, disk_write_success, net_success) = (True, True, True, True, True)
                 if DICT_CPU_LABEL in resources:
                     if self.cgroups_version == "v1":
                         cpu_success, cpu_resources = set_node_cpus(node_pid, resources[DICT_CPU_LABEL], self.container_engine)
@@ -131,7 +134,7 @@ class SingularityContainerManager:
 
                     node_dict[DICT_MEM_LABEL] = mem_resources
 
-                if DICT_DISK_LABEL in resources:
+                if DICT_DISK_READ_LABEL in resources or DICT_DISK_WRITE_LABEL in resources:
 
                     # TODO: maybe pass disk path as parameter from an HTTP request instead of getting it here
                     command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
@@ -145,12 +148,20 @@ class SingularityContainerManager:
                     else:
                         device = source.split("[")[0]
 
-                    if self.cgroups_version == "v1":
-                        disk_success, disk_resource = set_node_disk(node_pid, resources[DICT_DISK_LABEL], device, self.container_engine)
-                    else:
-                        #disk_success, disk_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_LABEL], self.container_engine)
-                        pass
-                    node_dict[DICT_DISK_LABEL] = disk_resource
+                    if DICT_DISK_READ_LABEL in resources:
+                        if self.cgroups_version == "v1":
+                            disk_read_success, disk_read_resource = set_node_disk(node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
+                        else:
+                            disk_read_success, disk_read_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
+                        node_dict[DICT_DISK_READ_LABEL] = disk_read_resource
+
+                    if DICT_DISK_WRITE_LABEL in resources:
+                        if self.cgroups_version == "v1":
+                            disk_write_success, disk_write_resource = set_node_disk(node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
+                        else:
+                            disk_write_success, disk_write_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
+                        node_dict[DICT_DISK_WRITE_LABEL] = disk_write_resource
+
                     # disks_changed = list()
                     # for disk in resources[DICT_DISK_LABEL]:
                     #     disk_success, disk_resource = set_node_disk(node_name, disk)
@@ -171,7 +182,7 @@ class SingularityContainerManager:
                     #     networks_changed.append(net_resource)
                     #     node_dict[DICT_NET_LABEL] = networks_changed
 
-                global_success = cpu_success and mem_success and disk_success and net_success
+                global_success = cpu_success and mem_success and disk_read_success and disk_write_success and net_success
                 return global_success, node_dict
 
             except AttributeError:
@@ -201,7 +212,7 @@ class SingularityContainerManager:
             command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
             try:
                 output = subprocess.run(
-                                command, universal_newlines=True, shell=True, capture_output=True, timeout=1).stdout
+                                command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout
                 source = output.split()[5]
                 if ":" in source:
                     ## Device mounted on NFS
@@ -211,15 +222,21 @@ class SingularityContainerManager:
                 else:
                     device = source.split("[")[0]
                     mount_point= re.findall(r'\[([^]]*)\]', source)[0]
-                    disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
-                    # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                    if self.cgroups_version == "v1":
+                        disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
+                        # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                    else:
+                        disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
 
                 if type(disk_resources) == list and len(disk_resources) > 0:
-                    node_dict[DICT_DISK_LABEL] = disk_resources[0]
+                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[0][DICT_DISK_READ_LABEL]
+                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[0][DICT_DISK_WRITE_LABEL]
                 elif disk_resources:
-                    node_dict[DICT_DISK_LABEL] = disk_resources
+                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
+                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
                 else:
-                    node_dict[DICT_DISK_LABEL] = []
+                    node_dict[DICT_DISK_READ_LABEL] = []
+                    node_dict[DICT_DISK_WRITE_LABEL] = []
 
             except (subprocess.TimeoutExpired, PermissionError):
                 #print("Timeout")

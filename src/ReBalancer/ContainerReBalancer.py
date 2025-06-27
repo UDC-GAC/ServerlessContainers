@@ -72,7 +72,7 @@ class ContainerRebalancer:
                 for usage_metric in usages:
                     # Split the key from the retrieved data
                     keys = usage_metric.split(".")
-                    if keys[1] == "disk" and "disk" not in container["resources"]: continue
+                    if any(keys[1] == res and res not in container["resources"] for res in ["disk_read", "disk_write"]): continue
                     if keys[1] == "energy" and "energy" not in container["resources"]: continue
                     container["resources"][keys[1]][keys[2]] = usages[usage_metric]
                 containers_with_usages.append(container)
@@ -110,17 +110,20 @@ class ContainerRebalancer:
         return filtered_containers
 
     def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
-        request = generate_request(container, int(amount_to_scale), resource)
+
+        if amount_to_scale > 0:  # Receiver
+            request = generate_request(container, int(amount_to_scale), resource, priority=2)
+            log_info("Node {0} will receive: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
+        elif amount_to_scale < 0:  # Donor
+            request = generate_request(container, int(amount_to_scale), resource, priority=-1)
+            log_info("Node {0} will give: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
+        else:
+            log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
+            return
+
         if container["name"] not in requests:
             requests[container["name"]] = list()
         requests[container["name"]].append(request)
-
-        if amount_to_scale > 0:  # Receiver
-            log_info("Node {0} will receive: {1}".format(container["name"], amount_to_scale), self.__debug)
-        elif amount_to_scale < 0:  # Donor
-            log_info("Node {0} will give: {1}".format(container["name"], amount_to_scale), self.__debug)
-        else:
-            log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
 
     def __send_final_requests(self, requests):
         # For each container, aggregate all its requests in a single request
@@ -257,6 +260,7 @@ class ContainerRebalancer:
             self.__send_final_requests(requests)
 
     # HOSTS BY PAIR SWAPPING
+    # TODO: adapt disk resource to disk_read and disk_write
     def __rebalance_host_containers_by_pair_swapping(self, containers, host):
 
         balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}, 
@@ -309,7 +313,7 @@ class ContainerRebalancer:
                 if max_receiver_amount == 0:
                     continue
 
-                if resource == "disk" and "disks" in host and host["disks"] > 1:
+                if resource == "disk" and "disks" in host["resources"] and len(host["resources"]["disks"]) > 1:
                     ## if host has more than one disk, each receiver can only receive from a donor on the same disk
                     i = 0
                     initial_donors = len(shuffling_tuples)
@@ -350,8 +354,10 @@ class ContainerRebalancer:
     # HOSTS BY WEIGHT
     def __rebalance_host_containers_by_weight(self, containers, host):
 
-        balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}, 
-                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}
+        balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE}, 
+                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                "disk_read": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                "disk_write": {"diff_percentage":self.__DIFF_PERCENTAGE},
                                 }
 
         def get_new_allocations(resource, containers, requests):
@@ -363,7 +369,7 @@ class ContainerRebalancer:
                 if resource in container["resources"]:
                     usage_threshold = container["resources"][resource]["current"] - container["resources"][resource]["usage"] < balanceable_resources[resource]["diff_percentage"] * container["resources"][resource]["current"]
                     if "weight" in container["resources"][resource] and usage_threshold:
-                        participants.append(container)
+                        participants.append({"container_info": container})
                         total_allocation_amount += container["resources"][resource]["current"]
                         weight_sum += container["resources"][resource]["weight"]
                     # else: containers with low usage that won't participate in the distribution
@@ -371,19 +377,123 @@ class ContainerRebalancer:
             if weight_sum > 0:
                 alloc_slice = total_allocation_amount / weight_sum
 
-                ## Distribute slices between containers considering their weights
+                ## Adjust alloc until every container is allocated an amount below their maximum
+                adjust_finished = False
+                while not adjust_finished:
+                    adjust_finished = True
+
+                    for container in participants:
+
+                        ## Update new_alloc if needed
+                        if "new_alloc" not in container or container["new_alloc"] < container["container_info"]["resources"][resource]["max"]:
+                            container["new_alloc"] = round(alloc_slice * container["container_info"]["resources"][resource]["weight"])
+
+                        ## Check if new_alloc exceeds container maximum
+                        if container["new_alloc"] > container["container_info"]["resources"][resource]["max"]:
+                            ## Set new_alloc to max and recalculate allocs
+                            container["new_alloc"] = container["container_info"]["resources"][resource]["max"]
+                            total_allocation_amount -= container["container_info"]["resources"][resource]["max"]
+                            weight_sum -= container["container_info"]["resources"][resource]["weight"]
+                            if weight_sum > 0: alloc_slice = total_allocation_amount / weight_sum
+                            else: alloc_slice = 0
+
+                            adjust_finished = False
+                            break # try again adjusting allocs
+
+                ## Send scaling requests
                 for container in participants:
-                    new_alloc = round(alloc_slice * container["resources"][resource]["weight"])
+                    amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
+                    self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
-                    # TODO: consider that new_alloc may be higher than the max for some containers
-                    # if new_alloc > container["resources"][resource]["max"]:
-                    #     new_alloc = container["resources"][resource]["max"]
-                    #     total_allocation_amount -= container["resources"][resource]["max"]
-                    #     weight_sum -= container["resources"][resource]["weight"]
-                    #     alloc_slice = total_allocation_amount / weight_sum
+        def get_new_allocations_by_disk(containers, requests, disk_name):
+            total_allocated_bw = 0
+            weight_sum = 0
+            weight_read_sum = 0
+            weight_write_sum = 0
+            participants = {"disk_read": [], "disk_write": []}
+            for container in containers:
+                if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]): 
+                    read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < balanceable_resources["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
+                    write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < balanceable_resources["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
 
-                    amount_to_scale = new_alloc - container["resources"][resource]["current"]
-                    self.__generate_scaling_request(container, resource, amount_to_scale, requests)
+                    if read_usage_threshold:
+                        participants["disk_read"].append({"container_info": container})
+                        total_allocated_bw += container["resources"]["disk_read"]["current"]
+                        weight_sum      += container["resources"]["disk_read"]["weight"]
+                        weight_read_sum += container["resources"]["disk_read"]["weight"]
+
+                    if write_usage_threshold:
+                        participants["disk_write"].append({"container_info": container})
+                        total_allocated_bw += container["resources"]["disk_write"]["current"]
+                        weight_sum       += container["resources"]["disk_write"]["weight"]
+                        weight_write_sum += container["resources"]["disk_write"]["weight"]
+
+            if weight_sum > 0:
+                read_distribution = total_allocated_bw * (weight_read_sum / weight_sum)
+                write_distribution = total_allocated_bw * (weight_write_sum / weight_sum)
+
+                ## Adjust distributions to host maximums
+                read_adjusted, write_adjusted, surplus_io = False, False, 0
+                while not read_adjusted or not write_adjusted:
+                    write_distribution += surplus_io
+                    surplus_io = 0
+                    write_adjusted = write_distribution <= host["resources"]["disks"][disk_name]["max_write"]
+                    if not write_adjusted:
+                        surplus_io = write_distribution - host["resources"]["disks"][disk_name]["max_write"]
+                        write_distribution = host["resources"]["disks"][disk_name]["max_write"]
+
+                    read_distribution += surplus_io
+                    surplus_io = 0
+                    read_adjusted = read_distribution <= host["resources"]["disks"][disk_name]["max_read"]
+                    if not read_adjusted:
+                        surplus_io = read_distribution - host["resources"]["disks"][disk_name]["max_read"]
+                        read_distribution = host["resources"]["disks"][disk_name]["max_read"]
+
+                    if read_distribution == host["resources"]["disks"][disk_name]["max_read"] and write_distribution == host["resources"]["disks"][disk_name]["max_write"]:
+                        break
+                ##
+                if weight_read_sum > 0: read_slice = read_distribution / weight_read_sum
+                else: read_slice = 0
+                if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum 
+                else: write_slice = 0
+
+                ## Adjust alloc until every container is allocated an amount below their maximum
+                adjust_finished = False
+                while not adjust_finished:
+                    adjust_finished = True
+
+                    for resource, alloc_slice in [("disk_read", read_slice), ("disk_write", write_slice)]:
+                        for container in participants[resource]:
+
+                            ## Update new_alloc if needed
+                            if "new_alloc" not in container or container["new_alloc"] < container["container_info"]["resources"][resource]["max"]:
+                                container["new_alloc"] = round(alloc_slice * container["container_info"]["resources"][resource]["weight"])
+
+                            ## Check if new_alloc exceeds container maximum
+                            if container["new_alloc"] > container["container_info"]["resources"][resource]["max"]:
+                                ## Set new_alloc to max and recalculate allocs
+                                container["new_alloc"] = container["container_info"]["resources"][resource]["max"]
+                                if resource == "disk_read":
+                                    read_distribution -= container["container_info"]["resources"][resource]["max"]
+                                    weight_read_sum -= container["container_info"]["resources"][resource]["weight"]
+                                    if weight_read_sum > 0: read_slice = read_distribution / weight_read_sum
+                                    else: read_slice = 0
+                                elif resource == "disk_write":
+                                    write_distribution -= container["container_info"]["resources"][resource]["max"]
+                                    weight_write_sum -= container["container_info"]["resources"][resource]["weight"]
+                                    if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum
+                                    else: write_slice = 0
+
+                                adjust_finished = False
+                                break # try again adjusting allocs
+
+                        if not adjust_finished: break
+
+                ## Send scaling requests
+                for resource in ["disk_read", "disk_write"]:
+                    for container in participants[resource]:
+                        amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
+                        self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
         for resource in self.__resources_balanced:
 
@@ -395,9 +505,26 @@ class ContainerRebalancer:
 
             requests = dict()
 
-            if resource == "disk" and "disks" in host and host["disks"] > 1:
+            if resource == "disk":
+                if "disks" not in host["resources"]:
+                    log_error("There are no disks in host {0}".format(host["name"]), self.__debug)
+                    continue
+                if len(host["resources"]["disks"]) > 1:
+                    ## if host has more than one disk the balancing needs to be performed on each disk
+                    for disk in host["resources"]["disks"]:
+                        disk_containers = []
+                        for container in containers:
+                            if "disk" in container["resources"] and container["resources"]["disk"]["name"] == disk: disk_containers.append(container)
+
+                        get_new_allocations_by_disk(disk_containers, requests, disk)
+                else:
+                    ## There is only one disk in the host
+                    disk_name = next(iter(host["resources"]["disks"]))
+                    get_new_allocations_by_disk(containers, requests, disk_name)
+
+            elif (resource == "disk_read" or resource == "disk_write") and "disks" in host["resources"] and len(host["resources"]["disks"]) > 1:
                 ## if host has more than one disk the balancing needs to be performed on each disk
-                for disk in host["disks"]:
+                for disk in host["resources"]["disks"]:
                     disk_containers = []
                     for container in containers:
                         if "disk" in container["resources"] and container["resources"]["disk"]["name"] == disk: disk_containers.append(container)
@@ -476,6 +603,12 @@ class ContainerRebalancer:
                         host_containers[host_name].append(container)
                 # Get the container usages
                 host_containers[host_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, host_containers[host_name])
+
+            ## Workaround to manage disk_read and disk_write at the same time if both are requested
+            if "disk_read" in self.__resources_balanced and "disk_write" in self.__resources_balanced:
+                self.__resources_balanced.remove("disk_read")
+                self.__resources_balanced.remove("disk_write")
+                self.__resources_balanced.append("disk")
 
             # Rebalance hosts
             for host in hosts:

@@ -45,7 +45,7 @@ structures_snapshoter = dict(
     config=dict(
         ACTIVE=False,
         DEBUG=True,
-        RESOURCES_PERSISTED=["cpu", "mem", "disk"]
+        RESOURCES_PERSISTED=["cpu", "mem"]
     )
 )
 

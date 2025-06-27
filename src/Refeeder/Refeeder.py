@@ -104,6 +104,10 @@ class ReFeeder:
             else:
                 utils.log_warning("No resource {0} info for application {1}".format(resource, application["name"]), self.debug)
 
+        ## Generate aggregated I/O usage
+        if "disk" in application["resources"] and "disk_read" in application_info and "disk_write" in application_info:
+            application["resources"]["disk"]["usage"] = application_info["disk_read"] + application_info["disk_write"]
+
         return application
 
     def refeed_users(self, users, applications):

@@ -7,9 +7,13 @@
     ./build/tsdb mkmetric limit.mem.lower
     ./build/tsdb mkmetric limit.mem.upper
     ./build/tsdb mkmetric limit.mem.boundary
-    ./build/tsdb mkmetric limit.disk.lower
-    ./build/tsdb mkmetric limit.disk.upper
-    ./build/tsdb mkmetric limit.disk.boundary
+    ./build/tsdb mkmetric limit.disk_read.lower
+    ./build/tsdb mkmetric limit.disk_read.upper
+    ./build/tsdb mkmetric limit.disk_read.boundary
+    ./build/tsdb mkmetric limit.disk_write.lower
+    ./build/tsdb mkmetric limit.disk_write.upper
+    ./build/tsdb mkmetric limit.disk_write.boundary
+
     ./build/tsdb mkmetric limit.net.lower
     ./build/tsdb mkmetric limit.net.upper
     ./build/tsdb mkmetric limit.net.boundary
@@ -29,11 +33,21 @@
     ./build/tsdb mkmetric structure.mem.max
     ./build/tsdb mkmetric structure.mem.min
 
-    ./build/tsdb mkmetric structure.disk.usage
+    # ./build/tsdb mkmetric structure.disk.usage
     ./build/tsdb mkmetric structure.disk.current
-    ./build/tsdb mkmetric structure.disk.fixed
-    ./build/tsdb mkmetric structure.disk.max
-    ./build/tsdb mkmetric structure.disk.min
+
+    ./build/tsdb mkmetric structure.disk_read.usage
+    ./build/tsdb mkmetric structure.disk_read.current
+    ./build/tsdb mkmetric structure.disk_read.fixed
+    ./build/tsdb mkmetric structure.disk_read.max
+    ./build/tsdb mkmetric structure.disk_read.min
+
+    ./build/tsdb mkmetric structure.disk_write.usage
+    ./build/tsdb mkmetric structure.disk_write.current
+    ./build/tsdb mkmetric structure.disk_write.fixed
+    ./build/tsdb mkmetric structure.disk_write.max
+    ./build/tsdb mkmetric structure.disk_write.min
+
 
     ./build/tsdb mkmetric structure.net.usage
     ./build/tsdb mkmetric structure.net.current
