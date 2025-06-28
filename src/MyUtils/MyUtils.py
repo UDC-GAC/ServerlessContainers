@@ -448,6 +448,8 @@ def get_structure_usages(resources, structure, window_difference, window_delay, 
     metrics_to_retrieve, metrics_to_generate = get_metrics_to_retrieve_and_generate(resources, structure["subtype"])
     tag = get_tag(structure["subtype"])
 
+    usages = dict()
+
     try:
         # Remote database operation
         usages = opentsdb_handler.get_structure_timeseries({tag: structure["name"]},
@@ -459,11 +461,10 @@ def get_structure_usages(resources, structure, window_difference, window_delay, 
         # Skip this structure if all the usage metrics are unavailable
         if all([usages[metric] == opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
             log_warning("structure: {0} has no usage data".format(structure["name"]), debug)
-            return None
+            #return dict() ## usages should be returned even if no data is available because that could mean zero usage
 
-        return usages
     except Exception as e:
         log_error("error with structure: {0} {1} {2}".format(structure["name"],
                                                              str(e), str(traceback.format_exc())), debug)
 
-    return None
+    return usages
