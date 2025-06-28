@@ -98,15 +98,16 @@ class ReFeeder:
             application_info = self.merge_dicts(container_info, application_info)
 
         # Update application values
-        for resource in self.generated_metrics:
-            if resource in application["resources"]:
-                application["resources"][resource]["usage"] = application_info[utils.res_to_metric(resource)]
-            else:
-                utils.log_warning("No resource {0} info for application {1}".format(resource, application["name"]), self.debug)
+        if application_info: # check that application_info has been loaded with the information of at least one container
+            for resource in self.generated_metrics:
+                if resource in application["resources"]:
+                    application["resources"][resource]["usage"] = application_info[utils.res_to_metric(resource)]
+                else:
+                    utils.log_warning("No resource {0} info for application {1}".format(resource, application["name"]), self.debug)
 
         ## Generate aggregated I/O usage
-        if "disk" in application["resources"] and "disk_read" in application_info and "disk_write" in application_info:
-            application["resources"]["disk"]["usage"] = application_info["disk_read"] + application_info["disk_write"]
+        if "disk" in application["resources"] and utils.res_to_metric("disk_read") in application_info and utils.res_to_metric("disk_write") in application_info:
+            application["resources"]["disk"]["usage"] = application_info[utils.res_to_metric("disk_read")] + application_info[utils.res_to_metric("disk_write")]
 
         return application
 
