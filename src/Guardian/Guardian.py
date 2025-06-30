@@ -871,7 +871,7 @@ class Guardian:
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
                 utils.log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
-            else:
+            elif usages[utils.res_to_metric(resource)] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                 useful_resources.append(resource)
 
         data = dict()
@@ -1176,10 +1176,10 @@ class Guardian:
                 if usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     utils.log_warning("structure: {0} has no usage data for {1}".format(structure["name"], metric), self.debug)
 
-            ## All the usage metrics are unavailable
-            # However, do not skip this structure, unavailable metrics could mean zero usage.
+            # Skip this structure if all the usage metrics are unavailable
             if all([usages[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE for metric in usages]):
-                utils.log_warning("structure: {0} has no usage data for any metric".format(structure["name"]), self.debug)
+                utils.log_warning("structure: {0} has no usage data for any metric, skipping".format(structure["name"]), self.debug)
+                return
 
             resources = structure["resources"]
 

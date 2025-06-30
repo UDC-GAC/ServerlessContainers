@@ -38,7 +38,7 @@ from requests import ReadTimeout
 class OpenTSDBServer:
     __OPENTSDB_URL = "opentsdb"
     __OPENTSDB_PORT = 4242
-    NO_METRIC_DATA_DEFAULT_VALUE = 0  # -1 # TODO this should be set to -1 and everything should work
+    NO_METRIC_DATA_DEFAULT_VALUE = -1
     __TIMEOUT = 5
 
     def __init__(self, opentsdb_url=None, opentsdb_port=None):
@@ -132,6 +132,9 @@ class OpenTSDBServer:
             final_values[value] = self.NO_METRIC_DATA_DEFAULT_VALUE
             for metric in generate_metrics[value]:
                 if metric in usages and usages[metric] != self.NO_METRIC_DATA_DEFAULT_VALUE:
-                    final_values[value] += usages[metric]
+                    if final_values[value] == self.NO_METRIC_DATA_DEFAULT_VALUE:
+                        final_values[value] = usages[metric]
+                    else:
+                        final_values[value] += usages[metric]
 
         return final_values
