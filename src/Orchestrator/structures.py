@@ -262,10 +262,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
     structure = retrieve_structure(structure_name)
     structure_limits = get_db().get_limits(structure)
 
-    if "boundary" not in structure_limits["resources"][resource]:
-        current_boundary = -1
-    else:
-        current_boundary = structure_limits["resources"][resource]["boundary"]
+    current_boundary = structure_limits.get("resources", {}).get(resource, {}).get("boundary", -1)
 
     if current_boundary == value:
         pass
@@ -306,10 +303,7 @@ def set_structure_resource_limit_boundary_type(structure_name, resource):
     structure = retrieve_structure(structure_name)
     structure_limits = get_db().get_limits(structure)
 
-    if "boundary_type" not in structure_limits["resources"][resource]:
-        current_boundary_type = ""
-    else:
-        current_boundary_type = structure_limits["resources"][resource]["boundary_type"]
+    current_boundary_type = structure_limits.get("resources", {}).get(resource, {}).get("boundary_type", "")
 
     if current_boundary_type == value:
         pass
