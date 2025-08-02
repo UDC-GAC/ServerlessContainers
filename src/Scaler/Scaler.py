@@ -94,9 +94,9 @@ class Scaler:
     # CHECKS
     ####################################################################################################################
     def fix_container_cpu_mapping(self, container, cpu_used_cores, cpu_used_shares):
-        resource_dict = {"cpu": {}}
-        resource_dict["cpu"]["cpu_num"] = ",".join(cpu_used_cores)
-        resource_dict["cpu"]["cpu_allowance_limit"] = int(cpu_used_shares)
+        resource_dict = {
+            "cpu": {"cpu_num": ",".join(cpu_used_cores), "cpu_allowance_limit": int(cpu_used_shares)}
+        }
         try:
             # TODO FIX this error should be further diagnosed, in case it affects other modules who use this call too
             set_container_resources(self.rescaler_http_session, container, resource_dict, self.debug)
@@ -124,12 +124,10 @@ class Scaler:
         return container["resources"]["disk"]["name"]
 
     def check_host_has_enough_free_resources(self, host_info, needed_resources, resource, container_name):
-        if resource == "disk_read" or resource == "disk_write":
+        if resource in ["disk_read", "disk_write"]:
             bound_disk = self.get_bound_disk(container_name)
-            if resource == "disk_read":
-                host_shares = host_info["resources"]["disks"][bound_disk]["free_read"]
-            else:
-                host_shares = host_info["resources"]["disks"][bound_disk]["free_write"]
+            disk_op = resource.split("_")[-1]
+            host_shares = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)]
         else:
             host_shares = host_info["resources"][resource]["free"]
 
@@ -137,10 +135,8 @@ class Scaler:
             raise ValueError("No resources available for resource {0} in host {1} ".format(resource, host_info["name"]))
         elif host_shares < needed_resources:
             missing_shares = needed_resources - host_shares
-            # raise ValueError("Error in setting {0}, couldn't get the resources needed, missing {1} shares".format(resource, missing_shares))
-            utils.log_warning(
-                "Beware, there are not enough free shares for container {0} for resource {1} in the host, there are {2},  missing {3}".format(container_name, resource, host_shares, missing_shares),
-                self.debug)
+            utils.log_warning("Beware, there are not enough free shares for container {0} for resource {1} in the host, "
+                              "there are {2}, missing {3}".format(container_name, resource, host_shares, missing_shares), self.debug)
 
         if resource == "disk_read" or resource == "disk_write":
             max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
@@ -150,9 +146,8 @@ class Scaler:
             current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
             if current_disk_free < needed_resources:
                 missing_shares = needed_resources - current_disk_free
-                log_warning(
-                    "Beware, there is not enough free total bandwidth for container {0} for resource {1} in the host, there are {2},  missing {3}".format(container_name, resource, current_disk_free, missing_shares),
-                    self.debug)
+                utils.log_warning("Beware, there is not enough free total bandwidth for container {0} for resource "
+                                  "{1} in the host, there are {2},  missing {3}".format(container_name, resource, current_disk_free, missing_shares), self.debug)
 
     def check_containers_cpu_limits(self, containers):
         errors_detected = False
@@ -170,11 +165,11 @@ class Scaler:
                 current_cpu_limit = self.get_current_resource_value(real_resources, "cpu")
                 if current_cpu_limit > max_cpu_limit:
                     utils.log_error("container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max "
-                              "parameter in its configuration".format(container["name"], current_cpu_limit, max_cpu_limit), self.debug)
+                                    "parameter in its configuration".format(container["name"], current_cpu_limit, max_cpu_limit), self.debug)
                     errors_detected = True
             except KeyError:
                 utils.log_error("container {0} not found, maybe is down or has been desubscribed"
-                          .format(container["name"]), self.debug)
+                                .format(container["name"]), self.debug)
                 errors_detected = True
             except ValueError as e:
                 utils.log_error("Current value of structure {0} is not valid: {1}".format(container["name"], str(e)), self.debug)
@@ -193,7 +188,7 @@ class Scaler:
         for core in core_usage_map:
             if core not in host_cpu_list:
                 continue
-            if container_name in core_usage_map[core] and core_usage_map[core][container_name] != 0:
+            if core_usage_map.get(core, {}).get(container_name, 0) != 0:
                 cpu_accounted_shares += core_usage_map[core][container_name]
                 cpu_accounted_cores.append(core)
 
@@ -227,10 +222,9 @@ class Scaler:
         map_host_valid, actual_used_cores, actual_used_shares = self.check_container_cpu_mapping(container, host_info, cpu_list, current_cpu_limit)
 
         if not map_host_valid:
-            utils.log_error(
-                "Detected invalid core mapping for container {0}, has {1}-{2}, should be {3}-{4}".format(c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares),
-                self.debug)
-            utils.log_error("trying to automatically fix", self.debug)
+            utils.log_error("Detected invalid core mapping for container {0}, has {1}-{2}, should be {3}-{4}".format(
+                c_name, cpu_list, current_cpu_limit, actual_used_cores, actual_used_shares), self.debug)
+            utils.log_error("Trying to automatically fix", self.debug)
             success = self.fix_container_cpu_mapping(container, actual_used_cores, actual_used_shares)
             if success:
                 utils.log_error("Succeeded fixing {0} container's core mapping".format(container["name"]), self.debug)
@@ -245,10 +239,11 @@ class Scaler:
         for container in containers:
             c_name = container["name"]
             utils.log_info("Checking container {0}".format(c_name), self.debug)
-            if c_name not in self.container_info_cache or "resources" not in self.container_info_cache[c_name]:
+            real_resources = self.container_info_cache.get(c_name, {}).get("resources", None)
+            if real_resources is None:
                 utils.log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), self.debug)
                 continue
-            real_resources = self.container_info_cache[c_name]["resources"]
+
             errors = self.check_container_core_mapping(container, real_resources)
             errors_detected = errors_detected or errors
         return errors_detected
