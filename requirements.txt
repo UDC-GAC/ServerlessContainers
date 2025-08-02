@@ -17,3 +17,4 @@ scikit-learn
 matplotlib
 seaborn
 scipy
+psutil
