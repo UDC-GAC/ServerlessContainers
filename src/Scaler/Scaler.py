@@ -59,6 +59,7 @@ RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem'
                               'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
 APP_SCALING_SPLIT_AMOUNT = 5
+MIN_SHARES_PER_SOCKET = 200
 
 
 def set_container_resources(rescaler_http_session, container, resources, debug):
@@ -75,6 +76,18 @@ def set_container_resources(rescaler_http_session, container, resources, debug):
         utils.log_error("Error processing container resource change in host in IP {0}".format(rescaler_ip), debug)
         utils.log_error(str(json.dumps(r.json())), debug)
         r.raise_for_status()
+
+
+def get_cpu_topology(rescaler_http_session, container, debug):
+    rescaler_ip = container["host_rescaler_ip"]
+    rescaler_port = container["host_rescaler_port"]
+    r = rescaler_http_session.get("http://{0}:{1}/host/cpu_topology".format(rescaler_ip, rescaler_port),
+                                  headers={'Accept': 'application/json'})
+    if r.status_code == 200:
+        return dict(r.json())
+
+    utils.log_error("Error getting CPU topology from host in IP {0}".format(rescaler_ip), debug)
+    r.raise_for_status()
 
 
 class Scaler:
@@ -383,15 +396,98 @@ class Scaler:
 
         return result
 
+    @staticmethod
+    def __scale_cpu(core_usage_map, take_core_list, used_cores, structure_name, amount, scale_up=True):
+        # When scaling up, we take shares from 'free' and put them into the structure_name
+        # when scaling down, we take shares from the structure_name and put them into 'free'
+        from_key = "free" if scale_up else structure_name
+        to_key = structure_name if scale_up else "free"
+
+        original_amount = amount
+        for core in take_core_list:
+            if amount <= 0:
+                break
+            if core_usage_map.get(core, {}).get(from_key, 0) > 0:
+                take = min(core_usage_map[core][from_key], amount)
+                core_usage_map[core][from_key] -= take
+                core_usage_map[core][to_key] += take
+                amount -= take
+
+                # If we are scaling up, we add the core to the used_cores list if it is not already there
+                if scale_up:
+                    if core not in used_cores:
+                        used_cores.append(core)
+                # If we are scaling down, we remove the core from used_cores if it has no shares left
+                else:
+                    if core_usage_map[core][structure_name] == 0 and core in used_cores:
+                        used_cores.remove(core)
+        return amount, original_amount - amount
+
+    @staticmethod
+    def __generate_core_dist(topology, dist_name):
+        core_dist = []
+        supported_distributions = ["Group_P&L", "Group_1P_2L", "Group_PP_LL", "Spread_P&L", "Spread_PP_LL"]
+        if dist_name not in supported_distributions:
+            raise ValueError("Invalid core distribution: {0}. Supported {1}.".format(dist_name, supported_distributions))
+
+        # Pairs of physical and logical cores, one socket at a time
+        if dist_name == "Group_P&L":
+            for sk_id in topology:
+                for core_id in topology[sk_id]:
+                    core_dist.extend(topology[sk_id][core_id])
+
+        # First physical cores, then logical cores, one socket at a time
+        if dist_name == "Group_1P_2L":
+            for sk_id in topology:
+                phy_c, log_c = [], []
+                for core_id in topology[sk_id]:
+                    phy_c.append(topology[sk_id][core_id][0])
+                    log_c.extend(topology[sk_id][core_id][1:])
+                core_dist.extend(phy_c)
+                core_dist.extend(log_c)
+
+        # First physical cores, from both sockets, then logical cores
+        if dist_name == "Group_PP_LL":
+            phy_c, log_c = [], []
+            for sk_id in topology:
+                for core_id in topology[sk_id]:
+                    phy_c.append(topology[sk_id][core_id][0])
+                    log_c.extend(topology[sk_id][core_id][1:])
+            core_dist.extend(phy_c)
+            core_dist.extend(log_c)
+
+        # Pairs of physical and logical cores, alternating between sockets
+        if dist_name == "Spread_P&L":
+            other_sk = sorted(topology, key=lambda sk: len(topology[sk]))
+            sk_id = other_sk.pop()
+            for core_id in topology[sk_id]:
+                core_dist.extend(topology[sk_id][core_id])
+                for sk2_id in other_sk:
+                    core_dist.extend(topology[sk2_id].get(core_id, []))
+
+        # Phirst physical cores, then logical cores, alternating between sockets
+        if dist_name == "Spread_PP_LL":
+            other_sk = sorted(topology, key=lambda sk: len(topology[sk]))
+            sk_id = other_sk.pop()
+            phy_c, log_c = [], []
+            for core_id in topology[sk_id]:
+                phy_c.append(topology[sk_id][core_id][0])
+                log_c.extend(topology[sk_id][core_id][1:])
+                for sk2_id in other_sk:
+                    phy_c.extend(topology[sk2_id].get(core_id, [])[0:1])
+                    log_c.extend(topology[sk2_id][core_id][1:])
+            core_dist.extend(phy_c)
+            core_dist.extend(log_c)
+
+        return [str(c) for c in core_dist]
+
     def apply_cpu_request(self, request, database_resources, real_resources, amount):
         resource = request["resource"]
         structure_name = request["structure"]
         host_info = self.host_info_cache[request["host"]]
-
         core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
-
         current_cpu_limit = self.get_current_resource_value(real_resources, resource)
-        cpu_list = self.get_cpu_list(real_resources["cpu"]["cpu_num"])
+        structure_cpu_list = self.get_cpu_list(real_resources["cpu"]["cpu_num"])
 
         host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
         host_cpu_list = [str(i) for i in range(host_max_cores)]
@@ -402,100 +498,45 @@ class Scaler:
             if structure_name not in core_usage_map[core]:
                 core_usage_map[core][structure_name] = 0
 
-        used_cores = list(cpu_list)  # copy
+        used_cores = list(structure_cpu_list)  # copy
 
+        # Get CPU topology from host and generate core distribution
+        cpu_topology = get_cpu_topology(self.rescaler_http_session, request, self.debug)
+        # TODO: Add core_distribution as a tunable service parameter
+        core_distribution = self.__generate_core_dist(cpu_topology, "Group_PP_LL")
+
+        # RESCALE UP
         if amount > 0:
-            # Rescale up, so look for free shares to assign and maybe add cores
             needed_shares = amount
 
-            # First fill the already used cores so that no additional cores are added unnecessarily
-            for core in cpu_list:
-                if core_usage_map[core]["free"] > 0:
-                    if core_usage_map[core]["free"] > needed_shares:
-                        core_usage_map[core]["free"] -= needed_shares
-                        core_usage_map[core][structure_name] += needed_shares
-                        needed_shares = 0
-                        break
-                    else:
-                        core_usage_map[core][structure_name] += core_usage_map[core]["free"]
-                        needed_shares -= core_usage_map[core]["free"]
-                        core_usage_map[core]["free"] = 0
+            # 1) Fill first the already used cores following core distribution order
+            used_cores_sorted = [c for c in core_distribution if c in used_cores]
+            needed_shares, assigned = self.__scale_cpu(core_usage_map, used_cores_sorted, used_cores, structure_name, needed_shares)
 
-            # Next try to satisfy the request by looking and adding a single core
-            if needed_shares > 0:
-                for core in host_cpu_list:
-                    if core_usage_map[core]["free"] >= needed_shares:
-                        core_usage_map[core]["free"] -= needed_shares
-                        core_usage_map[core][structure_name] += needed_shares
-                        needed_shares = 0
-                        used_cores.append(core)
-                        break
+            # 2) Fill the completely free cores following core distribution order
+            completely_free_cores = [c for c in core_distribution if c not in used_cores and core_usage_map[c]["free"] == 100]
+            needed_shares, assigned = self.__scale_cpu(core_usage_map, completely_free_cores, used_cores, structure_name, needed_shares)
 
-            # Finally, if unsuccessful, add as many cores as necessary, starting with the ones with the largest free shares to avoid too much spread
-            if needed_shares > 0:
-                l = list()
-                for core in host_cpu_list:
-                    l.append((core, core_usage_map[core]["free"]))
-                l.sort(key=lambda tup: tup[1], reverse=True)
-                less_used_cores = [i[0] for i in l]
-
-                for core in less_used_cores:
-                    # If this core has free shares
-                    if core_usage_map[core]["free"] > 0 and needed_shares > 0:
-                        # If it has more free shares than needed, assign them and finish
-                        if core_usage_map[core]["free"] >= needed_shares:
-                            core_usage_map[core]["free"] -= needed_shares
-                            core_usage_map[core][structure_name] += needed_shares
-                            needed_shares = 0
-                            used_cores.append(core)
-                            break
-                        else:
-                            # Otherwise, assign as many as possible and continue
-                            core_usage_map[core][structure_name] += core_usage_map[core]["free"]
-                            needed_shares -= core_usage_map[core]["free"]
-                            core_usage_map[core]["free"] = 0
-                            used_cores.append(core)
+            # 3) Fill the remaining cores that are not completely free, following core distribution order
+            remaining_cores = [c for c in core_distribution if c not in used_cores and core_usage_map[c]["free"] < 100]
+            needed_shares, assigned = self.__scale_cpu(core_usage_map, remaining_cores, used_cores, structure_name, needed_shares)
 
             if needed_shares > 0:
-                # raise ValueError("Error in setting cpu, couldn't get the resources needed, missing {0} shares".format(needed_shares))
-                utils.log_warning("Structure {0} couldn't get as much CPU shares as intended ({1}), "
-                            "instead it got {2}".format(structure_name, amount, amount - needed_shares), self.debug)
+                utils.log_warning("Structure {0} couldn't get as much CPU shares as intended ({1}), instead it got {2}"
+                                  .format(structure_name, amount, amount - needed_shares), self.debug)
                 amount = amount - needed_shares
-                # FIXME couldn't do rescale up properly as shares to get remain
 
+        # RESCALE DOWN
         elif amount < 0:
-            # Rescale down so free all shares and claim new one to see how many cores can be freed
             shares_to_free = abs(amount)
 
-            # First try to find cores with less shares for this structure (less allocated) and remove them
-            l = list()
-            for core in cpu_list:
-                l.append((core, core_usage_map[core][structure_name]))
+            # Sort cores by reverse core distribution order
+            rev_core_distribution = list(reversed(core_distribution))
+            used_cores_sorted = [c for c in rev_core_distribution if c in used_cores]
 
-            # First cores are ordered by number: cores with a higher number are picked first as they
-            # are likely to have been allocated a shorter time ago
-            l.sort(key=lambda tup: int(tup[0]), reverse=True)
-
-            # Then they are ordered by core allocation, which is the primary criterion
-            l.sort(key=lambda tup: tup[1], reverse=False)
-            less_allocated_cores = [i[0] for i in l]
-
-            for core in less_allocated_cores:
-                # Equal or less allocated shares than amount to be freed, remove this core altogether and if shares remain to be freed, continue
-                if core_usage_map[core][structure_name] <= shares_to_free:
-                    core_usage_map[core]["free"] += core_usage_map[core][structure_name]
-                    shares_to_free -= core_usage_map[core][structure_name]
-                    core_usage_map[core][structure_name] = 0
-                    used_cores.remove(core)
-                    # In the event that the amount to be freed was equal to the allocated one, finish
-                    if shares_to_free == 0:
-                        break
-                # More allocated shares than amount to be freed, reduce allocation and finish
-                elif core_usage_map[core][structure_name] > shares_to_free:
-                    core_usage_map[core]["free"] += shares_to_free
-                    core_usage_map[core][structure_name] -= shares_to_free
-                    shares_to_free = 0
-                    break
+            # 1) Free cores starting with the least used ones and following reverse core distribution order
+            least_used_cores = sorted(used_cores_sorted, key=lambda c: core_usage_map[c][structure_name])
+            shares_to_free, freed = self.__scale_cpu(core_usage_map, least_used_cores, used_cores, structure_name, shares_to_free, scale_up=False)
 
             if shares_to_free > 0:
                 raise ValueError("Error in setting cpu, couldn't free the resources properly")

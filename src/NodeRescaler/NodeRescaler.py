@@ -38,6 +38,7 @@ from functools import wraps
 
 import yaml
 import os
+import psutil
 
 node_resource_manager = None
 
@@ -87,6 +88,75 @@ def initialize_LXD(cgroups_version):
     else:
         pass
 
+
+def __get_topology_from_psutil(core_numbering="first-physical"):
+    logical_cores = psutil.cpu_count(logical=True)
+    physical_cores = psutil.cpu_count(logical=False)
+    multithreading = logical_cores > physical_cores
+    # Workaround to get number of sockets using psutil
+    num_sockets = len([sensor for sensor in psutil.sensors_temperatures()['coretemp']
+                       if 'Package id' in sensor.label or 'Physical id' in sensor.label])
+    cores_per_cpu = physical_cores // num_sockets
+
+    # TODO: Guess core_numbering from SO, now first-physical is assumed
+    #   Maybe read /sys/devices/system/cpu/cpu0/topology/core_siblings_list
+    topology = {}
+    for socket in range(num_sockets):
+        topology[socket] = {}
+        for c in range(cores_per_cpu * socket, cores_per_cpu * (socket + 1)):
+            topology[socket][c] = [c]
+            if multithreading:
+                if core_numbering == "first-physical":
+                    # First all physical cores are numbered, then all logical cores
+                    topology[socket][c].append(c + cores_per_cpu * num_sockets)
+                if core_numbering == "per-socket":
+                    # All socket cores are numbered in a row (physical and logical)
+                    topology[socket][c].append(c + cores_per_cpu)
+
+    return topology
+
+
+def __get_topology_from_procfs():
+    # Parse /proc/cpuinfo to get CPU topology
+    cpus, current_cpu = [], {}
+    with open("/proc/cpuinfo") as f:
+        for line in f:
+            line = line.strip()
+            # Get processor information
+            if ":" in line:
+                key, val = line.split(":", 1)
+                if key.strip() in ["processor", "physical id", "core id"]:
+                    current_cpu[key.strip()] = val.strip()
+
+            # Empty line indicates end of a CPU entry
+            if not line and current_cpu:
+                cpus.append(current_cpu)
+                current_cpu = {}
+        if current_cpu:
+            cpus.append(current_cpu)
+
+    # Build mapping between sockets, physical cores and logical cores
+    topology = {}
+    for cpu in cpus:
+        phys_id = int(cpu.get("physical id", 0))
+        core_id = int(cpu.get("core id", 0))
+        proc_id = int(cpu.get("processor", 0))
+        topology.setdefault(phys_id, {}).setdefault(core_id, []).append(proc_id)
+        # Sort threads by number
+        if len(topology[phys_id][core_id]) > 1:
+            topology[phys_id][core_id].sort()
+
+    return topology
+
+
+@node_rescaler.route("/host/cpu_topology", methods=['GET'])
+def get_cpu_topology():
+    if os.path.exists("/proc/cpuinfo"):
+        cpu_topology = __get_topology_from_procfs()
+    else:
+        cpu_topology = __get_topology_from_psutil()
+
+    return jsonify(cpu_topology)
 
 
 @node_rescaler.route("/container/", methods=['GET'])
