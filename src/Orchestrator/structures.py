@@ -105,7 +105,6 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     tries = 0
     while not put_done:
         tries += 1
-        structure = retrieve_structure(structure_name)
         structure["resources"][resource][parameter] = value
         get_db().update_structure(structure)
 
@@ -173,7 +172,7 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
         for resource in resources:
             if not valid_resource(resource):
                 return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
-            elif resource not in structure["resources"]:
+            if resource not in structure["resources"]:
                 return abort(400, {"message": "Resource '{0}' is missing in structure {1}".format(resource, structure_name)})
 
     # 1st check, in case nothing has to be done really
@@ -185,7 +184,6 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
     tries = 0
     while not put_done:
         tries += 1
-        structure = retrieve_structure(structure_name)
         for resource in resources:
             structure["resources"][resource]["guard"] = state
 

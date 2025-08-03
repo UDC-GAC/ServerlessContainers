@@ -64,7 +64,6 @@ def activate_rule(rule_name):
     tries = 0
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
         rule["active"] = True
         get_db().update_rule(rule)
         rule = retrieve_rule(rule_name)
@@ -84,7 +83,6 @@ def deactivate_rule(rule_name):
     tries = 0
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
         rule["active"] = False
         get_db().update_rule(rule)
 
@@ -112,10 +110,8 @@ def change_amount_rule(rule_name):
     put_done = rule["amount"] == amount
 
     tries = 0
-
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
         rule["amount"] = amount
         get_db().update_rule(rule)
 
@@ -135,31 +131,27 @@ def change_policy_rule(rule_name):
         return abort(400, {"message": "This rule can't have its policy changed"})
 
     rescale_policy = request.json["value"]
-    put_done = rule["rescale_policy"] == rescale_policy
-    tries = 0
-
     if rescale_policy not in SUPPORTED_POLICIES[rule["rescale_type"]]:
         return abort(400, {"message": f"Invalid policy for a rescale {rule['rescale_type']} rule"})
-    else:
-        while not put_done:
-            tries += 1
-            rule = retrieve_rule(rule_name)
-            rule["rescale_policy"] = rescale_policy
-            get_db().update_rule(rule)
 
-            time.sleep(BACK_OFF_TIME_MS / 1000)
-            rule = retrieve_rule(rule_name)
-            put_done = rule["rescale_policy"] == rescale_policy
-            if tries >= MAX_TRIES:
-                return abort(400, {"message": "MAX_TRIES updating database document"})
+    put_done = rule["rescale_policy"] == rescale_policy
+    tries = 0
+    while not put_done:
+        tries += 1
+        rule["rescale_policy"] = rescale_policy
+        get_db().update_rule(rule)
+
+        time.sleep(BACK_OFF_TIME_MS / 1000)
+        rule = retrieve_rule(rule_name)
+        put_done = rule["rescale_policy"] == rescale_policy
+        if tries >= MAX_TRIES:
+            return abort(400, {"message": "MAX_TRIES updating database document"})
+
     return jsonify(201)
-
 
 
 @rules_routes.route("/rule/<rule_name>/events_required", methods=['PUT'])
 def change_event_up_amount(rule_name):
-    put_done = False
-    tries = 0
     try:
         new_amount = int(request.json["value"])
         if new_amount < 0:
@@ -175,32 +167,28 @@ def change_event_up_amount(rule_name):
     if rule["rescale_type"] not in ["down", "up"]:
         return abort(400, {"message": "Can't apply this change to this rule"})
 
+    put_done = False
+    tries = 0
     while not put_done:
         tries += 1
-        rule = retrieve_rule(rule_name)
-
         correct_key = None
         list_rules_entry = 0
         for part in rule["rule"]["and"]:
             # Get the first and only value from the dictionary
-            first_key = list(part.keys())[0]
-            first_val = part[first_key]
-            rule_part = first_val[0]["var"]
-            rule_amount = first_val[1]
+            operator, expr = next(iter(part.items()))  # e.g., {"<=": [{"var": "events.scale.up"}, 1]}
+            rule_var = expr[0]["var"]
 
-            if event_type == "up":
-                if rule_part == "events.scale.up":
-                    rule["rule"]["and"][list_rules_entry][first_key][1] = new_amount
-                    correct_key = first_key
-                    break
+            if event_type == "up" and rule_var == "events.scale.up":
+                rule["rule"]["and"][list_rules_entry][operator][1] = new_amount
+                rule["events_to_remove"] = new_amount
+                correct_key = operator
+                break
 
-            if event_type == "down":
-                if rule_part == "events.scale.down":
-                    rule["rule"]["and"][list_rules_entry][first_key][1] = new_amount
-                    rule["events_to_remove"] = new_amount
-
-                    correct_key = first_key
-                    break
+            if event_type == "down" and rule_var == "events.scale.down":
+                rule["rule"]["and"][list_rules_entry][operator][1] = new_amount
+                rule["events_to_remove"] = new_amount
+                correct_key = operator
+                break
             list_rules_entry += 1
 
         get_db().update_rule(rule)
