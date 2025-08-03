@@ -18,3 +18,4 @@ matplotlib
 seaborn
 scipy
 psutil
+cachetools

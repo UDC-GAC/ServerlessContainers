@@ -28,6 +28,7 @@ from __future__ import print_function
 
 from threading import Thread, Lock, Condition
 from collections import Counter
+from cachetools import LRUCache
 import time
 import traceback
 import logging
@@ -64,7 +65,7 @@ class Guardian:
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.power_budget = {}
+        self.pb_cache = LRUCache(maxsize=128)
         self.window_timelapse, self.window_delay, self.event_timeout, self.debug = None, None, None, None
         self.structure_guarded, self.guardable_resources, self.cpu_shares_per_watt, self.active = None, None, None, None
         self.energy_model_name, self.energy_model_reliability, self.current_structures = None, None, None
@@ -497,17 +498,7 @@ class Guardian:
             (bool) Whether the power budget has already been used or not
 
         """
-        power_budget = structure["resources"]["energy"]["current"]
-        structure_id = structure['_id']
-
-        # Initialise with a non-possible value
-        if structure_id not in self.power_budget:
-            self.power_budget[structure_id] = -1
-
-        if self.power_budget[structure_id] != power_budget:
-            return True
-
-        return False
+        return structure["resources"]["energy"]["current"] != self.pb_cache.get(structure['_id'], -1)
 
     @staticmethod
     def power_is_near_power_budget(structure, usages, limits):
@@ -553,7 +544,7 @@ class Guardian:
 
         """
         # Update container power budget in order to know that the model has been already applied to this structure
-        self.power_budget[structure['_id']] = structure["resources"]["energy"]["current"]
+        self.pb_cache[structure['_id']] = structure["resources"]["energy"]["current"]
 
         # Get container information
         structure_name = structure['name']
@@ -585,7 +576,10 @@ class Guardian:
         self.register_scaling(structure, value=container_power_diff)
 
         # Compute CPU desired power based on current scalings of the same rescale type
-        host_scalings = sum(self.current_scalings[current_host][rescale_type])
+        if rescale_type == "both":
+            host_scalings = sum(self.current_scalings[current_host]["up" if container_power_diff > 0 else "down"])
+        else:
+            host_scalings = sum(self.current_scalings[current_host][rescale_type])
         cpu_desired_power = cpu_power_usage + host_scalings
 
         # Get model estimation
@@ -699,7 +693,7 @@ class Guardian:
                               "through power models has been trimmed from {1} to {2}"
                               .format(structure["name"], amount, new_amount), self.debug)
 
-        # # If amount is 0 ignore this request else generate the request and append it
+        # If amount is 0 ignore this request else generate the request and append it
         if new_amount == 0:
             utils.log_warning("Initial rescaling through power models for structure {0} will be ignored "
                               "because amount is 0".format(structure["name"]), self.debug)
