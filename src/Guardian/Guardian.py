@@ -497,7 +497,7 @@ class Guardian:
             (bool) Whether the power budget has already been used or not
 
         """
-        power_budget = structure["resources"]["energy"]["max"]
+        power_budget = structure["resources"]["energy"]["current"]
         structure_id = structure['_id']
 
         # Initialise with a non-possible value
@@ -525,7 +525,7 @@ class Guardian:
 
         """
         power_margin = limits["energy"]["boundary"] / 100
-        power_budget = structure["resources"]["energy"]["max"]
+        power_budget = structure["resources"]["energy"]["current"]
         current_energy_usage = usages[utils.res_to_metric("energy")]
 
         # If power is within some reasonable limits we do nothing
@@ -553,11 +553,11 @@ class Guardian:
 
         """
         # Update container power budget in order to know that the model has been already applied to this structure
-        self.power_budget[structure['_id']] = structure["resources"]["energy"]["max"]
+        self.power_budget[structure['_id']] = structure["resources"]["energy"]["current"]
 
         # Get container information
         structure_name = structure['name']
-        container_power_budget = structure["resources"]["energy"]["max"]
+        container_power_budget = structure["resources"]["energy"]["current"]
         container_cpu_limit = structure["resources"]["cpu"]["current"]
         container_power_usage = usages[utils.res_to_metric("energy")]
         container_power_diff = container_power_budget - container_power_usage
@@ -724,7 +724,7 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        power_budget = structure["resources"][resource]["max"]
+        power_budget = structure["resources"][resource]["current"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
         current_energy_usage = usages[utils.res_to_metric("energy")]
 
@@ -749,7 +749,7 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        power_budget = structure["resources"][resource]["max"]
+        power_budget = structure["resources"][resource]["current"]
         current_energy_usage = structure["resources"][resource]["usage"]
         error = power_budget - current_energy_usage
         energy_amplification = error * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
@@ -1030,7 +1030,7 @@ class Guardian:
                 if self.power_is_near_power_budget(structure, usages, limits):
                     utils.log_warning("Current energy usage ({0:.2f}) for structure {1} is close to its power budget ({2:.2f}), "
                                       "setting amount to 0".format(usages[utils.res_to_metric("energy")], structure["name"],
-                                                                   structure["resources"]["energy"]["max"]), self.debug)
+                                                                   structure["resources"]["energy"]["current"]), self.debug)
                     amount = 0
                 self.print_energy_rescale_info(structure, usages, limits, amount)
 

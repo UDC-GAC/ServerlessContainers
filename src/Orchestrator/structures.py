@@ -87,7 +87,10 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     if not valid_resource(resource):
         return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
 
-    if parameter not in ["max", "min", "weight"]:
+    # Energy is a special case where 'current' value may be modified in order to experiment with dynamic power_budgets
+    valid_parameters = ["max", "min", "weight"] + (["current"] if resource == "energy" else [])
+
+    if parameter not in valid_parameters:
         return abort(400, {"message": "Invalid parameter state"})
 
     try:
@@ -98,8 +101,16 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
         return abort(400)
 
     structure = retrieve_structure(structure_name)
-    if parameter in structure["resources"][resource] and structure["resources"][resource][parameter] == value:
+    if structure.get("resources", {}).get(resource, {}).get(parameter, -1) == value:
         return jsonify(201)
+
+    # If 'current' parameter is being changed, first check is valid
+    if parameter == "current":
+        _min = structure.get("resources", {}).get(resource, {}).get("min", -1)
+        _max = structure.get("resources", {}).get(resource, {}).get("max", -1)
+        if not _min < value < _max:
+            return abort(400, {"message": "Invalid value for 'current' parameter ({0}), it must be "
+                                          "between 'min' ({1}) and 'max' ({2})".format(value, _min, _max)})
 
     put_done = False
     tries = 0
