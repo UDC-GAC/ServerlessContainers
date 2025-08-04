@@ -108,7 +108,7 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     if parameter == "current":
         _min = structure.get("resources", {}).get(resource, {}).get("min", -1)
         _max = structure.get("resources", {}).get(resource, {}).get("max", -1)
-        if not _min < value < _max:
+        if not _min <= value <= _max:
             return abort(400, {"message": "Invalid value for 'current' parameter ({0}), it must be "
                                           "between 'min' ({1}) and 'max' ({2})".format(value, _min, _max)})
 

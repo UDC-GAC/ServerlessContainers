@@ -41,7 +41,7 @@ rescaler_http_session = requests.Session()
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
-    "energy": {"metric": "structure.energy.max", "limit_label": "energy_limit"},
+    "energy": {"metric": "structure.energy.current", "limit_label": "energy_limit"},
     "disk_read": {"metric": "structure.disk_read.current", "limit_label": "disk_read_limit"},
     "disk_write": {"metric": "structure.disk_write.current", "limit_label": "disk_write_limit"},
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
@@ -235,9 +235,9 @@ def get_container_resources_dict():
                         "the host is alive and with the Node Scaler service running".format(container_name, container["host"]), debug)
             continue
         container_resources_dict[container_name] = container
-        # Energy limit or "current" value is always max
+        # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
         if "energy" in container["resources"]:
-            container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["max"]}
+            container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
         container_resources_dict[container_name]["resources"] = container_info[container_name]
 
     return container_resources_dict
