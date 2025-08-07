@@ -52,11 +52,11 @@ def get_service(service_name):
 @service_routes.route("/service/<service_name>", methods=['PUT'])
 def set_service_information(service_name):
     data = request.json
+    service = retrieve_service(service_name)
     put_done = False
     tries = 0
     while not put_done:
         tries += 1
-        service = retrieve_service(service_name)
         for key in data:
             service["config"][key] = data[key]
         get_db().update_service(service)
@@ -110,7 +110,6 @@ def set_service_value(service_name, key):
 
     while not put_done:
         tries += 1
-        service = retrieve_service(service_name)
         service["config"][key] = value
         get_db().update_service(service)
 

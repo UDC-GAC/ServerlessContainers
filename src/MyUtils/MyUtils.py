@@ -36,29 +36,11 @@ from termcolor import colored
 
 from src.MyUtils.metrics import RESOURCE_TO_BDW, RESOURCE_TO_SC, SC_TO_BDW, TAGS, TRANSLATOR_DICT
 
+VALID_RESOURCES = {"cpu", "mem", "disk", "disk_read", "disk_write", "net", "energy"}
 
-def eprint(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
-
-
-# DON'T NEED TO TEST
-def resilient_beat(db_handler, service_name, max_tries=10):
-    try:
-        service = db_handler.get_service(service_name)
-        service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
-        service["heartbeat"] = time.time()
-        db_handler.update_service(service)
-    except (requests.exceptions.HTTPError, ValueError) as e:
-        if max_tries > 0:
-            time.sleep((1000 + random.randint(1, 200)) / 1000)
-            resilient_beat(db_handler, service_name, max_tries - 1)
-        else:
-            raise e
-
-
-# DON'T NEED TO TEST
-def beat(db_handler, service_name):
-    resilient_beat(db_handler, service_name, max_tries=5)
+# Logging configuration
+LOGGING_FORMAT = '[%(asctime)s]%(levelname)s:%(name)s:%(message)s'
+LOGGING_DATEFMT = '%Y-%m-%d %H:%M:%S%z'
 
 
 class MyConfig:
@@ -89,9 +71,28 @@ def get_config_value(config, default_config, key):
         return default_config[key]
 
 
-# Logging configuration
-LOGGING_FORMAT = '[%(asctime)s]%(levelname)s:%(name)s:%(message)s'
-LOGGING_DATEFMT = '%Y-%m-%d %H:%M:%S%z'
+def eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+# DON'T NEED TO TEST
+def resilient_beat(db_handler, service_name, max_tries=10):
+    try:
+        service = db_handler.get_service(service_name)
+        service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
+        service["heartbeat"] = time.time()
+        db_handler.update_service(service)
+    except (requests.exceptions.HTTPError, ValueError) as e:
+        if max_tries > 0:
+            time.sleep((1000 + random.randint(1, 200)) / 1000)
+            resilient_beat(db_handler, service_name, max_tries - 1)
+        else:
+            raise e
+
+
+# DON'T NEED TO TEST
+def beat(db_handler, service_name):
+    resilient_beat(db_handler, service_name, max_tries=5)
 
 
 # DON'T NEED TO TEST
@@ -229,10 +230,8 @@ def copy_structure_base(structure):
 
 
 def valid_resource(resource):
-    if resource not in ["cpu", "mem", "disk", "disk_read", "disk_write", "net", "energy"]:
-        return False
-    else:
-        return True
+    return resource in VALID_RESOURCES
+
 
 # DON'T NEED TO TEST
 def get_resource(structure, resource):

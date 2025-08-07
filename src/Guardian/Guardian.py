@@ -28,6 +28,7 @@ from __future__ import print_function
 
 from threading import Thread, Lock, Condition
 from collections import Counter
+from cachetools import LRUCache
 import time
 import traceback
 import logging
@@ -64,7 +65,7 @@ class Guardian:
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.power_budget = {}
+        self.pb_cache = LRUCache(maxsize=128)
         self.window_timelapse, self.window_delay, self.event_timeout, self.debug = None, None, None, None
         self.structure_guarded, self.guardable_resources, self.cpu_shares_per_watt, self.active = None, None, None, None
         self.energy_model_name, self.energy_model_reliability, self.current_structures = None, None, None
@@ -497,17 +498,7 @@ class Guardian:
             (bool) Whether the power budget has already been used or not
 
         """
-        power_budget = structure["resources"]["energy"]["max"]
-        structure_id = structure['_id']
-
-        # Initialise with a non-possible value
-        if structure_id not in self.power_budget:
-            self.power_budget[structure_id] = -1
-
-        if self.power_budget[structure_id] != power_budget:
-            return True
-
-        return False
+        return structure["resources"]["energy"]["current"] != self.pb_cache.get(structure['_id'], -1)
 
     @staticmethod
     def power_is_near_power_budget(structure, usages, limits):
@@ -525,7 +516,7 @@ class Guardian:
 
         """
         power_margin = limits["energy"]["boundary"] / 100
-        power_budget = structure["resources"]["energy"]["max"]
+        power_budget = structure["resources"]["energy"]["current"]
         current_energy_usage = usages[utils.res_to_metric("energy")]
 
         # If power is within some reasonable limits we do nothing
@@ -553,11 +544,11 @@ class Guardian:
 
         """
         # Update container power budget in order to know that the model has been already applied to this structure
-        self.power_budget[structure['_id']] = structure["resources"]["energy"]["max"]
+        self.pb_cache[structure['_id']] = structure["resources"]["energy"]["current"]
 
         # Get container information
         structure_name = structure['name']
-        container_power_budget = structure["resources"]["energy"]["max"]
+        container_power_budget = structure["resources"]["energy"]["current"]
         container_cpu_limit = structure["resources"]["cpu"]["current"]
         container_power_usage = usages[utils.res_to_metric("energy")]
         container_power_diff = container_power_budget - container_power_usage
@@ -585,7 +576,10 @@ class Guardian:
         self.register_scaling(structure, value=container_power_diff)
 
         # Compute CPU desired power based on current scalings of the same rescale type
-        host_scalings = sum(self.current_scalings[current_host][rescale_type])
+        if rescale_type == "both":
+            host_scalings = sum(self.current_scalings[current_host]["up" if container_power_diff > 0 else "down"])
+        else:
+            host_scalings = sum(self.current_scalings[current_host][rescale_type])
         cpu_desired_power = cpu_power_usage + host_scalings
 
         # Get model estimation
@@ -699,7 +693,7 @@ class Guardian:
                               "through power models has been trimmed from {1} to {2}"
                               .format(structure["name"], amount, new_amount), self.debug)
 
-        # # If amount is 0 ignore this request else generate the request and append it
+        # If amount is 0 ignore this request else generate the request and append it
         if new_amount == 0:
             utils.log_warning("Initial rescaling through power models for structure {0} will be ignored "
                               "because amount is 0".format(structure["name"]), self.debug)
@@ -724,7 +718,7 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        power_budget = structure["resources"][resource]["max"]
+        power_budget = structure["resources"][resource]["current"]
         current_cpu_limit = structure["resources"]["cpu"]["current"]
         current_energy_usage = usages[utils.res_to_metric("energy")]
 
@@ -749,7 +743,7 @@ class Guardian:
             (int) The amount to be reduced using the fit to usage policy.
 
         """
-        power_budget = structure["resources"][resource]["max"]
+        power_budget = structure["resources"][resource]["current"]
         current_energy_usage = structure["resources"][resource]["usage"]
         error = power_budget - current_energy_usage
         energy_amplification = error * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
@@ -1030,7 +1024,7 @@ class Guardian:
                 if self.power_is_near_power_budget(structure, usages, limits):
                     utils.log_warning("Current energy usage ({0:.2f}) for structure {1} is close to its power budget ({2:.2f}), "
                                       "setting amount to 0".format(usages[utils.res_to_metric("energy")], structure["name"],
-                                                                   structure["resources"]["energy"]["max"]), self.debug)
+                                                                   structure["resources"]["energy"]["current"]), self.debug)
                     amount = 0
                 self.print_energy_rescale_info(structure, usages, limits, amount)
 

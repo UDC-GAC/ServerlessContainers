@@ -41,7 +41,7 @@ structure_routes = Blueprint('structures', __name__)
 MANDATORY_RESOURCES = ["cpu", "mem"]
 CONTAINER_KEYS = ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]
 HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]
-APP_KEYS = ["name", "guard", "subtype", "resources", "files_dir", "install_script", "start_script", "stop_script", "app_jar"]
+APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script", "app_jar"]
 
 
 def retrieve_structure(structure_name):
@@ -87,7 +87,10 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     if not valid_resource(resource):
         return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
 
-    if parameter not in ["max", "min", "weight"]:
+    # Energy is a special case where 'current' value may be modified in order to experiment with dynamic power_budgets
+    valid_parameters = ["max", "min", "weight"] + (["current"] if resource == "energy" else [])
+
+    if parameter not in valid_parameters:
         return abort(400, {"message": "Invalid parameter state"})
 
     try:
@@ -98,14 +101,21 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
         return abort(400)
 
     structure = retrieve_structure(structure_name)
-    if parameter in structure["resources"][resource] and structure["resources"][resource][parameter] == value:
+    if structure.get("resources", {}).get(resource, {}).get(parameter, -1) == value:
         return jsonify(201)
+
+    # If 'current' parameter is being changed, first check is valid
+    if parameter == "current":
+        _min = structure.get("resources", {}).get(resource, {}).get("min", -1)
+        _max = structure.get("resources", {}).get(resource, {}).get("max", -1)
+        if not _min <= value <= _max:
+            return abort(400, {"message": "Invalid value for 'current' parameter ({0}), it must be "
+                                          "between 'min' ({1}) and 'max' ({2})".format(value, _min, _max)})
 
     put_done = False
     tries = 0
     while not put_done:
         tries += 1
-        structure = retrieve_structure(structure_name)
         structure["resources"][resource][parameter] = value
         get_db().update_structure(structure)
 
@@ -173,7 +183,7 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
         for resource in resources:
             if not valid_resource(resource):
                 return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
-            elif resource not in structure["resources"]:
+            if resource not in structure["resources"]:
                 return abort(400, {"message": "Resource '{0}' is missing in structure {1}".format(resource, structure_name)})
 
     # 1st check, in case nothing has to be done really
@@ -185,7 +195,6 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
     tries = 0
     while not put_done:
         tries += 1
-        structure = retrieve_structure(structure_name)
         for resource in resources:
             structure["resources"][resource]["guard"] = state
 
