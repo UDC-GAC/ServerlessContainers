@@ -101,7 +101,7 @@ class PIController:
                 utils.log_error("No usage data for structure {0}. Skipping structure.".format(structure["name"]), self.debug)
                 return
 
-            container_power_budget = structure["resources"]["energy"]["max"]
+            container_power_budget = structure["resources"]["energy"]["current"]
             container_power_usage = usages[utils.res_to_metric("energy")]
             container_power_error = container_power_budget - container_power_usage
             container_cpu_usage = usages[utils.res_to_metric("cpu")]
