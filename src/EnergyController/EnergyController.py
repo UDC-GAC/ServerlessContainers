@@ -161,6 +161,10 @@ class EnergyController:
 
     def structure_power_cap(self, structure, capping_method):
         try:
+            # Check the necessary info for this structure is available
+            if not self.host_cpu_info.get(structure["host"], {}).get(structure["name"], {}):
+                return
+
             # If the structure doesn't need a power scaling it is skipped
             if self.get_power_scaling(structure) == 0:
                 return
