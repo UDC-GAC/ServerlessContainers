@@ -213,7 +213,7 @@ class EnergyController:
 
         # Higher error requires fewer consecutive events to trigger scaling
         abs_ppe = abs(P_scaling / P_budget)
-        for ppe_threshold, event_threshold in [(0.25, 1), (0.15, 2), (0.05, 3)]:
+        for ppe_threshold, event_threshold in [(0.25, 1), (0.15, 2), (0.05, 4)]:
             if abs_ppe >= ppe_threshold and dir_events >= event_threshold and op_events == 0:
                 self.events_cache.clear_events(structure_id)
                 return P_scaling
