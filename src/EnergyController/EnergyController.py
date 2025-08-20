@@ -53,11 +53,11 @@ class EnergyController:
                  self.get_power_scaling(structure)) # P_scaling
 
     def _unpack_host(self, host):
-        # Unpacks host dictionary to values: (U_alloc, U_user, U_system, P_scaling)
+        # Unpacks host dictionary to values: (U_alloc, U_user, U_system, P_usage, P_scaling)
         return (
             self.host_cpu_info[host]["total"]["allocation"], # U_alloc
             self.host_cpu_info[host]["total"]["usages"][utils.res_to_metric("user")], # U_user
-            self.host_cpu_info[host]["total"]["usages"][utils.res_to_metric("system")], # U_system
+            self.host_cpu_info[host]["total"]["usages"][utils.res_to_metric("kernel")], # U_system
             self.host_cpu_info[host]["total"]["usages"]["rapl"], # P_usage
             self.host_cpu_info[host]["total"]["scaling"] # P_scaling
         )
