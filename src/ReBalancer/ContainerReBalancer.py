@@ -111,21 +111,53 @@ class ContainerRebalancer:
                 filtered_containers.append(container)
         return filtered_containers
 
-    def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
-
+    def __print_scaling_info(self, container, amount_to_scale, resource):
         if amount_to_scale > 0:  # Receiver
-            request = generate_request(container, int(amount_to_scale), resource, priority=2)
             log_info("Node {0} will receive: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
-        elif amount_to_scale < 0:  # Donor
-            request = generate_request(container, int(amount_to_scale), resource, priority=-1)
+        if amount_to_scale < 0:  # Donor
             log_info("Node {0} will give: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
-        else:
-            log_info("Node {0} doesn't need to scale".format(container["name"]), self.__debug)
-            return
 
+    def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
+        self.__print_scaling_info(container, amount_to_scale, resource)
+        request = generate_request(container, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1)
         if container["name"] not in requests:
             requests[container["name"]] = list()
         requests[container["name"]].append(request)
+
+    def __update_resource_in_couchdb(self, container, resource, amount_to_scale):
+        current_limit = container.get("resources", {}).get(resource, {}).get("current", -1)
+        new_current = current_limit + amount_to_scale
+        self.__print_scaling_info(container, amount_to_scale, resource)
+        # Update container "current" value in CouchDB
+        put_done = False
+        tries = 0
+        while not put_done:
+            tries += 1
+            container["resources"][resource]["current"] = new_current
+            self.__couchdb_handler.update_structure(container)
+
+            time.sleep(0.5)
+
+            container = self.__couchdb_handler.get_structure(container['name'])
+            put_done = container["resources"][resource]["current"] == new_current
+
+            if tries >= 3:
+                log_error("Node {0} 'current' value couldn't be updated in document database from {1} to {2}".format(container["name"], current_limit, new_current), self.__debug)
+                return
+
+
+    def __manage_rebalancing(self, donor, receiver, resource, amount_to_scale, requests):
+        if amount_to_scale == 0:
+            log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor["name"], receiver["name"]), self.__debug)
+            return
+        # Create the pair of scaling requests
+        if resource != "energy":
+            self.__generate_scaling_request(receiver, resource, amount_to_scale, requests)
+            self.__generate_scaling_request(donor, resource, -amount_to_scale, requests)
+        # Energy is directly updated in CouchDB as NodeRescaler cannot modify an energy physical limit
+        else:
+            self.__update_resource_in_couchdb(receiver, resource, amount_to_scale)
+            self.__update_resource_in_couchdb(donor, resource, -amount_to_scale)
 
     def __send_final_requests(self, requests):
         # For each container, aggregate all its requests in a single request
@@ -250,9 +282,8 @@ class ContainerRebalancer:
                     if not donor_slices[receiver_host]:
                         del donor_slices[receiver_host]
 
-                    # Create the pair of scaling requests
-                    self.__generate_scaling_request(receiver, resource, amount_to_scale, requests)
-                    self.__generate_scaling_request(donor, resource, -amount_to_scale, requests)
+                    # Manage necessary scalings to rebalance resource between donor and receiver
+                    self.__manage_rebalancing(donor, receiver, resource, amount_to_scale, requests)
 
                     # Update the received amount for this container
                     received_amount[receiver_name] += amount_to_scale
@@ -344,10 +375,9 @@ class ContainerRebalancer:
                 if amount_to_scale > max_receiver_amount:
                     amount_to_scale = max_receiver_amount
 
-                # Create the pair of scaling requests
-                self.__generate_scaling_request(receiver, resource, amount_to_scale, requests)
-                self.__generate_scaling_request(donor, resource, -amount_to_scale, requests)
-                log_info("Resource swap between {0}(donor) and {1}(receiver) with amount {2}".format(donor["name"], receiver["name"], amount_to_scale), self.__debug)
+                # Manage necessary scalings to rebalance resource between donor and receiver
+                self.__manage_rebalancing(donor, receiver, resource, amount_to_scale, requests)
+                log_info("Resource swap between {0} (donor) and {1} (receiver) with amount {2}".format(donor["name"], receiver["name"], amount_to_scale), self.__debug)
 
             log_info("No more receivers", self.__debug)
             self.__send_final_requests(requests)
@@ -405,7 +435,8 @@ class ContainerRebalancer:
                 ## Send scaling requests
                 for container in participants:
                     amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
-                    self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
+                    if amount_to_scale != 0:
+                        self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
         def get_new_allocations_by_disk(containers, requests, disk_name):
             total_allocated_bw = 0
@@ -495,7 +526,8 @@ class ContainerRebalancer:
                 for resource in ["disk_read", "disk_write"]:
                     for container in participants[resource]:
                         amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
-                        self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
+                        if amount_to_scale != 0:
+                            self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
         for resource in self.__resources_balanced:
 
