@@ -223,21 +223,18 @@ class ContainerRebalancer:
 
                 # Divide the total amount to donate in slices of 25 units
                 for slice_amount in self.__split_amount_in_slices(stolen_amount, 25):
-                    try:
-                        donor_slices[host].append((container, slice_amount))
-                    except KeyError:
-                        donor_slices[host] = [(container, slice_amount)]
+                    donor_slices.setdefault(host, []).append((container, slice_amount))
 
             # Sort slices by donated amount
-            for host in donor_slices:
+            for host in list(donor_slices.keys()):
                 donor_slices[host] = sorted(donor_slices[host], key=lambda c: c[1])
 
             # Print current donor slices
             self.__print_donor_slices(donor_slices)
 
             # Remove slices that can't be donated, as there is no receiver in the same host
-            for host in donor_slices:
-                if any(r["host"] == host for r in receivers):
+            for host in list(donor_slices.keys()):
+                if all(r["host"] != host for r in receivers):
                     del donor_slices[host]
 
             # Print viable donor slices
@@ -250,16 +247,17 @@ class ContainerRebalancer:
                 # Print current donor slices
                 self.__print_donor_slices(donor_slices)
 
-                for receiver in receivers:
+                if not receivers:
+                    break
+
+                # The loop iterates over a copy so that the list of receivers can be modified inside the loop
+                for receiver in list(receivers):
                     receiver_name = receiver["name"]
                     receiver_host = receiver["host"]
                     if receiver_host not in donor_slices:
                         log_info("No more donors on its host ({0}), container {1} left out".format(
                             receiver_host, receiver["name"]), self.__debug)
                         continue
-
-                    if receiver_name not in received_amount:
-                        received_amount[receiver_name] = 0
 
                     # Container can't receive more than its maximum also taking into account its previous donations
                     max_receiver_amount = (receiver["resources"][resource]["max"] -
@@ -268,6 +266,7 @@ class ContainerRebalancer:
 
                     # If this container can't be scaled anymore, skip
                     if max_receiver_amount <= 0:
+                        receivers.remove(receiver)
                         continue
 
                     # Get and remove one slice from the list
