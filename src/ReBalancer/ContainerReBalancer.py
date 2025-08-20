@@ -182,11 +182,12 @@ class ContainerRebalancer:
             donor_slices = dict()
             for container in donors:
                 # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
-                current_value = container["resources"]["cpu"]["current"]
-                min_value = container["resources"]["cpu"]["min"]
-                usage_value = container["resources"]["cpu"]["usage"]
+                current_limit = container["resources"][resource]["current"]
+                min_value = container["resources"][resource]["min"]
+                usage_value = container["resources"][resource]["usage"]
                 host = container["host"]
-                stolen_amount = 0.5 * (current_value - max(min_value,  usage_value))
+                # Give stolen percentage of the gap between current limit and current usage (or min if usage is lower)
+                stolen_amount = self.__STOLEN_PERCENTAGE * (current_limit - max(min_value,  usage_value))
 
                 # Divide the total amount to donate in slices of 25 units
                 for slice_amount in self.__split_amount_in_slices(stolen_amount, 25):
@@ -229,9 +230,9 @@ class ContainerRebalancer:
                         received_amount[receiver_name] = 0
 
                     # Container can't receive more than its maximum also taking into account its previous donations
-                    max_receiver_amount = (receiver["resources"]["cpu"]["max"] -
-                                           receiver["resources"]["cpu"]["current"] -
-                                           received_amount[receiver_name])
+                    max_receiver_amount = (receiver["resources"][resource]["max"] -
+                                           receiver["resources"][resource]["current"] -
+                                           received_amount.setdefault(receiver_name, 0))
 
                     # If this container can't be scaled anymore, skip
                     if max_receiver_amount <= 0:
