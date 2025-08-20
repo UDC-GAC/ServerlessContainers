@@ -46,7 +46,7 @@ class ContainerRebalancer:
 
     @staticmethod
     def __split_amount_in_slices(total_amount, slice_amount):
-        number_of_slices = total_amount // slice_amount
+        number_of_slices = int(total_amount // slice_amount)
         last_slice_amount = total_amount % slice_amount
         return [slice_amount] * number_of_slices + ([last_slice_amount] if last_slice_amount > 0 else [])
 
@@ -58,7 +58,7 @@ class ContainerRebalancer:
         debug_info(msg, self.__debug)
         for host in donor_slices:
             for donor, slice_amount in donor_slices[host]:
-                debug_info("({0})\t{1}\t{2}".format(host, donor["name"], slice_amount), self.__debug)
+                log_info("({0})\t{1}\t{2}".format(host, donor["name"], slice_amount), self.__debug)
 
     def __fill_containers_with_usage_info(self, resources, containers):
         containers_with_usages = list()
@@ -72,8 +72,7 @@ class ContainerRebalancer:
                 for usage_metric in usages:
                     # Split the key from the retrieved data
                     keys = usage_metric.split(".")
-                    if any(keys[1] == res and res not in container["resources"] for res in ["disk_read", "disk_write"]): continue
-                    if keys[1] == "energy" and "energy" not in container["resources"]: continue
+                    if any(keys[1] == res and res not in container["resources"] for res in ["disk_read", "disk_write", "energy"]): continue
                     container["resources"][keys[1]][keys[2]] = usages[usage_metric]
                 containers_with_usages.append(container)
         return containers_with_usages
@@ -149,9 +148,9 @@ class ContainerRebalancer:
 
     ## BALANCING METHODS
     # APPS BY PAIR SWAPPING
-    def __rebalance_containers_by_pair_swapping(self, containers, app_name):
+    def __rebalance_app_containers_by_pair_swapping(self, containers, app_name):
 
-        balanceable_resources = {"cpu"}
+        balanceable_resources = {"cpu", "energy"}
 
         for resource in self.__resources_balanced:
 
@@ -159,17 +158,18 @@ class ContainerRebalancer:
                 log_warning("'{0}' not yet supported in app '{1}' balancing, only '{2}' available at the moment".format(
                     resource, self.__balancing_method, list(balanceable_resources)), self.__debug)
                 continue
+            log_info("Going to rebalance '{0}' by {1} for {2}".format(resource, self.__balancing_method, app_name), self.__debug)
 
             # Filter the containers between donors and receivers, according to usage and rules
             donors = self.__filter_containers_by_role("donors", resource, containers)
             receivers = self.__filter_containers_by_role("receivers", resource, containers)
 
+            # Print info about current donors and receivers
+            self.__print_donors_and_receivers(donors, receivers)
+
             if not receivers:
                 log_info("No containers in need of rebalancing for {0}".format(app_name), self.__debug)
                 continue
-
-            # Print info about current donors and receivers
-            self.__print_donors_and_receivers(donors, receivers)
 
             # Order the containers from lower to upper current resource limit
             # TODO: Maybe is better to order by (max - current) -> Those containers with a bigger gap receive first
@@ -253,8 +253,8 @@ class ContainerRebalancer:
                     # Update the received amount for this container
                     received_amount[receiver_name] += amount_to_scale
 
-                    log_info("Resource swap between {0}(donor) and {1}(receiver)".format(
-                        donor["name"], receiver["name"]), self.__debug)
+                    log_info("Resource swap between {0} (donor) and {1} (receiver) with amount {2}".format(
+                        donor["name"], receiver["name"], amount_to_scale), self.__debug)
 
             log_info("No more donors", self.__debug)
             self.__send_final_requests(requests)
@@ -264,8 +264,7 @@ class ContainerRebalancer:
     def __rebalance_host_containers_by_pair_swapping(self, containers, host):
 
         balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}, 
-                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}
-                                }
+                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE, "stolen_percentage":self.__STOLEN_PERCENTAGE}}
 
         for resource in self.__resources_balanced:
 
@@ -354,11 +353,10 @@ class ContainerRebalancer:
     # HOSTS BY WEIGHT
     def __rebalance_host_containers_by_weight(self, containers, host):
 
-        balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE}, 
-                                "disk": {"diff_percentage":self.__DIFF_PERCENTAGE},
-                                "disk_read": {"diff_percentage":self.__DIFF_PERCENTAGE},
-                                "disk_write": {"diff_percentage":self.__DIFF_PERCENTAGE},
-                                }
+        balanceable_resources = {"cpu": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                 "disk": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                 "disk_read": {"diff_percentage":self.__DIFF_PERCENTAGE},
+                                 "disk_write": {"diff_percentage":self.__DIFF_PERCENTAGE}}
 
         def get_new_allocations(resource, containers, requests):
             ## Get total allocation and weight
@@ -412,7 +410,7 @@ class ContainerRebalancer:
             weight_write_sum = 0
             participants = {"disk_read": [], "disk_write": []}
             for container in containers:
-                if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]): 
+                if all("weight" in container.get("resources", {}).get(res, {}) for res in ["disk_read", "disk_write"]):
                     read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < balanceable_resources["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
                     write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < balanceable_resources["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
 
@@ -583,7 +581,7 @@ class ContainerRebalancer:
                 app_name = app["name"]
                 log_info("Going to rebalance app {0} now".format(app_name), self.__debug)
                 if self.__balancing_method == "pair_swapping":
-                    self.__rebalance_containers_by_pair_swapping(app_containers[app_name], app_name)
+                    self.__rebalance_app_containers_by_pair_swapping(app_containers[app_name], app_name)
                 elif self.__balancing_method == "weights":
                     log_warning("Weights balancing method not yet supported in applications", self.__debug)
                 else:
