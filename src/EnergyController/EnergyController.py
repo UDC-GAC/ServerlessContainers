@@ -365,10 +365,9 @@ class EnergyController:
             invalid, message = self.invalid_conf()
             if invalid:
                 utils.log_error(message, self.debug)
-                continue
 
             thread = None
-            if self.active:
+            if not invalid and self.active:
                 # Remote database operation
                 structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
                 # Get all the structures supported by this controller (i.e. containers)
