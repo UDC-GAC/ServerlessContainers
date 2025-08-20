@@ -83,10 +83,9 @@ class EnergyController:
     def power_is_near_pb(self, structure, limits, value):
         margin = self.get_resource_margin("energy", structure, limits)
         P_budget = structure["resources"]["energy"]["current"]
-        #is_near = P_budget < value < (P_budget + margin)
-        is_near = (P_budget - margin) < value < (P_budget + margin)
+        is_near = (P_budget - margin) < value < (P_budget + margin) # P_budget < value < (P_budget + margin)
         if is_near:
-            utils.log_warning(f"@{structure['name']} Power consumption ({value}W) is near power budget ({P_budget - margin}, {P_budget + margin})", self.debug)
+            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {P_budget - margin} < {value} < {P_budget + margin}", self.debug)
 
         return is_near
 
@@ -95,7 +94,7 @@ class EnergyController:
         U_alloc = structure["resources"]["cpu"]["current"]
         is_below = value < (U_alloc - margin)
         if is_below:
-            utils.log_warning(f"@{structure['name']} CPU usage is below boundary {value} < {U_alloc - margin} ({U_alloc} - {margin})", self.debug)
+            utils.log_warning(f"@{structure['name']} CPU usage is below boundary: {value} < {U_alloc - margin} ({U_alloc} - {margin})", self.debug)
 
         return is_below
 
@@ -113,6 +112,7 @@ class EnergyController:
 
         # Get host information
         U_alloc_host, U_user_host, U_system_host, P_usage_host, P_scaling_host = self._unpack_host(host)
+
         if ignore_system:
             U_system_host = 0.0
 
