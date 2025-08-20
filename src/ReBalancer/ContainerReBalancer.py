@@ -94,14 +94,17 @@ class ContainerRebalancer:
             return filtered_containers
 
         for container in containers:
-            try:
-                data = {resource: {"structure": {resource: {
-                    "usage": container["resources"][resource]["usage"],
-                    "min": container["resources"][resource]["min"],
-                    "max": container["resources"][resource]["max"],
-                    "current": container["resources"][resource]["current"]}}}}
-            except KeyError:
-                continue
+            data = {}
+            for r in container["resources"]:
+                try:
+                    data[r] =  {"structure": {r: {
+                        "usage": container["resources"][r]["usage"],
+                        "min": container["resources"][r]["min"],
+                        "max": container["resources"][r]["max"],
+                        "current": container["resources"][r]["current"]
+                    }}}
+                except KeyError:
+                    continue
 
             # Check if container activate the rule: it has low resource usage (donors) or a bottleneck (receivers)
             if jsonLogic(rule["rule"], data):
