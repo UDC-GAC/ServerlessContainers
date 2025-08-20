@@ -98,6 +98,14 @@ class EnergyController:
 
         return is_below
 
+    def cpu_usage_is_above_allocation(self, structure, value):
+        U_alloc = structure["resources"]["cpu"]["current"]
+        is_above = value > U_alloc * 1.05 # A 5% error can be assumed
+        if is_above:
+            utils.log_warning(f"@{structure['name']} CPU usage is above current allocation: {value} > {U_alloc}", self.debug)
+
+        return is_above
+
     def print_scaling_info(self, name, P_usage, P_budget, U_alloc, U_alloc_new):
         utils.log_info(f"@{name} POWER {P_usage} -> {P_budget} | CPU {U_alloc} -> {U_alloc_new}", self.debug)
 
@@ -199,6 +207,10 @@ class EnergyController:
 
         # If power is already near the power budget the structure doesn't need to scale power
         if self.power_is_near_pb(structure, limits, P_usage):
+            return 0
+
+        # If CPU usage exceeds current allocation, power consumption won't show the effect of recent allocation changes
+        if self.cpu_usage_is_above_allocation(structure, U_usage):
             return 0
 
         # If structure needs a power scale-up but CPU is below boundary (no CPU bottleneck), skip power scale
