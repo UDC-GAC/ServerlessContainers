@@ -25,7 +25,7 @@
 
 import requests
 
-from src.MyUtils import MyUtils
+import src.MyUtils.MyUtils as utils
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced, get_user_apps
 from src.StateDatabase import couchdb
 
@@ -55,9 +55,9 @@ class ApplicationRebalancer:
             if current_energy != limit_energy:
                 app["resources"]["energy"]["max"] = limit_energy
                 self.__couchdb_handler.update_structure(app)
-                MyUtils.log_info("Updated energy limit of app {0}".format(app["name"]), self.__debug)
+                utils.log_info("Updated energy limit of app {0}".format(app["name"]), self.__debug)
 
-            # MyUtils.log_info("Processed app {0} with an energy share of {1}% and {2} Watts".format(
+            # utils.log_info("Processed app {0} with an energy share of {1}% and {2} Watts".format(
             #     app["name"], str("%.2f" % (100 * percentage)), limit_energy), self.__debug)
 
     def __dynamic_app_rebalancing(self, applications):
@@ -76,6 +76,7 @@ class ApplicationRebalancer:
         else:
             # Order the apps from lower to upper energy limit
             apps_to_receive = sorted(receivers, key=lambda c: c["resources"]["energy"]["max"])
+                utils.log_info("No applications in need of rebalancing for {0}".format(app_name), self.__debug)
 
         shuffling_tuples = list()
         for app in donors:
@@ -96,43 +97,46 @@ class ApplicationRebalancer:
             donor["resources"]["energy"]["max"] -= amount_to_scale
             receiver["resources"]["energy"]["max"] += amount_to_scale
 
-            MyUtils.update_structure(donor, self.__couchdb_handler, self.__debug)
-            MyUtils.update_structure(receiver, self.__couchdb_handler, self.__debug)
+                utils.update_structure(donor, self.__couchdb_handler, self.__debug)
+                utils.update_structure(receiver, self.__couchdb_handler, self.__debug)
 
-            MyUtils.log_info(
-                "Energy swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]),
-                self.__debug)
+                utils.log_info(
+                    "Energy swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]),
+                    self.__debug)
 
     def rebalance_applications(self, config):
         self.__config = config
         self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
         self.__ENERGY_DIFF_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
         self.__ENERGY_STOLEN_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
-        MyUtils.log_info("_______________", self.__debug)
-        MyUtils.log_info("Performing APP ENERGY Balancing", self.__debug)
         MyUtils.log_info("ENERGY_DIFF_PERCENTAGE -> {0}".format(self.__ENERGY_DIFF_PERCENTAGE), self.__debug)
         MyUtils.log_info("ENERGY_STOLEN_PERCENTAGE -> {0}".format(self.__ENERGY_STOLEN_PERCENTAGE), self.__debug)
+        self.__debug = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        self.__ENERGY_DIFF_PERCENTAGE = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
+        self.__ENERGY_STOLEN_PERCENTAGE = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
+        utils.log_info("_______________", self.__debug)
+        utils.log_info("Performing APP Balancing", self.__debug)
 
         try:
-            applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
+            applications = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
             users = self.__couchdb_handler.get_users()
         except requests.exceptions.HTTPError as e:
-            MyUtils.log_error("Couldn't get users and/or applications", self.__debug)
-            MyUtils.log_error(str(e), self.__debug)
+            utils.log_error("Couldn't get users and/or applications", self.__debug)
+            utils.log_error(str(e), self.__debug)
             return
 
         for user in users:
-            MyUtils.log_info("Processing user {0}".format(user["name"]), self.__debug)
+            utils.log_info("Processing user {0}".format(user["name"]), self.__debug)
             user_apps = get_user_apps(applications, user)
             if "energy_policy" not in user:
                 balancing_policy = "static"
-                MyUtils.log_info(
+                utils.log_info(
                     "Energy balancing policy unset for user {0}, defaulting to 'static'".format(user["name"]),
                     self.__debug)
             else:
                 balancing_policy = user["energy_policy"]
 
-            MyUtils.log_info("User {0} has {1} policy".format(user["name"], balancing_policy), self.__debug)
+            utils.log_info("User {0} has {1} policy".format(user["name"], balancing_policy), self.__debug)
             if balancing_policy == "static":
                 max_energy = user["energy"]["max"]
                 self.__static_app_rebalancing(user_apps, max_energy)
@@ -141,6 +145,6 @@ class ApplicationRebalancer:
                 self.__dynamic_app_rebalancing(user_apps)
 
             else:
-                MyUtils.log_error("Unknown energy balancing policy '{0}'".format(balancing_policy), self.__debug)
+                utils.log_error("Unknown energy balancing policy '{0}'".format(balancing_policy), self.__debug)
 
-        MyUtils.log_info("_______________\n", self.__debug)
+        utils.log_info("_______________\n", self.__debug)

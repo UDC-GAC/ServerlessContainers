@@ -30,7 +30,7 @@ import time
 import traceback
 import logging
 
-import src.MyUtils.MyUtils as MyUtils
+import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.ReBalancer.ContainerReBalancer as containerReBalancer
@@ -54,24 +54,24 @@ class ReBalancer:
         self.config = {}
 
     def rebalance(self, ):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=MyUtils.LOGGING_FORMAT, datefmt=MyUtils.LOGGING_DATEFMT)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
         while True:
             # Get service info
-            service = MyUtils.get_service(self.couchdb_handler, SERVICE_NAME)
+            service = utils.get_service(self.couchdb_handler, SERVICE_NAME)
 
             # Heartbeat
-            MyUtils.beat(self.couchdb_handler, SERVICE_NAME)
+            utils.beat(self.couchdb_handler, SERVICE_NAME)
 
             # CONFIG
             self.config = service["config"]
-            self.debug = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "DEBUG")
-            window_difference = MyUtils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+            self.debug = utils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "DEBUG")
+            window_difference = utils.get_config_value(self.config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
 
             #self.userReBalancer.rebalance_users(self.config)
             #self.applicationReBalancer.rebalance_applications(self.config)
             self.containerRebalancer.rebalance_containers(self.config)
 
-            MyUtils.log_info("Epoch processed at {0}".format(MyUtils.get_time_now_string()), self.debug)
+            utils.log_info("Epoch processed at {0}".format(utils.get_time_now_string()), self.debug)
 
             time.sleep(window_difference)
 
@@ -81,7 +81,7 @@ def main():
         rebalancer = ReBalancer()
         rebalancer.rebalance()
     except Exception as e:
-        MyUtils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        utils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":

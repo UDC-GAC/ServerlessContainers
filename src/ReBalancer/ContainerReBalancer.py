@@ -28,8 +28,7 @@ import traceback
 
 from json_logic import jsonLogic
 
-from src.MyUtils.MyUtils import log_info, debug_info, get_config_value, log_error, log_warning, get_structures, \
-                                generate_request, get_structure_usages
+import src.MyUtils.MyUtils as utils
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, filter_rebalanceable_apps
 from src.StateDatabase import opentsdb
 from src.StateDatabase import couchdb
@@ -51,21 +50,21 @@ class ContainerRebalancer:
         return [slice_amount] * number_of_slices + ([last_slice_amount] if last_slice_amount > 0 else [])
 
     def __print_donors_and_receivers(self, donors, receivers):
-        log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
-        log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
+        utils.log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
+        utils.log_info("Nodes that will receive:  {0}".format(str([c["name"] for c in receivers])), self.__debug)
 
     def __print_donor_slices(self, donor_slices, msg="Donor slices are:"):
-        debug_info(msg, self.__debug)
+        utils.log_info(msg, self.__debug)
         for host in donor_slices:
             for donor, slice_amount in donor_slices[host]:
-                log_info("({0})\t{1}\t{2}".format(host, donor["name"], slice_amount), self.__debug)
+                utils.log_info("({0})\t{1}\t{2}".format(host, donor["name"], slice_amount), self.__debug)
 
     def __fill_containers_with_usage_info(self, resources, containers):
         containers_with_usages = list()
         for container in containers:
             # Get the usages for each balanced resource
-            usages = get_structure_usages(resources, container, self.__window_difference,
-                                          self.__window_delay, self.__opentsdb_handler, self.__debug)
+            usages = utils.get_structure_usages(resources, container, self.__window_difference,
+                                                self.__window_delay, self.__opentsdb_handler, self.__debug)
             # Save data following the format ["resources"][<resource>]["usage"]
             # e.g., structure.mem.usage -> container["resources"]["mem"]["usage"]
             if usages:
@@ -82,7 +81,7 @@ class ContainerRebalancer:
 
         # Check filter is valid
         if role not in ["donors", "receivers"]:
-            log_warning("Invalid role '{0}' for containers. It must be donors or receivers.".format(role), self.__debug)
+            utils.log_warning("Invalid role '{0}' for containers. It must be donors or receivers.".format(role), self.__debug)
             return filtered_containers
 
         # Try getting the rule
@@ -90,7 +89,7 @@ class ContainerRebalancer:
         try:
             rule = self.__couchdb_handler.get_rule("{0}_usage_{1}".format(resource, rule_type))
         except ValueError as e:
-            log_warning("No rule found for {0} usage {1}: {2}".format(resource, rule_type, str(e)), self.__debug)
+            utils.log_warning("No rule found for {0} usage {1}: {2}".format(resource, rule_type, str(e)), self.__debug)
             return filtered_containers
 
         for container in containers:
@@ -113,16 +112,14 @@ class ContainerRebalancer:
 
     def __print_scaling_info(self, container, amount_to_scale, resource):
         if amount_to_scale > 0:  # Receiver
-            log_info("Node {0} will receive: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
+            utils.log_info("Node {0} will receive: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
         if amount_to_scale < 0:  # Donor
-            log_info("Node {0} will give: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
+            utils.log_info("Node {0} will give: {1} for resource {2}".format(container["name"], amount_to_scale, resource), self.__debug)
 
     def __generate_scaling_request(self, container, resource, amount_to_scale, requests):
         self.__print_scaling_info(container, amount_to_scale, resource)
-        request = generate_request(container, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1)
-        if container["name"] not in requests:
-            requests[container["name"]] = list()
-        requests[container["name"]].append(request)
+        request = utils.generate_request(container, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1)
+        requests.setdefault(container["name"], []).append(request)
 
     def __update_resource_in_couchdb(self, container, resource, amount_to_scale):
         current_limit = container.get("resources", {}).get(resource, {}).get("current", -1)
@@ -142,13 +139,13 @@ class ContainerRebalancer:
             put_done = container["resources"][resource]["current"] == new_current
 
             if tries >= 3:
-                log_error("Node {0} 'current' value couldn't be updated in document database from {1} to {2}".format(container["name"], current_limit, new_current), self.__debug)
+                utils.log_error("Node {0} 'current' value couldn't be updated in document database from {1} to {2}".format(container["name"], current_limit, new_current), self.__debug)
                 return
 
 
     def __manage_rebalancing(self, donor, receiver, resource, amount_to_scale, requests):
         if amount_to_scale == 0:
-            log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor["name"], receiver["name"]), self.__debug)
+            utils.log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor["name"], receiver["name"]), self.__debug)
             return
         # Create the pair of scaling requests
         if resource != "energy":
@@ -168,17 +165,17 @@ class ContainerRebalancer:
             flat_request["amount"] = sum(req["amount"] for req in requests[container])
             final_requests.append(flat_request)
 
-        log_info("REQUESTS ARE:", self.__debug)
+        utils.log_info("REQUESTS ARE:", self.__debug)
         for c in requests.values():
             for r in c:
-                debug_info(r, self.__debug)
+                utils.debug_info(r, self.__debug)
 
         # TODO: Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed
         #  but not the scaling up, and shares will be lost
 
-        log_info("FINAL REQUESTS ARE:", self.__debug)
+        utils.log_info("FINAL REQUESTS ARE:", self.__debug)
         for r in final_requests:
-            debug_info(r, self.__debug)
+            utils.debug_info(r, self.__debug)
             self.__couchdb_handler.add_request(r)
 
     ## BALANCING METHODS
@@ -190,10 +187,10 @@ class ContainerRebalancer:
         for resource in self.__resources_balanced:
 
             if resource not in balanceable_resources:
-                log_warning("'{0}' not yet supported in app '{1}' balancing, only '{2}' available at the moment".format(
+                utils.log_warning("'{0}' not yet supported in app '{1}' balancing, only '{2}' available at the moment".format(
                     resource, self.__balancing_method, list(balanceable_resources)), self.__debug)
                 continue
-            log_info("Going to rebalance '{0}' by {1} for {2}".format(resource, self.__balancing_method, app_name), self.__debug)
+            utils.log_info("Going to rebalance '{0}' by {1} for {2}".format(resource, self.__balancing_method, app_name), self.__debug)
 
             # Filter the containers between donors and receivers, according to usage and rules
             donors = self.__filter_containers_by_role("donors", resource, containers)
@@ -203,7 +200,7 @@ class ContainerRebalancer:
             self.__print_donors_and_receivers(donors, receivers)
 
             if not receivers:
-                log_info("No containers in need of rebalancing for {0}".format(app_name), self.__debug)
+                utils.log_info("No containers in need of rebalancing for {0}".format(app_name), self.__debug)
                 continue
 
             # Order the containers from lower to upper current resource limit
@@ -255,7 +252,7 @@ class ContainerRebalancer:
                     receiver_name = receiver["name"]
                     receiver_host = receiver["host"]
                     if receiver_host not in donor_slices:
-                        log_info("No more donors on its host ({0}), container {1} left out".format(
+                        utils.log_info("No more donors on its host ({0}), container {1} left out".format(
                             receiver_host, receiver["name"]), self.__debug)
                         continue
 
@@ -287,10 +284,10 @@ class ContainerRebalancer:
                     # Update the received amount for this container
                     received_amount[receiver_name] += amount_to_scale
 
-                    log_info("Resource swap between {0} (donor) and {1} (receiver) with amount {2}".format(
+                    utils.log_info("Resource swap between {0} (donor) and {1} (receiver) with amount {2}".format(
                         donor["name"], receiver["name"], amount_to_scale), self.__debug)
 
-            log_info("No more donors", self.__debug)
+            utils.log_info("No more donors", self.__debug)
             self.__send_final_requests(requests)
 
     # HOSTS BY PAIR SWAPPING
@@ -303,10 +300,10 @@ class ContainerRebalancer:
         for resource in self.__resources_balanced:
 
             if resource not in balanceable_resources:
-                log_warning("'{0}' not yet supported in host '{1}' balancing, only '{2}' available at the moment".format(resource, self.__balancing_method, list(balanceable_resources.keys())), self.__debug)
+                utils.log_warning("'{0}' not yet supported in host '{1}' balancing, only '{2}' available at the moment".format(resource, self.__balancing_method, list(balanceable_resources.keys())), self.__debug)
                 continue
 
-            log_info("Going to rebalance {0} by {1}".format(resource, self.__balancing_method), self.__debug)
+            utils.log_info("Going to rebalance {0} by {1}".format(resource, self.__balancing_method), self.__debug)
 
             requests = dict()
             donors, receivers = list(), list()
@@ -323,7 +320,7 @@ class ContainerRebalancer:
                         receivers.append(container)
 
             if not receivers:
-                log_info("No containers in need of rebalancing for {0}".format(host["name"]), self.__debug)
+                utils.log_info("No containers in need of rebalancing for {0}".format(host["name"]), self.__debug)
                 continue
 
             # Print info about current donors and receivers
@@ -361,13 +358,13 @@ class ContainerRebalancer:
                             shuffling_tuples.append(donor, amount_to_scale)
 
                     if not disk_match:
-                        log_info("No more donors or no donors suited for container {0}".format(receiver["name"]), self.__debug)
+                        utils.log_info("No more donors or no donors suited for container {0}".format(receiver["name"]), self.__debug)
                         continue
                 else:
                     if shuffling_tuples:
                         donor, amount_to_scale = shuffling_tuples.pop(0)
                     else:
-                        log_info("No more donors, container {0} left out".format(receiver["name"]), self.__debug)
+                        utils.log_info("No more donors, container {0} left out".format(receiver["name"]), self.__debug)
                         continue
 
                 # Trim the amount to scale if needed
@@ -376,12 +373,12 @@ class ContainerRebalancer:
 
                 # Manage necessary scalings to rebalance resource between donor and receiver
                 self.__manage_rebalancing(donor, receiver, resource, amount_to_scale, requests)
-                log_info("Resource swap between {0} (donor) and {1} (receiver) with amount {2}".format(donor["name"], receiver["name"], amount_to_scale), self.__debug)
+                utils.log_info("Resource swap between {0} (donor) and {1} (receiver) with amount {2}".format(donor["name"], receiver["name"], amount_to_scale), self.__debug)
 
-            log_info("No more receivers", self.__debug)
+            utils.log_info("No more receivers", self.__debug)
             self.__send_final_requests(requests)
 
-        log_info("_______________", self.__debug)
+        utils.log_info("_______________", self.__debug)
 
     # HOSTS BY WEIGHT
     def __rebalance_host_containers_by_weight(self, containers, host):
@@ -531,16 +528,16 @@ class ContainerRebalancer:
         for resource in self.__resources_balanced:
 
             if resource not in balanceable_resources:
-                log_warning("'{0}' not yet supported in host '{1}' balancing, only '{2}' available at the moment".format(resource, self.__balancing_method, list(balanceable_resources.keys())), self.__debug)
+                utils.log_warning("'{0}' not yet supported in host '{1}' balancing, only '{2}' available at the moment".format(resource, self.__balancing_method, list(balanceable_resources.keys())), self.__debug)
                 continue
 
-            log_info("Going to rebalance {0} by {1}".format(resource, self.__balancing_method), self.__debug)
+            utils.log_info("Going to rebalance {0} by {1}".format(resource, self.__balancing_method), self.__debug)
 
             requests = dict()
 
             if resource == "disk":
                 if "disks" not in host["resources"]:
-                    log_error("There are no disks in host {0}".format(host["name"]), self.__debug)
+                    utils.log_error("There are no disks in host {0}".format(host["name"]), self.__debug)
                     continue
                 if len(host["resources"]["disks"]) > 1:
                     ## if host has more than one disk the balancing needs to be performed on each disk
@@ -569,32 +566,31 @@ class ContainerRebalancer:
 
             self.__send_final_requests(requests)
 
-        log_info("_______________", self.__debug)
+        utils.log_info("_______________", self.__debug)
 
     def rebalance_containers(self, config):
         self.__config = config
-        self.__debug = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        self.__debug = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
-        ## ATM we are using the energy percentage parameters to balance other resources (such as disk)
-        self.__DIFF_PERCENTAGE = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
-        self.__STOLEN_PERCENTAGE = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
-        self.__structures_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "STRUCTURES_BALANCED")
-        self.__resources_balanced = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "RESOURCES_BALANCED")
-        self.__balancing_method = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "BALANCING_METHOD")
-        self.__window_difference = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
-        self.__window_delay = get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
+        self.__DIFF_PERCENTAGE = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
+        self.__STOLEN_PERCENTAGE = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
+        self.__structures_balanced = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "STRUCTURES_BALANCED")
+        self.__resources_balanced = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "RESOURCES_BALANCED")
+        self.__balancing_method = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "BALANCING_METHOD")
+        self.__window_difference = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_TIMELAPSE")
+        self.__window_delay = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "WINDOW_DELAY")
 
-        log_info("_______________", self.__debug)
-        log_info("Performing CONTAINER Balancing", self.__debug)
+        utils.log_info("_______________", self.__debug)
+        utils.log_info("Performing CONTAINER Balancing", self.__debug)
 
         # Get the structures
-        containers = get_structures(self.__couchdb_handler, self.__debug, subtype="container")
-        applications = get_structures(self.__couchdb_handler, self.__debug, subtype="application")
-        hosts = get_structures(self.__couchdb_handler, self.__debug, subtype="host")
+        containers = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="container")
+        applications = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
+        hosts = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="host")
 
         # If some of the needed structures couldn't be retrieved, no rebalancing is performed
         if any(var is None for var in (containers, applications, hosts)):
-            log_error("Couldn't get structures", self.__debug)
+            utils.log_error("Couldn't get structures", self.__debug)
             return
 
         # APPS REBALANCING: Balancing the resources between containers of the same application
@@ -614,13 +610,13 @@ class ContainerRebalancer:
             # Rebalance applications
             for app in rebalanceable_apps:
                 app_name = app["name"]
-                log_info("Going to rebalance app {0} now".format(app_name), self.__debug)
+                utils.log_info("Going to rebalance app {0} now".format(app_name), self.__debug)
                 if self.__balancing_method == "pair_swapping":
                     self.__rebalance_app_containers_by_pair_swapping(app_containers[app_name], app_name)
                 elif self.__balancing_method == "weights":
-                    log_warning("Weights balancing method not yet supported in applications", self.__debug)
+                    utils.log_warning("Weights balancing method not yet supported in applications", self.__debug)
                 else:
-                    log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.__debug)
+                    utils.log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.__debug)
 
         # HOSTS REBALANCING: Balancing the resources between container on the same host
         if "hosts" in self.__structures_balanced:
@@ -646,10 +642,10 @@ class ContainerRebalancer:
             # Rebalance hosts
             for host in hosts:
                 host_name = host["name"]
-                log_info("Going to rebalance host {0} now".format(host_name), self.__debug)
+                utils.log_info("Going to rebalance host {0} now".format(host_name), self.__debug)
                 if self.__balancing_method == "pair_swapping":
                     self.__rebalance_host_containers_by_pair_swapping(host_containers[host_name], host)
                 elif self.__balancing_method == "weights":
                     self.__rebalance_host_containers_by_weight(host_containers[host_name], host)
                 else:
-                    log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.__debug)
+                    utils.log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.__debug)

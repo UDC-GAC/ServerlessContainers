@@ -25,7 +25,7 @@
 
 from json_logic import jsonLogic
 
-from src.MyUtils import MyUtils
+import src.MyUtils.MyUtils as utils
 
 CONFIG_DEFAULT_VALUES = {
     "WINDOW_TIMELAPSE": 30,
@@ -101,7 +101,7 @@ def filter_rebalanceable_apps(applications, rebalancing_level, couchdb_handler):
 
     # If a bad rebalancing level is specified, no app will be balanced
     if rebalancing_level not in ["container", "application"]:
-        MyUtils.log_error("Invalid app rebalancing policy '{0}'".format(rebalancing_level), debug=True)
+        utils.log_error("Invalid app rebalancing level '{0}'".format(rebalancing_level), debug=True)
         return rebalanceable_apps
 
     for app in applications:

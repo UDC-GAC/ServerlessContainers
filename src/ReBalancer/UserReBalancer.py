@@ -25,7 +25,7 @@
 
 import requests
 
-from src.MyUtils import MyUtils
+import src.MyUtils.MyUtils as utils
 from src.ReBalancer.Utils import CONFIG_DEFAULT_VALUES, app_can_be_rebalanced, get_user_apps
 from src.StateDatabase import couchdb
 
@@ -46,20 +46,20 @@ class UserRebalancer:
                     if "usage" in app["resources"][resource] and app["resources"][resource]["usage"]:
                         total_user[resource] += app["resources"][resource]["usage"]
                     else:
-                        MyUtils.log_error("Application {0} of user {1} has no used {2} field or value".format(
+                        utils.log_error("Application {0} of user {1} has no used {2} field or value".format(
                             app["name"], user["name"], resource), self.__debug)
 
                 if "current" in app["resources"]["cpu"] and app["resources"]["cpu"]["usage"]:
                     total_user_current_cpu += app["resources"][resource]["current"]
                 else:
-                    MyUtils.log_error("Application {0} of user {1} has no current cpu field or value".format(
+                    utils.log_error("Application {0} of user {1} has no current cpu field or value".format(
                         app["name"], user["name"]), self.__debug)
 
             user["energy"]["used"] = total_user["energy"]
             user["cpu"]["usage"] = total_user["cpu"]
             user["cpu"]["current"] = total_user_current_cpu
             self.__couchdb_handler.update_user(user)
-            MyUtils.log_info("Updated energy consumed by user {0}".format(user["name"]), self.__debug)
+            utils.log_info("Updated energy consumed by user {0}".format(user["name"]), self.__debug)
 
     def __inter_user_rebalancing(self, users):
         donors, receivers = list(), list()
@@ -71,7 +71,7 @@ class UserRebalancer:
                 receivers.append(user)
 
         if not receivers:
-            MyUtils.log_info("No user to give energy shares", self.__debug)
+            utils.log_info("No user to give energy shares", self.__debug)
             return
         else:
             # Order the apps from lower to upper energy limit
@@ -89,39 +89,39 @@ class UserRebalancer:
             if shuffling_tuples:
                 donor, amount_to_scale = shuffling_tuples.pop(0)
             else:
-                MyUtils.log_info("No more donors, user {0} left out".format(receiver["name"]), self.__debug)
+                utils.log_info("No more donors, user {0} left out".format(receiver["name"]), self.__debug)
                 continue
 
             donor["energy"]["max"] -= amount_to_scale
             receiver["energy"]["max"] += amount_to_scale
 
-            MyUtils.update_user(donor, self.__couchdb_handler, self.__debug)
-            MyUtils.update_user(receiver, self.__couchdb_handler, self.__debug)
+            utils.update_user(donor, self.__couchdb_handler, self.__debug)
+            utils.update_user(receiver, self.__couchdb_handler, self.__debug)
 
-            MyUtils.log_info(
+            utils.log_info(
                 "Energy swap between {0}(donor) and {1}(receiver)".format(donor["name"], receiver["name"]),
                 self.__debug)
 
     def rebalance_users(self, config):
         self.__config = config
-        self.__debug = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
+        self.__debug = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "DEBUG")
 
-        rebalance_users = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "REBALANCE_USERS")
+        rebalance_users = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "REBALANCE_USERS")
 
-        self.__ENERGY_DIFF_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
-        self.__ENERGY_STOLEN_PERCENTAGE = MyUtils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
-        MyUtils.log_info("ENERGY_DIFF_PERCENTAGE -> {0}".format(self.__ENERGY_DIFF_PERCENTAGE), self.__debug)
-        MyUtils.log_info("ENERGY_STOLEN_PERCENTAGE -> {0}".format(self.__ENERGY_STOLEN_PERCENTAGE), self.__debug)
+        self.__ENERGY_DIFF_PERCENTAGE = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_DIFF_PERCENTAGE")
+        self.__ENERGY_STOLEN_PERCENTAGE = utils.get_config_value(self.__config, CONFIG_DEFAULT_VALUES, "ENERGY_STOLEN_PERCENTAGE")
+        utils.log_info("ENERGY_DIFF_PERCENTAGE -> {0}".format(self.__ENERGY_DIFF_PERCENTAGE), self.__debug)
+        utils.log_info("ENERGY_STOLEN_PERCENTAGE -> {0}".format(self.__ENERGY_STOLEN_PERCENTAGE), self.__debug)
 
-        MyUtils.log_info("_______________", self.__debug)
-        MyUtils.log_info("Performing USER ENERGY Balancing", self.__debug)
+        utils.log_info("_______________", self.__debug)
+        utils.log_info("Performing USER ENERGY Balancing", self.__debug)
 
         try:
-            #applications = MyUtils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
+            #applications = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
             users = self.__couchdb_handler.get_users()
         except requests.exceptions.HTTPError as e:
-            MyUtils.log_error("Couldn't get users and/or applications", self.__debug)
-            MyUtils.log_error(str(e), self.__debug)
+            utils.log_error("Couldn't get users and/or applications", self.__debug)
+            utils.log_error(str(e), self.__debug)
             return
 
         #self.update_user_used_energy(applications, users)
@@ -129,4 +129,4 @@ class UserRebalancer:
         if rebalance_users:
             self.__inter_user_rebalancing(users)
 
-        MyUtils.log_info("_______________\n", self.__debug)
+        utils.log_info("_______________\n", self.__debug)
