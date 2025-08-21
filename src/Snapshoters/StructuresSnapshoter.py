@@ -34,10 +34,8 @@ import logging
 
 import src.StateDatabase.couchdb as couchDB
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, LOGGING_FORMAT, LOGGING_DATEFMT, \
-    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning
+    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning, update_service_config, start_epoch, print_service_config, end_epoch
 
-db_handler = couchDB.CouchDBServer()
-rescaler_http_session = requests.Session()
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
     "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
@@ -46,293 +44,237 @@ translate_map = {
     "disk_write": {"metric": "structure.disk_write.current", "limit_label": "disk_write_limit"},
     "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
 }
+
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "STRUCTURES_PERSISTED": ["applications"], "RESOURCES_PERSISTED": ["cpu", "mem"], "DEBUG": True, "ACTIVE": True}
 SERVICE_NAME = "structures_snapshoter"
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "PERSIST_APPS": True, "RESOURCES_PERSISTED": ["cpu", "mem"], "ACTIVE": True}
-MAX_FAIL_NUM = 5
-debug = True
 
 
-def update_container_current_values(container_name, limits):
-    # Remote database operation
-    database_structure = db_handler.get_structure(container_name)
-    structure = database_structure.copy()
+class StructuresSnapshoter:
 
-    if not "resources" in structure:
-        structure["resources"] = dict()
+    def __init__(self):
+        self.couchdb_handler = couchDB.CouchDBServer()
+        self.rescaler_http_session = requests.Session()
+        self.structure_tracker = []
+        self.polling_frequency, self.structures_persisted, self.resources_persisted = None, None, None
+        self.debug, self.active = None, None
 
-    for resource in resources_persisted:
+    @staticmethod
+    def run_in_threads(structures, worker_fn, *worker_args):
+        threads = []
+        for structure in structures:
+            process = Thread(target=worker_fn, args=(structure, *worker_args))
+            process.start()
+            threads.append(process)
 
-        ## Update each resource only if it already exists in the structure; structures are already initialized with their resources in Orchestrator.
-        # This allows to have structures without resources that are in the resources_persisted list
-        if resource in structure["resources"]:
-            if resource not in limits or not limits[resource]:
-                log_error("Unable to get info for resource {0} for container {1}".format(resource, container_name), debug)
-                structure["resources"][resource]["current"] = 0
+        for process in threads:
+            process.join()
+
+    def persist_structure(self, structure):
+        update_structure(structure, self.couchdb_handler, self.debug)
+
+    def update_user(self, user, applications):
+        # TODO: Implement user update logic
+        pass
+
+    def update_application(self, app, container_resources_dict):
+        disk_found_metrics = 0
+        for resource in self.resources_persisted:
+            if not app["resources"].get(resource, None):
+                log_error("Application {0} is missing info of resource {1}".format(app["name"], resource), self.debug)
+                continue
+
+            if resource in {"disk_read", "disk_write"}:
+                disk_found_metrics += 1
+                if disk_found_metrics == 2:  # Disk need both disk_read and disk_write to be persisted
+                    app["resources"].setdefault("disk", {})["current"] = 0
             else:
-                structure["resources"][resource]["current"] = limits[resource][translate_map[resource]["limit_label"]]
-
-            structure["resources"][resource]["current"] = int(structure["resources"][resource]["current"])
-
-    if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
-        if "disk" in structure["resources"]:
-            if "disk_read" not in limits or not limits["disk_read"] or "disk_write" not in limits or not limits["disk_write"]:
-                log_error("Unable to get info for {0} for container {1}".format(str(["disk_read", "disk_write"]), container_name), debug)
-                structure["resources"]["disk"]["current"] = 0
-            else:
-                ## Useful to get aggregated I/O current allocation
-                structure["resources"]["disk"]["current"] = structure["resources"]["disk_read"]["current"] + structure["resources"]["disk_write"]["current"]
-
-    # Remote database operation
-    update_structure(structure, db_handler, debug)
-
-
-def thread_persist_container(container, container_resources_dict):
-    container_name = container["name"]
-
-    # Try to get the container resources, if unavailable, continue with others
-    # Remote operation
-    # resources = MyUtils.get_container_resources(container, rescaler_http_session, debug)
-    resources = container_resources_dict[container_name]["resources"]
-    if not resources:
-        log_error("Couldn't get container's {0} resources".format(container_name), debug)
-        return
-
-    # Persist by updating the Database current value
-    update_container_current_values(container_name, resources)
-
-
-def persist_containers(container_resources_dict):
-    # Try to get the containers, if unavailable, return
-    # Remote database operation
-    containers = get_structures(db_handler, debug, subtype="container")
-    if not containers:
-        return
-
-    # Retrieve each container resources, persist them and store them to generate host info
-    threads = []
-    for container in containers:
-        # Check that the document has been properly initialized, otherwise it might be overwritten with just
-        # the "current" value without possibility of correcting it
-        # However, do not skip the whole container just because it lacks some resources
-        # There should not be any overwriting problems since the container is already initialized in the Orchestrator.
-        for resource in resources_persisted:
-            if resource not in container["resources"] or "max" not in container["resources"][resource]:
-                log_warning("Container {0} has not a proper config for the resource {1}".format(container["name"], resource), debug)
-
-        process = Thread(target=thread_persist_container, args=(container, container_resources_dict,))
-        process.start()
-        threads.append(process)
-
-    for process in threads:
-        process.join()
-
-
-def persist_applications(container_resources_dict):
-    # Try to get the applications, if unavailable, return
-    applications = get_structures(db_handler, debug, subtype="application")
-    if not applications:
-        return
-
-    # Generate the applications current resource values
-    for app in applications:
-        for resource in resources_persisted:
-            if resource not in app["resources"]:
-                log_error("Application {0} is missing info of resource {1}".format(app["name"], resource), debug)
-            else:
-                app["resources"][resource]["current"] = 0
-
-        if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
-            if "disk_read" not in app["resources"] or not app["resources"]["disk_read"] or "disk_write" not in app["resources"] or not app["resources"]["disk_write"]:
-                log_error("Application {0} is missing info of resource {1}".format(app["name"], str(["disk_read", "disk_write"])), debug)
-            else:
-                if "disk" not in app["resources"]: app["resources"]["disk"] = {}
-                app["resources"]["disk"]["current"] = 0
+                app["resources"].setdefault(resource, {})["current"] = 0
 
         application_containers = app["containers"]
         for container_name in application_containers:
-
             if container_name not in container_resources_dict:
                 log_error("Container info {0} is missing for app : {1}, app info will not be totally accurate".format(
-                    container_name, app["name"]), debug)
+                    container_name, app["name"]), self.debug)
                 continue
-
-            for resource in resources_persisted:
+            disk_found_metrics = 0
+            for resource in self.resources_persisted:
                 try:
                     container_resources = container_resources_dict[container_name]["resources"]
-                    if resource not in container_resources or not container_resources[resource]:
-                        log_error("Unable to get info for resource {0} for container {1} when computing app {2} resources".format(
-                            resource, container_name, app["name"]), debug)
-                    else:
-                        current_resource_label = translate_map[resource]["limit_label"]
-                        app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
-                except KeyError:
-                    if "name" in container_resources_dict[container_name] and "name" in app:
-                        log_error("Container info {0} is missing for app: {1} and resource {2} resource,".format(
-                            container_name, app["name"], resource) + " app info will not be totally accurate", debug)
+                    if not container_resources.get(resource, None):
+                        log_error("Unable to get info for resource {0} and container {1} when computing app {2} resources".format(
+                            resource, container_name, app["name"]), self.debug)
+                        continue
+                    current_resource_label = translate_map[resource]["limit_label"]
+                    app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
+                    if resource in {"disk_read", "disk_write"}:
+                        disk_found_metrics += 1
+                        if disk_found_metrics == 2:  # Disk need both disk_read and disk_write to be persisted
+                            app["resources"]["disk"]["current"] += app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
 
-            if "disk_read" in resources_persisted and "disk_write" in resources_persisted:
-                try:
-                    container_resources = container_resources_dict[container_name]["resources"]
-                    if "disk_read" not in container_resources or not container_resources["disk_read"] or "disk_write" not in container_resources or not container_resources["disk_write"]:
-                        log_error("Unable to get info for resource {0} for container {1} when computing app {2} resources".format(str(["disk_read", "disk_write"]), container_name, app["name"]), debug)
-                    else:
-                        ## Useful to get aggregated I/O current allocation
-                        app["resources"]["disk"]["current"] += app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
                 except KeyError:
-                    if "name" in container_resources_dict[container_name] and "name" in app:
-                        log_error("Container info {0} is missing for app: {1} and resource {2} resource,".format(
-                            container_name, app["name"], str(["disk_read", "disk_write"])) + " app info will not be totally accurate", debug)
+                    log_error("Container {0} info is missing for app {1} and resource {2}, app info will not be totally"
+                              " accurate".format(container_name, app.get("name"), resource), self.debug)
 
         # Remote database operation
-        update_structure(app, db_handler, debug)
+        self.structure_tracker.append(app)
 
-
-def fill_container_dict(hosts_info, containers):
-    def host_info_request(h, d):
-        host_containers = get_host_containers(h["host_rescaler_ip"], h["host_rescaler_port"], rescaler_http_session, debug)
-        for container_name in host_containers:
-            if container_name in container_list_names:
-                d[container_name] = host_containers[container_name]
-
-    container_list_names = [c["name"] for c in containers]
-    container_info = dict()
-    threads = list()
-    for hostname in hosts_info:
-        host = hosts_info[hostname]
-        t = Thread(target=host_info_request, args=(host, container_info,))
-        t.start()
-        threads.append(t)
-
-    for t in threads:
-        t.join()
-
-    return container_info
-
-
-def get_container_resources_dict():
-    # Remote database operation
-    containers = get_structures(db_handler, debug, subtype="container")
-    if not containers:
-        return dict()
-
-    # Get all the different hosts of the containers
-    hosts_info = dict()
-    for container in containers:
-        host = container["host"]
-        if host not in hosts_info:
-            hosts_info[host] = dict()
-            hosts_info[host]["host_rescaler_ip"] = container["host_rescaler_ip"]
-            hosts_info[host]["host_rescaler_port"] = container["host_rescaler_port"]
-
-    # For each host, retrieve its containers and persist the ones we look for
-    container_info = fill_container_dict(hosts_info, containers)
-
-    container_resources_dict = dict()
-    for container in containers:
+    def update_container(self, container, container_resources_dict):
         container_name = container["name"]
-        if container_name not in container_info:
-            log_warning("Container info for {0} not found, check that it is really living in its supposed host '{1}', and that "
-                        "the host is alive and with the Node Scaler service running".format(container_name, container["host"]), debug)
-            continue
-        container_resources_dict[container_name] = container
-        # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
-        if "energy" in container["resources"]:
-            container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
-        container_resources_dict[container_name]["resources"] = container_info[container_name]
+        # Try to get the container resources, if unavailable, continue with others
+        limits = container_resources_dict[container_name]["resources"]
+        if not limits:
+            log_error("Couldn't get container's {0} limits".format(container_name), self.debug)
+            return
 
-    return container_resources_dict
+        # Remote database operation
+        db_structure = self.couchdb_handler.get_structure(container_name)
+        if "resources" not in db_structure:
+            db_structure["resources"] = dict()
 
+        disk_found_metrics = 0
+        for resource in self.resources_persisted:
+            # Update only structure resources already in the database; as structures are already initialized in Orchestrator.
+            # This allows processing structures without resources that are in the resources_persisted list
+            if resource in db_structure["resources"]:
+                db_structure["resources"][resource]["current"] = int(limits.get(resource, {}).get(translate_map[resource]["limit_label"], 0))
+                if resource in {"disk_read", "disk_write"}:
+                    disk_found_metrics += 1
+                    if disk_found_metrics == 2:  # Disk need both disk_read and disk_write to be persisted
+                        db_structure["resources"]["disk"]["current"] += db_structure["resources"]["disk_read"]["current"] + db_structure["resources"]["disk_write"]["current"]
 
-def persist_thread():
-    t0 = time.time()
-    container_resources_dict = get_container_resources_dict()
-    t1 = time.time()
-    persist_applications(container_resources_dict)
-    t2 = time.time()
-    persist_containers(container_resources_dict)
-    t3 = time.time()
+        # Remote database operation
+        self.structure_tracker.append(db_structure)
 
-    log_info("It took {0} seconds to get container info".format(str("%.2f" % (t1 - t0))), debug)
-    log_info("It took {0} seconds to snapshot applications".format(str("%.2f" % (t2 - t1))), debug)
-    log_info("It took {0} seconds to snapshot containers".format(str("%.2f" % (t3 - t2))), debug)
+    def host_info_request(self, host, container_info, valid_containers):
+        host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], self.rescaler_http_session, self.debug)
+        for container_name in host_containers:
+            if container_name in valid_containers:
+                container_info[container_name] = host_containers[container_name]
 
+    def fill_container_dict(self, hosts_info, containers):
+        container_info = {}
+        threads = []
+        valid_containers = [c["name"] for c in containers]
+        for hostname in hosts_info:
+            host = hosts_info[hostname]
+            t = Thread(target=self.host_info_request, args=(host, container_info, valid_containers))
+            t.start()
+            threads.append(t)
 
-def invalid_conf(config):
-    # TODO Tiis code is duplicated on the structures and database snapshoters
-    for key, num in [("POLLING_FREQUENCY", config.get_value("POLLING_FREQUENCY"))]:
-        if num < 3:
-            return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
-    return False, ""
+        for t in threads:
+            t.join()
 
+        return container_info
 
-def persist():
-    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
+    def get_container_resources_dict(self, containers):
+        if not containers:
+            return {}
 
-    global resources_persisted
-    global debug
+        # Get all the different hosts of the containers
+        hosts_info = {}
+        for container in containers:
+            host = container["host"]
+            if host not in hosts_info:
+                hosts_info[host] = {}
+                hosts_info[host]["host_rescaler_ip"] = container["host_rescaler_ip"]
+                hosts_info[host]["host_rescaler_port"] = container["host_rescaler_port"]
 
-    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        # Retrieve all the containers on the host and persist the ones that we look for
+        container_info = self.fill_container_dict(hosts_info, containers)
+        container_resources_dict = {}
+        for container in containers:
+            container_name = container["name"]
+            if container_name not in container_info:
+                log_warning("Container info for {0} not found, check that it is really living in its supposed host '{1}', and that "
+                            "the host is alive and with the Node Scaler service running".format(container_name, container["host"]), self.debug)
+                continue
+            # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
+            if "energy" in container["resources"]:
+                container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
+            container["resources"] = container_info[container_name]
+            container_resources_dict[container_name] = container
 
-    while True:
-        log_info("----------------------", debug)
-        log_info("Starting Epoch", debug)
+        return container_resources_dict
+
+    def persist_thread(self,):
+        containers, applications = None, None
+        # Get containers information
         t0 = time.time()
+        containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
+        container_resources_dict = self.get_container_resources_dict(containers)
+        log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - t0))), self.debug)
 
-        # Get service info
-        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
+        # Update containers if information is available
+        t0 = time.time()
+        if containers:
+            self.run_in_threads(containers, self.update_container, container_resources_dict)
+        log_info("It took {0} seconds to update containers".format(str("%.2f" % (time.time() - t0))), self.debug)
 
-        # Heartbeat
-        beat(db_handler, SERVICE_NAME)  # Remote database operation
+        # Update applications if information is available
+        t0 = time.time()
+        if "applications" in self.structures_persisted:
+            applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
+            if applications:
+                self.run_in_threads(applications, self.update_application, container_resources_dict)
+        log_info("It took {0} seconds to update applications".format(str("%.2f" % (time.time() - t0))), self.debug)
 
-        # CONFIG
-        myConfig.set_config(service["config"])
-        polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
-        debug = myConfig.get_value("DEBUG")
-        resources_persisted = myConfig.get_value("RESOURCES_PERSISTED")
-        SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
-        log_info("Going to snapshot resources: {0}".format(resources_persisted), debug)
+        # Update users if information is available
+        t0 = time.time()
+        if "users" in self.structures_persisted:
+            if not applications:
+                applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
+            users = self.couchdb_handler.get_users()
+            if users:
+                self.run_in_threads(users, self.update_user, users, applications)
+        log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - t0))), self.debug)
 
-        log_info("Config is as follows:", debug)
-        log_info(".............................................", debug)
-        log_info("Polling frequency -> {0}".format(polling_frequency), debug)
-        log_info("Resources to be snapshoted are -> {0}".format(resources_persisted), debug)
-        log_info(".............................................", debug)
+        # Persist structures in database
+        t0 = time.time()
+        if self.structure_tracker:
+            self.run_in_threads(self.structure_tracker, self.persist_structure)
+            self.structure_tracker.clear()  # Clear the tracker after persisting
+        log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - t0))), self.debug)
 
-        ## CHECK INVALID CONFIG ##
-        # TODO This code is duplicated on the structures and database snapshoters
-        invalid, message = invalid_conf(myConfig)
-        if invalid:
-            log_error(message, debug)
-            time.sleep(polling_frequency)
-            if polling_frequency < 3:
-                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
-                polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
+    def invalid_conf(self, ):
+        for key, num in [("POLLING_FREQUENCY", self.polling_frequency)]:
+            if num < 3:
+                return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
+        return False, ""
 
-            log_info("----------------------\n", debug)
-            time.sleep(polling_frequency)
-            continue
+    def persist(self,):
+        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
 
-        thread = None
-        if SERVICE_IS_ACTIVATED:
-            thread = Thread(target=persist_thread, args=())
-            thread.start()
-        else:
-            log_warning("Structure snapshoter is not activated, will not do anything", debug)
+        while True:
 
-        time.sleep(polling_frequency)
+            update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
+            t0 = start_epoch(self.debug)
 
-        wait_operation_thread(thread, debug)
+            print_service_config(self, myConfig, self.debug)
 
-        t1 = time.time()
-        time_proc = "%.2f" % (t1 - t0 - polling_frequency)
-        time_total = "%.2f" % (t1 - t0)
-        log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(polling_frequency)), debug)
-        log_info("----------------------\n", debug)
+            # Check invalid configuration
+            invalid, message = self.invalid_conf()
+            if invalid:
+                log_error(message, self.debug)
+
+            thread = None
+            if self.active and not invalid:
+                thread = Thread(target=self.persist_thread, args=())
+                thread.start()
+            else:
+                log_warning("StructureSnapshoter is not activated", self.debug)
+
+            time.sleep(self.polling_frequency)
+
+            wait_operation_thread(thread, self.debug)
+
+            end_epoch(self.debug, self.polling_frequency, t0)
 
 
 def main():
     try:
-        persist()
+        structure_snapshoter = StructuresSnapshoter()
+        structure_snapshoter.persist()
     except Exception as e:
         log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
