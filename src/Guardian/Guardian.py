@@ -500,8 +500,7 @@ class Guardian:
         """
         return structure["resources"]["energy"]["current"] != self.pb_cache.get(structure['_id'], -1)
 
-    @staticmethod
-    def power_is_near_power_budget(structure, usages, limits):
+    def power_is_near_power_budget(self, structure, usages, limits):
         """Check whether the current energy usage of a structure is close to its power budget.
 
         *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
@@ -515,12 +514,12 @@ class Guardian:
             (bool) If energy is close to PB or not
 
         """
-        power_margin = limits["energy"]["boundary"] / 100
+        power_margin = self.get_margin_from_boundary(limits["energy"]["boundary"], limits["energy"]["boundary_type"], structure["resources"]["energy"], "energy")
         power_budget = structure["resources"]["energy"]["current"]
         current_energy_usage = usages[utils.res_to_metric("energy")]
 
         # If power is within some reasonable limits we do nothing
-        if power_budget < current_energy_usage < power_budget * (1 + power_margin):
+        if power_budget < current_energy_usage < power_budget + power_margin:
             return True
 
         return False
