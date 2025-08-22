@@ -123,36 +123,9 @@ class StructuresSnapshoter:
             if resource in {"disk_read", "disk_write"}:
                 disk_found_metrics += 1
                 if disk_found_metrics == 2:  # Disk need both disk_read and disk_write to be persisted
-                    app["resources"].setdefault("disk", {})["current"] = 0
-            else:
-                app["resources"].setdefault(resource, {})["current"] = 0
+                    app["resources"].setdefault("disk", {})["current"] = app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
 
-        application_containers = app["containers"]
-        for container_name in application_containers:
-            if container_name not in container_resources_dict:
-                utils.log_error("Container info {0} is missing for app : {1}, app info will not be totally accurate".format(
-                    container_name, app["name"]), self.debug)
-                continue
-            disk_found_metrics = 0
-            for resource in self.resources_persisted:
-                try:
-                    container_resources = container_resources_dict[container_name]["resources"]
-                    if not container_resources.get(resource, None):
-                        utils.log_error("Unable to get info for resource {0} and container {1} when computing app {2} resources".format(
-                            resource, container_name, app["name"]), self.debug)
-                        continue
-                    current_resource_label = translate_map[resource]["limit_label"]
-                    app["resources"][resource]["current"] += container_resources[resource][current_resource_label]
-                    if resource in {"disk_read", "disk_write"}:
-                        disk_found_metrics += 1
-                        if disk_found_metrics == 2:  # Disk need both disk_read and disk_write to be persisted
-                            app["resources"]["disk"]["current"] += app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
-
-                except KeyError:
-                    utils.log_error("Container {0} info is missing for app {1} and resource {2}, app info will not be totally"
-                              " accurate".format(container_name, app.get("name"), resource), self.debug)
-
-        # Remote database operation
+        # Register in tracker to persist later
         self.structure_tracker.append(app)
 
     def update_container(self, container, container_resources_dict):
