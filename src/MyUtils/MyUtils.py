@@ -33,6 +33,7 @@ import sys
 import requests
 import traceback
 from termcolor import colored
+from threading import Thread
 
 from src.MyUtils.metrics import RESOURCE_TO_BDW, RESOURCE_TO_SC, SC_TO_BDW, TAGS, TRANSLATOR_DICT
 
@@ -255,6 +256,15 @@ def update_user(user, db_handler, debug, max_tries=10):
         log_error("Error updating user " + user["name"] + " " + traceback.format_exc(), debug)
 
 
+def persist_data(data, db_handler, debug):
+    if data["type"] == "structure":
+        update_structure(data, db_handler, debug)  # Remote database operation
+    elif data["type"] == "user":
+        update_user(data, db_handler, debug)  # Remote database operation
+    else:
+        log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
+
+
 # CAN'T TEST
 def get_structures(db_handler, debug, subtype="application"):
     try:
@@ -300,7 +310,8 @@ def end_epoch(debug, window_difference, t0):
     t1 = time.time()
     time_proc = "%.2f" % (t1 - t0 - window_difference)
     time_total = "%.2f" % (t1 - t0)
-    log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(window_difference)), debug)
+    window_difference_str = "%.2f" % window_difference
+    log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, window_difference_str), debug)
     log_info("----------------------\n", debug)
 
 
@@ -319,6 +330,17 @@ def wait_operation_thread(thread, debug):
         thread.join()
         delay_end = time.time()
         log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
+
+
+def run_in_threads(structures, worker_fn, *worker_args):
+    threads = []
+    for structure in structures:
+        process = Thread(target=worker_fn, args=(structure, *worker_args))
+        process.start()
+        threads.append(process)
+
+    for process in threads:
+        process.join()
 
 
 # TESTED

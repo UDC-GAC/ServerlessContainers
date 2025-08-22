@@ -56,25 +56,6 @@ class StructuresSnapshoter:
             return "effective_cpu_limit" if resource == "cpu" else "{0}_limit".format(resource)
         raise ValueError("Trying to translate bad resource '{0}' or target '{1}'".format(resource, to))
 
-    @staticmethod
-    def run_in_threads(structures, worker_fn, *worker_args):
-        threads = []
-        for structure in structures:
-            process = Thread(target=worker_fn, args=(structure, *worker_args))
-            process.start()
-            threads.append(process)
-
-        for process in threads:
-            process.join()
-
-    def persist_data(self, data):
-        if data["type"] == "structure":
-            utils.update_structure(data, self.couchdb_handler, self.debug)  # Remote database operation
-        elif data["type"] == "user":
-            self.couchdb_handler.update_user(data)
-        else:
-            utils.log_error("Trying to persist unknown data type '{0}'".format(data["type"]), self.debug)  # Remote database operation
-
     def update_user(self, user, applications):
         # Aggregate resources for all the applications belonging to the user
         user_apps = [app for app in applications if app["name"] in user["clusters"]]
@@ -210,43 +191,42 @@ class StructuresSnapshoter:
     def persist_thread(self,):
         containers, applications = None, None
         # Get containers information
-        t0 = time.time()
+        ts = time.time()
         containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
         container_resources_dict = self.get_container_resources_dict(containers)
-        utils.log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - t0))), self.debug)
+        utils.log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Update containers if information is available
-        t0 = time.time()
+        ts = time.time()
         if containers:
-            self.run_in_threads(containers, self.update_container, container_resources_dict)
-        utils.log_info("It took {0} seconds to update containers".format(str("%.2f" % (time.time() - t0))), self.debug)
+            utils.run_in_threads(containers, self.update_container, container_resources_dict)
+        utils.log_info("It took {0} seconds to update containers".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Update applications if information is available
-        t0 = time.time()
+        ts = time.time()
         if "applications" in self.structures_persisted:
             applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             if applications:
-                self.run_in_threads(applications, self.update_application, container_resources_dict)
-        utils.log_info("It took {0} seconds to update applications".format(str("%.2f" % (time.time() - t0))), self.debug)
+                utils.run_in_threads(applications, self.update_application, container_resources_dict)
+        utils.log_info("It took {0} seconds to update applications".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Update users if information is available
-        t0 = time.time()
+        ts = time.time()
         if "users" in self.structures_persisted:
             if not applications:
                 applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             users = self.couchdb_handler.get_users()
             if users:
-                self.run_in_threads(users, self.update_user, users, applications)
-        utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - t0))), self.debug)
+                utils.run_in_threads(users, self.update_user, users, applications)
+        utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Persist structures and users in database
-        t0 = time.time()
-        if self.structure_tracker:
-            self.run_in_threads(self.structure_tracker + self.user_tracker, self.persist_data)
-            # Clear the trackers after persisting
-            self.structure_tracker.clear()
-            self.user_tracker.clear()
-        utils.log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - t0))), self.debug)
+        ts = time.time()
+        utils.run_in_threads(self.structure_tracker + self.user_tracker, utils.persist_data, self.couchdb_handler, self.debug)
+        # Clear the trackers after persisting
+        self.structure_tracker.clear()
+        self.user_tracker.clear()
+        utils.log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - ts))), self.debug)
 
     def invalid_conf(self, ):
         for key, num in [("POLLING_FREQUENCY", self.polling_frequency)]:
@@ -272,8 +252,11 @@ class StructuresSnapshoter:
 
             thread = None
             if self.active and not invalid:
-                thread = Thread(target=self.persist_thread, args=())
-                thread.start()
+                if self.structures_persisted:
+                    thread = Thread(target=self.persist_thread, args=())
+                    thread.start()
+                else:
+                    utils.log_warning("No structures to persist, check STRUCTURES_PERSISTED", self.debug)
             else:
                 utils.log_warning("StructureSnapshoter is not activated", self.debug)
 
