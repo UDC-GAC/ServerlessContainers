@@ -27,46 +27,35 @@ from json_logic import jsonLogic
 
 import src.MyUtils.MyUtils as utils
 
-CONFIG_DEFAULT_VALUES = {
-    "WINDOW_TIMELAPSE": 30,
-    "WINDOW_DELAY": 10,
-    "REBALANCE_USERS": False,
-    "DEBUG": True,
-    "ENERGY_DIFF_PERCENTAGE": 0.40,
-    "ENERGY_STOLEN_PERCENTAGE": 0.40,
-    "RESOURCES_BALANCED": ["cpu"],
-    "STRUCTURES_BALANCED": ["applications"],
-    "BALANCING_METHOD": "pair_swapping"
-}
-
-
-def get_user_apps(applications, user):
-    user_apps = list()
-    for app in applications:
-        if app["name"] in user["clusters"]:
-            user_apps.append(app)
-    return user_apps
-
-
-def app_can_be_rebalanced(application, rebalancing_level, couchdb_handler):
+def app_can_be_rebalanced(application, resource, rebalancing_level, couchdb_handler):
     try:
         _ = {
-                # "energy":
-                #     {"structure":
-                #          {"energy":
-                #               {"usage": application["resources"]["energy"]["usage"],
-                #                "max": application["resources"]["energy"]["max"]}}},
                 "cpu":
                     {"structure":
                          {"cpu":
-                              {"usage": application["resources"]["cpu"]["usage"],
-                               "min": application["resources"]["cpu"]["min"],
-                               "current": application["resources"]["cpu"]["current"]}}}
+                              {"usage": application["resources"][resource]["usage"],
+                               "min": application["resources"][resource]["min"],
+                               "current": application["resources"][resource]["current"]}}}
                 }
     except KeyError:
         return False
 
     # TODO: Review this, now it simply enables container balancing and disables app balancing
+    # This was supossed to filter the following scenarios:
+    # 1. ContainerRebalancer: Application is overusing energy, so Guardian must scale containers to deal with it
+    # 2. ContainerRebalancer: Application is underusing energy, so Guardian must scale containers to deal with it
+    # 3. ApplicationRebalancer: Application is overusing energy, so it may be a receiver for dynamic energy rebalancing
+    # 4. ApplicationRebalancer: Application is underusing energy, so it may be a donor for dynamic energy rebalancing
+    # Now ContainerRebalancer does not check app limits, so we dont need this filter
+
+    # 5. ContainerRebalancer: Application is in the middle area of energy utilization, rebalance containers within app
+    # 6. ApplicationRebalancer: Application is in the middle area of energy utilization, don't rebalance app (is already balanced)
+    # Now Application Rebalancer will check app limits to see if it is in the middle
+    # Regarding ContainerRebalancer, it also checks this with other methods
+
+    # Maybe we could create a similar method like this but taking into account new techniques
+
+    #    but it is an application rebalancing
     # rule_low_usage = couchdb_handler.get_rule("energy_exceeded_upper")
     # if jsonLogic(rule_low_usage["rule"], data):
     #     # Application is overusing energy

@@ -650,8 +650,8 @@ class ContainerRebalancer:
             for host in hosts:
                 host_name = host["name"]
                 utils.log_info("Going to rebalance host {0} now".format(host_name), self.__debug)
-                    self.__rebalance_host_containers_by_pair_swapping(host_containers[host_name], host)
                 if self.__config.get_value("BALANCING_METHOD") == "pair_swapping":
+                    self.__rebalance_host_containers_by_pair_swapping(host_containers[host_name], host)
                 elif self.__config.get_value("BALANCING_METHOD") == "weights":
                     self.__rebalance_host_containers_by_weight(host_containers[host_name], host)
                 else:

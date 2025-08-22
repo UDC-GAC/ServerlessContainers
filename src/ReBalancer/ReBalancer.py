@@ -104,12 +104,10 @@ class ReBalancer:
                     self.userReBalancer.rebalance_users()
 
                 if "applications" in self.structures_balanced:
-                    #self.applicationReBalancer.rebalance_applications()
-                    pass
+                    self.applicationReBalancer.rebalance_applications()
 
                 if "containers" in self.structures_balanced or "hosts" in self.structures_balanced:
-                    #self.containerRebalancer.rebalance_containers()
-                    pass
+                    self.containerRebalancer.rebalance_containers()
 
             time.sleep(self.window_timelapse)
 
