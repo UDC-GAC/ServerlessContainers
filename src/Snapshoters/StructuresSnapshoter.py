@@ -136,64 +136,12 @@ class StructuresSnapshoter:
         # Register in tracker to persist later
         self.structure_tracker.append(db_structure)
 
-    def host_info_request(self, host, container_info, valid_containers):
-        host_containers = utils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], self.rescaler_http_session, self.debug)
-        for container_name in host_containers:
-            if container_name in valid_containers:
-                container_info[container_name] = host_containers[container_name]
-
-    def fill_container_dict(self, hosts_info, containers):
-        container_info = {}
-        threads = []
-        valid_containers = [c["name"] for c in containers]
-        for hostname in hosts_info:
-            host = hosts_info[hostname]
-            t = Thread(target=self.host_info_request, args=(host, container_info, valid_containers))
-            t.start()
-            threads.append(t)
-
-        for t in threads:
-            t.join()
-
-        return container_info
-
-    def get_container_resources_dict(self, containers):
-        if not containers:
-            return {}
-
-        # Get all the different hosts of the containers
-        hosts_info = {}
-        for container in containers:
-            host = container["host"]
-            if host not in hosts_info:
-                hosts_info[host] = {}
-                hosts_info[host]["host_rescaler_ip"] = container["host_rescaler_ip"]
-                hosts_info[host]["host_rescaler_port"] = container["host_rescaler_port"]
-
-        # Retrieve all the containers on the host and persist the ones that we look for
-        container_info = self.fill_container_dict(hosts_info, containers)
-        container_resources_dict = {}
-        for container in containers:
-            container_name = container["name"]
-            if container_name not in container_info:
-                utils.log_warning("Container info for {0} not found, check that it is really living in its supposed "
-                                  "host '{1}', and that the host is alive and with the Node Scaler service running"
-                                  .format(container_name, container["host"]), self.debug)
-                continue
-            # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
-            if "energy" in container["resources"]:
-                container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
-            container["resources"] = container_info[container_name]
-            container_resources_dict[container_name] = container
-
-        return container_resources_dict
-
     def persist_thread(self,):
         containers, applications = None, None
         # Get containers information
         ts = time.time()
         containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-        container_resources_dict = self.get_container_resources_dict(containers)
+        container_resources_dict = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)
         utils.log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Update containers if information is available

@@ -36,7 +36,6 @@ import logging
 
 from requests import HTTPError
 from src.Guardian.Guardian import Guardian
-from src.Snapshoters.StructuresSnapshoter import get_container_resources_dict
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
@@ -1004,7 +1003,7 @@ class Scaler:
                 # Get the container structures and their resource information as such data is going to be needed
                 containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
                 try:
-                    self.container_info_cache = get_container_resources_dict()  # Reset the cache
+                    self.container_info_cache = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)  # Reset the cache
                 except (Exception, RuntimeError) as e:
                     utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
                     utils.log_error(str(e), self.debug)

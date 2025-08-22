@@ -489,3 +489,58 @@ def get_structure_usages(resources, structure, window_difference, window_delay, 
                                                              str(e), str(traceback.format_exc())), debug)
 
     return usages
+
+
+def host_info_request(host, container_info, valid_containers, rescaler_http_session, debug):
+    host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], rescaler_http_session, debug)
+    for container_name in host_containers:
+        if container_name in valid_containers:
+            container_info[container_name] = host_containers[container_name]
+
+
+def fill_container_dict(self, hosts_info, containers, rescaler_http_session, debug):
+    container_info = {}
+    threads = []
+    valid_containers = [c["name"] for c in containers]
+    for hostname in hosts_info:
+        host = hosts_info[hostname]
+        t = Thread(target=self.host_info_request, args=(host, container_info, valid_containers, rescaler_http_session, debug))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    return container_info
+
+
+def get_container_resources_dict(containers, rescaler_http_session, debug):
+    if not containers:
+        return {}
+
+    # Get all the different hosts of the containers
+    hosts_info = {}
+    for container in containers:
+        host = container["host"]
+        if host not in hosts_info:
+            hosts_info[host] = {}
+            hosts_info[host]["host_rescaler_ip"] = container["host_rescaler_ip"]
+            hosts_info[host]["host_rescaler_port"] = container["host_rescaler_port"]
+
+    # Retrieve all the containers on the host and persist the ones that we look for
+    container_info = fill_container_dict(hosts_info, containers, rescaler_http_session, debug)
+    container_resources_dict = {}
+    for container in containers:
+        container_name = container["name"]
+        if container_name not in container_info:
+            log_warning("Container info for {0} not found, check that it is really living in its supposed "
+                        "host '{1}', and that the host is alive and with the Node Scaler service running"
+                        .format(container_name, container["host"]), debug)
+            continue
+        # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
+        if "energy" in container["resources"]:
+            container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
+        container["resources"] = container_info[container_name]
+        container_resources_dict[container_name] = container
+
+    return container_resources_dict
