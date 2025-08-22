@@ -1274,7 +1274,7 @@ class Guardian:
 
             utils.wait_operation_thread(thread, self.debug)
 
-            utils.end_epoch(t0, self.window_timelapse, t0)
+            utils.end_epoch(self.debug, self.window_timelapse, t0)
 
 
 def main():

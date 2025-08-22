@@ -92,7 +92,7 @@ def set_service_value(service_name, key):
         pass
     elif isinstance(value, list):
         pass
-    elif key in ["ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY", "BALANCING_METHOD"]:
+    elif key in ["ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY", "BALANCING_METHOD", "BALANCING_POLICY", "CONTAINERS_SCOPE"]:
         pass
     else:
         try:
