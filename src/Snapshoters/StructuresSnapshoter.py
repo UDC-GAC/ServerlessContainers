@@ -32,9 +32,8 @@ import time
 import traceback
 import logging
 
+import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchDB
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, LOGGING_FORMAT, LOGGING_DATEFMT, \
-    update_structure, get_host_containers, get_structures, copy_structure_base, wait_operation_thread, log_warning, update_service_config, start_epoch, print_service_config, end_epoch
 
 translate_map = {
     "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
@@ -70,7 +69,7 @@ class StructuresSnapshoter:
             process.join()
 
     def persist_structure(self, structure):
-        update_structure(structure, self.couchdb_handler, self.debug)
+        utils.update_structure(structure, self.couchdb_handler, self.debug)
 
     def update_user(self, user, applications):
         # TODO: Implement user update logic
@@ -80,7 +79,7 @@ class StructuresSnapshoter:
         disk_found_metrics = 0
         for resource in self.resources_persisted:
             if not app["resources"].get(resource, None):
-                log_error("Application {0} is missing info of resource {1}".format(app["name"], resource), self.debug)
+                utils.log_error("Application {0} is missing info of resource {1}".format(app["name"], resource), self.debug)
                 continue
 
             if resource in {"disk_read", "disk_write"}:
@@ -93,7 +92,7 @@ class StructuresSnapshoter:
         application_containers = app["containers"]
         for container_name in application_containers:
             if container_name not in container_resources_dict:
-                log_error("Container info {0} is missing for app : {1}, app info will not be totally accurate".format(
+                utils.log_error("Container info {0} is missing for app : {1}, app info will not be totally accurate".format(
                     container_name, app["name"]), self.debug)
                 continue
             disk_found_metrics = 0
@@ -101,7 +100,7 @@ class StructuresSnapshoter:
                 try:
                     container_resources = container_resources_dict[container_name]["resources"]
                     if not container_resources.get(resource, None):
-                        log_error("Unable to get info for resource {0} and container {1} when computing app {2} resources".format(
+                        utils.log_error("Unable to get info for resource {0} and container {1} when computing app {2} resources".format(
                             resource, container_name, app["name"]), self.debug)
                         continue
                     current_resource_label = translate_map[resource]["limit_label"]
@@ -112,7 +111,7 @@ class StructuresSnapshoter:
                             app["resources"]["disk"]["current"] += app["resources"]["disk_read"]["current"] + app["resources"]["disk_write"]["current"]
 
                 except KeyError:
-                    log_error("Container {0} info is missing for app {1} and resource {2}, app info will not be totally"
+                    utils.log_error("Container {0} info is missing for app {1} and resource {2}, app info will not be totally"
                               " accurate".format(container_name, app.get("name"), resource), self.debug)
 
         # Remote database operation
@@ -123,7 +122,7 @@ class StructuresSnapshoter:
         # Try to get the container resources, if unavailable, continue with others
         limits = container_resources_dict[container_name]["resources"]
         if not limits:
-            log_error("Couldn't get container's {0} limits".format(container_name), self.debug)
+            utils.log_error("Couldn't get container's {0} limits".format(container_name), self.debug)
             return
 
         # Remote database operation
@@ -146,7 +145,7 @@ class StructuresSnapshoter:
         self.structure_tracker.append(db_structure)
 
     def host_info_request(self, host, container_info, valid_containers):
-        host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], self.rescaler_http_session, self.debug)
+        host_containers = utils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], self.rescaler_http_session, self.debug)
         for container_name in host_containers:
             if container_name in valid_containers:
                 container_info[container_name] = host_containers[container_name]
@@ -185,8 +184,9 @@ class StructuresSnapshoter:
         for container in containers:
             container_name = container["name"]
             if container_name not in container_info:
-                log_warning("Container info for {0} not found, check that it is really living in its supposed host '{1}', and that "
-                            "the host is alive and with the Node Scaler service running".format(container_name, container["host"]), self.debug)
+                utils.log_warning("Container info for {0} not found, check that it is really living in its supposed "
+                                  "host '{1}', and that the host is alive and with the Node Scaler service running"
+                                  .format(container_name, container["host"]), self.debug)
                 continue
             # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
             if "energy" in container["resources"]:
@@ -200,40 +200,40 @@ class StructuresSnapshoter:
         containers, applications = None, None
         # Get containers information
         t0 = time.time()
-        containers = get_structures(self.couchdb_handler, self.debug, subtype="container")
+        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
         container_resources_dict = self.get_container_resources_dict(containers)
-        log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - t0))), self.debug)
+        utils.log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - t0))), self.debug)
 
         # Update containers if information is available
         t0 = time.time()
         if containers:
             self.run_in_threads(containers, self.update_container, container_resources_dict)
-        log_info("It took {0} seconds to update containers".format(str("%.2f" % (time.time() - t0))), self.debug)
+        utils.log_info("It took {0} seconds to update containers".format(str("%.2f" % (time.time() - t0))), self.debug)
 
         # Update applications if information is available
         t0 = time.time()
         if "applications" in self.structures_persisted:
-            applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
+            applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             if applications:
                 self.run_in_threads(applications, self.update_application, container_resources_dict)
-        log_info("It took {0} seconds to update applications".format(str("%.2f" % (time.time() - t0))), self.debug)
+        utils.log_info("It took {0} seconds to update applications".format(str("%.2f" % (time.time() - t0))), self.debug)
 
         # Update users if information is available
         t0 = time.time()
         if "users" in self.structures_persisted:
             if not applications:
-                applications = get_structures(self.couchdb_handler, self.debug, subtype="application")
+                applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             users = self.couchdb_handler.get_users()
             if users:
                 self.run_in_threads(users, self.update_user, users, applications)
-        log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - t0))), self.debug)
+        utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - t0))), self.debug)
 
         # Persist structures in database
         t0 = time.time()
         if self.structure_tracker:
             self.run_in_threads(self.structure_tracker, self.persist_structure)
             self.structure_tracker.clear()  # Clear the tracker after persisting
-        log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - t0))), self.debug)
+        utils.log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - t0))), self.debug)
 
     def invalid_conf(self, ):
         for key, num in [("POLLING_FREQUENCY", self.polling_frequency)]:
@@ -242,33 +242,33 @@ class StructuresSnapshoter:
         return False, ""
 
     def persist(self,):
-        myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
+        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
 
         while True:
 
-            update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-            t0 = start_epoch(self.debug)
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
+            t0 = utils.start_epoch(self.debug)
 
-            print_service_config(self, myConfig, self.debug)
+            utils.print_service_config(self, myConfig, self.debug)
 
             # Check invalid configuration
             invalid, message = self.invalid_conf()
             if invalid:
-                log_error(message, self.debug)
+                utils.log_error(message, self.debug)
 
             thread = None
             if self.active and not invalid:
                 thread = Thread(target=self.persist_thread, args=())
                 thread.start()
             else:
-                log_warning("StructureSnapshoter is not activated", self.debug)
+                utils.log_warning("StructureSnapshoter is not activated", self.debug)
 
             time.sleep(self.polling_frequency)
 
-            wait_operation_thread(thread, self.debug)
+            utils.wait_operation_thread(thread, self.debug)
 
-            end_epoch(self.debug, self.polling_frequency, t0)
+            utils.end_epoch(self.debug, self.polling_frequency, t0)
 
 
 def main():
@@ -276,7 +276,7 @@ def main():
         structure_snapshoter = StructuresSnapshoter()
         structure_snapshoter.persist()
     except Exception as e:
-        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        utils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
