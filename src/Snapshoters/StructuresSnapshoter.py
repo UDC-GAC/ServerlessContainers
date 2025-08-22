@@ -35,15 +35,6 @@ import logging
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchDB
 
-translate_map = {
-    "cpu": {"metric": "structure.cpu.current", "limit_label": "effective_cpu_limit"},
-    "mem": {"metric": "structure.mem.current", "limit_label": "mem_limit"},
-    "energy": {"metric": "structure.energy.current", "limit_label": "energy_limit"},
-    "disk_read": {"metric": "structure.disk_read.current", "limit_label": "disk_read_limit"},
-    "disk_write": {"metric": "structure.disk_write.current", "limit_label": "disk_write_limit"},
-    "net": {"metric": "structure.net.current", "limit_label": "net_limit"}
-}
-
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "STRUCTURES_PERSISTED": ["applications"], "RESOURCES_PERSISTED": ["cpu", "mem"], "DEBUG": True, "ACTIVE": True}
 SERVICE_NAME = "structures_snapshoter"
 
@@ -53,9 +44,17 @@ class StructuresSnapshoter:
     def __init__(self):
         self.couchdb_handler = couchDB.CouchDBServer()
         self.rescaler_http_session = requests.Session()
-        self.structure_tracker = []
+        self.structure_tracker, self.user_tracker = [], []
         self.polling_frequency, self.structures_persisted, self.resources_persisted = None, None, None
         self.debug, self.active = None, None
+
+    @staticmethod
+    def translate_resource(resource, to="metric"):
+        if to == "metric":
+            return "structure.{0}.current".format(resource)
+        if to == "limit_label":
+            return "effective_cpu_limit" if resource == "cpu" else "{0}_limit".format(resource)
+        raise ValueError("Trying to translate bad resource '{0}' or target '{1}'".format(resource, to))
 
     @staticmethod
     def run_in_threads(structures, worker_fn, *worker_args):
@@ -68,19 +67,58 @@ class StructuresSnapshoter:
         for process in threads:
             process.join()
 
-    def persist_structure(self, structure):
-        utils.update_structure(structure, self.couchdb_handler, self.debug)
+    def persist_data(self, data):
+        if data["type"] == "structure":
+            utils.update_structure(data, self.couchdb_handler, self.debug)  # Remote database operation
+        elif data["type"] == "user":
+            self.couchdb_handler.update_user(data)
+        else:
+            utils.log_error("Trying to persist unknown data type '{0}'".format(data["type"]), self.debug)  # Remote database operation
 
     def update_user(self, user, applications):
-        # TODO: Implement user update logic
-        pass
+        # Aggregate resources for all the applications belonging to the user
+        user_apps = [app for app in applications if app["name"] in user["clusters"]]
+        for resource in self.resources_persisted:
+            if not user.get(resource, None):
+                utils.log_error("User {0} is missing info of resource {1}".format(user["name"], resource), self.debug)
+                continue
+            user[resource]["current"] = 0
+
+            for app in user_apps:
+                value = app["resources"].get(resource, {}).get("current", None)
+                if value is None:
+                    utils.log_warning("Application {0} info is missing for user {1} and resource {2}, user info will not be "
+                                      "totally accurate".format(app["name"], user["name"], resource), self.debug)
+                    continue
+                user[resource]["current"] += int(value)
+
+        # Register in tracker to persist later
+        self.user_tracker.append(user)
 
     def update_application(self, app, container_resources_dict):
+        valid_containers = []
+        for container_name in app["containers"]:
+            if container_name not in container_resources_dict:
+                utils.log_error("Container info {0} is missing for app {1}, app info will not be totally accurate"
+                                .format(container_name, app["name"]), self.debug)
+                continue
+            valid_containers.append(container_name)
+
         disk_found_metrics = 0
         for resource in self.resources_persisted:
             if not app["resources"].get(resource, None):
                 utils.log_error("Application {0} is missing info of resource {1}".format(app["name"], resource), self.debug)
                 continue
+            app["resources"][resource]["current"] = 0
+
+            limit_label = self.translate_resource(resource, to="limit_label")
+            for container_name in valid_containers:
+                value = container_resources_dict[container_name]["resources"].get(resource, {}).get(limit_label, None)
+                if value is None:
+                    utils.log_warning("Container {0} info is missing for app {1} and resource {2}, app info will not be "
+                                      "totally accurate".format(container_name, app["name"], resource), self.debug)
+                    continue
+                app["resources"][resource]["current"] += int(value)
 
             if resource in {"disk_read", "disk_write"}:
                 disk_found_metrics += 1
@@ -135,13 +173,13 @@ class StructuresSnapshoter:
             # Update only structure resources already in the database; as structures are already initialized in Orchestrator.
             # This allows processing structures without resources that are in the resources_persisted list
             if resource in db_structure["resources"]:
-                db_structure["resources"][resource]["current"] = int(limits.get(resource, {}).get(translate_map[resource]["limit_label"], 0))
+                db_structure["resources"][resource]["current"] = int(limits.get(resource, {}).get(self.translate_resource(resource, to="limit_label"), 0))
                 if resource in {"disk_read", "disk_write"}:
                     disk_found_metrics += 1
                     if disk_found_metrics == 2:  # Disk need both disk_read and disk_write to be persisted
-                        db_structure["resources"]["disk"]["current"] += db_structure["resources"]["disk_read"]["current"] + db_structure["resources"]["disk_write"]["current"]
+                        db_structure["resources"]["disk"]["current"] = db_structure["resources"]["disk_read"]["current"] + db_structure["resources"]["disk_write"]["current"]
 
-        # Remote database operation
+        # Register in tracker to persist later
         self.structure_tracker.append(db_structure)
 
     def host_info_request(self, host, container_info, valid_containers):
@@ -228,11 +266,13 @@ class StructuresSnapshoter:
                 self.run_in_threads(users, self.update_user, users, applications)
         utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - t0))), self.debug)
 
-        # Persist structures in database
+        # Persist structures and users in database
         t0 = time.time()
         if self.structure_tracker:
-            self.run_in_threads(self.structure_tracker, self.persist_structure)
-            self.structure_tracker.clear()  # Clear the tracker after persisting
+            self.run_in_threads(self.structure_tracker + self.user_tracker, self.persist_data)
+            # Clear the trackers after persisting
+            self.structure_tracker.clear()
+            self.user_tracker.clear()
         utils.log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - t0))), self.debug)
 
     def invalid_conf(self, ):
