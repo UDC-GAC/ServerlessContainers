@@ -32,24 +32,11 @@ import time
 import traceback
 import logging
 
+import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
 from src.MyUtils.ConfigValidator import ConfigValidator
 
-
-from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT
-
-config_validator = ConfigValidator(min_frequency=3)
-db_handler = couchdb.CouchDBServer()
-opentsdb_handler = opentsdb.OpenTSDBServer()
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"] ,"ACTIVE": True}
-OPENTSDB_STORED_VALUES_AS_NULL = 0
-SERVICE_NAME = "database_snapshoter"
-MAX_FAIL_NUM = 5
-debug = True
-
-PERSIST_METRICS = ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"]
-PERSIST_CONFIG_SERVICES_NAMES = ["guardian", "scaler"]
 PERSIST_CONFIG_SERVICES_DOCS = {
     "guardian": [
         ("WINDOW_DELAY", "conf.guardian.window_delay"),
@@ -62,177 +49,155 @@ PERSIST_CONFIG_SERVICES_DOCS = {
     ]
 }
 
-
-def translate_structure_doc_to_timeseries(doc):
-    try:
-        struct_name = doc["name"]
-        timestamp = int(time.time())
-
-        timeseries_list = list()
-        for resource in doc["resources"]:
-            for doc_metric in doc["resources"][resource]:
-                if doc_metric in PERSIST_METRICS and doc_metric in doc["resources"][resource]:
-                    value = doc["resources"][resource][doc_metric]
-                    if value or value == 0:
-                        metric = ".".join([doc["type"], resource, doc_metric])
-                        timeseries = dict(metric=metric, value=value, timestamp=timestamp,
-                                          tags={"structure": struct_name})
-                        timeseries_list.append(timeseries)
-                    else:
-                        log_error(
-                            "Error with document: {0}, doc metric {1} has null value '{2}', assuming a value of '{3}'".format(
-                                str(doc), doc_metric, value, OPENTSDB_STORED_VALUES_AS_NULL), debug)
-
-        return timeseries_list
-    except (ValueError, KeyError) as e:
-        log_error("Error {0} {1} with document: {2} ".format(str(e), str(traceback.format_exc()), str(doc)), debug)
-        raise
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"],
+                         "SERVICES_PERSISTED": ["guardian", "scaler"],
+                         "FIELDS_PERSISTED": ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"],
+                         "DEBUG": True, "ACTIVE": True}
+SERVICE_NAME = "database_snapshoter"
 
 
-def get_users():
-    docs = list()
-    # Remote database operation
-    for user in db_handler.get_users():
-        timestamp = int(time.time())
-        for submetric in ["used", "max", "usage", "current"]:
-            timeseries = dict(metric="user.energy.{0}".format(submetric),
-                              value=user["energy"][submetric],
-                              timestamp=timestamp,
-                              tags={"user": user["name"]})
-            docs.append(timeseries)
-    return docs
+class DatabaseSnapshoter:
 
+    def __init__(self):
+        self.config_validator = ConfigValidator(min_frequency=3)
+        self.couchdb_handler = couchdb.CouchDBServer()
+        self.opentsdb_handler = opentsdb.OpenTSDBServer()
+        self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
+        self.polling_frequency, self.documents_persisted, self.services_persisted = None, None, None
+        self.fields_persisted, self.debug, self.active = None, None, None
 
-def get_limits():
-    docs = list()
-    # Remote database operation
-    for limit in db_handler.get_all_limits():
-        docs += translate_structure_doc_to_timeseries(limit)
-    return docs
+    def translate_structure_doc_to_timeseries(self, doc):
+        try:
+            struct_name = doc["name"]
+            timestamp = int(time.time())
+            timeseries_list = []
+            for resource in doc["resources"]:
+                for doc_field in self.fields_persisted:
+                    value = doc["resources"][resource].get(doc_field, None)
+                    if value is not None:
+                        if value != self.NO_METRIC_DATA_DEFAULT_VALUE:
+                            metric = ".".join([doc["type"], resource, doc_field])
+                            timeseries = dict(metric=metric, value=value, timestamp=timestamp, tags={"structure": struct_name})
+                            timeseries_list.append(timeseries)
+                        else:
+                            utils.log_error("Document for structure {0} has a null value in field '{1}' ('{2}')".format(struct_name, doc_field, value), self.debug)
 
+            return timeseries_list
+        except (ValueError, KeyError) as e:
+            utils.log_error("Error {0} {1} with document: {2} ".format(str(e), str(traceback.format_exc()), str(doc)), self.debug)
+            raise e
 
-def get_structures():
-    docs = list()
-    # Remote database operation
-    for structure in db_handler.get_structures():
-        docs += translate_structure_doc_to_timeseries(structure)
-    return docs
-
-
-def get_configs():
-    docs = list()
-    services = db_handler.get_services()  # Remote database operation
-    filtered_services = [s for s in services if s["name"] in PERSIST_CONFIG_SERVICES_NAMES]
-    for service in filtered_services:
-        for parameter in PERSIST_CONFIG_SERVICES_DOCS[service["name"]]:
-            database_key_name, timeseries_metric_name = parameter
-            if  database_key_name in service["config"]:
-                timeseries = dict(metric=timeseries_metric_name,
-                                  value=service["config"][database_key_name],
-                                  timestamp=int(time.time()),
-                                  tags={"service": service["name"]})
-                docs.append(timeseries)
-            else:
-                log_warning("Missing config key '{0}' in service '{1}'".format(database_key_name, service["name"]), debug)
-    return docs
-
-
-funct_map = {"users": get_users,
-             "limits": get_limits,
-             "structures": get_structures,
-             "configs": get_configs}
-
-
-def get_data(funct):
-    docs = list()
-    try:
-        docs += funct_map[funct]()
-    except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
-        # An error might have been thrown because database was recently updated or created
-        log_warning("Couldn't retrieve {0} info, error {1}.".format(funct, str(e)), debug)
-    return docs
-
-
-def send_data(docs):
-    num_sent_docs = 0
-    if docs:
+    def get_users(self, ):
+        docs = list()
         # Remote database operation
-        success, info = opentsdb_handler.send_json_documents(docs)
-        if not success:
-            log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])), debug)
-        else:
-            num_sent_docs = len(docs)
-    return num_sent_docs
+        for user in self.couchdb_handler.get_users():
+            timestamp = int(time.time())
+            for submetric in ["used", "max", "usage", "current"]:
+                timeseries = dict(metric="user.energy.{0}".format(submetric),
+                                  value=user["energy"][submetric],
+                                  timestamp=timestamp,
+                                  tags={"user": user["name"]})
+                docs.append(timeseries)
+        return docs
+
+    def get_limits(self, ):
+        docs = list()
+        # Remote database operation
+        for limit in self.couchdb_handler.get_all_limits():
+            docs += self.translate_structure_doc_to_timeseries(limit)
+        return docs
+
+    def get_structures(self,):
+        docs = list()
+        # Remote database operation
+        for structure in self.couchdb_handler.get_structures():
+            docs += self.translate_structure_doc_to_timeseries(structure)
+        return docs
+
+    def get_configs(self, ):
+        docs = list()
+        services = self.couchdb_handler.get_services()  # Remote database operation
+        filtered_services = [s for s in services if s["name"] in self.services_persisted]
+        for service in filtered_services:
+            for parameter in PERSIST_CONFIG_SERVICES_DOCS[service["name"]]:
+                database_key_name, timeseries_metric_name = parameter
+                if database_key_name in service["config"]:
+                    timeseries = dict(metric=timeseries_metric_name,
+                                      value=service["config"][database_key_name],
+                                      timestamp=int(time.time()),
+                                      tags={"service": service["name"]})
+                    docs.append(timeseries)
+                else:
+                    utils.log_warning("Missing config key '{0}' in service '{1}'".format(database_key_name, service["name"]), self.debug)
+        return docs
+
+    def get_data(self, doc_type):
+        docs = []
+        try:
+            docs = getattr(self, "get_{0}".format(doc_type))()
+        except (requests.exceptions.HTTPError, KeyError, ValueError) as e:
+            # An error might have been thrown because database was recently updated or created
+            utils.log_warning("Couldn't retrieve {0} info, error {1}.".format(doc_type, str(e)), self.debug)
+        return docs
+
+    def send_data(self, docs):
+        num_sent_docs = 0
+        if docs:
+            # Remote database operation
+            success, info = self.opentsdb_handler.send_json_documents(docs)
+            if not success:
+                utils.log_error("Couldn't properly post documents, error : {0}".format(json.dumps(info["error"])), self.debug)
+            else:
+                num_sent_docs = len(docs)
+        return num_sent_docs
 
 
-def persist_docs(funct):
-    t0 = time.time()
-    docs = get_data(funct)
-    t1 = time.time()
-
-    if docs:
-        log_info("It took {0} seconds to get {1} info".format(str("%.2f" % (t1 - t0)), funct), debug)
-        num_docs = send_data(docs)
-        t2 = time.time()
-        if num_docs > 0:
-            log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)),funct), debug)
-            log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), funct), debug)
-
-
-def persist():
-    logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
-
-    global debug
-
-    myConfig = MyConfig(CONFIG_DEFAULT_VALUES)
-
-    while True:
-        log_info("----------------------", debug)
-        log_info("Starting Epoch", debug)
+    def persist_docs(self, doc_type):
         t0 = time.time()
-
-        # Get service info
-        service = get_service(db_handler, SERVICE_NAME)  # Remote database operation
-
-        # Heartbeat
-        beat(db_handler, SERVICE_NAME)  # Remote database operation
-
-        # CONFIG
-        myConfig.set_config(service["config"])
-        polling_frequency = myConfig.get_value("POLLING_FREQUENCY")
-        debug = myConfig.get_value("DEBUG")
-        documents_persisted = myConfig.get_value("DOCUMENTS_PERSISTED")
-        SERVICE_IS_ACTIVATED = myConfig.get_value("ACTIVE")
-
-        log_info("Config is as follows:", debug)
-        log_info(".............................................", debug)
-        log_info("Polling frequency -> {0}".format(polling_frequency), debug)
-        log_info("Documents to be persisted are -> {0}".format(documents_persisted), debug)
-        log_info(".............................................", debug)
-
-        invalid, message = config_validator.invalid_conf(myConfig)
-        if invalid:
-            log_error(message, debug)
-
-        if not SERVICE_IS_ACTIVATED:
-            log_warning("Database snapshoter is not activated", debug)
-
-        if SERVICE_IS_ACTIVATED and not invalid:
-            for docType in documents_persisted:
-                persist_docs(docType)
-
+        docs = self.get_data(doc_type)
         t1 = time.time()
-        log_info("Epoch processed in {0} seconds ".format("%.2f" % (t1 - t0)), debug)
-        log_info("----------------------\n", debug)
 
-        time.sleep(polling_frequency)
+        if docs:
+            utils.log_info("It took {0} seconds to get {1} info".format(str("%.2f" % (t1 - t0)), doc_type), self.debug)
+            num_docs = self.send_data(docs)
+            t2 = time.time()
+            if num_docs > 0:
+                utils.log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)), doc_type), self.debug)
+                utils.log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), doc_type), self.debug)
+
+    def persist(self,):
+        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
+        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
+
+        while True:
+            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
+
+            t0 = utils.start_epoch(self.debug)
+
+            utils.print_service_config(self, myConfig, self.debug)
+
+            invalid, message = self.config_validator.invalid_conf(myConfig)
+            if invalid:
+                utils.log_error(message, self.debug)
+
+            if not self.active:
+                utils.log_warning("Database snapshoter is not activated", self.debug)
+
+            if self.active and not invalid:
+                for doc_type in self.documents_persisted:
+                    self.persist_docs(doc_type)
+
+            time.sleep(self.polling_frequency)
+
+            utils.end_epoch(self.debug, self.polling_frequency, t0)
 
 
 def main():
     try:
-        persist()
+        database_snapshoter = DatabaseSnapshoter()
+        database_snapshoter.persist()
     except Exception as e:
-        log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
+        utils.log_error("{0} {1}".format(str(e), str(traceback.format_exc())), debug=True)
 
 
 if __name__ == "__main__":
