@@ -274,68 +274,12 @@ def get_structures(db_handler, debug, subtype="application"):
         return None
 
 
-def update_service_config(service_instance, service_name, service_config, couchdb_handler):
-    # Get service info
-    service = get_service(couchdb_handler, service_name)
-
-    # Heartbeat
-    beat(couchdb_handler, service_name)
-
-    # Update service configuration
-    service_config.set_config(service["config"])
-
-    # Update service instance attributes according to new configuration
-    for k, v in service_config.get_config().items():
-        setattr(service_instance, k.lower(), v)
-
-
-def print_service_config(service_instance, service_config, debug):
-    log_info("Config is as follows:", debug)
-    log_info(".............................................", debug)
-
-    for key in service_config.get_config().keys():
-        value = getattr(service_instance, key.lower(), None)
-        log_info(f"{key.replace('_', ' ').capitalize()} -> {value}", debug)
-
-    log_info(".............................................", debug)
 def get_users(db_handler, debug):
     try:
         return db_handler.get_users()
     except (requests.exceptions.HTTPError, ValueError):
         log_warning("Couldn't retrieve users info.", debug=debug)
         return None
-
-
-def start_epoch(debug):
-    log_info("----------------------", debug)
-    log_info("Starting Epoch", debug)
-    return time.time()
-
-
-def end_epoch(debug, window_difference, t0):
-    t1 = time.time()
-    time_proc = "%.2f" % (t1 - t0 - window_difference)
-    time_total = "%.2f" % (t1 - t0)
-    window_difference_str = "%.2f" % window_difference
-    log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, window_difference_str), debug)
-    log_info("----------------------\n", debug)
-
-
-def wait_operation_thread(thread, debug):
-    """This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
-    A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this
-    thread to finish.
-    Args:
-        thread (Python Thread): The thread that has spawned the basic threads that carry out operations as needed
-
-    """
-    if thread and thread.is_alive():
-        log_warning("Previous thread didn't finish and next poll should start now", debug)
-        log_warning("Going to wait until thread finishes before proceeding", debug)
-        delay_start = time.time()
-        thread.join()
-        delay_end = time.time()
-        log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
 
 
 def run_in_threads(structures, worker_fn, *worker_args):

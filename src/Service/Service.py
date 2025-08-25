@@ -1,6 +1,5 @@
 import time
 import logging
-from threading import Thread
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
@@ -72,6 +71,34 @@ class Service:
 
         utils.log_info(".............................................", self.debug)
 
+    def _start_epoch(self):
+        utils.log_info("----------------------", self.debug)
+        utils.log_info("Starting Epoch", self.debug)
+        return time.time()
+
+    def _end_epoch(self, window_difference, t0):
+        t1 = time.time()
+        time_proc = "%.2f" % (t1 - t0 - window_difference)
+        time_total = "%.2f" % (t1 - t0)
+        window_difference_str = "%.2f" % window_difference
+        utils.log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, window_difference_str), self.debug)
+        utils.log_info("----------------------\n", self.debug)
+
+    def _wait_operation_thread(self, thread):
+        """This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
+        A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this
+        thread to finish.
+        Args:
+            thread (Python Thread): The thread that has spawned the basic threads that carry out operations as needed
+        """
+        if thread and thread.is_alive():
+            utils.log_warning("Previous thread didn't finish and next poll should start now", self.debug)
+            utils.log_warning("Going to wait until thread finishes before proceeding", self.debug)
+            delay_start = time.time()
+            thread.join()
+            delay_end = time.time()
+            utils.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), self.debug)
+
     # --------- Main loop function ---------
 
     def run_loop(self):
@@ -87,7 +114,7 @@ class Service:
 
             self.on_config_updated(service_config)
 
-            t0 = utils.start_epoch(self.debug)
+            t0 = self._start_epoch()
             self._print_config(service_config)
 
             invalid, message = self.invalid_conf(service_config)
@@ -106,7 +133,7 @@ class Service:
             time.sleep(sleep_time)
 
             # Wait for thread to finish if exists
-            utils.wait_operation_thread(thread, self.debug)
+            self._wait_operation_thread(thread)
 
             # End epoch
-            utils.end_epoch(self.debug, sleep_time, t0)
+            self._end_epoch(sleep_time, t0)
