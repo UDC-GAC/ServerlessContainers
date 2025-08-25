@@ -29,25 +29,21 @@ from __future__ import print_function
 from threading import Thread
 import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "STRUCTURES_REFEEDED": ["application"], "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True}
-
-SERVICE_NAME = "refeeder"
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "STRUCTURES_REFEEDED": ["application"], "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True, "ACTIVE": True}
 
 
-class ReFeeder:
+class ReFeeder(Service):
     """ ReFeeder class that implements all the logic for this service"""
 
     def __init__(self):
-        self.config_validator = ConfigValidator()
+        super().__init__("refeeder", ConfigValidator(), CONFIG_DEFAULT_VALUES, sleep_attr="window_timelapse")
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
-        self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.app_tracker, self.user_tracker = [], []
         self.window_timelapse, self.window_delay, self.structures_refeeded = None, None, None
@@ -127,38 +123,17 @@ class ReFeeder:
         self.user_tracker.clear()
         utils.log_info("It took {0} seconds to persist refeeded data in StateDatabase".format(str("%.2f" % (time.time() - ts))), self.debug)
 
+    def work(self):
+        thread = None
+        if self.structures_refeeded:
+            thread = Thread(target=self.refeed_thread, args=())
+            thread.start()
+        else:
+            utils.log_warning("No structures set to refeed, check STRUCTURES_REFEEDED", self.debug)
+        return thread
+
     def refeed(self, ):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            invalid, message = self.config_validator.invalid_conf(myConfig)
-            if invalid:
-                utils.log_error(message, self.debug)
-
-            if not self.active:
-                utils.log_warning("Refeeder is not activated", self.debug)
-
-            thread = None
-            if self.active and not invalid:
-                if self.structures_refeeded:
-                    thread = Thread(target=self.refeed_thread, args=())
-                    thread.start()
-                else:
-                    utils.log_warning("No structures to refeed, check STRUCTURES_REFEEDED", self.debug)
-
-            time.sleep(self.window_timelapse)
-
-            utils.wait_operation_thread(thread, self.debug)
-
-            utils.end_epoch(self.debug, self.window_timelapse, t0)
+        self.run_loop()
 
 
 def main():

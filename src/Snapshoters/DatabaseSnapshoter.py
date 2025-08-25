@@ -30,12 +30,11 @@ import requests
 import json
 import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
 from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
 PERSIST_CONFIG_SERVICES_DOCS = {
     "guardian": [
@@ -53,14 +52,12 @@ CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DOCUMENTS_PERSISTED": ["limits
                          "SERVICES_PERSISTED": ["guardian", "scaler"],
                          "FIELDS_PERSISTED": ["max", "min", "upper", "lower", "current", "usage", "fixed", "shares"],
                          "DEBUG": True, "ACTIVE": True}
-SERVICE_NAME = "database_snapshoter"
 
 
-class DatabaseSnapshoter:
+class DatabaseSnapshoter(Service):
 
     def __init__(self):
-        self.config_validator = ConfigValidator(min_frequency=3)
-        self.couchdb_handler = couchdb.CouchDBServer()
+        super().__init__("database_snapshoter", ConfigValidator(min_frequency=3), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
         self.opentsdb_handler = opentsdb.OpenTSDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.polling_frequency, self.documents_persisted, self.services_persisted = None, None, None
@@ -165,31 +162,13 @@ class DatabaseSnapshoter:
                 utils.log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)), doc_type), self.debug)
                 utils.log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), doc_type), self.debug)
 
+    def work(self):
+        for doc_type in self.documents_persisted:
+            self.persist_docs(doc_type)
+        return None
+
     def persist(self,):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            invalid, message = self.config_validator.invalid_conf(myConfig)
-            if invalid:
-                utils.log_error(message, self.debug)
-
-            if not self.active:
-                utils.log_warning("Database snapshoter is not activated", self.debug)
-
-            if self.active and not invalid:
-                for doc_type in self.documents_persisted:
-                    self.persist_docs(doc_type)
-
-            time.sleep(self.polling_frequency)
-
-            utils.end_epoch(self.debug, self.polling_frequency, t0)
+        self.run_loop()
 
 
 def main():

@@ -30,21 +30,18 @@ from threading import Thread
 import requests
 import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchDB
 from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "STRUCTURES_PERSISTED": ["application"], "RESOURCES_PERSISTED": ["cpu", "mem"], "DEBUG": True, "ACTIVE": True}
-SERVICE_NAME = "structures_snapshoter"
 
 
-class StructuresSnapshoter:
+class StructuresSnapshoter(Service):
 
     def __init__(self):
-        self.config_validator = ConfigValidator(min_frequency=3)
-        self.couchdb_handler = couchDB.CouchDBServer()
+        super().__init__("structures_snapshoter", ConfigValidator(min_frequency=3), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
         self.rescaler_http_session = requests.Session()
         self.structure_tracker, self.user_tracker = [], []
         self.polling_frequency, self.structures_persisted, self.resources_persisted = None, None, None
@@ -178,38 +175,17 @@ class StructuresSnapshoter:
         self.user_tracker.clear()
         utils.log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - ts))), self.debug)
 
+    def work(self, ):
+        thread = None
+        if self.structures_persisted:
+            thread = Thread(target=self.persist_thread, args=())
+            thread.start()
+        else:
+            utils.log_warning("No structures to persist, check STRUCTURES_PERSISTED", self.debug)
+        return thread
+
     def persist(self,):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            # Check invalid configuration
-            invalid, message = self.config_validator.invalid_conf(myConfig)
-            if invalid:
-                utils.log_error(message, self.debug)
-
-            thread = None
-            if self.active and not invalid:
-                if self.structures_persisted:
-                    thread = Thread(target=self.persist_thread, args=())
-                    thread.start()
-                else:
-                    utils.log_warning("No structures to persist, check STRUCTURES_PERSISTED", self.debug)
-            else:
-                utils.log_warning("StructureSnapshoter is not activated", self.debug)
-
-            time.sleep(self.polling_frequency)
-
-            utils.wait_operation_thread(thread, self.debug)
-
-            utils.end_epoch(self.debug, self.polling_frequency, t0)
+        self.run_loop()
 
 
 def main():

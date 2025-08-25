@@ -34,12 +34,15 @@ from src.ReBalancer.Utils import filter_rebalanceable_apps
 
 class ContainerRebalancer:
 
-    def __init__(self, config, opentsdb_handler, couchdb_handler):
-        self.__config = config
+    def __init__(self, opentsdb_handler, couchdb_handler):
+        self.__config = None
         self.__opentsdb_handler = opentsdb_handler
         self.__couchdb_handler = couchdb_handler
         self.__NO_METRIC_DATA_DEFAULT_VALUE = self.__opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.__debug = True
+
+    def set_config(self, config):
+        self.__config = config
 
     @staticmethod
     def __split_amount_in_slices(total_amount, slice_amount):

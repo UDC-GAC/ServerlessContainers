@@ -32,19 +32,14 @@ from threading import Thread
 
 import requests
 import traceback
-import logging
 
 from requests import HTTPError
 from src.Guardian.Guardian import Guardian
 from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
-
-
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True, "ACTIVE": True}
-SERVICE_NAME = "scaler"
 
 BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
                                 "mem": ['proc.mem.resident'],
@@ -60,6 +55,8 @@ RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem'
 
 APP_SCALING_SPLIT_AMOUNT = 5
 MIN_SHARES_PER_SOCKET = 200
+
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True, "ACTIVE": True}
 
 
 def set_container_resources(rescaler_http_session, container, resources, debug):
@@ -90,14 +87,13 @@ def get_cpu_topology(rescaler_http_session, container, debug):
     r.raise_for_status()
 
 
-class Scaler:
+class Scaler(Service):
     """
     Scaler class that implements the logic for this microservice.
     """
 
     def __init__(self):
-        self.config_validator = ConfigValidator(min_frequency=3)
-        self.couchdb_handler = couchdb.CouchDBServer()
+        super().__init__("scaler", ConfigValidator(min_frequency=3), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
         self.rescaler_http_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
         self.host_info_cache, self.container_info_cache = dict(), dict()
@@ -961,94 +957,72 @@ class Scaler:
     ####################################################################################################################
     # MAIN LOOP
     ####################################################################################################################
-    def scale(self, ):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        # Remove previous requests
+    def on_start(self):
         utils.log_info("Purging any previous requests", True)
         self.filter_requests(0)
         utils.log_info("----------------------\n", True)
 
-        while True:
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
+    def work(self):
+        # Get the container structures and their resource information as such data is going to be needed
+        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+        try:
+            self.container_info_cache = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)  # Reset the cache
+        except (Exception, RuntimeError) as e:
+            utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
+            utils.log_error(str(e), self.debug)
+            return None
 
-            t0 = utils.start_epoch(self.debug)
+        # Fill the host information cache
+        utils.log_info("Getting host and container info", self.debug)
+        try:
+            self.fill_host_info_cache(containers)
+        except (Exception, RuntimeError) as e:
+            utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
+            utils.log_error(str(e), self.debug)
+            return None
 
-            utils.print_service_config(self, myConfig, self.debug)
+        # Do the core mapping check-up
+        if self.check_core_map:
+            utils.log_info("Doing container CPU limits check", self.debug)
+            utils.log_info("First hosts", self.debug)
+            errors_detected = self.check_host_cpu_limits()
+            if errors_detected:
+                utils.log_error("Errors detected during host CPU limits check", self.debug)
 
-            invalid, message = self.config_validator.invalid_conf(myConfig)
-            if invalid:
-                utils.log_error(message, self.debug)
+            utils.log_info("Second containers", self.debug)
+            errors_detected = self.check_containers_cpu_limits(containers)
+            if errors_detected:
+                utils.log_error("Errors detected during container CPU limits check", self.debug)
 
-            if not self.active:
-                utils.log_warning("Scaler is not activated", self.debug)
+            utils.log_info("Doing core mapping check", self.debug)
+            errors_detected = self.check_core_mapping(containers)
+            if errors_detected:
+                utils.log_error("Errors detected during container CPU map check", self.debug)
+        else:
+            utils.log_warning("Core map check has been disabled", self.debug)
 
-            if self.active and not invalid:
-                # Get the container structures and their resource information as such data is going to be needed
-                containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-                try:
-                    self.container_info_cache = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)  # Reset the cache
-                except (Exception, RuntimeError) as e:
-                    utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
-                    utils.log_error(str(e), self.debug)
-                    time.sleep(self.polling_frequency)
-                    continue
+        # Get the requests
+        new_requests = self.filter_requests(self.request_timeout)
+        container_reqs, app_reqs = self.sort_requests(new_requests)
 
-                # Fill the host information cache
-                utils.log_info("Getting host and container info", self.debug)
-                try:
-                    self.fill_host_info_cache(containers)
-                except (Exception, RuntimeError) as e:
-                    utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
-                    utils.log_error(str(e), self.debug)
-                    time.sleep(self.polling_frequency)
-                    continue
+        # Process first the application requests, as they generate container ones
+        if app_reqs:
+            utils.log_info("Processing applications requests", self.debug)
+            self.scale_structures(app_reqs)
+        else:
+            utils.log_info("No applications requests", self.debug)
 
-                # Do the core mapping check-up
-                if self.check_core_map:
-                    utils.log_info("Doing container CPU limits check", self.debug)
-                    utils.log_info("First hosts", self.debug)
-                    errors_detected = self.check_host_cpu_limits()
-                    if errors_detected:
-                        utils.log_error("Errors detected during host CPU limits check", self.debug)
+        # Then process container ones
+        if container_reqs:
+            utils.log_info("Processing container requests", self.debug)
+            self.scale_structures(container_reqs)
+        else:
+            utils.log_info("No container requests", self.debug)
 
-                    utils.log_info("Second containers", self.debug)
-                    errors_detected = self.check_containers_cpu_limits(containers)
-                    if errors_detected:
-                        utils.log_error("Errors detected during container CPU limits check", self.debug)
+        return None
 
-                    utils.log_info("Doing core mapping check", self.debug)
-                    errors_detected = self.check_core_mapping(containers)
-                    if errors_detected:
-                        utils.log_error("Errors detected during container CPU map check", self.debug)
-                else:
-                    utils.log_warning("Core map check has been disabled", self.debug)
-
-                # Get the requests
-                new_requests = self.filter_requests(self.request_timeout)
-                container_reqs, app_reqs = self.sort_requests(new_requests)
-
-                # Process first the application requests, as they generate container ones
-                if app_reqs:
-                    utils.log_info("Processing applications requests", self.debug)
-                    self.scale_structures(app_reqs)
-                else:
-                    utils.log_info("No applications requests", self.debug)
-
-                # Then process container ones
-                if container_reqs:
-                    utils.log_info("Processing container requests", self.debug)
-                    self.scale_structures(container_reqs)
-                else:
-                    utils.log_info("No container requests", self.debug)
-
-                t1 = time.time()
-                utils.log_info("Epoch processed in {0} seconds".format(str("%.2f" % (t1 - t0))), self.debug)
-
-            utils.log_info("----------------------\n", self.debug)
-            time.sleep(self.polling_frequency)
+    def scale(self, ):
+        self.run_loop()
 
 
 def main():

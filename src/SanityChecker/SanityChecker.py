@@ -28,27 +28,25 @@ from __future__ import print_function
 
 import time
 import traceback
-import logging
 
 import src.Guardian.Guardian
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
+from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
-SERVICE_NAME = "sanity_checker"
-CONFIG_DEFAULT_VALUES = {"DELAY": 120, "DEBUG": True}
-DATABASES = ["events", "requests", "services", "structures", "limits"]
+CONFIG_DEFAULT_VALUES = {"DELAY": 120, "POLLING_FREQUENCY": 0, "DATABASES": ["events", "requests", "services", "structures", "limits"], "DEBUG": True, "ACTIVE": True}
 
 
-class SanityChecker:
+class SanityChecker(Service):
 
     def __init__(self):
-        self.couchdb_handler = couchdb.CouchDBServer()
+        super().__init__("sanity_checker", ConfigValidator(min_frequency=0), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
         self.delay, self.debug = None, None
 
     def compact_databases(self):
         try:
             compacted_dbs = list()
-            for db in DATABASES:
+            for db in self.databases:
                 success = self.couchdb_handler.compact_database(db)
                 if success:
                     compacted_dbs.append(db)
@@ -83,31 +81,25 @@ class SanityChecker:
             utils.log_error(
                 "Error doing configuration check up: {0} {1}".format(str(e), str(traceback.format_exc())), self.debug)
 
+    def work(self, ):
+        self.compact_databases()
+        self.check_unstable_configuration()
+        # check_core_mapping()
+        utils.log_info("Sanity checked", self.debug)
+        utils.log_info(".............................................", self.debug)
+
+        time_waited = 0
+        heartbeat_delay = 10  # seconds
+        while time_waited < self.delay:
+            # Heartbeat
+            utils.beat(self.couchdb_handler, self.service_name)
+            time.sleep(heartbeat_delay)
+            time_waited += heartbeat_delay
+
+        return None
+
     def check_sanity(self):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-            # Get service info
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            # Print service info
-            utils.print_service_config(self, myConfig, self.debug)
-
-            self.compact_databases()
-            self.check_unstable_configuration()
-            # check_core_mapping()
-            utils.log_info("Sanity checked", self.debug)
-            utils.log_info(".............................................", self.debug)
-
-            time_waited = 0
-            heartbeat_delay = 10  # seconds
-            while time_waited < self.delay:
-                # Heartbeat
-                utils.beat(self.couchdb_handler, SERVICE_NAME)
-                time.sleep(heartbeat_delay)
-                time_waited += heartbeat_delay
+        self.run_loop()
 
 
 def main():

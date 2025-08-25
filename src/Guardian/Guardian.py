@@ -31,28 +31,27 @@ from collections import Counter
 from cachetools import LRUCache
 import time
 import traceback
-import logging
 
 from json_logic import jsonLogic
 from termcolor import colored
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
+
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
 MODELS_STRUCTURE = "host"
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"], "CPU_SHARES_PER_WATT": 5,
                          "ENERGY_MODEL_NAME": "polyreg_General", "ENERGY_MODEL_RELIABILITY": "low", "ACTIVE": True}
-SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
 
 
-class Guardian:
+class Guardian(Service):
     """
     Guardian class that implements the logic for this microservice. The Guardian takes care of matching the resource
     time series with a subset of rules to generate Events and then, matches the event against another subset of rules
@@ -62,9 +61,8 @@ class Guardian:
     """
 
     def __init__(self):
-        self.config_validator = ConfigValidator()
+        super().__init__("guardian", ConfigValidator(), CONFIG_DEFAULT_VALUES, sleep_attr="window_timelapse")
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
-        self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.pb_cache = LRUCache(maxsize=128)
@@ -1216,48 +1214,25 @@ class Guardian:
         for process in threads:
             process.join()
 
+    def on_config_updated(self, service_config):
+        if self.energy_model_name != self.last_used_energy_model:
+            self.last_used_energy_model = self.energy_model_name
+            self.power_budget = {}
+            self.model_is_hw_aware = None
+
+    def work(self, ):
+        thread = None
+        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
+        if structures:
+            utils.log_info("{0} Structures to process, launching threads".format(len(structures)), self.debug)
+            thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
+            thread.start()
+        else:
+            utils.log_info("No structures to process", self.debug)
+        return thread
+
     def guard(self, ):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            # If power model has changed all the power budgets are restarted (we try to rescale using the new model)
-            if self.energy_model_name != self.last_used_energy_model:
-                self.last_used_energy_model = self.energy_model_name
-                self.power_budget = {}
-                self.model_is_hw_aware = None
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            invalid, message = self.config_validator.invalid_conf(myConfig)
-            if invalid:
-                utils.log_error(message, self.debug)
-
-            if not self.active:
-                utils.log_warning("Guardian is not activated", self.debug)
-
-            thread = None
-            if self.active and not invalid:
-                # Remote database operation
-                structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
-                if structures:
-                    utils.log_info("{0} Structures to process, launching threads".format(len(structures)), self.debug)
-                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
-                    thread.start()
-                else:
-                    utils.log_info("No structures to process", self.debug)
-
-            time.sleep(self.window_timelapse)
-
-            utils.wait_operation_thread(thread, self.debug)
-
-            utils.end_epoch(self.debug, self.window_timelapse, t0)
+        self.run_loop()
 
 
 def main():

@@ -29,10 +29,13 @@ import src.MyUtils.MyUtils as utils
 
 
 class UserRebalancer:
-    def __init__(self, config, couchdb_handler):
-        self.__config = config
+    def __init__(self, couchdb_handler):
+        self.__config = None
         self.__couchdb_handler = couchdb_handler
         self.__debug = True
+
+    def set_config(self, config):
+        self.__config = config
 
     def __inter_user_rebalancing(self, users):
         for resource in self.__config.get_value("RESOURCES_BALANCED"):

@@ -26,17 +26,15 @@
 
 from __future__ import print_function
 
-import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
-import src.ReBalancer.ContainerReBalancer as containerReBalancer
-import src.ReBalancer.ApplicationReBalancer as applicationReBalancer
-import src.ReBalancer.UserReBalancer as userReBalancer
+from src.ReBalancer.ContainerReBalancer import ContainerRebalancer
+from src.ReBalancer.ApplicationReBalancer import ApplicationRebalancer
+from src.ReBalancer.UserReBalancer import UserRebalancer
 from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {
     "WINDOW_DELAY": 10,
@@ -48,64 +46,50 @@ CONFIG_DEFAULT_VALUES = {
     "CONTAINERS_SCOPE": "application",
     "BALANCING_POLICY": "rules",
     "BALANCING_METHOD": "pair_swapping",
-    "DEBUG": True
+    "DEBUG": True,
+    "ACTIVE": True
 }
 
-SERVICE_NAME = "rebalancer"
 
-
-class ReBalancer:
+class ReBalancer(Service):
     """ ReBalancer class that implements all the logic for this service"""
 
     def __init__(self):
-        self.config_validator = ConfigValidator()
+        super().__init__("rebalancer", ConfigValidator(), CONFIG_DEFAULT_VALUES, sleep_attr="window_timelapse")
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
-        self.couchdb_handler = couchdb.CouchDBServer()
-        self.config = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        self.containerRebalancer = containerReBalancer.ContainerRebalancer(self.config, self.opentsdb_handler, self.couchdb_handler)
-        self.applicationReBalancer = applicationReBalancer.ApplicationRebalancer(self.config, self.couchdb_handler)
-        self.userReBalancer = userReBalancer.UserRebalancer(self.config, self.couchdb_handler)
+        self.container_rebalancer = ContainerRebalancer(self.opentsdb_handler, self.couchdb_handler)
+        self.application_rebalancer = ApplicationRebalancer(self.couchdb_handler)
+        self.user_rebalancer = UserRebalancer(self.couchdb_handler)
         self.window_timelapse, self.window_delay, self.diff_percentage, self.stolen_percentage = None, None, None, None
         self.resources_balanced, self.structures_balanced, self.containers_scope = None, None, None
         self.balancing_policy, self.balancing_method, self.debug = None, None, None
 
-    def invalid_conf(self, ):
+    def on_config_updated(self, service_config):
+        self.container_rebalancer.set_config(service_config)
+        self.application_rebalancer.set_config(service_config)
+        self.user_rebalancer.set_config(service_config)
+
+    def invalid_conf(self, service_config):
         if self.containers_scope not in {"application", "host"}:
             return True, "Containers scope '{0}' to perform container balancing is invalid".format(self.containers_scope)
 
         if self.balancing_policy not in {"rules", "thresholds"}:
             return True, "Balancing policy '{0}' is invalid".format(self.balancing_policy)
 
-        return self.config_validator.invalid_conf(self.config)
+        return self.config_validator.invalid_conf(service_config)
+
+    def work(self,):
+        if "user" in self.structures_balanced:
+            self.user_rebalancer.rebalance_users()
+
+        if "application" in self.structures_balanced:
+            self.application_rebalancer.rebalance_applications()
+
+        if "container" in self.structures_balanced:
+            self.container_rebalancer.rebalance_containers()
 
     def rebalance(self, ):
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-            utils.update_service_config(self, SERVICE_NAME, self.config, self.couchdb_handler)
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, self.config, self.debug)
-
-            invalid, message = self.invalid_conf()
-            if invalid:
-                utils.log_error(message, self.debug)
-
-            # Run rebalancers from upper to lower level of granularity
-            if not invalid:
-                if "user" in self.structures_balanced:
-                    self.userReBalancer.rebalance_users()
-
-                if "application" in self.structures_balanced:
-                    self.applicationReBalancer.rebalance_applications()
-
-                if "container" in self.structures_balanced:
-                    self.containerRebalancer.rebalance_containers()
-
-            time.sleep(self.window_timelapse)
-
-            utils.end_epoch(t0, self.window_timelapse, t0)
+        self.run_loop()
 
 
 def main():
