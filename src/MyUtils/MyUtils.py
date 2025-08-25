@@ -33,6 +33,7 @@ import sys
 import requests
 import traceback
 from termcolor import colored
+from threading import Thread
 
 from src.MyUtils.metrics import RESOURCE_TO_BDW, RESOURCE_TO_SC, SC_TO_BDW, TAGS, TRANSLATOR_DICT
 
@@ -255,6 +256,15 @@ def update_user(user, db_handler, debug, max_tries=10):
         log_error("Error updating user " + user["name"] + " " + traceback.format_exc(), debug)
 
 
+def persist_data(data, db_handler, debug):
+    if data["type"] == "structure":
+        update_structure(data, db_handler, debug)  # Remote database operation
+    elif data["type"] == "user":
+        update_user(data, db_handler, debug)  # Remote database operation
+    else:
+        log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
+
+
 # CAN'T TEST
 def get_structures(db_handler, debug, subtype="application"):
     try:
@@ -264,61 +274,23 @@ def get_structures(db_handler, debug, subtype="application"):
         return None
 
 
-def update_service_config(service_instance, service_name, service_config, couchdb_handler):
-    # Get service info
-    service = get_service(couchdb_handler, service_name)
-
-    # Heartbeat
-    beat(couchdb_handler, service_name)
-
-    # Update service configuration
-    service_config.set_config(service["config"])
-
-    # Update service instance attributes according to new configuration
-    for k, v in service_config.get_config().items():
-        setattr(service_instance, k.lower(), v)
+def get_users(db_handler, debug):
+    try:
+        return db_handler.get_users()
+    except (requests.exceptions.HTTPError, ValueError):
+        log_warning("Couldn't retrieve users info.", debug=debug)
+        return None
 
 
-def print_service_config(service_instance, service_config, debug):
-    log_info("Config is as follows:", debug)
-    log_info(".............................................", debug)
+def run_in_threads(structures, worker_fn, *worker_args):
+    threads = []
+    for structure in structures:
+        process = Thread(target=worker_fn, args=(structure, *worker_args))
+        process.start()
+        threads.append(process)
 
-    for key in service_config.get_config().keys():
-        value = getattr(service_instance, key.lower(), None)
-        log_info(f"{key.replace('_', ' ').capitalize()} -> {value}", debug)
-
-    log_info(".............................................", debug)
-
-
-def start_epoch(debug):
-    log_info("----------------------", debug)
-    log_info("Starting Epoch", debug)
-    return time.time()
-
-
-def end_epoch(debug, window_difference, t0):
-    t1 = time.time()
-    time_proc = "%.2f" % (t1 - t0 - window_difference)
-    time_total = "%.2f" % (t1 - t0)
-    log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, str(window_difference)), debug)
-    log_info("----------------------\n", debug)
-
-
-def wait_operation_thread(thread, debug):
-    """This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
-    A main thread is launched that spawns the needed threads to carry out the operations. The service waits for this
-    thread to finish.
-    Args:
-        thread (Python Thread): The thread that has spawned the basic threads that carry out operations as needed
-
-    """
-    if thread and thread.is_alive():
-        log_warning("Previous thread didn't finish and next poll should start now", debug)
-        log_warning("Going to wait until thread finishes before proceeding", debug)
-        delay_start = time.time()
-        thread.join()
-        delay_end = time.time()
-        log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), debug)
+    for process in threads:
+        process.join()
 
 
 # TESTED
@@ -467,3 +439,58 @@ def get_structure_usages(resources, structure, window_difference, window_delay, 
                                                              str(e), str(traceback.format_exc())), debug)
 
     return usages
+
+
+def host_info_request(host, container_info, valid_containers, rescaler_http_session, debug):
+    host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], rescaler_http_session, debug)
+    for container_name in host_containers:
+        if container_name in valid_containers:
+            container_info[container_name] = host_containers[container_name]
+
+
+def fill_container_dict(self, hosts_info, containers, rescaler_http_session, debug):
+    container_info = {}
+    threads = []
+    valid_containers = [c["name"] for c in containers]
+    for hostname in hosts_info:
+        host = hosts_info[hostname]
+        t = Thread(target=self.host_info_request, args=(host, container_info, valid_containers, rescaler_http_session, debug))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    return container_info
+
+
+def get_container_resources_dict(containers, rescaler_http_session, debug):
+    if not containers:
+        return {}
+
+    # Get all the different hosts of the containers
+    hosts_info = {}
+    for container in containers:
+        host = container["host"]
+        if host not in hosts_info:
+            hosts_info[host] = {}
+            hosts_info[host]["host_rescaler_ip"] = container["host_rescaler_ip"]
+            hosts_info[host]["host_rescaler_port"] = container["host_rescaler_port"]
+
+    # Retrieve all the containers on the host and persist the ones that we look for
+    container_info = fill_container_dict(hosts_info, containers, rescaler_http_session, debug)
+    container_resources_dict = {}
+    for container in containers:
+        container_name = container["name"]
+        if container_name not in container_info:
+            log_warning("Container info for {0} not found, check that it is really living in its supposed "
+                        "host '{1}', and that the host is alive and with the Node Scaler service running"
+                        .format(container_name, container["host"]), debug)
+            continue
+        # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
+        if "energy" in container["resources"]:
+            container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
+        container["resources"] = container_info[container_name]
+        container_resources_dict[container_name] = container
+
+    return container_resources_dict

@@ -26,81 +26,64 @@
 
 from __future__ import print_function
 
-import requests
-import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
+from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True}
-SERVICE_NAME = "energy_manager"
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 10, "DEBUG": True, "ACTIVE": True}
 
 
-class EnergyManager:
+class EnergyManager(Service):
 
     def __init__(self):
-        self.couchdb_handler = couchdb.CouchDBServer()
-        self.polling_frequency, self.debug = None, None
+        super().__init__("energy_manager", ConfigValidator(), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
+        self.polling_frequency, self.debug, self.active = None, None, None
+
+    def update_energy_limits(self, users, structures):
+        for user in users:
+            utils.log_info("Processing user {0}".format(user["name"]), self.debug)
+            max_energy = user["energy"]["max"]
+
+            # Add up all the shares
+            total_shares = 0
+            for structure in structures:
+                if structure["name"] in user["clusters"]:
+                    total_shares += structure["resources"]["energy"]["shares"]
+
+            total_user_energy = 0
+            for structure in structures:
+                if structure["name"] in user["clusters"]:
+                    percentage = structure["resources"]["energy"]["shares"] / total_shares
+                    limit_energy = max_energy * percentage
+                    current_energy = structure["resources"]["energy"]["max"]
+
+                    if current_energy != limit_energy:
+                        structure["resources"]["energy"]["max"] = limit_energy
+                        self.couchdb_handler.update_structure(structure)
+
+                    utils.log_info("Processed cluster {0} with an energy share of {1}% and {2} Watts".format(
+                        structure["name"], str("%.2f" % (100 * percentage)), limit_energy), self.debug)
+
+                    if "used" in structure["resources"]["energy"]:
+                        total_user_energy += structure["resources"]["energy"]["used"]
+
+            utils.log_info("Updated energy consumed by user {0}".format(user["name"]), self.debug)
+            user["energy"]["used"] = total_user_energy
+            self.couchdb_handler.update_user(user)
+
+    def work(self, ):
+        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
+        users = utils.get_users(self.couchdb_handler, self.debug)
+        if structures and users:
+            self.update_energy_limits(users, structures)
+        else:
+            utils.log_warning("No users or structures to process", self.debug)
+        return None
 
     def process(self, ):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-            # Get service info
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            # Print service info
-            utils.print_service_config(self, myConfig, self.debug)
-
-            # Remote database operation
-            users, structures = None, None
-            try:
-                structures = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-                users = self.couchdb_handler.get_users()
-            except requests.exceptions.HTTPError as e:
-                utils.log_error("Couldn't get users", self.debug)
-                utils.log_error(str(e), self.debug)
-                time.sleep(self.polling_frequency)
-                continue
-
-            for user in users:
-                utils.log_info("Processing user {0}".format(user["name"]), self.debug)
-                max_energy = user["energy"]["max"]
-
-                # Add up all the shares
-                total_shares = 0
-                for structure in structures:
-                    if structure["name"] in user["clusters"]:
-                        total_shares += structure["resources"]["energy"]["shares"]
-
-                total_user_energy = 0
-                for structure in structures:
-                    if structure["name"] in user["clusters"]:
-                        percentage = structure["resources"]["energy"]["shares"] / total_shares
-                        limit_energy = max_energy * percentage
-                        current_energy = structure["resources"]["energy"]["max"]
-
-                        if current_energy != limit_energy:
-                            structure["resources"]["energy"]["max"] = limit_energy
-                            self.couchdb_handler.update_structure(structure)
-
-                        utils.log_info("Processed cluster {0} with an energy share of {1}% and {2} Watts".format(
-                            structure["name"], str("%.2f" % (100 * percentage)), limit_energy), self.debug)
-
-                        if "used" in structure["resources"]["energy"]:
-                            total_user_energy += structure["resources"]["energy"]["used"]
-
-                utils.log_info("Updated energy consumed by user {0}".format(user["name"]), self.debug)
-                user["energy"]["used"] = total_user_energy
-                self.couchdb_handler.update_user(user)
-
-            utils.log_info(
-                "Epoch processed at {0}".format(utils.get_time_now_string()), self.debug)
-            time.sleep(self.polling_frequency)
+        self.run_loop()
 
 
 def main():

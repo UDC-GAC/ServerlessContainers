@@ -31,27 +31,27 @@ from collections import Counter
 from cachetools import LRUCache
 import time
 import traceback
-import logging
 
 from json_logic import jsonLogic
 from termcolor import colored
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
+
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
+from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
 MODELS_STRUCTURE = "host"
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"], "CPU_SHARES_PER_WATT": 5,
                          "ENERGY_MODEL_NAME": "polyreg_General", "ENERGY_MODEL_RELIABILITY": "low", "ACTIVE": True}
-SERVICE_NAME = "guardian"
 
 NOT_AVAILABLE_STRING = "n/a"
 
 
-class Guardian:
+class Guardian(Service):
     """
     Guardian class that implements the logic for this microservice. The Guardian takes care of matching the resource
     time series with a subset of rules to generate Events and then, matches the event against another subset of rules
@@ -61,8 +61,8 @@ class Guardian:
     """
 
     def __init__(self):
+        super().__init__("guardian", ConfigValidator(), CONFIG_DEFAULT_VALUES, sleep_attr="window_timelapse")
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
-        self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.pb_cache = LRUCache(maxsize=128)
@@ -500,8 +500,7 @@ class Guardian:
         """
         return structure["resources"]["energy"]["current"] != self.pb_cache.get(structure['_id'], -1)
 
-    @staticmethod
-    def power_is_near_power_budget(structure, usages, limits):
+    def power_is_near_power_budget(self, structure, usages, limits):
         """Check whether the current energy usage of a structure is close to its power budget.
 
         *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
@@ -515,12 +514,12 @@ class Guardian:
             (bool) If energy is close to PB or not
 
         """
-        power_margin = limits["energy"]["boundary"] / 100
+        power_margin = self.get_margin_from_boundary(limits["energy"]["boundary"], limits["energy"]["boundary_type"], structure["resources"]["energy"], "energy")
         power_budget = structure["resources"]["energy"]["current"]
         current_energy_usage = usages[utils.res_to_metric("energy")]
 
         # If power is within some reasonable limits we do nothing
-        if power_budget < current_energy_usage < power_budget * (1 + power_margin):
+        if power_budget < current_energy_usage < power_budget + power_margin:
             return True
 
         return False
@@ -1215,67 +1214,25 @@ class Guardian:
         for process in threads:
             process.join()
 
-    def invalid_conf(self, ):
-        for res in self.guardable_resources:
-            if res not in ["cpu", "mem", "disk_read", "disk_write", "net", "energy"]:
-                return True, "Resource to be guarded '{0}' is invalid".format(res)
+    def on_config_updated(self, service_config):
+        if self.energy_model_name != self.last_used_energy_model:
+            self.last_used_energy_model = self.energy_model_name
+            self.power_budget = {}
+            self.model_is_hw_aware = None
 
-        if self.structure_guarded not in ["container", "application"]:
-            return True, "Structure to be guarded '{0}' is invalid".format(self.structure_guarded)
-
-        for key, num in [("WINDOW_TIMELAPSE", self.window_timelapse), ("WINDOW_DELAY", self.window_delay), ("EVENT_TIMEOUT", self.event_timeout)]:
-            if num < 5:
-                return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
-        return False, ""
+    def work(self, ):
+        thread = None
+        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
+        if structures:
+            utils.log_info("{0} Structures to process, launching threads".format(len(structures)), self.debug)
+            thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
+            thread.start()
+        else:
+            utils.log_info("No structures to process", self.debug)
+        return thread
 
     def guard(self, ):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            # If power model has changed all the power budgets are restarted (we try to rescale using the new model)
-            if self.energy_model_name != self.last_used_energy_model:
-                self.last_used_energy_model = self.energy_model_name
-                self.power_budget = {}
-                self.model_is_hw_aware = None
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            ## CHECK INVALID CONFIG ##
-            invalid, message = self.invalid_conf()
-            if invalid:
-                utils.log_error(message, self.debug)
-                if self.window_timelapse < 5:
-                    utils.log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
-                    self.window_timelapse = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
-                time.sleep(self.window_timelapse)
-                utils.end_epoch(self.debug, self.window_timelapse, t0)
-                continue
-
-            thread = None
-            if self.active:
-                # Remote database operation
-                structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
-                if structures:
-                    utils.log_info("{0} Structures to process, launching threads".format(len(structures)), self.debug)
-                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
-                    thread.start()
-                else:
-                    utils.log_info("No structures to process", self.debug)
-            else:
-                utils.log_warning("Guardian is not activated", self.debug)
-
-            time.sleep(self.window_timelapse)
-
-            utils.wait_operation_thread(thread, self.debug)
-
-            utils.end_epoch(t0, self.window_timelapse, t0)
+        self.run_loop()
 
 
 def main():
