@@ -27,7 +27,6 @@
 from __future__ import print_function
 
 from threading import Thread
-import requests
 import time
 import traceback
 import logging
@@ -35,8 +34,9 @@ import logging
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
+from src.MyUtils.ConfigValidator import ConfigValidator
 
-CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "STRUCTURES_REFEEDED": ["applications"], "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True}
+CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 20, "STRUCTURES_REFEEDED": ["application"], "GENERATED_METRICS": ["cpu", "mem"], "DEBUG": True}
 
 SERVICE_NAME = "refeeder"
 
@@ -45,6 +45,7 @@ class ReFeeder:
     """ ReFeeder class that implements all the logic for this service"""
 
     def __init__(self):
+        self.config_validator = ConfigValidator()
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
@@ -105,14 +106,14 @@ class ReFeeder:
         applications = None
 
         ts = time.time()
-        if "applications" in self.structures_refeeded:
+        if "application" in self.structures_refeeded:
             applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             if applications:
                 utils.run_in_threads(applications, self.generate_application_metrics)
         utils.log_info("It took {0} seconds to refeed applications".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         ts = time.time()
-        if "users" in self.structures_refeeded:
+        if "user" in self.structures_refeeded:
             if not applications:
                 applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             users = self.couchdb_handler.get_users()
@@ -138,15 +139,20 @@ class ReFeeder:
 
             utils.print_service_config(self, myConfig, self.debug)
 
+            invalid, message = self.config_validator.invalid_conf(myConfig)
+            if invalid:
+                utils.log_error(message, self.debug)
+
+            if not self.active:
+                utils.log_warning("Refeeder is not activated", self.debug)
+
             thread = None
-            if self.active:
+            if self.active and not invalid:
                 if self.structures_refeeded:
                     thread = Thread(target=self.refeed_thread, args=())
                     thread.start()
                 else:
                     utils.log_warning("No structures to refeed, check STRUCTURES_REFEEDED", self.debug)
-            else:
-                utils.log_warning("Refeeder is not activated", self.debug)
 
             time.sleep(self.window_timelapse)
 

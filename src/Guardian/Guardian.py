@@ -40,6 +40,7 @@ import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
+from src.MyUtils.ConfigValidator import ConfigValidator
 
 MODELS_STRUCTURE = "host"
 
@@ -61,6 +62,7 @@ class Guardian:
     """
 
     def __init__(self):
+        self.config_validator = ConfigValidator()
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
@@ -1214,19 +1216,6 @@ class Guardian:
         for process in threads:
             process.join()
 
-    def invalid_conf(self, ):
-        for res in self.guardable_resources:
-            if res not in ["cpu", "mem", "disk_read", "disk_write", "net", "energy"]:
-                return True, "Resource to be guarded '{0}' is invalid".format(res)
-
-        if self.structure_guarded not in ["container", "application"]:
-            return True, "Structure to be guarded '{0}' is invalid".format(self.structure_guarded)
-
-        for key, num in [("WINDOW_TIMELAPSE", self.window_timelapse), ("WINDOW_DELAY", self.window_delay), ("EVENT_TIMEOUT", self.event_timeout)]:
-            if num < 5:
-                return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
-        return False, ""
-
     def guard(self, ):
         myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
@@ -1246,19 +1235,15 @@ class Guardian:
 
             utils.print_service_config(self, myConfig, self.debug)
 
-            ## CHECK INVALID CONFIG ##
-            invalid, message = self.invalid_conf()
+            invalid, message = self.config_validator.invalid_conf(myConfig)
             if invalid:
                 utils.log_error(message, self.debug)
-                if self.window_timelapse < 5:
-                    utils.log_error("Window difference is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]), self.debug)
-                    self.window_timelapse = CONFIG_DEFAULT_VALUES["WINDOW_TIMELAPSE"]
-                time.sleep(self.window_timelapse)
-                utils.end_epoch(self.debug, self.window_timelapse, t0)
-                continue
+
+            if not self.active:
+                utils.log_warning("Guardian is not activated", self.debug)
 
             thread = None
-            if self.active:
+            if self.active and not invalid:
                 # Remote database operation
                 structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
                 if structures:
@@ -1267,8 +1252,6 @@ class Guardian:
                     thread.start()
                 else:
                     utils.log_info("No structures to process", self.debug)
-            else:
-                utils.log_warning("Guardian is not activated", self.debug)
 
             time.sleep(self.window_timelapse)
 

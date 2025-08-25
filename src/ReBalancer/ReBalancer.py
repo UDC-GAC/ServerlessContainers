@@ -36,6 +36,7 @@ import src.StateDatabase.opentsdb as bdwatchdog
 import src.ReBalancer.ContainerReBalancer as containerReBalancer
 import src.ReBalancer.ApplicationReBalancer as applicationReBalancer
 import src.ReBalancer.UserReBalancer as userReBalancer
+from src.MyUtils.ConfigValidator import ConfigValidator
 
 CONFIG_DEFAULT_VALUES = {
     "WINDOW_DELAY": 10,
@@ -43,8 +44,8 @@ CONFIG_DEFAULT_VALUES = {
     "DIFF_PERCENTAGE": 0.40,
     "STOLEN_PERCENTAGE": 0.40,
     "RESOURCES_BALANCED": ["cpu"],
-    "STRUCTURES_BALANCED": ["containers"],
-    "CONTAINERS_SCOPE": "applications",
+    "STRUCTURES_BALANCED": ["container"],
+    "CONTAINERS_SCOPE": "application",
     "BALANCING_POLICY": "rules",
     "BALANCING_METHOD": "pair_swapping",
     "DEBUG": True
@@ -57,6 +58,7 @@ class ReBalancer:
     """ ReBalancer class that implements all the logic for this service"""
 
     def __init__(self):
+        self.config_validator = ConfigValidator()
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.config = utils.MyConfig(CONFIG_DEFAULT_VALUES)
@@ -68,21 +70,13 @@ class ReBalancer:
         self.balancing_policy, self.balancing_method, self.debug = None, None, None
 
     def invalid_conf(self, ):
-        for res in self.resources_balanced:
-            if res not in {"cpu", "mem", "disk_read", "disk_write", "net", "energy"}:
-                return True, "Resource to be balanced '{0}' is invalid".format(res)
-
-        for structure in self.structures_balanced:
-            if structure not in {"containers", "applications", "users"}:
-                return True, "Structure to be balanced '{0}' is invalid".format(structure)
-
-        if self.containers_scope not in {"applications", "hosts"}:
+        if self.containers_scope not in {"application", "host"}:
             return True, "Containers scope '{0}' to perform container balancing is invalid".format(self.containers_scope)
 
         if self.balancing_policy not in {"rules", "thresholds"}:
             return True, "Balancing policy '{0}' is invalid".format(self.balancing_policy)
 
-        return False, ""
+        return self.config_validator.invalid_conf(self.config)
 
     def rebalance(self, ):
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
@@ -100,13 +94,13 @@ class ReBalancer:
 
             # Run rebalancers from upper to lower level of granularity
             if not invalid:
-                if "users" in self.structures_balanced:
+                if "user" in self.structures_balanced:
                     self.userReBalancer.rebalance_users()
 
-                if "applications" in self.structures_balanced:
+                if "application" in self.structures_balanced:
                     self.applicationReBalancer.rebalance_applications()
 
-                if "containers" in self.structures_balanced or "hosts" in self.structures_balanced:
+                if "container" in self.structures_balanced:
                     self.containerRebalancer.rebalance_containers()
 
             time.sleep(self.window_timelapse)

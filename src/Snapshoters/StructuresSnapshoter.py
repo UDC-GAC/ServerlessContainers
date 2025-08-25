@@ -34,14 +34,16 @@ import logging
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchDB
+from src.MyUtils.ConfigValidator import ConfigValidator
 
-CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "STRUCTURES_PERSISTED": ["applications"], "RESOURCES_PERSISTED": ["cpu", "mem"], "DEBUG": True, "ACTIVE": True}
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "STRUCTURES_PERSISTED": ["application"], "RESOURCES_PERSISTED": ["cpu", "mem"], "DEBUG": True, "ACTIVE": True}
 SERVICE_NAME = "structures_snapshoter"
 
 
 class StructuresSnapshoter:
 
     def __init__(self):
+        self.config_validator = ConfigValidator(min_frequency=3)
         self.couchdb_handler = couchDB.CouchDBServer()
         self.rescaler_http_session = requests.Session()
         self.structure_tracker, self.user_tracker = [], []
@@ -152,7 +154,7 @@ class StructuresSnapshoter:
 
         # Update applications if information is available
         ts = time.time()
-        if "applications" in self.structures_persisted:
+        if "application" in self.structures_persisted:
             applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             if applications:
                 utils.run_in_threads(applications, self.update_application, container_resources_dict)
@@ -160,7 +162,7 @@ class StructuresSnapshoter:
 
         # Update users if information is available
         ts = time.time()
-        if "users" in self.structures_persisted:
+        if "user" in self.structures_persisted:
             if not applications:
                 applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             users = self.couchdb_handler.get_users()
@@ -176,12 +178,6 @@ class StructuresSnapshoter:
         self.user_tracker.clear()
         utils.log_info("It took {0} seconds to persist updated structures in StateDatabase".format(str("%.2f" % (time.time() - ts))), self.debug)
 
-    def invalid_conf(self, ):
-        for key, num in [("POLLING_FREQUENCY", self.polling_frequency)]:
-            if num < 3:
-                return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
-        return False, ""
-
     def persist(self,):
         myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
         logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
@@ -189,12 +185,13 @@ class StructuresSnapshoter:
         while True:
 
             utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
+
             t0 = utils.start_epoch(self.debug)
 
             utils.print_service_config(self, myConfig, self.debug)
 
             # Check invalid configuration
-            invalid, message = self.invalid_conf()
+            invalid, message = self.config_validator.invalid_conf(myConfig)
             if invalid:
                 utils.log_error(message, self.debug)
 

@@ -36,6 +36,7 @@ import logging
 
 from requests import HTTPError
 from src.Guardian.Guardian import Guardian
+from src.MyUtils.ConfigValidator import ConfigValidator
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
@@ -95,6 +96,7 @@ class Scaler:
     """
 
     def __init__(self):
+        self.config_validator = ConfigValidator(min_frequency=3)
         self.couchdb_handler = couchdb.CouchDBServer()
         self.rescaler_http_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
@@ -295,12 +297,8 @@ class Scaler:
         for request in fresh_requests:
             structure = request["structure"]  # The structure name (string), acting as an id
             action = request["action"]  # The action name (string)
-            if structure not in structure_requests_dict:
-                structure_requests_dict[structure] = {}
-
-            if action not in structure_requests_dict[structure]:
-                structure_requests_dict[structure][action] = request
-            else:
+            stored_request = structure_requests_dict.get(structure, {}).get(action,  None)
+            if stored_request:
                 # A previous request was found for this structure, remove old one and leave the newer one
                 stored_request = structure_requests_dict[structure][action]
 
@@ -320,6 +318,8 @@ class Scaler:
                     structure_requests_dict[structure][action] = request
 
                 duplicated_counter += 1
+            else:
+                structure_requests_dict[structure] = {action: request}
 
         self.couchdb_handler.delete_requests(purged_requests)
 
@@ -842,13 +842,6 @@ class Scaler:
     ####################################################################################################################
     # SERVICE METHODS
     ####################################################################################################################
-    def invalid_conf(self, ):
-        # TODO This code is duplicated on the structures and database snapshoters
-        for key, num in [("POLLING_FREQUENCY", self.polling_frequency), ("REQUEST_TIMEOUT", self.request_timeout)]:
-            if num < 5:
-                return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
-        return False, ""
-
     def get_cpu_list(self, cpu_num_string):
         # Translate something like '2-4,7' to [2,3,7]
         cpu_list = list()
@@ -985,21 +978,14 @@ class Scaler:
 
             utils.print_service_config(self, myConfig, self.debug)
 
-            ## CHECK INVALID CONFIG ##
-            # TODO This code is duplicated on the structures and database snapshoters
-            invalid, message = self.invalid_conf()
+            invalid, message = self.config_validator.invalid_conf(myConfig)
             if invalid:
                 utils.log_error(message, self.debug)
-                time.sleep(self.polling_frequency)
-                if self.polling_frequency < 5:
-                    utils.log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), self.debug)
-                    self.polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
 
-                utils.log_info("----------------------\n", self.debug)
-                time.sleep(self.polling_frequency)
-                continue
+            if not self.active:
+                utils.log_warning("Scaler is not activated", self.debug)
 
-            if self.active:
+            if self.active and not invalid:
                 # Get the container structures and their resource information as such data is going to be needed
                 containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
                 try:
@@ -1060,9 +1046,6 @@ class Scaler:
 
                 t1 = time.time()
                 utils.log_info("Epoch processed in {0} seconds".format(str("%.2f" % (t1 - t0))), self.debug)
-
-            else:
-                utils.log_warning("Scaler service is not activated", self.debug)
 
             utils.log_info("----------------------\n", self.debug)
             time.sleep(self.polling_frequency)

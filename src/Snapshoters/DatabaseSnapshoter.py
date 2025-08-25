@@ -34,10 +34,12 @@ import logging
 
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as opentsdb
+from src.MyUtils.ConfigValidator import ConfigValidator
 
 
 from src.MyUtils.MyUtils import MyConfig, log_error, get_service, beat, log_info, log_warning, LOGGING_FORMAT, LOGGING_DATEFMT
 
+config_validator = ConfigValidator(min_frequency=3)
 db_handler = couchdb.CouchDBServer()
 opentsdb_handler = opentsdb.OpenTSDBServer()
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "DEBUG": True, "DOCUMENTS_PERSISTED": ["limits", "structures", "users", "configs"] ,"ACTIVE": True}
@@ -140,6 +142,7 @@ funct_map = {"users": get_users,
              "structures": get_structures,
              "configs": get_configs}
 
+
 def get_data(funct):
     docs = list()
     try:
@@ -148,6 +151,7 @@ def get_data(funct):
         # An error might have been thrown because database was recently updated or created
         log_warning("Couldn't retrieve {0} info, error {1}.".format(funct, str(e)), debug)
     return docs
+
 
 def send_data(docs):
     num_sent_docs = 0
@@ -160,8 +164,8 @@ def send_data(docs):
             num_sent_docs = len(docs)
     return num_sent_docs
 
-def persist_docs(funct):
 
+def persist_docs(funct):
     t0 = time.time()
     docs = get_data(funct)
     t1 = time.time()
@@ -174,13 +178,6 @@ def persist_docs(funct):
             log_info("It took {0} seconds to send {1} info".format(str("%.2f" % (t2 - t1)),funct), debug)
             log_info("Post was done with {0} documents of '{1}'".format(str(num_docs), funct), debug)
 
-
-def invalid_conf(config):
-    # TODO THis code is duplicated on the structures and database snapshoters
-    for key, num in [("POLLING_FREQUENCY",config.get_value("POLLING_FREQUENCY"))]:
-        if num < 3:
-            return True, "Configuration item '{0}' with a value of '{1}' is likely invalid".format(key, num)
-    return False, ""
 
 def persist():
     logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO, format=LOGGING_FORMAT, datefmt=LOGGING_DATEFMT)
@@ -213,25 +210,16 @@ def persist():
         log_info("Documents to be persisted are -> {0}".format(documents_persisted), debug)
         log_info(".............................................", debug)
 
-        ## CHECK INVALID CONFIG ##
-        # TODO THis code is duplicated on the structures and database snapshoters
-        invalid, message = invalid_conf(myConfig)
+        invalid, message = config_validator.invalid_conf(myConfig)
         if invalid:
             log_error(message, debug)
-            time.sleep(polling_frequency)
-            if polling_frequency < 4:
-                log_error("Polling frequency is too short, replacing with DEFAULT value '{0}'".format(CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]), debug)
-                polling_frequency = CONFIG_DEFAULT_VALUES["POLLING_FREQUENCY"]
 
-            log_info("----------------------\n", debug)
-            time.sleep(polling_frequency)
-            continue
+        if not SERVICE_IS_ACTIVATED:
+            log_warning("Database snapshoter is not activated", debug)
 
-        if SERVICE_IS_ACTIVATED:
+        if SERVICE_IS_ACTIVATED and not invalid:
             for docType in documents_persisted:
                 persist_docs(docType)
-        else:
-            log_warning("Database snapshoter is not activated, will not do anything", debug)
 
         t1 = time.time()
         log_info("Epoch processed in {0} seconds ".format("%.2f" % (t1 - t0)), debug)
