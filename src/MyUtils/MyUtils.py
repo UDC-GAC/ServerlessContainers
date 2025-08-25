@@ -298,6 +298,12 @@ def print_service_config(service_instance, service_config, debug):
         log_info(f"{key.replace('_', ' ').capitalize()} -> {value}", debug)
 
     log_info(".............................................", debug)
+def get_users(db_handler, debug):
+    try:
+        return db_handler.get_users()
+    except (requests.exceptions.HTTPError, ValueError):
+        log_warning("Couldn't retrieve users info.", debug=debug)
+        return None
 
 
 def start_epoch(debug):

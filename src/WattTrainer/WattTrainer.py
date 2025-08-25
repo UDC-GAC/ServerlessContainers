@@ -30,12 +30,13 @@ from threading import Thread
 import requests
 import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
-import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
+from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
+
 
 BDWATCHDOG_METRICS = ['proc.cpu.user', 'proc.cpu.kernel', 'structure.energy.usage']
 
@@ -49,15 +50,13 @@ CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "USAGE_THRE
                          "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"],
                          "MODELS_TO_TRAIN": ["all"], "DEBUG": True, "ACTIVE": True}
 
-SERVICE_NAME = "watt_trainer"
 
-
-class WattTrainer:
+class WattTrainer(Service):
     """ WattTrainer class that implements all the logic for this service"""
 
     def __init__(self):
+        super().__init__("watt_trainer", ConfigValidator(), CONFIG_DEFAULT_VALUES, sleep_attr="window_timelapse")
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
-        self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
         self.window_timelapse, self.window_delay, self.usage_threshold, self.generated_metrics = None, None, None, None
@@ -150,41 +149,23 @@ class WattTrainer:
         # If no changes we return the list already used in previous iteration
         return self.models_to_train
 
-    def train(self):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
+    def work(self, ):
+        thread = None
+        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+        if len(self.models_to_train) == 0:
+            # Models to train couldn't be checked
+            utils.log_info("No models to train", self.debug)
+        elif not containers:
+            # As no container info is available, models can't be trained
+            utils.log_info("No structures to process", self.debug)
+        else:
+            thread = Thread(target=self.train_thread, args=())
+            thread.start()
+            utils.log_info("Model trained", self.debug)
+        return thread
 
-        while True:
-
-            utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-
-            t0 = utils.start_epoch(self.debug)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            thread = None
-            if self.active:
-                # Remote database operation
-                containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-                if len(self.models_to_train) == 0:
-                    # Models to train couldn't be checked
-                    utils.log_info("No models to train", self.debug)
-                elif not containers:
-                    # As no container info is available, models can't be trained
-                    utils.log_info("No structures to process", self.debug)
-                else:
-                    thread = Thread(target=self.train_thread, args=())
-                    thread.start()
-                    utils.log_info("Model trained", self.debug)
-            else:
-                utils.log_warning("WattTrainer is not activated", self.debug)
-
-            time.sleep(self.window_timelapse)
-
-            utils.wait_operation_thread(thread, self.debug)
-
-            utils.end_epoch(self.debug, self.window_timelapse, t0)
+    def train(self, ):
+        self.run_loop()
 
 
 def main():
