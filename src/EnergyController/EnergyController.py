@@ -4,28 +4,29 @@ from __future__ import print_function
 from threading import Thread, Lock
 import time
 import traceback
-import logging
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
 import src.StateDatabase.opentsdb as bdwatchdog
 import src.WattWizard.WattWizardUtils as wattwizard
 import src.EnergyController.CacheUtils as cache_utils
+from src.MyUtils.ConfigValidator import ConfigValidator
+from src.Service.Service import Service
 
-CONFIG_DEFAULT_VALUES = {"CONTROL_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
+CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
                          "DEBUG": True, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
                          "POWER_MODEL": "polyreg_General", "ACTIVE": True}
 
-SERVICE_NAME = "energy_controller"
 
-class EnergyController:
+class EnergyController(Service):
 
     def __init__(self):
+        super().__init__("energy_controller", ConfigValidator(min_delay=0), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
-        self.control_frequency, self.window_timelapse, self.window_delay, self.debug = None, None, None, None
+        self.polling_frequency, self.window_timelapse, self.window_delay, self.debug = None, None, None, None
         self.structure_guarded, self.active, self.control_policy, self.power_model = None, None, None, None
         self.event_timeout = None
         self.events_cache = cache_utils.EventsCache()
@@ -197,7 +198,6 @@ class EnergyController:
         down_events = dir_events if direction == "down" else op_events
         utils.log_info(f"@{structure['name']} EVENTS: DOWN {down_events} | UP {up_events}", self.debug)
 
-
     def compute_power_scaling(self, structure, limits, usages):
         structure_id = structure["_id"]
         U_usage, P_usage = usages[utils.res_to_metric("cpu")], usages[utils.res_to_metric("energy")]
@@ -323,7 +323,6 @@ class EnergyController:
         for capping_method, structures in capping_groups:
             self.run_in_threads("power_cap", structures, self.structure_power_cap, [capping_method])
 
-
     def validate(self, structures, validation_steps):
         valid_structures = structures
         if valid_structures:
@@ -350,56 +349,33 @@ class EnergyController:
         ]
         return self.validate(structures, validation_steps)
 
-    def invalid_conf(self, ):
-        if self.structure_guarded not in ["container", "application"]:
-            return True, "Structure to be guarded '{0}' is invalid".format(self.structure_guarded)
-
+    def invalid_conf(self, service_config):
         if self.control_policy not in ["ppe-proportional", "model-boosted"]:
             return True, "Control policy '{0}' is invalid".format(self.control_policy)
 
-        return False, ""
+        return self.config_validator.invalid_conf(service_config)
+
+    def work(self, ):
+        # Remote database operation
+        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
+        # Get all the structures supported by this controller (i.e. containers)
+        supported_structures = self.get_supported_structures(structures)
+        # Get the structures that have energy set to guarded
+        thread = None
+        guarded_structures = self.get_guarded_structures(supported_structures)
+        if guarded_structures:
+            utils.log_info("{0} Structures to process, launching threads".format(len(guarded_structures)), self.debug)
+            thread = Thread(name="control_structures", target=self.control_structures, args=(guarded_structures, supported_structures,))
+            thread.start()
+        else:
+            utils.log_info("No valid structures to process", self.debug)
+        return thread
+
+    def compute_sleep_time(self):
+        return self.polling_frequency - (time.time() % self.polling_frequency)
 
     def control(self, ):
-        myConfig = utils.MyConfig(CONFIG_DEFAULT_VALUES)
-        logging.basicConfig(filename=SERVICE_NAME + '.log', level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
-
-        while True:
-            t0 = utils.start_epoch(self.debug)
-
-            #utils.update_service_config(self, SERVICE_NAME, myConfig, self.couchdb_handler)
-            for key, value in myConfig.get_config().items():
-                setattr(self, key.lower(), value)
-
-            utils.print_service_config(self, myConfig, self.debug)
-
-            ## CHECK INVALID CONFIG ##
-            invalid, message = self.invalid_conf()
-            if invalid:
-                utils.log_error(message, self.debug)
-
-            thread = None
-            if not invalid and self.active:
-                # Remote database operation
-                structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
-                # Get all the structures supported by this controller (i.e. containers)
-                supported_structures = self.get_supported_structures(structures)
-                # Get the structures that have energy set to guarded
-                guarded_structures = self.get_guarded_structures(supported_structures)
-                if guarded_structures:
-                    utils.log_info("{0} Structures to process, launching threads".format(len(guarded_structures)), self.debug)
-                    thread = Thread(name="control_structures", target=self.control_structures, args=(guarded_structures, supported_structures,))
-                    thread.start()
-                else:
-                    utils.log_info("No valid structures to process", self.debug)
-            else:
-                utils.log_warning("Energy Controller is not activated", self.debug)
-
-            sleep_time = self.control_frequency - (time.time() % self.control_frequency)
-            time.sleep(sleep_time)
-
-            utils.wait_operation_thread(thread, self.debug)
-            utils.end_epoch(self.debug, sleep_time, t0)
+        self.run_loop()
 
 
 def main():
