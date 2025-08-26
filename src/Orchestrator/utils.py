@@ -26,7 +26,7 @@
 from flask import g
 import os
 
-import src.StateDatabase.couchdb as couchDB
+import src.StateDatabase.couchdb as couchdb
 
 MAX_TRIES = 10
 BACK_OFF_TIME_MS = 500
@@ -40,5 +40,5 @@ def get_db():
     """Opens a new database connection if there is none yet for the current application context."""
     if not hasattr(g, 'db_handler'):
         #g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
-        g.db_handler = couchDB.CouchDBServer()
+        g.db_handler = couchdb.CouchDBServer()
     return g.db_handler

@@ -30,11 +30,9 @@ from flask import jsonify
 from flask import request
 import time
 
-import src.Scaler.Scaler
-from src.MyUtils import MyUtils
-from src.MyUtils.MyUtils import valid_resource, get_host_containers
+import src.MyUtils.MyUtils as utils
 from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES
-from src.Scaler import Scaler
+from src.Scaler.Scaler import set_container_resources, CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 
 structure_routes = Blueprint('structures', __name__)
 
@@ -84,7 +82,7 @@ def get_structure_parameter_of_resource(structure_name, resource, parameter):
 
 @structure_routes.route("/structure/<structure_name>/resources/<resource>/<parameter>", methods=['PUT'])
 def set_structure_parameter_of_resource(structure_name, resource, parameter):
-    if not valid_resource(resource):
+    if not utils.valid_resource(resource):
         return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
 
     # Energy is a special case where 'current' value may be modified in order to experiment with dynamic power_budgets
@@ -181,7 +179,7 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
         return abort(400, {"message": "Structure '{0}' has no resources to configure".format(structure_name)})
     else:
         for resource in resources:
-            if not valid_resource(resource):
+            if not utils.valid_resource(resource):
                 return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
             if resource not in structure["resources"]:
                 return abort(400, {"message": "Resource '{0}' is missing in structure {1}".format(resource, structure_name)})
@@ -258,7 +256,7 @@ def get_structure_resource_limits(structure_name, resource):
 
 @structure_routes.route("/structure/<structure_name>/limits/<resource>/boundary", methods=['PUT'])
 def set_structure_resource_limit_boundary(structure_name, resource):
-    if not valid_resource(resource):
+    if not utils.valid_resource(resource):
         return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
 
     try:
@@ -299,7 +297,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
 # TODO: Merge with set_structure_resource_limit_boundary
 @structure_routes.route("/structure/<structure_name>/limits/<resource>/boundary_type", methods=['PUT'])
 def set_structure_resource_limit_boundary_type(structure_name, resource):
-    if not valid_resource(resource):
+    if not utils.valid_resource(resource):
         return abort(400, {"message": "Resource '{0}' is not valid".format(resource)})
 
     try:
@@ -342,7 +340,7 @@ def disable_scaler(scaler_service):
     get_db().update_service(scaler_service)
 
     # Wait a little bit, half the polling time of the Scaler
-    polling_freq = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "POLLING_FREQUENCY")
+    polling_freq = scaler_service["config"].get("POLLING_FREQUENCY", SCALER_CONFIG_DEFAULTS["POLLING_FREQUENCY"])
     time.sleep(int(polling_freq))
 
 
@@ -441,8 +439,8 @@ def desubscribe_container(structure_name):
             desubscribe_container_from_app(structure_name, app["name"])
 
     # Disable the Scaler as we will modify the core mapping of a host
-    scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
-    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "ACTIVE")
+    scaler_service = get_db().get_service("scaler")
+    previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
     if previous_state:
         disable_scaler(scaler_service)
 
@@ -661,7 +659,7 @@ def subscribe_container(structure_name):
 
     # Check that its supposed host exists and that it reports this container
     check_structure_exists(container["host"], "host", True)
-    host_containers = get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
+    host_containers = utils.get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
     if container["name"] not in host_containers:
         return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
 
@@ -699,8 +697,8 @@ def subscribe_container(structure_name):
     limits["name"] = container["name"]
 
     # Disable the Scaler as we will modify the core mapping of a host
-    scaler_service = get_db().get_service(src.Scaler.Scaler.SERVICE_NAME)
-    previous_state = MyUtils.get_config_value(scaler_service["config"], src.Scaler.Scaler.CONFIG_DEFAULT_VALUES, "ACTIVE")
+    scaler_service = get_db().get_service("scaler")
+    previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
     if previous_state:
         disable_scaler(scaler_service)
 
@@ -708,7 +706,7 @@ def subscribe_container(structure_name):
     host = get_db().get_structure(container["host"])
 
     resource_dict = map_container_to_host_resources(container, host)
-    Scaler.set_container_resources(node_scaler_session, container, resource_dict, True)
+    set_container_resources(node_scaler_session, container, resource_dict, True)
 
     get_db().add_structure(container)
     get_db().update_structure(host)
@@ -744,7 +742,7 @@ def subscribe_host(structure_name):
 
     # Check that this supposed host exists and has its node scaler up
     try:
-        host_containers = get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        host_containers = utils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
         if host_containers is None:
             raise RuntimeError()
     except Exception:

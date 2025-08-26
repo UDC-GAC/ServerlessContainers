@@ -448,13 +448,13 @@ def host_info_request(host, container_info, valid_containers, rescaler_http_sess
             container_info[container_name] = host_containers[container_name]
 
 
-def fill_container_dict(self, hosts_info, containers, rescaler_http_session, debug):
+def fill_container_dict(hosts_info, containers, rescaler_http_session, debug):
     container_info = {}
     threads = []
     valid_containers = [c["name"] for c in containers]
     for hostname in hosts_info:
         host = hosts_info[hostname]
-        t = Thread(target=self.host_info_request, args=(host, container_info, valid_containers, rescaler_http_session, debug))
+        t = Thread(target=host_info_request, args=(host, container_info, valid_containers, rescaler_http_session, debug))
         t.start()
         threads.append(t)
 
@@ -490,7 +490,7 @@ def get_container_resources_dict(containers, rescaler_http_session, debug):
         # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
         if "energy" in container["resources"]:
             container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
-        container["resources"] = container_info[container_name]
-        container_resources_dict[container_name] = container
+        container_resources_dict[container_name] = dict(container)
+        container_resources_dict[container_name]["resources"] = container_info[container_name]
 
     return container_resources_dict
