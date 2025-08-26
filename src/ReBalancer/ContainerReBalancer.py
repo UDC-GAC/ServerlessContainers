@@ -603,8 +603,8 @@ class ContainerRebalancer:
             utils.log_error("Couldn't get structures", self.__debug)
             return
 
-        # APPS REBALANCING: Balancing the resources between containers of the same application
-        if "application" in self.__config.get_value("CONTAINERS_SCOPE"):
+        # APPLICATION SCOPE: Balancing the resources between containers of the same application
+        if self.__config.get_value("CONTAINERS_SCOPE") == "application":
 
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
             rebalanceable_apps = filter_rebalanceable_apps(applications, "container", self.__couchdb_handler)
@@ -628,8 +628,8 @@ class ContainerRebalancer:
                 else:
                     utils.log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.__debug)
 
-        # HOSTS REBALANCING: Balancing the resources between container on the same host
-        if "host" in self.__config.get_value("CONTAINERS_SCOPE"):
+        # HOST SCOPE: Balancing the resources between containers on the same host
+        if self.__config.get_value("CONTAINERS_SCOPE") == "host":
 
             # Get hosts' containers
             host_containers = dict()
