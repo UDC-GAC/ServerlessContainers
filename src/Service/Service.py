@@ -39,13 +39,15 @@ class Service:
         """
         raise NotImplementedError
 
-    # --------- Auxiliar functions ---------
-
-    def _get_sleep_time(self, ):
+    def compute_sleep_time(self):
+        """Compute the time to sleep between iterations. By default, it just returns the value of the attribute
+        indicated by self._sleep_attr."""
         val = getattr(self, self._sleep_attr, None)
         if val is None:
             raise AttributeError(f"Sleep attribute '{self._sleep_attr}' not found on {self}")
         return val
+
+    # --------- Auxiliar functions ---------
 
     def _update_config(self, service_config):
         # Get service info
@@ -129,7 +131,7 @@ class Service:
                 thread = self.work()
 
             # Sleep
-            sleep_time = self._get_sleep_time()
+            sleep_time = self.compute_sleep_time()
             time.sleep(sleep_time)
 
             # Wait for thread to finish if exists
