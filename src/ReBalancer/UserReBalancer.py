@@ -26,6 +26,7 @@
 import requests
 
 import src.MyUtils.MyUtils as utils
+from src.ReBalancer.Utils import pair_swapping
 
 
 class UserRebalancer:
@@ -37,47 +38,6 @@ class UserRebalancer:
     def set_config(self, config):
         self.__config = config
 
-    def __inter_user_rebalancing(self, users):
-        for resource in self.__config.get_value("RESOURCES_BALANCED"):
-            donors, receivers = [], []
-            for user in users:
-                diff = user[resource]["max"] - user[resource]["usage"]
-                if diff > self.__config.get_value("DIFF_PERCENTAGE") * user[resource]["max"]:
-                    donors.append(user)
-                else:
-                    receivers.append(user)
-
-            if not receivers:
-                utils.log_info("No user to receive resource {0} shares".format(resource), self.__debug)
-                return
-
-            # Order the users from lower to upper resource limit
-            receivers = sorted(receivers, key=lambda c: c[resource]["max"])
-
-            shuffling_tuples = list()
-            for user in donors:
-                diff = user["energy"]["max"] - user["energy"]["used"]
-                stolen_amount = self.__config.get_value("STOLEN_PERCENTAGE") * diff
-                shuffling_tuples.append((user, stolen_amount))
-            shuffling_tuples = sorted(shuffling_tuples, key=lambda c: c[1])
-
-            # Give the resources to the other users
-            for receiver in receivers:
-                if shuffling_tuples:
-                    donor, amount_to_scale = shuffling_tuples.pop(0)
-                else:
-                    utils.log_info("No more donors, user {0} left out".format(receiver["name"]), self.__debug)
-                    continue
-
-                donor[resource]["max"] -= amount_to_scale
-                receiver[resource]["max"] += amount_to_scale
-
-                utils.update_user(donor, self.__couchdb_handler, self.__debug)
-                utils.update_user(receiver, self.__couchdb_handler, self.__debug)
-
-                utils.log_info("Resource {0} swap between {1} (donor) and {2} (receiver) with amount {3}".format(
-                    resource, donor["name"], receiver["name"], amount_to_scale), self.__debug)
-
     def rebalance_users(self):
         self.__debug = self.__config.get_value("DEBUG")
 
@@ -87,10 +47,11 @@ class UserRebalancer:
         try:
             users = self.__couchdb_handler.get_users()
         except requests.exceptions.HTTPError as e:
-            utils.log_error("Couldn't get users and/or applications", self.__debug)
+            utils.log_error("Couldn't get users", self.__debug)
             utils.log_error(str(e), self.__debug)
             return
 
-        self.__inter_user_rebalancing(users)
+        pair_swapping(users, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
+                      self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
 
         utils.log_info("_______________\n", self.__debug)
