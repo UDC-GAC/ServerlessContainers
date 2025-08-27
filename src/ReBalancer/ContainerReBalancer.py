@@ -23,9 +23,6 @@
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
-import time
-import traceback
-
 from json_logic import jsonLogic
 
 import src.MyUtils.MyUtils as utils
@@ -49,6 +46,13 @@ class ContainerRebalancer:
         number_of_slices = int(total_amount // slice_amount)
         last_slice_amount = total_amount % slice_amount
         return [slice_amount] * number_of_slices + ([last_slice_amount] if last_slice_amount > 0 else [])
+
+    @staticmethod
+    def __get_donor_slice_key(container, resource):
+        key = container["host"]
+        if resource == "disk":
+            key += "_{0}".format(container["resources"]["disk"]["name"])
+        return key
 
     def __print_donors_and_receivers(self, donors, receivers):
         utils.log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.__debug)
@@ -115,7 +119,7 @@ class ContainerRebalancer:
 
         return filtered_structures["donors"], filtered_structures["receivers"]
 
-    def split_structures_using_config(self, structures, resource):
+    def split_structures_using_thresholds(self, structures, resource):
         filtered_structures = {"donors": list(), "receivers": list()}
         diff_percentage = self.__config.get_value("DIFF_PERCENTAGE")
         for structure in structures:
@@ -128,18 +132,19 @@ class ContainerRebalancer:
                 if role == "donors":
                     diff = _max - _current
                     margin = diff_percentage * _max
-                    utils.log_info(f"Checking if structure {structure['name']} gap between max ({_max}) and "
-                                   f"current ({_current}) {resource} limits is higher than {diff_percentage} * {_max}", self.__debug)
+                    utils.log_info(f"If max ({_max}) - current ({_current}) < {diff_percentage} * max ({_max}) "
+                                   f"-> structure {structure['name']} is a donor", self.__debug)
 
                 # If usage its near its current it is a receiver -> (current - usage) < diff_percentage * current
                 if role == "receivers":
                     diff = _current - _usage
                     margin = diff_percentage * _current
-                    utils.log_info(f"Checking if structure {structure['name']} gap between current ({_current}) "
-                                   f"and usage ({_usage}) {resource} limits is lower than {diff_percentage} * {_current}", self.__debug)
+                    utils.log_info(f"If current ({_current}) - usage ({_usage}) < {diff_percentage} * current ({_current}) "
+                                   f"-> structure {structure['name']} is a receiver", self.__debug)
 
                 if diff < margin:
                     filtered_structures[role].append(structure)
+                    break  # A structure can't be both donor and receiver
 
         return filtered_structures["donors"], filtered_structures["receivers"]
 
@@ -152,7 +157,7 @@ class ContainerRebalancer:
 
         if self.__config.get_value("BALANCING_POLICY") == "thresholds":
             # Split structures using configuration parameters
-            donors, receivers = self.split_structures_using_config(structures, resource)
+            donors, receivers = self.split_structures_using_thresholds(structures, resource)
 
         return donors, receivers
 
@@ -212,7 +217,7 @@ class ContainerRebalancer:
     # APPS BY PAIR SWAPPING
     def __rebalance_containers_by_pair_swapping(self, containers, app_name):
 
-        balanceable_resources = {"cpu", "energy"}
+        balanceable_resources = {"cpu", "energy", "disk"}
 
         for resource in self.__resources_balanced:
 
@@ -240,23 +245,25 @@ class ContainerRebalancer:
             donor_slices = dict()
             for container in donors:
                 # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
-                current_limit = container["resources"][resource]["current"]
-                min_value = container["resources"][resource]["min"]
-                usage_value = container["resources"][resource]["usage"]
-                host = container["host"]
+                _current = container["resources"][resource]["current"]
+                _min = container["resources"][resource]["min"]
+                _usage = container["resources"][resource]["usage"]
+
                 # Give stolen percentage of the gap between current limit and current usage (or min if usage is lower)
-                stolen_amount = self.__config.get_value("STOLEN_PERCENTAGE") * (current_limit - max(min_value,  usage_value))
+                stolen_amount = self.__config.get_value("STOLEN_PERCENTAGE") * (_current - max(_min,  _usage))
 
                 # Divide the total amount to donate in slices of 25 units
+                key = self.__get_donor_slice_key(container, resource)
                 for slice_amount in self.__split_amount_in_slices(stolen_amount, 25):
-                    donor_slices.setdefault(host, []).append((container, slice_amount))
+                    donor_slices.setdefault(key, []).append((container, slice_amount))
 
             # Sort slices by donated amount and remove hosts that have no receivers (i.e., slices that can't be donated)
-            for host in list(donor_slices.keys()):
+            for key in list(donor_slices.keys()):
+                host = key.split("_")[0]
                 if all(r["host"] != host for r in receivers):
-                    del donor_slices[host]
+                    del donor_slices[key]
                 else:
-                    donor_slices[host] = sorted(donor_slices[host], key=lambda c: c[1])
+                    donor_slices[key] = sorted(donor_slices[key], key=lambda c: c[1])
 
             # Print current donor slices
             self.__print_donor_slices(donor_slices)
@@ -274,10 +281,12 @@ class ContainerRebalancer:
                 # The loop iterates over a copy so that the list of receivers can be modified inside the loop
                 for receiver in list(receivers):
                     receiver_name = receiver["name"]
-                    receiver_host = receiver["host"]
-                    if receiver_host not in donor_slices:
-                        utils.log_info("No more donors on its host ({0}), container {1} left out".format(
-                            receiver_host, receiver["name"]), self.__debug)
+                    key = self.__get_donor_slice_key(receiver, resource)
+
+                    if key not in donor_slices:
+                        extra_info = " and disk ({0})".format(receiver["resources"]["disk"]["name"]) if resource == "disk" else ""
+                        utils.log_info("No more donors on its host ({0}){1}, container {2} left out".format(
+                            receiver["host"], extra_info, receiver["name"]), self.__debug)
                         receivers.remove(receiver)
                         continue
 
@@ -292,16 +301,16 @@ class ContainerRebalancer:
                         continue
 
                     # Get and remove one slice from the list
-                    donor, amount_to_scale = donor_slices[receiver_host].pop()
+                    donor, amount_to_scale = donor_slices[key].pop()
 
                     # Trim the amount to scale if needed and return the remaining amount to the donor slices
                     if amount_to_scale > max_receiver_amount:
-                        donor_slices[receiver_host].append((donor, amount_to_scale - max_receiver_amount))
+                        donor_slices[key].append((donor, amount_to_scale - max_receiver_amount))
                         amount_to_scale = max_receiver_amount
 
-                    # If all the resources from the donors on this host have been donated, the host is removed
-                    if not donor_slices[receiver_host]:
-                        del donor_slices[receiver_host]
+                    # If all the resources from the donors on this host (and disk) have been donated, key is removed
+                    if not donor_slices[key]:
+                        del donor_slices[key]
 
                     # Manage necessary scalings to rebalance resource between donor and receiver
                     self.__manage_rebalancing(donor, receiver, resource, amount_to_scale, requests)
@@ -603,11 +612,22 @@ class ContainerRebalancer:
             utils.log_error("Couldn't get structures", self.__debug)
             return
 
+        # Get the resources needed to perform balancing
+        needed_resource_usages = set(self.__resources_balanced)
+        if "energy" in self.__resources_balanced:
+            needed_resource_usages.add("cpu")
+
+        ## Workaround to manage disk_read and disk_write at the same time if both are requested
+        if "disk_read" in self.__resources_balanced and "disk_write" in self.__resources_balanced:
+            self.__resources_balanced.remove("disk_read")
+            self.__resources_balanced.remove("disk_write")
+            self.__resources_balanced.append("disk")
+
         # APPLICATION SCOPE: Balancing the resources between containers of the same application
         if self.__config.get_value("CONTAINERS_SCOPE") == "application":
 
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
-            rebalanceable_apps = filter_rebalanceable_apps(applications, "container", self.__couchdb_handler)
+            rebalanceable_apps = filter_rebalanceable_apps(applications, "container")
 
             # Sort them according to each application they belong
             app_containers = dict()
@@ -615,7 +635,7 @@ class ContainerRebalancer:
                 app_name = app["name"]
                 app_containers[app_name] = [c for c in containers if c["name"] in app["containers"]]
                 # Get the container usages
-                app_containers[app_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, app_containers[app_name])
+                app_containers[app_name] = self.__fill_containers_with_usage_info(list(needed_resource_usages), app_containers[app_name])
 
             # Rebalance applications
             for app in rebalanceable_apps:
@@ -641,20 +661,14 @@ class ContainerRebalancer:
                     if container["name"] in host_containers_names:
                         host_containers[host_name].append(container)
                 # Get the container usages
-                host_containers[host_name] = self.__fill_containers_with_usage_info(self.__resources_balanced, host_containers[host_name])
-
-            ## Workaround to manage disk_read and disk_write at the same time if both are requested
-            if "disk_read" in self.__resources_balanced and "disk_write" in self.__resources_balanced:
-                self.__resources_balanced.remove("disk_read")
-                self.__resources_balanced.remove("disk_write")
-                self.__resources_balanced.append("disk")
+                host_containers[host_name] = self.__fill_containers_with_usage_info(list(needed_resource_usages), host_containers[host_name])
 
             # Rebalance hosts
             for host in hosts:
                 host_name = host["name"]
                 utils.log_info("Going to rebalance host {0} now".format(host_name), self.__debug)
                 if self.__config.get_value("BALANCING_METHOD") == "pair_swapping":
-                    self.__rebalance_host_containers_by_pair_swapping(host_containers[host_name], host)
+                    self.__rebalance_containers_by_pair_swapping(host_containers[host_name], host["name"])
                 elif self.__config.get_value("BALANCING_METHOD") == "weights":
                     self.__rebalance_host_containers_by_weight(host_containers[host_name], host)
                 else:
