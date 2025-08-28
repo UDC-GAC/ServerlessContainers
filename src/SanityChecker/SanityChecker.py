@@ -41,7 +41,7 @@ class SanityChecker(Service):
 
     def __init__(self):
         super().__init__("sanity_checker", ConfigValidator(min_frequency=0), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
-        self.delay, self.debug = None, None
+        self.delay, self.debug, self.databases = None, None, None
 
     def compact_databases(self):
         try:

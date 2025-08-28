@@ -33,11 +33,30 @@ from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 
 service_routes = Blueprint('services', __name__)
 
+STR_KEYS = {
+    "STRUCTURE_GUARDED", "ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY",  # Guardian
+    "CONTAINERS_SCOPE", "BALANCING_METHOD", "BALANCING_POLICY"  # ReBalancer
+}
+BOOL_VALUES = {"true", "false"}
+
+
 def retrieve_service(service_name):
     try:
         return get_db().get_service(service_name)
     except ValueError:
         return abort(404)
+
+
+def coerce_value(value):
+    # Boolean strings are coerced to bool
+    if value in BOOL_VALUES:
+        return value == "true"
+    # Numeric strings are coerced to int or float
+    if 0 < float(value) < 1:
+        return float(value)
+    else:
+        return int(value)
+
 
 @service_routes.route("/service/", methods=['GET'])
 def get_services():
@@ -86,22 +105,12 @@ def set_service_value(service_name, key):
 
     if not isinstance(value, (list, str)):
         abort(400, {"message": "invalid content, resources must be a list or a string"})
-    elif value == "true" or value == "false":
-        value = value == "true"
-    elif value == "container" or value == "application":
-        pass
-    elif isinstance(value, list):
-        pass
-    elif key in ["ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY", "BALANCING_METHOD", "BALANCING_POLICY", "CONTAINERS_SCOPE"]:
-        pass
-    else:
+
+    if isinstance(value, str) and key not in STR_KEYS:
         try:
-            if 0 < float(value) < 1:
-                value = float(value)
-            else:
-                value = int(value)
+            value = coerce_value(value)
         except ValueError:
-            abort(400, {"message": "bad content"})
+            return abort(400, {"message": "bad content"})
 
     # Check if it is really needed to carry out the operation
     service = retrieve_service(service_name)
