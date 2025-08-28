@@ -35,6 +35,14 @@ def has_required_fields(structure, resource, required_fields):
     return True
 
 
+def scale_and_adjust_alloc_ratio(structure, resource, amount_to_scale):
+    new_max = structure["resources"][resource]["max"] + amount_to_scale
+    # If shares are defined, adjust them according to the new max
+    if "shares" in structure["resources"][resource]:
+        structure["resources"][resource]["alloc_ratio"] = float(structure["resources"][resource]["alloc_ratio"] * new_max / structure["resources"][resource]["max"])
+    structure["resources"][resource]["max"] = new_max
+
+
 def pair_swapping(structures, resources, diff_percentage, stolen_percentage, db_handler, debug):
     for resource in resources:
         donors, receivers = [], []
@@ -68,8 +76,8 @@ def pair_swapping(structures, resources, diff_percentage, stolen_percentage, db_
                 utils.log_info("No more donors, structure {0} left out".format(receiver["name"]), debug)
                 continue
 
-            donor[resource]["max"] -= amount_to_scale
-            receiver[resource]["max"] += amount_to_scale
+            scale_and_adjust_alloc_ratio(donor, resource, -amount_to_scale)
+            scale_and_adjust_alloc_ratio(receiver, resource, amount_to_scale)
 
             utils.persist_data(donor, db_handler, debug)
             utils.persist_data(receiver, db_handler, debug)
