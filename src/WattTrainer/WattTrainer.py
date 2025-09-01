@@ -47,7 +47,7 @@ WATT_TRAINER_METRICS = {
 }
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "USAGE_THRESHOLD": 1.0,
-                         "GENERATED_METRICS": ["cpu_user", "cpu_kernel", "energy"],
+                         "TRAIN_METRICS": ["cpu_user", "cpu_kernel", "energy"],
                          "MODELS_TO_TRAIN": ["all"], "DEBUG": True, "ACTIVE": True}
 
 
@@ -59,7 +59,7 @@ class WattTrainer(Service):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.window_timelapse, self.window_delay, self.usage_threshold, self.generated_metrics = None, None, None, None
+        self.window_timelapse, self.window_delay, self.usage_threshold, self.train_metrics = None, None, None, None
         self.prev_models_to_train, self.models_to_train, self.debug, self.active,  = None, None, None, None
 
     def get_container_usages(self, container_name):
@@ -71,7 +71,7 @@ class WattTrainer(Service):
                                                                             BDWATCHDOG_METRICS,
                                                                             WATT_TRAINER_METRICS)
             for metric in WATT_TRAINER_METRICS:
-                if metric not in self.generated_metrics:
+                if metric not in self.train_metrics:
                     continue
                 if container_info[metric] == self.NO_METRIC_DATA_DEFAULT_VALUE:
                     utils.log_warning("No info for {0} in container {1}".format(metric, container_name), debug=self.debug)
@@ -88,7 +88,7 @@ class WattTrainer(Service):
 
     def train_model(self, structure, structure_type, model_name, usages):
         missing_values = False
-        for resource in self.generated_metrics:
+        for resource in self.train_metrics:
             if resource not in usages:
                 missing_values = True
                 utils.log_error(
@@ -148,6 +148,13 @@ class WattTrainer(Service):
 
         # If no changes we return the list already used in previous iteration
         return self.models_to_train
+
+    def invalid_conf(self, service_config):
+        for metric in self.train_metrics:
+            if metric not in {"cpu_user", "cpu_kernel", "energy"}:
+                return True, "Train metrics value '{0}' is invalid".format(self.train_metrics)
+
+        return self.config_validator.invalid_conf(service_config)
 
     def work(self, ):
         thread = None
