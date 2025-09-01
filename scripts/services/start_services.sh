@@ -3,7 +3,7 @@ scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 
 
 
-declare -a serviceArr=("guardian" "scaler" "orchestrator" "refeeder" "sanity_checker" "structure_snapshoter" "database_snapshoter" "watt_wizard" "watt_trainer")
+declare -a serviceArr=("guardian" "scaler" "orchestrator" "refeeder" "sanity_checker" "structure_snapshoter" "database_snapshoter" "watt_wizard" "watt_trainer", "limits_dispatcher")
 
 ## now loop through the above array
 for s in "${serviceArr[@]}"
