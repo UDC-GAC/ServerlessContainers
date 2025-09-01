@@ -37,21 +37,17 @@ class UserRebalancer:
 
     def set_config(self, config):
         self.__config = config
-
-    def rebalance_users(self):
         self.__debug = self.__config.get_value("DEBUG")
 
-        utils.log_info("_______________", self.__debug)
-        utils.log_info("Performing USER Balancing", self.__debug)
+    def rebalance_users(self):
+        utils.log_info("------------------------ USER BALANCING -----------------------", self.__debug)
 
         try:
             users = self.__couchdb_handler.get_users()
         except requests.exceptions.HTTPError as e:
-            utils.log_error("Couldn't get users", self.__debug)
-            utils.log_error(str(e), self.__debug)
+            utils.log_error("Couldn't get users: {0}".format(str(e)), self.__debug)
             return
-
-        pair_swapping(users, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
-                      self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
-
-        utils.log_info("_______________\n", self.__debug)
+        users_with_apps_running = [user for user in users if any(app.get("containers", []) for app in user.get("clusters", []))]
+        if users_with_apps_running:
+            pair_swapping(users_with_apps_running, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
+                          self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)

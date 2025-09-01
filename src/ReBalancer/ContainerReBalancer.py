@@ -36,10 +36,12 @@ class ContainerRebalancer:
         self.__opentsdb_handler = opentsdb_handler
         self.__couchdb_handler = couchdb_handler
         self.__NO_METRIC_DATA_DEFAULT_VALUE = self.__opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.__debug = True
+        self.__debug, self.__resources_balanced = None, None
 
     def set_config(self, config):
         self.__config = config
+        self.__debug = self.__config.get_value("DEBUG")
+        self.__resources_balanced = self.__config.get_value("RESOURCES_BALANCED")
 
     @staticmethod
     def __split_amount_in_slices(total_amount, slice_amount):
@@ -225,7 +227,7 @@ class ContainerRebalancer:
                 utils.log_warning("'{0}' not yet supported in pair-swapping balancing, only '{1}' available at the "
                                   "moment".format(resource, list(balanceable_resources)), self.__debug)
                 continue
-            utils.log_info("Rebalancing resource '{0}' for structure {1} by pair-swapping".format(resource, app_name), self.__debug)
+            utils.log_info("Rebalancing resource '{0}' for structure {1} containers by pair-swapping".format(resource, app_name), self.__debug)
 
             # Filter the containers between donors and receivers
             donors, receivers = self.split_structures_by_role(resource, containers)
@@ -339,7 +341,7 @@ class ContainerRebalancer:
                 utils.log_warning("'{0}' not yet supported in host pair-swapping balancing, only '{1}' available at the moment".format(resource, list(balanceable_resources.keys())), self.__debug)
                 continue
 
-            utils.log_info("Rebalancing resource '{0}' for host {1} by pair-swapping".format(resource, host["name"]), self.__debug)
+            utils.log_info("Rebalancing resource '{0}' for host {1} containers by pair-swapping".format(resource, host["name"]), self.__debug)
 
             requests = dict()
 
@@ -404,8 +406,6 @@ class ContainerRebalancer:
 
             utils.log_info("No more receivers", self.__debug)
             self.__send_final_requests(requests)
-
-        utils.log_info("_______________", self.__debug)
 
     # HOSTS BY WEIGHT
     def __rebalance_host_containers_by_weight(self, containers, host):
@@ -593,14 +593,8 @@ class ContainerRebalancer:
 
             self.__send_final_requests(requests)
 
-        utils.log_info("_______________", self.__debug)
-
     def rebalance_containers(self):
-        self.__debug = self.__config.get_value("DEBUG")
-        self.__resources_balanced = self.__config.get_value("RESOURCES_BALANCED")
-
-        utils.log_info("_______________", self.__debug)
-        utils.log_info("Performing CONTAINER Balancing", self.__debug)
+        utils.log_info("--------------------- CONTAINER BALANCING ---------------------", self.__debug)
 
         # Get the structures
         containers = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="container")

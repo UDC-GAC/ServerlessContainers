@@ -38,65 +38,30 @@ class ApplicationRebalancer:
 
     def set_config(self, config):
         self.__config = config
-
-    def __static_rebalancing(self, user, applications):
-        for resource in self.__config.get_value("RESOURCES_BALANCED"):
-            # Get user "max" limit for this resource
-            user_max = user["resources"][resource]["max"]
-
-            # Filter applications that have the required fields
-            valid_apps = [app for app in applications if has_required_fields(app, resource, ["max", "shares"])]
-
-            # Add up all the shares
-            total_shares = sum([app["resources"][resource]["shares"] for app in valid_apps])
-
-            # For each application calculate the resource limit according to its shares
-            for app in valid_apps:
-                percentage = app["resources"][resource]["shares"] / total_shares
-                new_app_max = int(user_max * percentage)
-                app_max = app["resources"][resource]["max"]
-
-                # If the database record and the new limit are not the same, update
-                if app_max != new_app_max:
-                    app["resources"][resource]["max"] = new_app_max
-                    self.__couchdb_handler.update_structure(app)
-                    utils.log_info("Updated resource '{0}' max limit for app {1}".format(resource, app["name"]), self.__debug)
-
-                utils.log_info("Processed app {0} with a resource '{1}' share of {2}%, new limit is {3}".format(
-                                app["name"], resource, str("%.2f" % (100 * percentage)), new_app_max), self.__debug)
-
-    def rebalance_applications(self):
         self.__debug = self.__config.get_value("DEBUG")
 
-        utils.log_info("_______________", self.__debug)
-        utils.log_info("Performing APP Balancing", self.__debug)
+    def rebalance_applications(self):
+        utils.log_info("-------------------- APPLICATION BALANCING --------------------", self.__debug)
 
+        applications = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
+        users = []
         try:
-            applications = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
             users = self.__couchdb_handler.get_users()
-        except requests.exceptions.HTTPError as e:
-            utils.log_error("Couldn't get users and/or applications: {0}".format(str(e)), self.__debug)
+        except requests.exceptions.HTTPError:
+            utils.log_warning("No registered users were found on the platform, all the applications will be balanced as a single cluster", self.__debug)
+
+        running_apps = [app for app in applications if app.get("containers", [])]
+        if not running_apps:
+            utils.log_warning("No registered registered app is running right now", self.__debug)
             return
 
-        for user in users:
-            utils.log_info("Processing user {0}".format(user["name"]), self.__debug)
-
-            balancing_method = user.get("balancing_method", None)
-            if not balancing_method:
-                balancing_method = "pair_swapping"
-                utils.log_info("User {0} has no balancing method, using default: {1}".format(user["name"], balancing_method), self.__debug)
-            else:
-                utils.log_info("User {0} has set {1} balancing method".format(user["name"], balancing_method), self.__debug)
-
-            user_apps = [app for app in applications if app["name"] in user["clusters"]]
-            if balancing_method == "static":
-                self.__static_rebalancing(user, user_apps)
-
-            elif balancing_method == "pair_swapping":
-                pair_swapping(user_apps, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
-                              self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
-
-            else:
-                utils.log_error("Unknown application balancing method '{0}'".format(balancing_method), self.__debug)
-
-        utils.log_info("_______________\n", self.__debug)
+        if users:
+            for user in users:
+                user_apps = [app for app in running_apps if app["name"] in user["clusters"]]
+                utils.log_info("Processing user {0} who has {1} applications registered".format(user["name"], len(user_apps)), self.__debug)
+                if user_apps:
+                    pair_swapping(user_apps, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
+                                  self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
+        else:
+            pair_swapping(running_apps, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
+                          self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)

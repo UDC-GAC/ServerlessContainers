@@ -37,8 +37,8 @@ def has_required_fields(structure, resource, required_fields):
 
 def scale_and_adjust_alloc_ratio(structure, resource, amount_to_scale):
     new_max = structure["resources"][resource]["max"] + amount_to_scale
-    # If shares are defined, adjust them according to the new max
-    if "shares" in structure["resources"][resource]:
+    # If allocation ratio is defined, adjust it according to the new max
+    if "alloc_ratio" in structure["resources"][resource]:
         structure["resources"][resource]["alloc_ratio"] = float(structure["resources"][resource]["alloc_ratio"] * new_max / structure["resources"][resource]["max"])
     structure["resources"][resource]["max"] = new_max
 
@@ -47,15 +47,17 @@ def pair_swapping(structures, resources, diff_percentage, stolen_percentage, db_
     for resource in resources:
         donors, receivers = [], []
         for structure in structures:
-            if has_required_fields(structure, resource, ["max", "usage"]):
-                diff = structure["resources"][resource]["max"] - structure["resources"][resource]["usage"]
-                if diff > diff_percentage * structure["resources"][resource]["max"]:
-                    donors.append(structure)
-                else:
-                    receivers.append(structure)
+            if has_required_fields(structure, resource, ["max", "current", "usage"]):
+                # If current is zero structure is registered but not running
+                if structure["resources"][resource]["current"] > 0:
+                    diff = structure["resources"][resource]["max"] - structure["resources"][resource]["usage"]
+                    if diff > diff_percentage * structure["resources"][resource]["max"]:
+                        donors.append(structure)
+                    else:
+                        receivers.append(structure)
 
         if not receivers:
-            utils.log_info("No user to receive resource {0} shares".format(resource), debug)
+            utils.log_info("No structure to receive resource {0} shares".format(resource), debug)
             return
 
         # Order the users from lower to upper resource limit
