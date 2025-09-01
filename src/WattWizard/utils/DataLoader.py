@@ -1,4 +1,5 @@
 import os
+import hashlib
 import pandas as pd
 from src.WattWizard.logs.logger import log
 from src.WattWizard.data.TimeSeriesParallelCollector import TimeSeriesParallelCollector
@@ -30,14 +31,24 @@ class DataLoader:
         suffix = ('_IDLE' if idle else '') + ('_JOIN' if join and not idle else '') if ext == 'csv' else ''
         return os.path.join(base_dir, f"{filename}{suffix}.{ext}")
 
+    @staticmethod
+    def _hash_md5(path, block_size=65536):
+        h = hashlib.new("md5")
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
     def load_time_series(self, structure, base_dir, filename, idle=False, join=False, csv_caching=False):
         csv_path = None
+        timestamps_path = self._build_path(base_dir, filename, "timestamps")
 
         # Try getting data from CSV file if CSV caching is active
         if csv_caching:
             # Create separate directory to cache time series in CSV files
             os.makedirs(f"{base_dir}/.csv_cache", exist_ok=True)
-            csv_path = self._build_path(f"{base_dir}/.csv_cache", filename, "csv", idle, join)
+            timestamps_hash = self._hash_md5(timestamps_path)
+            csv_path = self._build_path(f"{base_dir}/.csv_cache", timestamps_hash, "csv", idle, join)
             if os.path.exists(csv_path):
                 try:
                     df = self._read_from_csv(csv_path)
@@ -49,7 +60,6 @@ class DataLoader:
                     log(f"Error while reading {csv_path}: {str(e)}", "WARN")
 
         # If CSV not available, get data from InfluxDB
-        timestamps_path = self._build_path(base_dir, filename, "timestamps")
         log(f"Retrieving data from InfluxDB using timestamps file: {timestamps_path}")
         # Parse file with the timestamps corresponding to InfluxDB data
         train_timestamps = self.ts_collector.parse_timestamps(timestamps_path)
