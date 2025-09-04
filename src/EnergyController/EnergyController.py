@@ -81,12 +81,11 @@ class EnergyController(Service):
         for t in threads:
             t.join()
 
-    def power_is_near_pb(self, structure, limits, value):
-        margin = self.get_resource_margin("energy", structure, limits)
+    def power_is_near_pb(self, structure, value):
         P_budget = structure["resources"]["energy"]["current"]
-        is_near = (P_budget - margin) < value < (P_budget + margin) # P_budget < value < (P_budget + margin)
+        is_near = (P_budget * 0.95) < value < (P_budget * 1.05) # P_budget < value < (P_budget + margin)
         if is_near:
-            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {P_budget - margin} < {value} < {P_budget + margin}", self.debug)
+            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {P_budget * 0.95} < {value} < {P_budget * 1.05}", self.debug)
 
         return is_near
 
