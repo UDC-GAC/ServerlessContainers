@@ -43,17 +43,20 @@ class LimitsDispatcher(Service):
         self.polling_frequency, self.generated_metrics = None, None
         self.debug, self.active = None, None
 
-    def dispatch_limits_by_ratio(self, parent_structure, child_structures):
+    def dispatch_limits_by_ratio(self, parent_structure, child_structures, parent_type, child_type):
         for resource in self.generated_metrics:
             global_limit = parent_structure["resources"][resource]["max"]
 
             total_ratio = sum(s["resources"][resource].get("alloc_ratio", 0) for s in child_structures)
 
             for s in child_structures:
+                utils.log_info("Processing {0} '{1}' from {2} '{3}'".format(child_type, s["name"], parent_type, parent_structure["name"]), self.debug)
+                updated = False
                 if "alloc_ratio" not in s["resources"][resource]:
                     new_ratio = min(s["resources"][resource]["max"] / global_limit, 1 - total_ratio)
                     total_ratio += new_ratio
                     s["resources"][resource]["alloc_ratio"] = s["resources"][resource]["max"] / global_limit
+                    updated = True
 
                 if s["resources"][resource]["alloc_ratio"] == 0.0:
                     utils.log_warning("A new child structure has been added to {0} while not having {1} left"
@@ -64,19 +67,24 @@ class LimitsDispatcher(Service):
 
                 if structure_limit != structure_limit_db:
                     s["resources"][resource]["max"] = structure_limit
-                    utils.log_warning("Updating structure {0} resource {1} limit from {2} to {3}".format(
-                        s["name"], resource, structure_limit_db, structure_limit), self.debug)
+                    updated = True
+
+                if updated:
                     self.couchdb_handler.update_structure(s)
+                    utils.log_warning("Updated {0} '{1}' resource {2} limit from {3} to {4}".format(
+                        child_type, s["name"], resource, structure_limit_db, structure_limit), self.debug)
 
     def dispatch_user(self, user, applications):
         utils.log_info("Dispatching user {0} limit to apps".format(user["name"]), self.debug)
         user_apps = [app for app in applications if app["name"] in user["clusters"]]
-        self.dispatch_limits_by_ratio(user, user_apps)
+        if user_apps:
+            self.dispatch_limits_by_ratio(user, user_apps, "user", "application")
 
     def dispatch_app(self, app, containers):
         utils.log_info("Dispatching app {0} limit to containers".format(app["name"]), self.debug)
         app_containers = [c for c in containers if c["name"] in app.get("containers", [])]
-        self.dispatch_limits_by_ratio(app, app_containers)
+        if app_containers:
+            self.dispatch_limits_by_ratio(app, app_containers, "application", "container")
 
     def dispatch_thread(self, ):
         try:
