@@ -89,6 +89,15 @@ class EnergyController(Service):
 
         return is_near
 
+    def error_is_below_potential_pb(self, structure, value):
+        P_budget = structure["resources"]["energy"]["current"]
+        P_max = structure["resources"]["energy"]["max"]
+        error_is_below_potential_pb = (value > P_budget) and (value < P_max) # P_budget < value < (P_budget + margin)
+        if error_is_below_potential_pb:
+            utils.log_warning(f"@{structure['name']} Power consumption exceeds current limit but is below potential power budget: {value} < {P_max}", self.debug)
+
+        return error_is_below_potential_pb
+
     def cpu_is_below_boundary(self, structure, limits, value):
         margin = self.get_resource_margin("cpu", structure, limits)
         U_alloc = structure["resources"]["cpu"]["current"]
@@ -205,7 +214,11 @@ class EnergyController(Service):
         direction, opposite = ("up", "down") if P_scaling > 0 else ("down", "up")
 
         # If power is already near the power budget the structure doesn't need to scale power
-        if self.power_is_near_pb(structure, limits, P_usage):
+        if self.power_is_near_pb(structure, P_usage):
+            return 0
+
+        # If power exceeds "current" and "current" < "max", Guardian should scale "current" instead of the Controller scaling down CPU
+        if self.error_is_below_potential_pb(structure, P_usage):
             return 0
 
         # If CPU usage exceeds current allocation, power consumption won't show the effect of recent allocation changes
