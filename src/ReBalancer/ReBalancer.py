@@ -92,7 +92,9 @@ class ReBalancer(Service):
         utils.log_info("---------------------------------------------------------------", self.debug)
 
     def work(self,):
-        return Thread(name="rebalance_structures", target=self.rebalance_structures, args=())
+        thread = Thread(name="rebalance_structures", target=self.rebalance_structures, args=())
+        thread.start()
+        return thread
 
     def rebalance(self, ):
         self.run_loop()
