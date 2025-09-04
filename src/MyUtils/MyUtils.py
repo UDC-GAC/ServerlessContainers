@@ -30,6 +30,9 @@ import random
 import time
 import logging
 import sys
+import os
+import yaml
+import json
 import requests
 import traceback
 from termcolor import colored
@@ -42,7 +45,6 @@ VALID_RESOURCES = {"cpu", "mem", "disk", "disk_read", "disk_write", "net", "ener
 # Logging configuration
 LOGGING_FORMAT = '[%(asctime)s]%(levelname)s:%(name)s:%(message)s'
 LOGGING_DATEFMT = '%Y-%m-%d %H:%M:%S%z'
-
 
 class MyConfig:
 
@@ -125,6 +127,22 @@ def log_error(message, debug):
 # DON'T NEED TO TEST
 def get_time_now_string():
     return str(time.strftime(LOGGING_DATEFMT, time.localtime()))
+
+
+def get_orchestrator_url():
+    serverless_path = os.environ['SERVERLESS_PATH']
+    with open(serverless_path + "/services_config.yml", "r") as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    return "http://{0}:{1}".format(config['ORCHESTRATOR_URL'], config['ORCHESTRATOR_PORT'])
+
+
+def put_request_to_orchestrator(url, error_message, headers, data):
+    response = requests.put(url, data=json.dumps(data), headers=headers)
+    error = ""
+    if response != "" and not response.ok:
+        error = "{0}: {1}".format(error_message, response.text.strip())
+
+    return error, response
 
 
 def get_host_containers(container_host_ip, container_host_port, rescaler_http_session, debug):
@@ -240,12 +258,33 @@ def get_resource(structure, resource):
 
 
 # CAN'T TEST
+def update_resource_in_couchdb(structure, resource, field, value, db_handler, debug, max_tries=3):
+    old_value = structure["resources"][resource][field]
+    put_done = False
+    tries = 0
+    while not put_done:
+        tries += 1
+        structure["resources"][resource][field] = value
+        db_handler.update_structure(structure)
+
+        time.sleep(200 / 1000)
+
+        structure = db_handler.get_structure(structure["name"])
+        put_done = structure["resources"][resource][field] == value
+
+        if tries >= max_tries:
+            log_error("Could not update {0} value for structure {1} for {2} tries, aborting".format(resource, structure["name"], max_tries), debug)
+            return
+
+    log_info("Resource {0} value for structure {1} has been updated from {2} to {3}".format(resource, structure["name"], old_value, value), debug)
+
+
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
         db_handler.update_structure(structure, max_tries=max_tries)
         log_info("{0} {1} ->  updated".format(structure["subtype"].capitalize(), structure["name"]), debug)
     except requests.exceptions.HTTPError:
-        log_error("Error updating container " + structure["name"] + " " + traceback.format_exc(), debug)
+        log_error("Error updating {0} {1}: {2} ".format(structure["subtype"].capitalize(), structure["name"], traceback.format_exc()), debug)
 
 
 def update_user(user, db_handler, debug, max_tries=10):
@@ -253,7 +292,7 @@ def update_user(user, db_handler, debug, max_tries=10):
         db_handler.update_user(user, max_tries=max_tries)
         log_info("User {0} ->  updated".format(user["name"]), debug)
     except requests.exceptions.HTTPError:
-        log_error("Error updating user " + user["name"] + " " + traceback.format_exc(), debug)
+        log_error("Error updating user {0}: {1} ".format(user["name"], traceback.format_exc()), debug)
 
 
 def persist_data(data, db_handler, debug):
