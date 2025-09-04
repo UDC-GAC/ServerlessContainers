@@ -27,6 +27,7 @@
 from __future__ import print_function
 
 import traceback
+from threading import Thread
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.opentsdb as bdwatchdog
@@ -78,7 +79,7 @@ class ReBalancer(Service):
 
         return self.config_validator.invalid_conf(service_config)
 
-    def work(self,):
+    def rebalance_structures(self,):
         if "user" in self.structures_balanced:
             self.user_rebalancer.rebalance_users()
 
@@ -87,6 +88,11 @@ class ReBalancer(Service):
 
         if "container" in self.structures_balanced:
             self.container_rebalancer.rebalance_containers()
+
+        utils.log_info("---------------------------------------------------------------", self.debug)
+
+    def work(self,):
+        return Thread(name="rebalance_structures", target=self.rebalance_structures, args=())
 
     def rebalance(self, ):
         self.run_loop()
