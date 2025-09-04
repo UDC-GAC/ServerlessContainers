@@ -26,28 +26,39 @@
 import requests
 
 import src.MyUtils.MyUtils as utils
-from src.ReBalancer.Utils import pair_swapping
+from src.ReBalancer.BaseRebalancer import BaseRebalancer
 
 
-class UserRebalancer:
+class UserRebalancer(BaseRebalancer):
+
+    REBALANCING_LEVEL = "user"
+
     def __init__(self, couchdb_handler):
-        self.__config = None
-        self.__couchdb_handler = couchdb_handler
-        self.__debug = True
+        super().__init__(couchdb_handler)
 
-    def set_config(self, config):
-        self.__config = config
-        self.__debug = self.__config.get_value("DEBUG")
+    @staticmethod
+    def select_donated_field(resource):
+        return "max"
+
+    @staticmethod
+    def get_donor_slice_key(structure, resource):
+        # Users can donate to and receive from any other user
+        return "all"
+
+    def is_donor(self, data):
+        return (data["max"] - data["usage"]) > (self.diff_percentage * data["max"])
+
+    def is_receiver(self, data):
+        return (data["max"] - data["usage"]) < (self.diff_percentage * data["max"])
 
     def rebalance_users(self):
-        utils.log_info("------------------------ USER BALANCING -----------------------", self.__debug)
+        utils.log_info("------------------------ USER BALANCING -----------------------", self.debug)
 
         try:
-            users = self.__couchdb_handler.get_users()
+            users = self.couchdb_handler.get_users()
         except requests.exceptions.HTTPError as e:
-            utils.log_error("Couldn't get users: {0}".format(str(e)), self.__debug)
+            utils.log_error("Couldn't get users: {0}".format(str(e)), self.debug)
             return
         users_with_apps_running = [user for user in users if any(app.get("containers", []) for app in user.get("clusters", []))]
         if users_with_apps_running:
-            pair_swapping(users_with_apps_running, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
-                          self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
+            self.pair_swapping(users_with_apps_running)

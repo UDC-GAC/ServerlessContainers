@@ -26,42 +26,51 @@
 import requests
 
 import src.MyUtils.MyUtils as utils
-from src.ReBalancer.Utils import pair_swapping, has_required_fields
+from src.ReBalancer.BaseRebalancer import BaseRebalancer
 
 
-class ApplicationRebalancer:
+class ApplicationRebalancer(BaseRebalancer):
+
+    REBALANCING_LEVEL = "application"
 
     def __init__(self, couchdb_handler):
-        self.__config = None
-        self.__couchdb_handler = couchdb_handler
-        self.__debug = True
+        super().__init__(couchdb_handler)
 
-    def set_config(self, config):
-        self.__config = config
-        self.__debug = self.__config.get_value("DEBUG")
+    @staticmethod
+    def select_donated_field(resource):
+        return "max"
+
+    @staticmethod
+    def get_donor_slice_key(structure, resource):
+        # Applications can donate to and receive from any other application
+        return "all"
+
+    def is_donor(self, data):
+        return (data["max"] - data["usage"]) > (self.diff_percentage * data["max"])
+
+    def is_receiver(self, data):
+        return (data["max"] - data["usage"]) < (self.diff_percentage * data["max"])
 
     def rebalance_applications(self):
-        utils.log_info("-------------------- APPLICATION BALANCING --------------------", self.__debug)
+        utils.log_info("-------------------- APPLICATION BALANCING --------------------", self.debug)
 
-        applications = utils.get_structures(self.__couchdb_handler, self.__debug, subtype="application")
+        applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
         users = []
         try:
-            users = self.__couchdb_handler.get_users()
+            users = self.couchdb_handler.get_users()
         except requests.exceptions.HTTPError:
-            utils.log_warning("No registered users were found on the platform, all the applications will be balanced as a single cluster", self.__debug)
+            utils.log_warning("No registered users were found on the platform, all the applications will be balanced as a single cluster", self.debug)
 
         running_apps = [app for app in applications if app.get("containers", [])]
         if not running_apps:
-            utils.log_warning("No registered registered app is running right now", self.__debug)
+            utils.log_warning("No registered registered app is running right now", self.debug)
             return
 
         if users:
             for user in users:
                 user_apps = [app for app in running_apps if app["name"] in user["clusters"]]
-                utils.log_info("Processing user {0} who has {1} applications registered".format(user["name"], len(user_apps)), self.__debug)
+                utils.log_info("Processing user {0} who has {1} applications registered".format(user["name"], len(user_apps)), self.debug)
                 if user_apps:
-                    pair_swapping(user_apps, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
-                                  self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
+                    self.pair_swapping(user_apps)
         else:
-            pair_swapping(running_apps, self.__config.get_value("RESOURCES_BALANCED"), self.__config.get_value("DIFF_PERCENTAGE"),
-                          self.__config.get_value("STOLEN_PERCENTAGE"), self.__couchdb_handler, self.__debug)
+            self.pair_swapping(running_apps)
