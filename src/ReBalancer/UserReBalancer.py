@@ -59,6 +59,13 @@ class UserRebalancer(BaseRebalancer):
         except requests.exceptions.HTTPError as e:
             utils.log_error("Couldn't get users: {0}".format(str(e)), self.debug)
             return
-        users_with_apps_running = [user for user in users if any(app.get("containers", []) for app in user.get("clusters", []))]
-        if users_with_apps_running:
-            self.pair_swapping(users_with_apps_running)
+
+        # Filter only users that have at least one application running
+        if self.only_running:
+            users = [user for user in users if any(app.get("containers", []) for app in user.get("clusters", []))]
+
+        if not users:
+            utils.log_warning("No {0} users to rebalance".format("running" if self.only_running else "registered"), self.debug)
+            return
+
+        self.pair_swapping(users)

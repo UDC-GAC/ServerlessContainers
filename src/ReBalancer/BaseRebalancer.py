@@ -40,7 +40,7 @@ class BaseRebalancer(ABC):
         self.couchdb_handler = couchdb_handler
         self.window_timelapse, self.window_delay, self.diff_percentage, self.stolen_percentage = None, None, None, None
         self.resources_balanced, self.structures_balanced, self.containers_scope = None, None, None
-        self.balancing_policy, self.balancing_method, self.debug = None, None, None
+        self.balancing_policy, self.balancing_method, self.only_running, self.debug = None, None, None, None
 
     def set_config(self, config):
         for attr in self.__dict__.keys():
@@ -211,10 +211,6 @@ class BaseRebalancer(ABC):
                     "max": structure["resources"][resource]["max"],
                     "current": structure["resources"][resource]["current"]}
             except KeyError:
-                continue
-
-            # If current is zero structure is registered but not running
-            if data["current"] <= 0:
                 continue
 
             if self.is_donor(data):

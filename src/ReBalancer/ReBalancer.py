@@ -47,6 +47,7 @@ CONFIG_DEFAULT_VALUES = {
     "CONTAINERS_SCOPE": "application",
     "BALANCING_POLICY": "rules",
     "BALANCING_METHOD": "pair_swapping",
+    "ONLY_RUNNING": False,
     "DEBUG": True,
     "ACTIVE": True
 }
@@ -63,7 +64,7 @@ class ReBalancer(Service):
         self.user_rebalancer = UserRebalancer(self.couchdb_handler)
         self.window_timelapse, self.window_delay, self.diff_percentage, self.stolen_percentage = None, None, None, None
         self.resources_balanced, self.structures_balanced, self.containers_scope = None, None, None
-        self.balancing_policy, self.balancing_method, self.debug = None, None, None
+        self.balancing_policy, self.balancing_method, self.only_running, self.debug = None, None, None, None
 
     def on_config_updated(self, service_config):
         self.container_rebalancer.set_config(service_config)

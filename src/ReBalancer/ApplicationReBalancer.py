@@ -61,16 +61,19 @@ class ApplicationRebalancer(BaseRebalancer):
         except requests.exceptions.HTTPError:
             utils.log_warning("No registered users were found on the platform, all the applications will be balanced as a single cluster", self.debug)
 
-        running_apps = [app for app in applications if app.get("containers", [])]
-        if not running_apps:
-            utils.log_warning("No registered registered app is running right now", self.debug)
+        applications = self.filter_rebalanceable_apps(applications)
+        if self.only_running:
+            applications = [app for app in applications if app.get("containers", [])]
+
+        if not applications:
+            utils.log_warning("No {0} applications to rebalance".format("running" if self.only_running else "registered"), self.debug)
             return
 
         if users:
             for user in users:
-                user_apps = [app for app in running_apps if app["name"] in user["clusters"]]
-                utils.log_info("Processing user {0} who has {1} applications registered".format(user["name"], len(user_apps)), self.debug)
+                user_apps = [app for app in applications if app["name"] in user["clusters"]]
+                utils.log_info("Processing user {0} who has {1} valid applications registered".format(user["name"], len(user_apps)), self.debug)
                 if user_apps:
                     self.pair_swapping(user_apps)
         else:
-            self.pair_swapping(running_apps)
+            self.pair_swapping(applications)
