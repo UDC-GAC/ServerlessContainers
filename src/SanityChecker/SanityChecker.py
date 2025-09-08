@@ -41,7 +41,7 @@ class SanityChecker(Service):
 
     def __init__(self):
         super().__init__("sanity_checker", ConfigValidator(min_frequency=0), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
-        self.delay, self.debug, self.databases = None, None, None
+        self.delay, self.debug, self.polling_frequency, self.databases = None, None, None, None
 
     def compact_databases(self):
         try:
@@ -81,13 +81,7 @@ class SanityChecker(Service):
             utils.log_error(
                 "Error doing configuration check up: {0} {1}".format(str(e), str(traceback.format_exc())), self.debug)
 
-    def work(self, ):
-        self.compact_databases()
-        self.check_unstable_configuration()
-        # check_core_mapping()
-        utils.log_info("Sanity checked", self.debug)
-        utils.log_info(".............................................", self.debug)
-
+    def compute_sleep_time(self):
         time_waited = 0
         heartbeat_delay = 10  # seconds
         while time_waited < self.delay:
@@ -96,6 +90,14 @@ class SanityChecker(Service):
             time.sleep(heartbeat_delay)
             time_waited += heartbeat_delay
 
+        return self.polling_frequency
+
+    def work(self, ):
+        self.compact_databases()
+        self.check_unstable_configuration()
+        # check_core_mapping()
+        utils.log_info("Sanity checked", self.debug)
+        utils.log_info(".............................................", self.debug)
         return None
 
     def check_sanity(self):
