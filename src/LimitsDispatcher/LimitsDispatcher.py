@@ -53,9 +53,14 @@ class LimitsDispatcher(Service):
                 utils.log_info("Processing {0} '{1}' from {2} '{3}'".format(child_type, s["name"], parent_type, parent_structure["name"]), self.debug)
                 updated = False
                 if "alloc_ratio" not in s["resources"][resource]:
-                    new_ratio = min(s["resources"][resource]["max"] / global_limit, 1 - total_ratio)
+                    # If "max" limit has been already rebalanced undo operation to compute allocation ratio based
+                    # on its original "max" limit
+                    original_limit = global_limit - parent_structure["resources"][resource].get("rebalanced", 0)
+                    new_ratio = min(s["resources"][resource]["max"] / original_limit, 1 - total_ratio)
+                    s["resources"][resource]["alloc_ratio"] = new_ratio
                     total_ratio += new_ratio
-                    s["resources"][resource]["alloc_ratio"] = s["resources"][resource]["max"] / global_limit
+                    utils.log_warning("Allocation ratio for {0} '{1}' and resource {2} will be initialised to {3} ({4} / {5})".format(
+                        child_type, s["name"], resource, new_ratio, s["resources"][resource]["max"], original_limit), self.debug)
                     updated = True
 
                 if s["resources"][resource]["alloc_ratio"] == 0.0:
@@ -74,17 +79,36 @@ class LimitsDispatcher(Service):
                     utils.log_warning("Updated {0} '{1}' resource {2} limit from {3} to {4}".format(
                         child_type, s["name"], resource, structure_limit_db, structure_limit), self.debug)
 
-    def dispatch_user(self, user, applications):
-        utils.log_info("Dispatching user {0} limit to apps".format(user["name"]), self.debug)
+    def reset_limits(self, parent_structure, parent_type):
+        for resource in self.generated_metrics:
+            _current = parent_structure["resources"][resource].get("current", -1)
+            _max = parent_structure["resources"][resource]["max"]
+            _rebalanced = parent_structure["resources"][resource].get("rebalanced", 0)
+            if _current == 0 and _rebalanced != 0:
+                original_limit = _max - _rebalanced
+                parent_structure["resources"][resource]["max"] = original_limit
+                parent_structure["resources"][resource]["rebalanced"] = 0
+                self.couchdb_handler.update_structure(parent_structure)
+                utils.log_warning("Reset {0} '{1}' resource {2} limit from {3} to {4}".format(
+                    parent_type, parent_structure["name"], resource, _max, original_limit), self.debug)
+
+    def dispatch_user(self, user, applications, users_running):
         user_apps = [app for app in applications if app["name"] in user["clusters"]]
         if user_apps:
+            utils.log_info("Dispatching user {0} limit to apps".format(user["name"]), self.debug)
             self.dispatch_limits_by_ratio(user, user_apps, "user", "application")
+        elif not users_running:
+            utils.log_info("Check if user {0} limits must be reset".format(user["name"]), self.debug)
+            self.reset_limits(user, "user")
 
-    def dispatch_app(self, app, containers):
-        utils.log_info("Dispatching app {0} limit to containers".format(app["name"]), self.debug)
+    def dispatch_app(self, app, containers, apps_running):
         app_containers = [c for c in containers if c["name"] in app.get("containers", [])]
         if app_containers:
+            utils.log_info("Dispatching app {0} limit to containers".format(app["name"]), self.debug)
             self.dispatch_limits_by_ratio(app, app_containers, "application", "container")
+        elif not apps_running:
+            utils.log_info("Check if app {0} limits must be reset".format(app["name"]), self.debug)
+            self.reset_limits(app, "application")
 
     def dispatch_thread(self, ):
         try:
@@ -92,11 +116,13 @@ class LimitsDispatcher(Service):
             applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             users = utils.get_users(self.couchdb_handler, self.debug)
 
-            if users and applications:
-                utils.run_in_threads(users, self.dispatch_user, applications)
+            if users:
+                users_running = any(any(app.get("containers", []) for app in user.get("clusters", [])) for user in users)
+                utils.run_in_threads(users, self.dispatch_user, applications, users_running)
 
-            if applications and containers:
-                utils.run_in_threads(applications, self.dispatch_app, containers)
+            if applications:
+                apps_running = any([app.get("containers", []) for app in applications])
+                utils.run_in_threads(applications, self.dispatch_app, containers, apps_running)
 
         except Exception as e:
             utils.log_error("Some error ocurred dispatching limits: {0} {1}".format(str(e), str(traceback.format_exc())), self.debug)

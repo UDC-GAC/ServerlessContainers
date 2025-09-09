@@ -83,16 +83,24 @@ class BaseRebalancer(ABC):
     def scale_and_adjust_alloc_ratio(self, structure, resource, d_field, amount_to_scale, max_tries=3):
         old_value = structure["resources"][resource][d_field]
         new_value = old_value + amount_to_scale
+        old_ratio, new_ratio = None, None
         tries, put_done = 0, False
         while not put_done:
             tries += 1
             structure["resources"][resource][d_field] = new_value
-            # If allocation ratio is defined, adjust it according to the new max
-            if d_field == "max" and "alloc_ratio" in structure["resources"][resource]:
-                structure["resources"][resource]["alloc_ratio"] = float(structure["resources"][resource]["alloc_ratio"] * new_value / structure["resources"][resource][d_field])
+
+            # If "max" is updated register the amount rebalanced so the LimitsDispatcher can take it into account
+            if d_field == "max":
+                structure["resources"][resource]["rebalanced"] = structure["resources"][resource].get("rebalanced", 0) + amount_to_scale
+                # If allocation ratio is defined, adjust it according to the new max
+                if "alloc_ratio" in structure["resources"][resource]:
+                    old_ratio = structure["resources"][resource]["alloc_ratio"]
+                    new_ratio = float(old_ratio * new_value / structure["resources"][resource][d_field])
+                    structure["resources"][resource]["alloc_ratio"] = new_ratio
+
             utils.persist_data(structure, self.couchdb_handler, self.debug)
 
-            time.sleep(0.2)
+            time.sleep(0.5)
 
             structure = self.couchdb_handler.get_structure(structure["name"])
             put_done = structure["resources"][resource][d_field] == new_value
@@ -102,6 +110,8 @@ class BaseRebalancer(ABC):
                 return
 
         utils.log_info("Resource {0} value for structure {1} has been successfully updated from {2} to {3}".format(resource, structure["name"], old_value, new_value), self.debug)
+        if old_ratio is not None and new_ratio is not None:
+            utils.log_warning("Also updated allocation ratio from {0} to {1}".format(old_ratio, new_ratio), self.debug)
 
     @staticmethod
     def split_amount_in_slices(total_amount, slice_amount):
