@@ -34,8 +34,9 @@ from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db
 service_routes = Blueprint('services', __name__)
 
 STR_KEYS = {
-    "STRUCTURE_GUARDED", "ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY",  # Guardian
-    "CONTAINERS_SCOPE", "BALANCING_METHOD", "BALANCING_POLICY"  # ReBalancer
+    "STRUCTURE_GUARDED", "ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY",   # Guardian
+    "CONTAINERS_SCOPE", "BALANCING_METHOD", "BALANCING_POLICY",             # ReBalancer
+    "CONTROL_POLICY", "POWER_MODEL"                                         # EnergyController
 }
 BOOL_VALUES = {"true", "false"}
 
