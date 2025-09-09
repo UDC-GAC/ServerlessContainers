@@ -1,5 +1,6 @@
 import time
 import logging
+from logging.handlers import RotatingFileHandler
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.couchdb as couchdb
@@ -7,6 +8,9 @@ import src.StateDatabase.couchdb as couchdb
 
 class Service:
     """Base class for all services."""
+
+    MAX_LOG_SIZE = 100 * 1024 * 1024  # 100 MB
+    BACKUP_COUNT = 1  # Number of backup log files to keep
 
     def __init__(self, service_name, config_validator, default_config, sleep_attr="polling_frequency"):
         self.service_name = service_name
@@ -104,21 +108,26 @@ class Service:
     # --------- Main loop function ---------
 
     def run_loop(self):
+        # Set initial configuration
         service_config = utils.MyConfig(self._default_config)
 
-        logging.basicConfig(filename=self.service_name + ".log", level=logging.INFO,
-                            format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT)
+        # Configure service logging
+        handler = RotatingFileHandler(filename=self.service_name + ".log", maxBytes=self.MAX_LOG_SIZE, backupCount=self.BACKUP_COUNT)
+        logging.basicConfig(level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT, handlers=[handler])
 
         self.on_start()
 
         while True:
+            # Get configuration from CouchDB and update
             self._update_config(service_config)
 
+            # Do things after config update
             self.on_config_updated(service_config)
 
             t0 = self._start_epoch()
             self._print_config(service_config)
 
+            # Validate configuration
             invalid, message = self.invalid_conf(service_config)
             if invalid:
                 utils.log_error(message, self.debug)
@@ -126,6 +135,7 @@ class Service:
             if not self.active:
                 utils.log_warning("{0} is not activated".format(self.service_name.capitalize()), self.debug)
 
+            # Do main work
             thread = None
             if self.active and not invalid:
                 thread = self.work()
