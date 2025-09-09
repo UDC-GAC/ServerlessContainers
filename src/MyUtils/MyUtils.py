@@ -258,23 +258,25 @@ def get_resource(structure, resource):
 
 
 # CAN'T TEST
-def update_resource_in_couchdb(structure, resource, field, value, db_handler, debug, max_tries=3):
+def update_resource_in_couchdb(structure, resource, field, value, db_handler, debug, max_tries=3, backoff_time_ms=500):
     old_value = structure["resources"][resource][field]
     put_done = False
     tries = 0
     while not put_done:
-        tries += 1
+        if tries >= max_tries:
+            log_error("Could not update {0} '{1}' value for structure {2} for {3} tries, aborting"
+                      .format(resource, field, structure["name"], max_tries), debug)
+            return
+
         structure["resources"][resource][field] = value
         db_handler.update_structure(structure)
 
-        time.sleep(200 / 1000)
+        time.sleep(backoff_time_ms / 1000)
 
         structure = db_handler.get_structure(structure["name"])
         put_done = structure["resources"][resource][field] == value
 
-        if tries >= max_tries:
-            log_error("Could not update {0} value for structure {1} for {2} tries, aborting".format(resource, structure["name"], max_tries), debug)
-            return
+        tries += 1
 
     log_info("Resource {0} value for structure {1} has been updated from {2} to {3}".format(resource, structure["name"], old_value, value), debug)
 
