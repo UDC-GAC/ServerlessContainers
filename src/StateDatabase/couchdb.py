@@ -370,6 +370,9 @@ class CouchDBServer:
     def update_user(self, user, max_tries=10):
         return self.__resilient_update_doc(self.__users_db_name, user, max_tries=max_tries)
 
+    def delete_user(self, user):
+        self.__resilient_delete_doc(self.__users_db_name, user)
+
     # SERVICES #
     def get_services(self):
         return self.__get_all_database_docs(self.__services_db_name)

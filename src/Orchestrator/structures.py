@@ -31,22 +31,14 @@ from flask import request
 import time
 
 import src.MyUtils.MyUtils as utils
-from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES
+from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
 from src.Scaler.Scaler import set_container_resources, CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 
 structure_routes = Blueprint('structures', __name__)
 
-MANDATORY_RESOURCES = ["cpu", "mem"]
 CONTAINER_KEYS = ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]
 HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]
 APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script", "app_jar"]
-
-
-def retrieve_structure(structure_name):
-    try:
-        return get_db().get_structure(structure_name)
-    except ValueError:
-        return abort(404)
 
 
 @structure_routes.route("/structure/", methods=['GET'])
@@ -351,18 +343,28 @@ def restore_scaler_state(scaler_service, previous_state):
 
 @structure_routes.route("/structure/container/<structure_name>/<app_name>", methods=['PUT'])
 def subscribe_container_to_app(structure_name, app_name):
-    structure = retrieve_structure(structure_name)
+    container = retrieve_structure(structure_name)
     app = retrieve_structure(app_name)
-    cont_name = structure["name"]
+    cont_name = container["name"]
 
     # Look for any application that hosts this container, to make sure it is not already subscribed
     apps = get_db().get_structures(subtype="application")
     for application in apps:
         if cont_name in application["containers"]:
-            return abort(400, {"message": "Container '{0}' already subscribed in app '{1}'".format(cont_name, app_name)})
+            return abort(400, {"message": "Container '{0}' is already subscribed to app '{1}'".format(cont_name, application["name"])})
+
+    for resource in container["resources"]:
+        if resource in app["resources"]:
+            try:
+                alloc_ratio = container["resources"][resource]["max"] / app["resources"][resource]["max"]
+                container["resources"][resource]["alloc_ratio"] = alloc_ratio
+            except (ZeroDivisionError, KeyError) as e:
+                return abort(400, {"message": "Couldn't set allocation ratio for container '{0}' and "
+                                              "application '{1}': {2}".format(cont_name, app_name, str(e))})
 
     app["containers"].append(cont_name)
 
+    get_db().update_structure(container)
     get_db().update_structure(app)
     return jsonify(201)
 
@@ -593,55 +595,6 @@ def check_structure_exists(structure_name, structure_type, searching_for_existen
         return abort(400, {"message": "Structure {0} with name {1} does not exist".format(structure_type, structure_name)})
 
 
-def check_resources_data_is_present(data, res_info_type=None):
-    if len(res_info_type) > 1:
-        for res_info in res_info_type:
-            if "resources" not in data[res_info]:
-                return abort(400, {"message": "Missing resource {0} information".format(res_info)})
-            for resource in MANDATORY_RESOURCES:
-                if resource not in data[res_info]["resources"]:
-                    return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
-
-            if "disk" in data[res_info]["resources"] and ("disk_read" not in data[res_info]["resources"] or "disk_write" not in data[res_info]["resources"]):
-                return abort(400, {"message": "Missing disk read or write bandwidth for structure {0}".format(data[res_info])})
-
-    else:
-        res_info = res_info_type[0]
-        if "resources" not in data:
-            return abort(400, {"message": "Missing resource {0} information".format(res_info)})
-        for resource in MANDATORY_RESOURCES:
-            if resource not in data["resources"]:
-                return abort(400, {"message": "Missing '{0}' {1} resource information".format(resource, res_info)})
-
-
-def get_keys_from_requested_structure(req_structure, mandatory_keys, optional_keys=[]):
-    structure = {}
-    for key in mandatory_keys:
-        if key not in req_structure:
-            return abort(400, {"message": "Missing key '{0}'".format(key)})
-        else:
-            structure[key] = req_structure[key]
-
-    for key in optional_keys:
-        if key in req_structure:
-            structure[key] = req_structure[key]
-
-    structure["type"] = "structure"
-
-    return structure
-
-def get_resource_keys_from_requested_structure(req_structure, structure, resource, mandatory_keys, optional_keys=[]):
-    structure["resources"][resource] = {}
-    for key in mandatory_keys:
-        if key not in req_structure["resources"][resource]:
-            return abort(400, {"message": "Missing key '{0}' for '{1}' resource".format(key, resource)})
-        else:
-            structure["resources"][resource][key] = req_structure["resources"][resource][key]
-
-    for key in optional_keys:
-        if key in req_structure["resources"][resource]:
-            structure["resources"][resource][key] = req_structure["resources"][resource][key]
-
 @structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
 def subscribe_container(structure_name):
     node_scaler_session = requests.Session()
@@ -749,7 +702,7 @@ def subscribe_host(structure_name):
         return abort(400, {"message": "Could not connect to this host, is it up and has its node scaler up?"})
 
     # Check that all the needed data for resources is present on the request
-    check_resources_data_is_present(req_host, ["host"])
+    check_resources_data_is_present({"host": req_host}, ["host"])
 
     # Get data corresponding to host resources
     host["resources"] = {}
@@ -786,6 +739,7 @@ def desubscribe_host(structure_name):
     get_db().delete_structure(host)
 
     return jsonify(201)
+
 
 @structure_routes.route("/structure/apps/<structure_name>", methods=['PUT'])
 def subscribe_app(structure_name):
@@ -845,6 +799,7 @@ def desubscribe_app(structure_name):
     get_db().delete_limit(limits)
 
     return jsonify(201)
+
 
 @structure_routes.route("/structure/host/<structure_name>/disks", methods=['PUT'])
 def add_disks_to_host(structure_name):
