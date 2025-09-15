@@ -250,6 +250,8 @@ class CouchDBServer:
         req_docs = self.session.post(self.server + "/" + database + "/_find", data=json.dumps(query),
                                      headers={'Content-Type': 'application/json'})
         if req_docs.status_code != 200:
+            if req_docs.status_code == 404:
+                raise ValueError("Database '{0}' does not exist".format(database))
             req_docs.raise_for_status()
         else:
             return req_docs.json()["docs"]

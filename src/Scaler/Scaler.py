@@ -747,7 +747,7 @@ class Scaler(Service):
                     best_fit_container = self.lowest_current_to_usage_margin(container, best_fit_container, resource_label)
 
             # Generate the new request
-            new_request = Guardian.generate_request(best_fit_container, amount, resource_label)
+            new_request = utils.generate_request(best_fit_container, amount, resource_label)
 
             return True, best_fit_container, new_request
         else:

@@ -117,7 +117,7 @@ class LimitsDispatcher(Service):
             users = utils.get_users(self.couchdb_handler, self.debug)
 
             if users:
-                users_running = any(any(app.get("containers", []) for app in user.get("clusters", [])) for user in users)
+                users_running = any(any(app.get("containers", []) and app['name'] in user.get("clusters", []) for app in applications) for user in users)
                 utils.run_in_threads(users, self.dispatch_user, applications, users_running)
 
             if applications:

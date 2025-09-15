@@ -8,7 +8,7 @@ if __name__ == "__main__":
     handler = couchDB.CouchDBServer()
 
     #tables = ["events", "requests", "rules", "limits", "structures"]
-    tables = ["events", "requests", "limits", "structures"]
+    tables = ["events", "requests", "limits", "structures", "users"]
     for table in tables:
         initializer_utils.remove_db(table)
         initializer_utils.create_db(table)
