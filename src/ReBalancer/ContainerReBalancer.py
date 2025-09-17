@@ -299,7 +299,7 @@ class ContainerRebalancer(BaseRebalancer):
                 app_name = app["name"]
                 utils.log_info("Going to rebalance app {0} now".format(app_name), self.debug)
                 if self.balancing_method == "pair_swapping":
-                    self.pair_swapping(app_containers[app_name])
+                    self.pair_swapping(app_containers[app_name], app)
                 elif self.balancing_method == "weights":
                     utils.log_warning("Weights balancing method not yet supported in applications", self.debug)
                 else:

@@ -74,6 +74,6 @@ class ApplicationRebalancer(BaseRebalancer):
                 user_apps = [app for app in applications if app["name"] in user["clusters"]]
                 utils.log_info("Processing user {0} who has {1} valid applications registered".format(user["name"], len(user_apps)), self.debug)
                 if user_apps:
-                    self.pair_swapping(user_apps)
+                    self.pair_swapping(user_apps, user)
         else:
             self.pair_swapping(applications)

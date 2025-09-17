@@ -24,6 +24,8 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 import time
+from copy import deepcopy
+from threading import Thread
 from abc import ABC, abstractmethod
 from json_logic import jsonLogic
 
@@ -33,6 +35,7 @@ import src.MyUtils.MyUtils as utils
 class BaseRebalancer(ABC):
 
     STATIC_ATTRS = {"couchdb_handler"}
+    MANDATORY_FIELDS = {"max", "current", "usage", "min"}
     BALANCEABLE_RESOURCES = {"cpu", "disk", "energy"}
     REBALANCING_LEVEL = "base"
 
@@ -80,39 +83,6 @@ class BaseRebalancer(ABC):
                 return False
         return True
 
-    def scale_and_adjust_alloc_ratio(self, structure, resource, d_field, amount_to_scale, max_tries=3):
-        old_value = structure["resources"][resource][d_field]
-        new_value = old_value + amount_to_scale
-        old_ratio, new_ratio = None, None
-        tries, put_done = 0, False
-        while not put_done:
-            tries += 1
-            structure["resources"][resource][d_field] = new_value
-
-            # If "max" is updated register the amount rebalanced so the LimitsDispatcher can take it into account
-            if d_field == "max":
-                structure["resources"][resource]["rebalanced"] = structure["resources"][resource].get("rebalanced", 0) + amount_to_scale
-                # If allocation ratio is defined, adjust it according to the new max
-                if "alloc_ratio" in structure["resources"][resource]:
-                    old_ratio = structure["resources"][resource]["alloc_ratio"]
-                    new_ratio = float(old_ratio * new_value / structure["resources"][resource][d_field])
-                    structure["resources"][resource]["alloc_ratio"] = new_ratio
-
-            utils.persist_data(structure, self.couchdb_handler, self.debug)
-
-            time.sleep(0.5)
-
-            structure = self.couchdb_handler.get_structure(structure["name"])
-            put_done = structure["resources"][resource][d_field] == new_value
-
-            if tries >= max_tries:
-                utils.log_error("Could not update {0} value for structure {1} for {2} tries, aborting".format(resource, structure["name"], max_tries), self.debug)
-                return
-
-        utils.log_info("Resource {0} value for structure {1} has been successfully updated from {2} to {3}".format(resource, structure["name"], old_value, new_value), self.debug)
-        if old_ratio is not None and new_ratio is not None:
-            utils.log_warning("Also updated allocation ratio from {0} to {1}".format(old_ratio, new_ratio), self.debug)
-
     @staticmethod
     def split_amount_in_slices(total_amount, slice_amount):
         number_of_slices = int(total_amount // slice_amount)
@@ -137,13 +107,12 @@ class BaseRebalancer(ABC):
 
     def filter_rebalanceable_apps(self, applications):
         rebalanceable_apps = []
-
         for app in applications:
             # Unless otherwise specified, all applications are rebalanced
             if "rebalance" in app and not app["rebalance"]:
                 continue
-            # Single-container applications do not need internal rebalancing
-            if self.REBALANCING_LEVEL == "container" and len(app["containers"]) <= 1:
+            # Applications not running do not need internal rebalancing
+            if self.REBALANCING_LEVEL == "container" and len(app["containers"]) == 0:
                 continue
             # If app match the criteria, it is added to the list
             rebalanceable_apps.append(app)
@@ -153,26 +122,45 @@ class BaseRebalancer(ABC):
     def generate_scaling_request(self, structure, resource, amount_to_scale, requests):
         self.print_scaling_info(structure, amount_to_scale, resource, "current")
         request = utils.generate_request(structure, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1)
+        if resource == "energy":
+            request["resource"] = "energy"
         requests.setdefault(structure["name"], []).append(request)
 
-    def update_resource_in_couchdb(self, structure, resource, d_field, amount_to_scale):
-        self.print_scaling_info(structure, amount_to_scale, resource, d_field)
-        self.scale_and_adjust_alloc_ratio(structure, resource, d_field, amount_to_scale)
+    def distribute_parent_limit(self, parent_structure, child_structures, resource, requests):
+        agg_limit = sum(s["resources"][resource]["max"] for s in child_structures)
+        parent_limit = parent_structure.get("resources", {}).get(resource, {}).get("max", None)
+        if parent_limit is not None and agg_limit > 0 and agg_limit != parent_limit:
+            utils.log_warning("Adjust the aggregate {0} limit of {1}s subscribed to {2} ({3}) to the limit of {2} ({4})."
+                              .format(resource, self.REBALANCING_LEVEL, parent_structure["name"], agg_limit, parent_limit), self.debug)
+            direction = 1 if agg_limit < parent_limit else -1
+            total_amount = abs(int(parent_limit - agg_limit))
+            child_structures = sorted(child_structures, key=lambda s: s["resources"][resource]["max"] - s["resources"][resource]["current"], reverse=(agg_limit > parent_limit))
+            slices_to_distribute = self.split_amount_in_slices(int(total_amount), 25)
+            while slices_to_distribute:
+                for structure in child_structures:
+                    if not slices_to_distribute:
+                        break
+                    amount_to_scale = slices_to_distribute.pop() * direction
+                    max_scale_down = structure["resources"][resource]["max"] - structure["resources"][resource]["current"]
 
-    def manage_rebalancing(self, donor, receiver, resource, d_field, amount_to_scale, requests):
+                    # If scaling down, ensure that structure will not scale "max" below its "current" limit
+                    if direction == -1 and abs(amount_to_scale) > max_scale_down:
+                        slices_to_distribute.append(amount_to_scale + max_scale_down)
+                        amount_to_scale = -max_scale_down
+                    if amount_to_scale != 0:
+                        self.generate_scaling_request(structure, resource, amount_to_scale, requests)
+                        # Update the value in dict in order to properly split structures in donors/receivers later
+                        structure["resources"][resource]["max"] = structure["resources"][resource]["max"] + amount_to_scale
+
+    def manage_rebalancing(self, donor, receiver, resource, amount_to_scale, requests):
         if amount_to_scale == 0:
-            utils.log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor["name"], receiver["name"]), self.debug)
+            utils.log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor.get("name"), receiver.get("name")), self.debug)
             return
-
         # Create the pair of scaling requests
-        if d_field == "current" and resource != "energy":
+        if receiver:
             self.generate_scaling_request(receiver, resource, amount_to_scale, requests)
+        if donor:
             self.generate_scaling_request(donor, resource, -amount_to_scale, requests)
-        # Max limits are directly updated in CouchDB. Energy "current" is also updated in CouchDB as NodeRescaler
-        # cannot modify an energy physical limit
-        else:
-            self.update_resource_in_couchdb(receiver, resource, d_field, amount_to_scale)
-            self.update_resource_in_couchdb(donor, resource, d_field, -amount_to_scale)
 
     def map_role_to_rule(self, resource, role):
         if role == "donors":
@@ -196,31 +184,32 @@ class BaseRebalancer(ABC):
         for structure in structures:
             data = {}
             for r in structure["resources"]:
-                try:
-                    data[r] = {"structure": {r: {
-                        "usage": structure["resources"][r]["usage"],
-                        "min": structure["resources"][r]["min"],
-                        "max": structure["resources"][r]["max"],
-                        "current": structure["resources"][r]["current"]}}}
-                except KeyError:
+                data[r] = {"structure": {r: {}}}
+                if self.has_required_fields(structure, resource, self.MANDATORY_FIELDS):
+                    for f in self.MANDATORY_FIELDS:
+                        data[r]["structure"][r][f] = structure["resources"][r][f]
+                else:
+                    utils.log_warning("Structure is missing {0} some mandatory fields for resource '{1}': {2}"
+                                      .format(structure["name"], r, self.MANDATORY_FIELDS), self.debug)
                     continue
-            # Check if container activate the rule: it has low resource usage (donors) or a bottleneck (receivers)
-            for role in valid_roles:
-                if jsonLogic(rule[role]["rule"], data):
-                    filtered_structures[role].append(structure)
+
+                # Check if structure activates the rule: it has low resource usage (donors) or a bottleneck (receivers)
+                for role in valid_roles:
+                    if jsonLogic(rule[role]["rule"], data):
+                        filtered_structures[role].append(structure)
 
         return filtered_structures["donors"], filtered_structures["receivers"]
 
     def split_structures_using_thresholds(self, structures, resource):
         donors, receivers = [], []
         for structure in structures:
-            try:
-                data = {
-                    "usage": structure["resources"][resource]["usage"],
-                    "min": structure["resources"][resource]["min"],
-                    "max": structure["resources"][resource]["max"],
-                    "current": structure["resources"][resource]["current"]}
-            except KeyError:
+            data = {}
+            if self.has_required_fields(structure, resource, self.MANDATORY_FIELDS):
+                for f in self.MANDATORY_FIELDS:
+                    data[f] = structure["resources"][resource][f]
+            else:
+                utils.log_warning("Structure is missing {0} some mandatory fields for resource '{1}': {2}"
+                                  .format(structure["name"], resource, self.MANDATORY_FIELDS), self.debug)
                 continue
 
             if self.is_donor(data):
@@ -243,30 +232,54 @@ class BaseRebalancer(ABC):
 
         return donors, receivers
 
-    def send_final_requests(self, requests):
+    def update_structures_in_couchdb(self, structures, resource, d_field, requests):
+        threads = []
+        for structure in structures:
+            amount_to_scale = requests.get(structure["name"], {}).get("amount", 0)
+            if amount_to_scale != 0:
+                utils.log_info("    {0}: {1}".format(structure["name"], amount_to_scale), self.debug)
+                new_value = structure["resources"][resource][d_field] + amount_to_scale
+                thread = Thread(name="update_{0}".format(structure["name"]), target=utils.update_resource_in_couchdb,
+                                args=(structure, resource, d_field, new_value, self.couchdb_handler, self.debug),
+                                kwargs={"max_tries": 5, "backoff_time_ms": 500})
+                thread.start()
+                threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+    def send_final_requests(self, structures, requests, resource, d_field):
         # For each structure, aggregate all its requests in a single request
-        final_requests = list()
+        final_requests = []
+        final_requests_by_name = {}
         for structure in requests:
             # Copy the first request as the base request
             flat_request = dict(requests[structure][0])
             flat_request["amount"] = sum(req["amount"] for req in requests[structure])
             final_requests.append(flat_request)
+            final_requests_by_name[structure] = flat_request
 
-        utils.log_info("REQUESTS ARE:", self.debug)
+        utils.debug_info("REQUESTS ARE:", self.debug)
         for c in requests.values():
             for r in c:
-                utils.debug_info(r, self.debug)
+                utils.debug_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
 
-        # TODO: Adjust requests amounts according to the maximums (trim), otherwise the scaling down will be performed
-        #  but not the scaling up, and shares will be lost
+        # Sort requests so the ones that increase the limit are first
+        final_requests = sorted(final_requests, key=lambda r: r["amount"], reverse=True)
         utils.log_info("FINAL REQUESTS ARE:", self.debug)
-        for r in final_requests:
-            utils.debug_info(r, self.debug)
-            self.couchdb_handler.add_request(r)
+        if d_field == "current" and resource != "energy":
+            for r in final_requests:
+                utils.log_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
+                self.couchdb_handler.add_request(r)
+        else:
+            # Max limits are directly updated in CouchDB.
+            # Energy "current" is also updated in CouchDB as NodeRescaler cannot modify an energy physical limit
+            self.update_structures_in_couchdb(structures, resource, d_field, final_requests_by_name)
 
     # --------- Rebalancing algorithms ---------
 
-    def pair_swapping(self, structures):
+    def pair_swapping(self, structures, parent_structure=None):
+        original_structures = deepcopy(structures)
         for resource in self.resources_balanced:
             if resource not in self.BALANCEABLE_RESOURCES:
                 utils.log_warning("'{0}' not yet supported in pair-swapping balancing, only '{1}' available at the "
@@ -274,103 +287,104 @@ class BaseRebalancer(ABC):
                 continue
             utils.log_info("Rebalancing resource '{0}' at {1} level by pair-swapping".format(resource, self.REBALANCING_LEVEL), self.debug)
 
-            donors, receivers = self.split_structures_by_role(structures, resource)
-
-            if not receivers:
-                utils.log_info("No structure to receive resource {0} shares".format(resource), self.debug)
-                return
-
-            self.print_donors_and_receivers(donors, receivers)
-
-            # Select the field to be rebalanced for this resource
-            d_field = self.select_donated_field(resource)
-
-            # Order the structures from lower to upper resource limit
-            receivers = sorted(receivers, key=lambda s: s["resources"][resource][d_field])
-
-            donor_slices = dict()
-            for container in donors:
-                # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
-                _max = container["resources"][resource]["max"]
-                _current = container["resources"][resource]["current"]
-                _min = container["resources"][resource]["min"]
-                _usage = container["resources"][resource]["usage"]
-
-                stolen_amount = None
-                # Give stolen percentage of the gap between max and current limit (or usage if current is lower)
-                if d_field == "max":
-                    stolen_amount = self.stolen_percentage * (_max - max(_current,  _usage))
-
-                # Give stolen percentage of the gap between current limit and current usage (or min if usage is lower)
-                if d_field == "current":
-                    stolen_amount = self.stolen_percentage * (_current - max(_min,  _usage))
-
-                if not stolen_amount:
-                    utils.log_warning("It wasn't possible to compute a stolen amount for structure {0} "
-                                      "(donated field = {1})".format(container["name"], d_field), self.debug)
-                    continue
-
-                # Divide the total amount to donate in slices of 25 units
-                key = self.get_donor_slice_key(container, resource)
-                for slice_amount in self.split_amount_in_slices(int(stolen_amount), 25):
-                    donor_slices.setdefault(key, []).append((container, slice_amount))
-
-            # Remove donor slices that cannot be given to any receiver
-            for key in list(donor_slices.keys()):
-                if all(key != self.get_donor_slice_key(r, resource) for r in receivers):
-                    del donor_slices[key]
-                else:
-                    donor_slices[key] = sorted(donor_slices[key], key=lambda c: c[1])
-
             requests = {}
-            received_amount = {}
-            while donor_slices:
-                # Print current donor slices
-                self.print_donor_slices(donor_slices)
+            # Field to be donated: "max" or "current"
+            d_field = self.select_donated_field(resource)
+            # If parent structure is defined, adjust "max" limits to be equal to the parent limit
+            if parent_structure and d_field == "max":
+                self.distribute_parent_limit(parent_structure, structures, resource, requests)
 
-                if not receivers:
-                    break
+            donors, receivers = self.split_structures_by_role(structures, resource)
+            if receivers:
+                self.print_donors_and_receivers(donors, receivers)
 
-                # The loop iterates over a copy so that the list of receivers can be modified inside the loop
-                for receiver in list(receivers):
-                    receiver_name = receiver["name"]
-                    key = self.get_donor_slice_key(receiver, resource)
+                # Order the structures from lower to upper resource limit
+                receivers = sorted(receivers, key=lambda s: s["resources"][resource][d_field])
 
-                    if key not in donor_slices:
-                        utils.log_info("No suitable donors have been found for receiver {0}, searched for by key '{1}'".format(receiver["name"], key), self.debug)
-                        receivers.remove(receiver)
+                donor_slices = dict()
+                for container in donors:
+                    # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
+                    _max = container["resources"][resource]["max"]
+                    _current = container["resources"][resource]["current"]
+                    _min = container["resources"][resource]["min"]
+                    _usage = container["resources"][resource]["usage"]
+
+                    stolen_amount = None
+                    # Give stolen percentage of the gap between max and current limit (or usage if current is lower)
+                    if d_field == "max":
+                        stolen_amount = self.stolen_percentage * (_max - max(_current,  _usage))
+
+                    # Give stolen percentage of the gap between current limit and current usage (or min if usage is lower)
+                    if d_field == "current":
+                        stolen_amount = self.stolen_percentage * (_current - max(_min,  _usage))
+
+                    if not stolen_amount:
+                        utils.log_warning("It wasn't possible to compute a stolen amount for structure {0} "
+                                          "(donated field = {1})".format(container["name"], d_field), self.debug)
                         continue
 
-                    # When donating "current", structure can't receive more than its max also taking into account its previous donations
-                    max_receiver_amount = (receiver["resources"][resource]["max"] -
-                                           receiver["resources"][resource]["current"] -
-                                           received_amount.setdefault(receiver_name, 0))
+                    # Divide the total amount to donate in slices of 25 units
+                    key = self.get_donor_slice_key(container, resource)
+                    for slice_amount in self.split_amount_in_slices(int(stolen_amount), 25):
+                        donor_slices.setdefault(key, []).append((container, slice_amount))
 
-                    if d_field == "current" and max_receiver_amount <= 0:
-                        receivers.remove(receiver)
-                        continue
-
-                    # Get and remove one slice from the list
-                    donor, amount_to_scale = donor_slices[key].pop()
-
-                    # Trim the amount to scale if needed and return the remaining amount to the donor slices
-                    if d_field == "current" and amount_to_scale > max_receiver_amount:
-                        donor_slices[key].append((donor, amount_to_scale - max_receiver_amount))
-                        amount_to_scale = max_receiver_amount
-
-                    # If all the resources from the donors corresponding to this key have been donated, key is removed
-                    if not donor_slices[key]:
+                # Remove donor slices that cannot be given to any receiver
+                for key in list(donor_slices.keys()):
+                    if all(key != self.get_donor_slice_key(r, resource) for r in receivers):
                         del donor_slices[key]
+                    else:
+                        donor_slices[key] = sorted(donor_slices[key], key=lambda c: c[1])
 
-                    # Manage necessary scalings to rebalance resource between donor and receiver
-                    self.manage_rebalancing(donor, receiver, resource, d_field, amount_to_scale, requests)
+                received_amount = {}
+                while donor_slices:
+                    # Print current donor slices
+                    self.print_donor_slices(donor_slices)
 
-                    # Update the received amount for this container
-                    received_amount[receiver_name] += amount_to_scale
+                    if not receivers:
+                        break
 
-                    utils.log_info("Resource {0} swap between {1} (donor) and {2} (receiver) with amount {3}".format(
-                        resource, donor["name"], receiver["name"], amount_to_scale), self.debug)
+                    # The loop iterates over a copy so that the list of receivers can be modified inside the loop
+                    for receiver in list(receivers):
+                        receiver_name = receiver["name"]
+                        key = self.get_donor_slice_key(receiver, resource)
+
+                        if key not in donor_slices:
+                            utils.log_info("No suitable donors have been found for receiver {0}, searched for by key '{1}'".format(receiver["name"], key), self.debug)
+                            receivers.remove(receiver)
+                            continue
+
+                        # When donating "current", structure can't receive more than its max also taking into account its previous donations
+                        max_receiver_amount = (receiver["resources"][resource]["max"] -
+                                               receiver["resources"][resource]["current"] -
+                                               received_amount.setdefault(receiver_name, 0))
+
+                        if d_field == "current" and max_receiver_amount <= 0:
+                            receivers.remove(receiver)
+                            continue
+
+                        # Get and remove one slice from the list
+                        donor, amount_to_scale = donor_slices[key].pop()
+
+                        # Trim the amount to scale if needed and return the remaining amount to the donor slices
+                        if d_field == "current" and amount_to_scale > max_receiver_amount:
+                            donor_slices[key].append((donor, amount_to_scale - max_receiver_amount))
+                            amount_to_scale = max_receiver_amount
+
+                        # If all the resources from the donors corresponding to this key have been donated, key is removed
+                        if not donor_slices[key]:
+                            del donor_slices[key]
+
+                        # Manage necessary scalings to rebalance resource between donor and receiver
+                        self.manage_rebalancing(donor, receiver, resource, amount_to_scale, requests)
+
+                        # Update the received amount for this container
+                        received_amount[receiver_name] += amount_to_scale
+
+                        utils.log_info("Resource {0} swap between {1} (donor) and {2} (receiver) with amount {3}".format(
+                            resource, donor["name"], receiver["name"], amount_to_scale), self.debug)
+            else:
+                utils.log_info("No structure to receive resource {0} shares".format(resource), self.debug)
 
             # If some requests have been generated, send them to CouchDB
             if requests:
-                self.send_final_requests(requests)
+                self.send_final_requests(original_structures, requests, resource, d_field)
