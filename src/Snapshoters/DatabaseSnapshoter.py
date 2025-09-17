@@ -89,12 +89,15 @@ class DatabaseSnapshoter(Service):
         # Remote database operation
         for user in self.couchdb_handler.get_users():
             timestamp = int(time.time())
-            for submetric in ["used", "max", "usage", "current"]:
-                timeseries = dict(metric="user.energy.{0}".format(submetric),
-                                  value=user["energy"][submetric],
-                                  timestamp=timestamp,
-                                  tags={"user": user["name"]})
-                docs.append(timeseries)
+            for resource in user["resources"]:
+                for field in ["max", "current", "usage", "min"]:
+                    value = user["resources"].get(resource, {}).get(field, None)
+                    if value is not None:
+                        timeseries = dict(metric="structure.{0}.{1}".format(resource, field),
+                                          value=value,
+                                          timestamp=timestamp,
+                                          tags={"user": user["name"]})
+                        docs.append(timeseries)
         return docs
 
     def get_limits(self, ):
@@ -147,7 +150,6 @@ class DatabaseSnapshoter(Service):
             else:
                 num_sent_docs = len(docs)
         return num_sent_docs
-
 
     def persist_docs(self, doc_type):
         t0 = time.time()

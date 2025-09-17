@@ -60,14 +60,14 @@ class ReFeeder(Service):
         # Get all applications belonging to user and aggregate usages
         user_apps = [app for app in applications if app["name"] in user["clusters"]]
         for resource in self.generated_metrics:
-            user.setdefault(resource, {})["usage"] = 0
+            user["resources"].setdefault(resource, {})["usage"] = 0
             for app in user_apps:
                 value = app.get("resources", {}).get(resource, {}).get("usage", None)
                 if value is None:
                     utils.log_warning("Missing usage for resource '{0}' in application {1} from user {2}".format(
                         resource, app["name"], user["name"]), self.debug)
                     continue
-                user[resource]["usage"] += value
+                user["resources"][resource]["usage"] += value
 
         self.user_tracker.append(user)
 

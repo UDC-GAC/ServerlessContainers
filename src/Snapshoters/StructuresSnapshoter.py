@@ -59,10 +59,10 @@ class StructuresSnapshoter(Service):
         # Aggregate resources for all the applications belonging to the user
         user_apps = [app for app in applications if app["name"] in user["clusters"]]
         for resource in self.resources_persisted:
-            if not user.get(resource, None):
+            if not user.get("resources", {}).get(resource, None):
                 utils.log_error("User {0} is missing info of resource {1}".format(user["name"], resource), self.debug)
                 continue
-            user[resource]["current"] = 0
+            user["resources"][resource]["current"] = 0
 
             for app in user_apps:
                 value = app["resources"].get(resource, {}).get("current", None)
@@ -70,7 +70,7 @@ class StructuresSnapshoter(Service):
                     utils.log_warning("Application {0} info is missing for user {1} and resource {2}, user info will not be "
                                       "totally accurate".format(app["name"], user["name"], resource), self.debug)
                     continue
-                user[resource]["current"] += int(value)
+                user["resources"][resource]["current"] += int(value)
 
         # Register in tracker to persist later
         self.user_tracker.append(user)
@@ -164,7 +164,7 @@ class StructuresSnapshoter(Service):
                 applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             users = self.couchdb_handler.get_users()
             if users:
-                utils.run_in_threads(users, self.update_user, users, applications)
+                utils.run_in_threads(users, self.update_user, applications)
         utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Persist structures and users in database

@@ -269,7 +269,7 @@ def update_resource_in_couchdb(structure, resource, field, value, db_handler, de
             return
 
         structure["resources"][resource][field] = value
-        db_handler.update_structure(structure)
+        persist_data(structure, db_handler, debug)
 
         time.sleep(backoff_time_ms / 1000)
 
@@ -298,10 +298,10 @@ def update_user(user, db_handler, debug, max_tries=10):
 
 
 def persist_data(data, db_handler, debug):
-    if data["type"] == "structure":
-        update_structure(data, db_handler, debug)  # Remote database operation
-    elif data["type"] == "user":
+    if data["type"] == "user" or data["subtype"] == "user":
         update_user(data, db_handler, debug)  # Remote database operation
+    elif data["type"] == "structure":
+        update_structure(data, db_handler, debug)  # Remote database operation
     else:
         log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
 
