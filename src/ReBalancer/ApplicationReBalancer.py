@@ -24,6 +24,7 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 import requests
+from copy import deepcopy
 
 import src.MyUtils.MyUtils as utils
 from src.ReBalancer.BaseRebalancer import BaseRebalancer
@@ -55,15 +56,25 @@ class ApplicationRebalancer(BaseRebalancer):
         utils.log_info("-------------------- APPLICATION BALANCING --------------------", self.debug)
 
         applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
+        original_apps = deepcopy(applications)
         users = []
         try:
             users = self.couchdb_handler.get_users()
         except requests.exceptions.HTTPError:
             utils.log_warning("No registered users were found on the platform, all the applications will be balanced as a single cluster", self.debug)
 
+        # Distribute user limit across applications if user_max != sum(app_max)
+        requests_by_user = {}
+        for user in users:
+            requests_by_user[user["name"]] = {}
+            user_apps = [app for app in applications if app["name"] in user["clusters"]]
+            if user_apps:
+                self.distribute_parent_limit(user, user_apps, requests_by_user[user["name"]])
+
         applications = self.filter_rebalanceable_apps(applications)
+        # If we want to distribute user limit only across running applications move this condition above
         if self.only_running:
-            applications = [app for app in applications if app.get("containers", [])]
+            applications = [app for app in applications if app.get("running", False)]
 
         if not applications:
             utils.log_warning("No {0} applications to rebalance".format("running" if self.only_running else "registered"), self.debug)
@@ -74,6 +85,10 @@ class ApplicationRebalancer(BaseRebalancer):
                 user_apps = [app for app in applications if app["name"] in user["clusters"]]
                 utils.log_info("Processing user {0} who has {1} valid applications registered".format(user["name"], len(user_apps)), self.debug)
                 if user_apps:
-                    self.pair_swapping(user_apps, user)
+                    self.pair_swapping(user_apps, requests_by_user.get(user["name"], {}))
+                self.send_final_requests(original_apps, requests_by_user.get(user["name"], {}))
         else:
-            self.pair_swapping(applications)
+            _requests = {}
+            self.pair_swapping(applications, _requests)
+            self.send_final_requests(original_apps, _requests)
+

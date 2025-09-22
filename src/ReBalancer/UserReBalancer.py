@@ -62,10 +62,12 @@ class UserRebalancer(BaseRebalancer):
 
         # Filter only users that have at least one application running
         if self.only_running:
-            users = [user for user in users if any(app.get("containers", []) for app in user.get("clusters", []))]
+            users = [user for user in users if any(app.get("running", False) for app in user.get("clusters", []))]
 
         if not users:
             utils.log_warning("No {0} users to rebalance".format("running" if self.only_running else "registered"), self.debug)
             return
 
-        self.pair_swapping(users)
+        _requests = {}
+        self.pair_swapping(users, _requests)
+        self.send_final_requests(users, _requests)
