@@ -119,40 +119,50 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     return jsonify(201)
 
 
-def set_structure_to_guarded_state(structure_name, state):
+def set_structure_boolean_parameter(structure_name, parameter, state):
     if state not in [True, False]:
-        return abort(400, {"message": "Invalid guarded state"})
+        return abort(400, {"message": "Invalid {0} state".format(parameter)})
 
     structure = retrieve_structure(structure_name)
 
-    if "guard" in structure and structure["guard"] == state:
+    if parameter in structure and structure[parameter] == state:
         return jsonify(201)
 
     put_done = False
     tries = 0
     while not put_done:
         tries += 1
-        structure["guard"] = state
+        structure[parameter] = state
         get_db().update_structure(structure)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
         structure = retrieve_structure(structure_name)
-        put_done = structure["guard"] == state
+        put_done = structure[parameter] == state
 
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
 
+@structure_routes.route("/structure/<structure_name>/run", methods=['PUT'])
+def set_structure_to_running(structure_name):
+    return set_structure_boolean_parameter(structure_name, "running", True)
+
+
+@structure_routes.route("/structure/<structure_name>/stop", methods=['PUT'])
+def set_structure_to_stop(structure_name):
+    return set_structure_boolean_parameter(structure_name, "running", False)
+
+
 @structure_routes.route("/structure/<structure_name>/guard", methods=['PUT'])
 def set_structure_to_guarded(structure_name):
-    return set_structure_to_guarded_state(structure_name, True)
+    return set_structure_boolean_parameter(structure_name, "guard", True)
 
 
 @structure_routes.route("/structure/<structure_name>/unguard", methods=['PUT'])
 def set_structure_to_unguarded(structure_name):
-    return set_structure_to_guarded_state(structure_name, False)
+    return set_structure_boolean_parameter(structure_name, "guard", False)
 
 
 @structure_routes.route("/structure/<structure_name>/resources/<resource>/guard", methods=['PUT'])
