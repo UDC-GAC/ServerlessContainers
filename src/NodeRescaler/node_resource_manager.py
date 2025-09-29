@@ -442,6 +442,22 @@ def get_device_major_minor(device_path):
 
     return None
 
+def get_container_disk_blocksize(container_id, container_engine, major_minor_str):
+
+    if container_engine == "apptainer":
+
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        estimate_io_op_script_path = "/".join([script_dir, "..", "..", "scripts", container_engine, "estimate_blocksize.sh"])
+        estimate_io_op = subprocess.Popen(
+            ["/bin/bash", estimate_io_op_script_path, str(container_id), major_minor_str],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+
+        out, err = estimate_io_op.communicate()
+
+        return out.decode('utf-8').split()
+    else:
+        return None
 
 def get_node_disks(container_id, device, device_mountpoint, container_engine):
     retrieved_disks = list()
@@ -469,6 +485,8 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
     else:
         device_write_limit = -1
 
+    read_bs, write_bs = get_container_disk_blocksize(container_id, container_engine, major_minor_str)
+
     disk_dict = dict()
 
     disk_dict["disk_read"] = dict()
@@ -478,6 +496,7 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
     disk_dict["disk_read"]["minor"] = minor
     disk_dict["disk_read"]["unit"] = "Mbit"
     disk_dict["disk_read"][DISK_READ_LIMIT_LABEL] = device_read_limit
+    disk_dict["disk_read"]["blocksize"] = read_bs
 
     disk_dict["disk_write"] = dict()
     disk_dict["disk_write"]["mountpoint"] = device_mountpoint
@@ -486,6 +505,7 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
     disk_dict["disk_write"]["minor"] = minor
     disk_dict["disk_write"]["unit"] = "Mbit"
     disk_dict["disk_write"][DISK_WRITE_LIMIT_LABEL] = device_write_limit
+    disk_dict["disk_write"]["blocksize"] = write_bs
 
     retrieved_disks.append(disk_dict)
 

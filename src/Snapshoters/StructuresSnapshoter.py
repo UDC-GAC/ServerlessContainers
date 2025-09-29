@@ -80,6 +80,14 @@ def update_container_current_values(container_name, limits):
         else:
             structure["resources"]["disk"]["current"] = structure["resources"]["disk_read"]["current"] + structure["resources"]["disk_write"]["current"]
 
+    for res in ["disk_read", "disk_write"]:
+        ## Blocksize estimation
+        if res in resources_persisted and res in structure["resources"]:
+            if "blocksize" in limits[res]:
+                structure["resources"][res]["blocksize"] = limits[res]["blocksize"]
+            else:
+                structure["resources"][res]["blocksize"] = -1
+
     # Remote database operation
     update_structure(structure, db_handler, debug)
 
