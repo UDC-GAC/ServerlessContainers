@@ -125,10 +125,26 @@ class ContainerRebalancer:
             requests[container["name"]] = list()
         requests[container["name"]].append(request)
 
-    def __send_final_requests(self, requests):
+    def __send_final_requests(self, requests, resource=None):
         # For each container, aggregate all its requests in a single request
         final_requests = list()
         for container in requests:
+
+            # Separate disk read and write requests
+            if resource and resource == "disk":
+                read_flat_request  = None
+                write_flat_request = None
+                for req in requests[container]:
+                    if "Disk_read" in req["action"]:
+                        if not read_flat_request: read_flat_request = dict(req)
+                        else: read_flat_request["amount"] += req["amount"]
+                    if "Disk_write" in req["action"]:
+                        if not write_flat_request: write_flat_request = dict(req)
+                        else: write_flat_request["amount"] += req["amount"]
+
+                if read_flat_request:  final_requests.append(read_flat_request)
+                if write_flat_request: final_requests.append(write_flat_request)
+
             # Copy the first request as the base request
             flat_request = dict(requests[container][0])
             flat_request["amount"] = sum(req["amount"] for req in requests[container])
@@ -406,27 +422,47 @@ class ContainerRebalancer:
                     self.__generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
 
         def get_new_allocations_by_disk(containers, requests, disk_name):
-            total_allocated_bw = 0
+            #total_allocated_bw = 0
+            total_allocated_bw = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"])
             weight_sum = 0
             weight_read_sum = 0
             weight_write_sum = 0
             participants = {"disk_read": [], "disk_write": []}
             for container in containers:
-                if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]): 
+                if all(resource in container["resources"] and "weight" in container["resources"][resource] for resource in ["disk_read", "disk_write"]):
+
+                    ## factor adjustment for random I/O usage
+                    for res in ["disk_read", "disk_write"]:
+                        if "blocksize" in container["resources"][res]:
+                            blocksize = int(container["resources"][res]["blocksize"])
+
+                            if blocksize > 0 and blocksize < 64:
+                                if res == "disk_read": ratio_label = "read_ratio"
+                                else: ratio_label = "write_ratio"
+                                ratio = host["resources"]["disks"][disk_name][ratio_label]
+
+                                container["resources"][res]["usage"] *= ratio
+
                     read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < balanceable_resources["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
                     write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < balanceable_resources["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
 
                     if read_usage_threshold:
                         participants["disk_read"].append({"container_info": container})
-                        total_allocated_bw += container["resources"]["disk_read"]["current"]
+                        #total_allocated_bw += container["resources"]["disk_read"]["current"]
                         weight_sum      += container["resources"]["disk_read"]["weight"]
                         weight_read_sum += container["resources"]["disk_read"]["weight"]
+                    elif container["resources"]["disk_read"]["current"] >= container["resources"]["disk_read"]["min"]:
+                        total_allocated_bw -= container["resources"]["disk_read"]["min"]
+                        participants["disk_read"].append({"container_info": container, "new_alloc": container["resources"]["disk_read"]["min"]})
 
                     if write_usage_threshold:
                         participants["disk_write"].append({"container_info": container})
-                        total_allocated_bw += container["resources"]["disk_write"]["current"]
+                        #total_allocated_bw += container["resources"]["disk_write"]["current"]
                         weight_sum       += container["resources"]["disk_write"]["weight"]
                         weight_write_sum += container["resources"]["disk_write"]["weight"]
+                    elif container["resources"]["disk_write"]["current"] >= container["resources"]["disk_write"]["min"]:
+                        total_allocated_bw -= container["resources"]["disk_write"]["min"]
+                        participants["disk_write"].append({"container_info": container, "new_alloc": container["resources"]["disk_write"]["min"]})
 
             if weight_sum > 0:
                 read_distribution = total_allocated_bw * (weight_read_sum / weight_sum)
@@ -534,7 +570,7 @@ class ContainerRebalancer:
             else:
                 get_new_allocations(resource, containers, requests)
 
-            self.__send_final_requests(requests)
+            self.__send_final_requests(requests, resource)
 
         log_info("_______________", self.__debug)
 
