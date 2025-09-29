@@ -757,7 +757,7 @@ def subscribe_host(structure_name):
             host["resources"][resource] = {}
             for disk in req_host["resources"][resource]:
                 new_disk = {}
-                for key in ["type", "load", "path", "max_read", "free_read", "max_write", "free_write"]:
+                for key in ["type", "load", "path", "max_read", "free_read", "read_ratio", "max_write", "free_write", "write_ratio"]:
                     if key not in disk:
                         return abort(400, {"message": "Missing key '{0}' in disk resource information".format(key)})
                     else:
@@ -873,7 +873,7 @@ def add_disks_to_host(structure_name):
         if disk['name'] in host['resources']['disks']: continue
 
         new_disk = {}
-        for key in ["type", "load", "path", "max_read", "free_read", "max_write", "free_write"]:
+        for key in ["type", "load", "path", "max_read", "free_read", "read_ratio", "max_write", "free_write", "write_ratio"]:
             if key not in disk:
                 return abort(400, {"message": "Missing key {0} for disk resource".format(key)})
             else:
