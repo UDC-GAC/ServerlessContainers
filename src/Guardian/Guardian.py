@@ -769,7 +769,7 @@ class Guardian:
                 rule["generates"] == "events" and \
                 jsonLogic(rule["rule"], data)
 
-    def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
+    def match_usages_and_limits(self, structure_name, rules, usages, limits, resources, host):
 
         resources_with_rules = list()
         for rule in rules:
@@ -799,10 +799,30 @@ class Guardian:
             struct_type, usage_resource = keys[0], keys[1]
             # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
             if usage_resource in useful_resources:
+
+                ## factor adjustment for random I/O usage
+                if usage_resource in ["disk_read", "disk_write"]:
+                    if usage_resource == "disk_read": ratio_label = "read_ratio"
+                    else: ratio_label = "write_ratio"
+
+                    ratio = host["resources"]["disks"][resources["disk"]["name"]][ratio_label]
+                    blocksize = int(resources[usage_resource]["blocksize"])
+
+                    if blocksize > 0 and blocksize < 64:
+                        usages[usage_metric] *= ratio
+
                 data[usage_resource][struct_type][usage_resource][keys[2]] = usages[usage_metric]
 
         events = []
         for rule in rules:
+
+            ## enforce fairness by avoiding scaling down of random I/O
+            if rule["name"] in ["disk_read_dropped_lower", "disk_write_dropped_lower"]:
+                res = rule["resource"] ## disk_read or disk_write
+                blocksize = int(resources[res]["blocksize"])
+                if blocksize > 0 and blocksize < 64:
+                    continue ## skip to next rule
+
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
                 if self.rule_triggers_event(rule, data, resources):
@@ -1005,10 +1025,10 @@ class Guardian:
         # Log uncoloured string
         utils.log_info(" ".join([container_name_str, uncoloured_resources_str, triggered_requests_and_events]), debug=False)
 
-    def process_serverless_structure(self, structure, usages, limits, rules):
+    def process_serverless_structure(self, structure, usages, limits, rules, host):
 
         # Match usages and rules to generate events
-        triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
+        triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"], host)
 
         # If energy model reliability is high power modelling rules are independent of events the first time they are applied
         self.check_power_modelling_rules(structure, rules, limits, usages, triggered_events)
@@ -1051,7 +1071,7 @@ class Guardian:
         if self.debug:
             self.print_structure_info(structure, usages, limits, triggered_events, triggered_requests)
 
-    def serverless(self, structure, rules):
+    def serverless(self, structure, rules, host):
         structure_subtype = structure["subtype"]
 
         # Check if structure is guarded
@@ -1107,19 +1127,24 @@ class Guardian:
             # Remote database operation
             self.couchdb_handler.update_limit(limits)
 
-            self.process_serverless_structure(structure, usages, limits_resources, rules)
+            self.process_serverless_structure(structure, usages, limits_resources, rules, host)
 
         except Exception as e:
             utils.log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
 
-    def guard_structures(self, structures):
+    def guard_structures(self, structures, hosts):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
         threads = []
         for structure in structures:
+
+            for h in hosts:
+                if structure["host"] == h["name"]:
+                    host = h
+
             thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
-                            args=(structure, rules,))
+                            args=(structure, rules, host))
             thread.start()
             threads.append(thread)
 
@@ -1199,10 +1224,12 @@ class Guardian:
             if SERVICE_IS_ACTIVATED:
                 # Remote database operation
                 structures = utils.get_structures(self.couchdb_handler, debug, subtype=self.structure_guarded)
+                hosts = utils.get_structures(self.couchdb_handler, self.debug, subtype="host")
+
                 if structures:
                     utils.log_info("{0} Structures to process, launching threads".format(len(structures)), debug)
                     self.current_structures = structures
-                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))
+                    thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures, hosts))
                     thread.start()
                 else:
                     utils.log_info("No structures to process", debug)
