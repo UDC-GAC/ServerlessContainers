@@ -260,8 +260,8 @@ def get_resource(structure, resource):
 # CAN'T TEST
 def update_resource_in_couchdb(structure, resource, field, value, db_handler, debug, max_tries=3, backoff_time_ms=500):
     old_value = structure["resources"][resource][field]
-    put_done = False
-    tries = 0
+    amount_scaled = value - structure["resources"][resource][field]
+    put_done, tries = False, 0
     while not put_done:
         if tries >= max_tries:
             log_error("Could not update {0} '{1}' value for structure {2} for {3} tries, aborting"
@@ -279,6 +279,29 @@ def update_resource_in_couchdb(structure, resource, field, value, db_handler, de
         tries += 1
 
     log_info("Resource {0} value for structure {1} has been updated from {2} to {3}".format(resource, structure["name"], old_value, value), debug)
+
+    # If "current" is being updated, host "free" resources must also be updated
+    if structure["subtype"] == "container" and field == "current":
+        put_done, tries = False, 0
+        host = db_handler.get_structure(structure["host"])
+        new_host_free = host["resources"][resource]["free"] - amount_scaled
+        while not put_done:
+            if tries >= max_tries:
+                log_error("Could not update free {0} value for host {1} for {2} tries, aborting"
+                          .format(resource, host["name"], max_tries), debug)
+                return
+
+            host["resources"][resource]["free"] = new_host_free
+            db_handler.update_structure(host)
+
+            time.sleep(backoff_time_ms / 1000)
+
+            host = db_handler.get_structure(structure["host"])
+            put_done = host["resources"][resource]["free"] == new_host_free
+
+            tries += 1
+
+        log_info("Host {0} free {1} has been updated according to structure {2} scaling ({3})".format(structure["host"], resource, structure["name"], amount_scaled), debug)
 
 
 def update_structure(structure, db_handler, debug, max_tries=10):

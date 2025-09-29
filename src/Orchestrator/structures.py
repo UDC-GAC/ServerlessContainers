@@ -424,6 +424,7 @@ def free_container_disks(container, host):
         except KeyError:
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
+
 def free_container_resources(container, host):
     cont_name = container["name"]
     for resource in container["resources"]:
@@ -433,8 +434,6 @@ def free_container_resources(container, host):
             continue
         elif resource == 'disk':
             free_container_disks(container, host)
-        elif resource == 'energy':
-            host["resources"][resource]["free"] += container["resources"][resource]["max"]
         else:
             host["resources"][resource]["free"] += container["resources"][resource]["current"]
 
