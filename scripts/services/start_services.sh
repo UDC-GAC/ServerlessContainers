@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 
-declare -a serviceArr=("guardian" "scaler" "orchestrator" "refeeder" "sanity_checker" "structure_snapshoter" "database_snapshoter" "watt_wizard" "watt_trainer" "limits_dispatcher" "energy_controller")
+declare -a serviceArr=("guardian" "scaler" "orchestrator" "refeeder" "sanity_checker" "structure_snapshoter" "database_snapshoter" "watt_wizard" "watt_trainer" "energy_controller")
 
 ## now loop through the above array
 for s in "${serviceArr[@]}"

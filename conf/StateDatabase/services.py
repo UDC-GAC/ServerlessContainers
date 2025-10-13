@@ -87,17 +87,6 @@ watt_trainer = dict(
     )
 )
 
-limits_dispatcher = dict(
-    name="limits_dispatcher",
-    type="service",
-    heartbeat="",
-    config=dict(
-        POLLING_FREQUENCY=10,
-        GENERATED_METRICS=["energy"],
-        DEBUG=True
-    )
-)
-
 energy_controller = dict(
     name="energy_controller",
     type="service",
@@ -126,5 +115,4 @@ if __name__ == "__main__":
         handler.add_service(sanity_checker)
         handler.add_service(rebalancer)
         handler.add_service(watt_trainer)
-        handler.add_service(limits_dispatcher)
         handler.add_service(energy_controller)
