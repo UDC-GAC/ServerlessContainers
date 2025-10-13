@@ -193,7 +193,7 @@ class EnergyController(Service):
                 amount = self.get_amount_from_ppe(structure)
 
             if amount != 0:
-                request = utils.generate_request(structure, amount, "energy")
+                request = utils.generate_request(structure, amount, "cpu")
                 self.couchdb_handler.add_request(request)
                 self.alloc_cache.add(structure["_id"], structure["resources"]["cpu"]["current"],
                                      structure["resources"]["cpu"]["current"] + amount)
