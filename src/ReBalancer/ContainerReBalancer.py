@@ -46,6 +46,10 @@ class ContainerRebalancer(BaseRebalancer):
         # Containers can only donate to and receive from other containers on the same host (and same disk if needed)
         return structure["host"] + "_{0}".format(structure["resources"]["disk"]["name"]) if resource == "disk" else ""
 
+    @staticmethod
+    def get_best_fit_child(scalable_containers, resource, amount):
+        return utils.get_best_fit_container(scalable_containers, resource, amount, "max")
+
     def is_donor(self, data):
         # If current its near its maximum it is a donor -> (max - current) < diff_percentage * max
         return (data["max"] - data["current"]) < (self.diff_percentage * data["max"])
@@ -53,6 +57,28 @@ class ContainerRebalancer(BaseRebalancer):
     def is_receiver(self, data):
         # If usage its near its current it is a receiver -> (current - usage) < diff_percentage * current
         return (data["current"] - data["usage"]) < (self.diff_percentage * data["current"])
+
+    def process_app_requests(self, applications, containers, app_requests):
+        for app in applications:
+            app_request = app_requests.get(app["name"], {})
+            app_containers = [c for c in containers if c["name"] in app.get("containers", [])]
+            if app_request and app_containers:
+                self.simulate_scaler_request_processing(app, app_containers, app_request)
+
+    def filter_rebalanceable_apps(self, applications):
+        rebalanceable_apps = []
+        for app in applications:
+            # Unless otherwise specified, all applications are rebalanced
+            if not app.get("rebalance", True):
+                continue
+            # Applications that doesn't have containers subscribed cannot perform an internal rebalancing
+            if len(app["containers"]) == 0:
+                continue
+
+            # If app match the criteria, it is added to the list
+            rebalanceable_apps.append(app)
+
+        return rebalanceable_apps
 
     def fill_containers_with_usage_info(self, containers):
         containers_with_usages = list()
@@ -122,7 +148,7 @@ class ContainerRebalancer(BaseRebalancer):
                 for container in participants:
                     amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
                     if amount_to_scale != 0:
-                        self.generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
+                        self.add_scaling_request(container["container_info"], resource, "current", amount_to_scale, requests)
 
         def get_new_allocations_by_disk(containers, requests, disk_name):
             total_allocated_bw = 0
@@ -173,7 +199,7 @@ class ContainerRebalancer(BaseRebalancer):
                 ##
                 if weight_read_sum > 0: read_slice = read_distribution / weight_read_sum
                 else: read_slice = 0
-                if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum 
+                if weight_write_sum > 0: write_slice = write_distribution / weight_write_sum
                 else: write_slice = 0
 
                 ## Adjust alloc until every container is allocated an amount below their maximum
@@ -213,7 +239,7 @@ class ContainerRebalancer(BaseRebalancer):
                     for container in participants[resource]:
                         amount_to_scale = container["new_alloc"] - container["container_info"]["resources"][resource]["current"]
                         if amount_to_scale != 0:
-                            self.generate_scaling_request(container["container_info"], resource, amount_to_scale, requests)
+                            self.add_scaling_request(container["container_info"], resource, "current", amount_to_scale, requests)
 
         for resource in self.resources_balanced:
 
@@ -223,7 +249,7 @@ class ContainerRebalancer(BaseRebalancer):
 
             utils.log_info("Rebalancing resource '{0}' for host {1} by weights".format(resource, host["name"]), self.debug)
 
-            requests = dict()
+            requests = {}
 
             if resource == "disk":
                 if "disks" not in host["resources"]:
@@ -254,13 +280,11 @@ class ContainerRebalancer(BaseRebalancer):
             else:
                 get_new_allocations(resource, containers, requests)
 
-            self.send_final_requests(containers, requests)
+            self.send_final_requests(requests)
 
-    def rebalance_containers(self):
+    def rebalance_containers(self, applications, app_requests, containers):
         utils.log_info("--------------------- CONTAINER BALANCING ---------------------", self.debug)
 
-        # Get the structures
-        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
         if not containers:
             utils.log_warning("No registered containers were found", self.debug)
             return
@@ -273,16 +297,9 @@ class ContainerRebalancer(BaseRebalancer):
 
         # APPLICATION SCOPE: Balancing the resources between containers of the same application
         if self.containers_scope == "application":
-            applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-            original_containers = deepcopy(containers)
-            # Distribute application limit across containers if app_max != sum(container_max)
-            app_containers = {}
-            requests_by_app = {}
-            for app in applications:
-                app_name = app["name"]
-                requests_by_app[app_name] = {}
-                app_containers[app_name] = [c for c in containers if c["name"] in app["containers"]]
-                self.distribute_parent_limit(app, app_containers[app_name], requests_by_app[app_name])
+
+            # First check if there are application requests to be processed
+            self.process_app_requests(applications, containers, app_requests)
 
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
             rebalanceable_apps = self.filter_rebalanceable_apps(applications)
@@ -290,19 +307,22 @@ class ContainerRebalancer(BaseRebalancer):
                 utils.log_warning("Trying to balance containers at 'application' scope but no rebalanceable applications were found", self.debug)
                 return
 
-            # Sort them according to each application they belong
+            # Sort containers according to each application they belong
+            app_containers = {}
             for app in rebalanceable_apps:
                 app_name = app["name"]
                 # Get the container usages
+                app_containers[app_name] = [c for c in containers if c["name"] in app.get("containers", [])]
                 app_containers[app_name] = self.fill_containers_with_usage_info(app_containers[app_name])
 
             # Rebalance applications
             for app in rebalanceable_apps:
                 app_name = app["name"]
+                container_requests = {}
                 utils.log_info("Going to rebalance app {0} now".format(app_name), self.debug)
                 if self.balancing_method == "pair_swapping":
-                    self.pair_swapping(app_containers[app_name], requests_by_app.get(app_name, {}))
-                    self.send_final_requests(original_containers, requests_by_app.get(app_name, {}))
+                    self.pair_swapping(app_containers[app_name], container_requests)
+                    self.send_final_requests(container_requests)
                 elif self.balancing_method == "weights":
                     utils.log_warning("Weights balancing method not yet supported in applications", self.debug)
                 else:
@@ -315,27 +335,21 @@ class ContainerRebalancer(BaseRebalancer):
                 utils.log_warning("Trying to balance containers at 'host' scope but no hosts were found", self.debug)
                 return
 
-            # Get hosts' containers
-            host_containers = dict()
+            # Get hosts' containers and fill with usage info
+            host_containers = {}
             for host in hosts:
                 host_name = host["name"]
-                host_containers[host_name] = list()
-                host_containers_names = [c["name"] for c in containers if c["host"] == host_name]
-                for container in containers:
-                    if container["name"] in host_containers_names:
-                        host_containers[host_name].append(container)
-                # Get the container usages
+                host_containers[host_name] = [c for c in containers if c["host"] == host_name]
                 host_containers[host_name] = self.fill_containers_with_usage_info(host_containers[host_name])
 
             # Rebalance hosts
-            requests_by_host = {}
             for host in hosts:
                 host_name = host["name"]
+                container_requests = {}
                 utils.log_info("Going to rebalance host {0} now".format(host_name), self.debug)
-                requests_by_host[host_name] = {}
                 if self.balancing_method == "pair_swapping":
-                    self.pair_swapping(host_containers[host_name], requests_by_host[host_name])
-                    self.send_final_requests(host_containers[host_name], requests_by_host[host_name])
+                    self.pair_swapping(host_containers[host_name], container_requests)
+                    self.send_final_requests(container_requests)
                 elif self.balancing_method == "weights":
                     self.rebalance_host_containers_by_weight(host_containers[host_name], host)
                 else:

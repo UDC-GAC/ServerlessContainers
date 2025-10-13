@@ -45,20 +45,19 @@ class UserRebalancer(BaseRebalancer):
         # Users can donate to and receive from any other user
         return "all"
 
+    @staticmethod
+    def get_best_fit_child(scalable_users, resource, amount):
+        raise NotImplementedError("Users do not have a parent structure (maybe hosts in the future)")
+
     def is_donor(self, data):
         return (data["max"] - data["usage"]) > (self.diff_percentage * data["max"])
 
     def is_receiver(self, data):
         return (data["max"] - data["usage"]) < (self.diff_percentage * data["max"])
 
-    def rebalance_users(self):
+    def rebalance_users(self, users):
         utils.log_info("------------------------ USER BALANCING -----------------------", self.debug)
-
-        try:
-            users = self.couchdb_handler.get_users()
-        except requests.exceptions.HTTPError as e:
-            utils.log_error("Couldn't get users: {0}".format(str(e)), self.debug)
-            return
+        user_requests, final_user_requests = {}, {}
 
         # Filter only users that have at least one application running
         if self.only_running:
@@ -66,8 +65,9 @@ class UserRebalancer(BaseRebalancer):
 
         if not users:
             utils.log_warning("No {0} users to rebalance".format("running" if self.only_running else "registered"), self.debug)
-            return
+            return final_user_requests
 
-        _requests = {}
-        self.pair_swapping(users, _requests)
-        self.send_final_requests(users, _requests)
+        self.pair_swapping(users, user_requests)
+        final_user_requests = self.send_final_requests(user_requests)
+
+        return final_user_requests

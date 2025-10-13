@@ -36,6 +36,7 @@ class BaseRebalancer(ABC):
     MANDATORY_FIELDS = {"max", "current", "usage", "min"}
     BALANCEABLE_RESOURCES = {"cpu", "disk", "energy"}
     REBALANCING_LEVEL = "base"
+    PARENT_SPLIT_AMOUNT = 5  # TODO: Geneneralise split amount for Scaler and Rebalancer
 
     def __init__(self, couchdb_handler):
         self.couchdb_handler = couchdb_handler
@@ -62,17 +63,22 @@ class BaseRebalancer(ABC):
     def select_donated_field(resource):
         pass
 
+    @staticmethod
+    @abstractmethod
+    def get_donor_slice_key(structure, resource):
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def get_best_fit_child(scalable_structures, resource, amount):
+        pass
+
     @abstractmethod
     def is_donor(self, data):
         pass
 
     @abstractmethod
     def is_receiver(self, data):
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def get_donor_slice_key(structure, resource):
         pass
 
     # --------- Auxiliar functions ---------
@@ -85,16 +91,10 @@ class BaseRebalancer(ABC):
         return True
 
     @staticmethod
-    def split_amount_in_slices(total_amount, slice_amount):
-        number_of_slices = int(total_amount // slice_amount)
-        last_slice_amount = total_amount % slice_amount
-        return [slice_amount] * number_of_slices + ([last_slice_amount] if last_slice_amount > 0 else [])
-
-    @staticmethod
-    def generate_scaling_request(structure, resource, amount_to_scale, requests):
-        request = utils.generate_request(structure, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1)
-        if resource == "energy":
-            request["resource"] = "energy"
+    def add_scaling_request(structure, resource, d_field, amount_to_scale, requests, pair_structure=None):
+        request = utils.generate_request(structure, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1, field=d_field)
+        if pair_structure:
+            request["pair_structure"] = pair_structure["name"]
         requests.setdefault(structure["name"], []).append(request)
 
     def print_donors_and_receivers(self, donors, receivers):
@@ -113,90 +113,67 @@ class BaseRebalancer(ABC):
             for donor, slice_amount in donor_slices[key]:
                 utils.log_info("({0})\t{1}\t{2}".format(key, donor["name"], slice_amount), self.debug)
 
-    def filter_rebalanceable_apps(self, applications):
-        rebalanceable_apps = []
-        for app in applications:
-            # Unless otherwise specified, all applications are rebalanced
-            if "rebalance" in app and not app["rebalance"]:
+    def app_state_is_valid(self, app):
+        # Check applications are consistent before performing a rebalance
+        if app.get("running", False):
+            # If app has been recently started, containers may not yet be subscribed
+            if len(app["containers"]) == 0:
+                return False
+
+            for resource in self.resources_balanced:
+                # The "current" limit can only be zero if the application has been started recently
+                # and StructureSnapshoter has not yet added its actual "current" value
+                if app.get("resources", {}).get(resource, {}).get("current", 0) <= app.get("resources", {}).get(resource, {}).get("min", 0):
+                    return False
+        return True
+
+    def simulate_scaler_request_processing(self, parent, childs, parent_request):
+        resource = parent_request["resource"]
+        total_amount = parent_request["amount"]
+
+        if parent_request["field"] != "max":
+            utils.log_warning("Parent request processing can only manage requests to scale 'max' limits, skipping "
+                              "request for structure '{0}'".format(parent["name"]), self.debug)
+            return
+
+        # Create smaller requests of 'split_amount' size for childs
+        split_amount = -self.PARENT_SPLIT_AMOUNT if total_amount < 0 else self.PARENT_SPLIT_AMOUNT
+        base_request = dict(parent_request)
+        child_requests = []
+        for slice_amount in utils.split_amount_in_slices(total_amount, split_amount):
+            base_request["amount"] = slice_amount
+            child_requests.append(dict(base_request))
+
+        success, scaled_amount = True, 0
+        while success and len(child_requests) > 0:
+            success = False
+            request = child_requests.pop(0)
+            # Look for childs that can be rescaled
+            if request["amount"] < 0:
+                scalable_childs = [s for s in childs if s["resources"][resource]["max"] + request["amount"] > s["resources"][resource]["current"]]
+            else:
+                scalable_childs = childs
+
+            if not scalable_childs:
                 continue
-            # Applications not running do not need internal rebalancing
-            if self.REBALANCING_LEVEL == "container" and len(app["containers"]) == 0:
-                continue
-            # Check applications are consistent before performing a rebalance
-            if self.REBALANCING_LEVEL == "application" and app.get("running", False):
-                inconsistent_state = False
-                # If app has been recently started, containers may not be subscribed
-                if len(app["containers"]) == 0:
-                    inconsistent_state = True
 
-                if not inconsistent_state:
-                    for resource in self.resources_balanced:
-                        # The "current" limit can only be zero if the application has been started recently
-                        # and StructureSnapshoter has not yet added its "current" value
-                        if app.get("resources", {}).get(resource, {}).get("current", 0) <= app.get("resources", {}).get(resource, {}).get("min", 0):
-                            inconsistent_state = True
-                            break
+            # Look for the best fit child to rescale
+            best_fit_child = self.get_best_fit_child(scalable_childs, resource, request["amount"])
 
-                if inconsistent_state:
-                    utils.log_warning("Inconsistent state for app {0}, it probably started too recently".format(app["name"]), self.debug)
-                    continue
+            # Update the child's resources as if the request was already processed
+            best_fit_child["resources"][resource]["max"] += request["amount"]
+            scaled_amount += request["amount"]
+            success = True
 
-            # If app match the criteria, it is added to the list
-            rebalanceable_apps.append(app)
-
-        return rebalanceable_apps
-
-    def distribute_parent_limit(self, parent_structure, child_structures, requests):
-        for resource in self.resources_balanced:
-            d_field = self.select_donated_field(resource)
-            if d_field != "max":
-                continue
-
-            agg_limit = sum(s["resources"][resource]["max"] for s in child_structures)
-            parent_limit = parent_structure.get("resources", {}).get(resource, {}).get("max", None)
-            if parent_limit is not None and agg_limit > 0 and agg_limit != parent_limit:
-                utils.log_warning("Adjust the aggregate {0} limit of {1}s subscribed to {2} ({3}) to the limit of {2} ({4})."
-                                  .format(resource, self.REBALANCING_LEVEL, parent_structure["name"], agg_limit, parent_limit), self.debug)
-                direction = 1 if agg_limit < parent_limit else -1
-                total_amount = abs(int(parent_limit - agg_limit))
-                child_structures = sorted(child_structures, key=lambda s: s["resources"][resource]["max"] - s["resources"][resource]["current"], reverse=(agg_limit > parent_limit))
-                slices_to_distribute = self.split_amount_in_slices(int(total_amount), 25)
-                num_childs = len(child_structures)
-                while slices_to_distribute:
-                    empty_structures = 0
-                    for structure in child_structures:
-                        if not slices_to_distribute:
-                            break
-                        _max = structure["resources"][resource]["max"]
-                        _current = structure["resources"][resource]["current"]
-                        _min = structure["resources"][resource]["min"]
-                        max_scale_down = _max - max(_current, _min)
-                        amount_to_scale = slices_to_distribute.pop() * direction
-                        # If scaling down, ensure that structure will not scale "max" below its "current" limit
-                        if direction == -1 and abs(amount_to_scale) > max_scale_down:
-                            if max_scale_down <= 0:
-                                empty_structures += 1
-                            slices_to_distribute.append(amount_to_scale + max_scale_down)
-                            amount_to_scale = -max_scale_down
-                        if amount_to_scale != 0:
-                            self.generate_scaling_request(structure, resource, amount_to_scale, requests)
-                            # Update the value in dict in order to properly split structures in donors/receivers later
-                            structure["resources"][resource]["max"] = _max + amount_to_scale
-
-                    if empty_structures == num_childs:
-                        utils.log_error("Parent structure {0} has donated more {1} than it could. Childs cannot be "
-                                        "adjusted to limit.".format(parent_structure["name"], resource), self.debug)
-                        break
-
-    def manage_rebalancing(self, donor, receiver, resource, amount_to_scale, requests):
+    def manage_rebalancing(self, donor, receiver, resource, d_field, amount_to_scale, requests):
         if amount_to_scale == 0:
             utils.log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor.get("name"), receiver.get("name")), self.debug)
             return
         # Create the pair of scaling requests
         if receiver:
-            self.generate_scaling_request(receiver, resource, amount_to_scale, requests)
+            self.add_scaling_request(receiver, resource, d_field, amount_to_scale, requests, donor)
         if donor:
-            self.generate_scaling_request(donor, resource, -amount_to_scale, requests)
+            self.add_scaling_request(donor, resource, d_field, -amount_to_scale, requests, receiver)
 
     def map_role_to_rule(self, resource, role):
         if role == "donors":
@@ -219,20 +196,23 @@ class BaseRebalancer(ABC):
 
         for structure in structures:
             data = {}
+            valid_resources = True
             for r in self.get_needed_resources():
                 data[r] = {"structure": {r: {}}}
                 if self.has_required_fields(structure, resource, self.MANDATORY_FIELDS):
                     for f in self.MANDATORY_FIELDS:
                         data[r]["structure"][r][f] = structure["resources"][r][f]
                 else:
-                    utils.log_warning("Structure is missing {0} some mandatory fields for resource '{1}': {2}"
+                    valid_resources = False
+                    utils.log_warning("Structure {0} is missing some mandatory fields for resource '{1}': {2}"
                                       .format(structure["name"], r, self.MANDATORY_FIELDS), self.debug)
                     continue
 
             # Check if structure activates the rule: it has low resource usage (donors) or a bottleneck (receivers)
-            for role in valid_roles:
-                if jsonLogic(rule[role]["rule"], data):
-                    filtered_structures[role].append(structure)
+            if valid_resources:
+                for role in valid_roles:
+                    if jsonLogic(rule[role]["rule"], data):
+                        filtered_structures[role].append(structure)
 
         return filtered_structures["donors"], filtered_structures["receivers"]
 
@@ -284,32 +264,35 @@ class BaseRebalancer(ABC):
         for thread in threads:
             thread.join()
 
-    def send_final_requests(self, structures, requests):
+    def send_final_requests(self, requests):
         if not requests:
-            return
-        for resource in self.resources_balanced:
-            d_field = self.select_donated_field(resource)
-            # For each structure, aggregate all its requests in a single request
-            final_requests = []
-            final_requests_by_name = {}
-            for structure in requests:
-                # Copy the first request as the base request
-                flat_request = dict(requests[structure][0])
-                flat_request["amount"] = sum(req["amount"] for req in requests[structure])
-                final_requests.append(flat_request)
-                final_requests_by_name[structure] = flat_request
+            return {}
 
-            # Sort requests so the ones that increase the limit are first
-            final_requests = sorted(final_requests, key=lambda r: r["amount"], reverse=True)
-            utils.log_info("FINAL REQUESTS ARE:", self.debug)
-            if d_field == "current" and resource != "energy":
-                for r in final_requests:
-                    utils.log_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
-                    self.couchdb_handler.add_request(r)
-            else:
-                # Max limits are directly updated in CouchDB.
-                # Energy "current" is also updated in CouchDB as NodeRescaler cannot modify an energy physical limit
-                self.update_structures_in_couchdb(structures, resource, d_field, final_requests_by_name)
+        # For each structure, aggregate all its requests in a single request
+        final_requests = []
+        final_requests_by_name = {}
+        for structure in requests:
+            # Copy the first request as the base request
+            flat_request = dict(requests[structure][0])
+            flat_request["amount"] = sum(req["amount"] for req in requests[structure])
+            final_requests.append(flat_request)
+            final_requests_by_name[structure] = flat_request
+
+        # Sort requests so the ones that decrease the limit (free host resources) are first
+        final_requests = sorted(final_requests, key=lambda r: r["amount"])
+        utils.log_info("FINAL REQUESTS ARE:", self.debug)
+        for r in final_requests:
+            utils.log_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
+            self.couchdb_handler.add_request(r)
+            # if d_field == "current" and resource != "energy":
+            #     for r in final_requests:
+            #         utils.log_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
+            #         self.couchdb_handler.add_request(r)
+            # else:
+            #     # Max limits are directly updated in CouchDB.
+            #     # Energy "current" is also updated in CouchDB as NodeRescaler cannot modify an energy physical limit
+            #     self.update_structures_in_couchdb(structures, resource, d_field, final_requests_by_name)
+        return final_requests_by_name
 
     # --------- Rebalancing algorithms ---------
 
@@ -343,9 +326,9 @@ class BaseRebalancer(ABC):
                     _usage = structure["resources"][resource]["usage"]
 
                     stolen_amount = None
-                    # Give stolen percentage of the gap between max and current limit (or usage/min if current is lower)
+                    # Give stolen percentage of the gap between max and current limit (or usage if current is lower)
                     if d_field == "max":
-                        stolen_amount = self.stolen_percentage * (_max - max(max(_current,  _usage), _min))
+                        stolen_amount = self.stolen_percentage * (_max - max(_current,  _usage))
 
                     # Give stolen percentage of the gap between current limit and current usage (or min if usage is lower)
                     if d_field == "current":
@@ -358,7 +341,7 @@ class BaseRebalancer(ABC):
 
                     # Divide the total amount to donate in slices of 25 units
                     key = self.get_donor_slice_key(structure, resource)
-                    for slice_amount in self.split_amount_in_slices(int(stolen_amount), 25):
+                    for slice_amount in utils.split_amount_in_slices(int(stolen_amount), 25):
                         donor_slices.setdefault(key, []).append((structure, slice_amount))
 
                 # Remove donor slices that cannot be given to any receiver
@@ -408,7 +391,7 @@ class BaseRebalancer(ABC):
                             del donor_slices[key]
 
                         # Manage necessary scalings to rebalance resource between donor and receiver
-                        self.manage_rebalancing(donor, receiver, resource, amount_to_scale, requests)
+                        self.manage_rebalancing(donor, receiver, resource, d_field, amount_to_scale, requests)
 
                         # Update the received amount for this container
                         received_amount[receiver_name] += amount_to_scale

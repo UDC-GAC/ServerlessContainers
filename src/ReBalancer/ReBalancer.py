@@ -78,17 +78,33 @@ class ReBalancer(Service):
         if self.balancing_policy not in {"rules", "thresholds"}:
             return True, "Balancing policy '{0}' is invalid".format(self.balancing_policy)
 
+        if "applications" in self.structures_balanced and "containers" in self.structures_balanced and self.containers_scope == "host":
+            return True, "Inconsistent configuration, 'application' scope must be used for container balancing when also performing application balancing"
+
         return self.config_validator.invalid_conf(service_config)
 
-    def rebalance_structures(self,):
+    def get_structures(self):
+        users, applications, containers = [], [], []
         if "user" in self.structures_balanced:
-            self.user_rebalancer.rebalance_users()
+            users = utils.get_users(self.couchdb_handler, self.debug)
+        if "application" in self.structures_balanced:
+            applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
+        if "container" in self.structures_balanced:
+            containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+
+        return users, applications, containers
+
+    def rebalance_structures(self,):
+        users, applications, containers = self.get_structures()
+        user_requests, app_requests = {}, {}
+        if "user" in self.structures_balanced:
+            user_requests = self.user_rebalancer.rebalance_users(users)
 
         if "application" in self.structures_balanced:
-            self.application_rebalancer.rebalance_applications()
+            app_requests = self.application_rebalancer.rebalance_applications(users, user_requests, applications)
 
         if "container" in self.structures_balanced:
-            self.container_rebalancer.rebalance_containers()
+            self.container_rebalancer.rebalance_containers(applications, app_requests, containers)
 
         utils.log_info("---------------------------------------------------------------", self.debug)
 

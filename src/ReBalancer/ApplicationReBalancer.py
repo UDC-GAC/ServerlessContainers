@@ -23,9 +23,6 @@
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
-import requests
-from copy import deepcopy
-
 import src.MyUtils.MyUtils as utils
 from src.ReBalancer.BaseRebalancer import BaseRebalancer
 
@@ -46,49 +43,66 @@ class ApplicationRebalancer(BaseRebalancer):
         # Applications can donate to and receive from any other application
         return "all"
 
+    @staticmethod
+    def get_best_fit_child(scalable_apps, resource, amount):
+        return utils.get_best_fit_app(scalable_apps, resource, amount)
+
     def is_donor(self, data):
         return (data["max"] - data["usage"]) > (self.diff_percentage * data["max"])
 
     def is_receiver(self, data):
         return (data["max"] - data["usage"]) < (self.diff_percentage * data["max"])
 
-    def rebalance_applications(self):
-        utils.log_info("-------------------- APPLICATION BALANCING --------------------", self.debug)
-
-        applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-        original_apps = deepcopy(applications)
-        users = []
-        try:
-            users = self.couchdb_handler.get_users()
-        except requests.exceptions.HTTPError:
-            utils.log_warning("No registered users were found on the platform, all the applications will be balanced as a single cluster", self.debug)
-
-        # Distribute user limit across applications if user_max != sum(app_max)
-        requests_by_user = {}
+    def process_user_requests(self, users, user_requests, applications):
         for user in users:
-            requests_by_user[user["name"]] = {}
-            user_apps = [app for app in applications if app["name"] in user["clusters"]]
-            if user_apps:
-                self.distribute_parent_limit(user, user_apps, requests_by_user[user["name"]])
+            user_request = user_requests.get(user["name"], {})
+            user_apps = [app for app in applications if app["name"] in user.get("clusters", [])]
+            if user_request and user_apps:
+                self.simulate_scaler_request_processing(user, user_apps, user_request)
+
+    def filter_rebalanceable_apps(self, applications):
+        rebalanceable_apps = []
+        for app in applications:
+            # Unless otherwise specified, all applications are rebalanced
+            if not app.get("rebalance", True):
+                continue
+
+            # Check applications are consistent before performing a rebalance
+            if not self.app_state_is_valid(app):
+                utils.log_warning("Inconsistent state for app {0}, it probably started too recently".format(app["name"]), self.debug)
+                continue
+
+            # If app match the criteria, it is added to the list
+            rebalanceable_apps.append(app)
+
+        return rebalanceable_apps
+
+    def rebalance_applications(self, users, user_requests, applications):
+        utils.log_info("-------------------- APPLICATION BALANCING --------------------", self.debug)
+        final_app_requests = {}
+
+        # First check if there are user requests to be processed
+        self.process_user_requests(users, user_requests, applications)
 
         applications = self.filter_rebalanceable_apps(applications)
-        # If we want to distribute user limit only across running applications move this condition above
         if self.only_running:
             applications = [app for app in applications if app.get("running", False)]
 
         if not applications:
             utils.log_warning("No {0} applications to rebalance".format("running" if self.only_running else "registered"), self.debug)
-            return
+            return final_app_requests
 
         if users:
             for user in users:
+                app_requests = {}
                 user_apps = [app for app in applications if app["name"] in user["clusters"]]
                 utils.log_info("Processing user {0} who has {1} valid applications registered".format(user["name"], len(user_apps)), self.debug)
                 if user_apps:
-                    self.pair_swapping(user_apps, requests_by_user.get(user["name"], {}))
-                self.send_final_requests(original_apps, requests_by_user.get(user["name"], {}))
+                    self.pair_swapping(user_apps, app_requests)
+                final_app_requests.update(self.send_final_requests(app_requests))
         else:
-            _requests = {}
-            self.pair_swapping(applications, _requests)
-            self.send_final_requests(original_apps, _requests)
+            app_requests = {}
+            self.pair_swapping(applications, app_requests)
+            final_app_requests = self.send_final_requests(app_requests)
 
+        return final_app_requests

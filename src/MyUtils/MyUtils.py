@@ -221,6 +221,12 @@ def get_service(db_handler, service_name, max_allowed_failures=10, time_backoff_
     return service
 
 
+def split_amount_in_slices(total_amount, slice_amount):
+    number_of_slices = int(total_amount // slice_amount)
+    last_slice_amount = total_amount % slice_amount
+    return [slice_amount] * number_of_slices + ([last_slice_amount] if abs(last_slice_amount) > 0 else [])
+
+
 # TESTED
 # Tranlsate something like '2-5,7' to [2,3,4,7]
 def get_cpu_list(cpu_num_string):
@@ -257,10 +263,35 @@ def get_resource(structure, resource):
     return structure["resources"][resource]
 
 
+def get_best_fit_app(scalable_apps, resource, amount):
+    stopped_apps, running_apps = [], []
+    for app in scalable_apps:
+        if app["resources"][resource].get("current", 0) == 0 and not app.get("running", False):
+            stopped_apps.append(app)
+        else:
+            running_apps.append(app)
+    # When scaling down, stopped apps are preferred, when scaling up, running apps are preferred
+    sorted_apps = sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["current"])
+    sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"])
+
+    return sorted_apps[-1] if amount < 0 else sorted_apps[0]
+
+
+def get_best_fit_container(scalable_containers, resource, amount, field):
+    best_fit_container, sorted_containers = {}, []
+    if field == "current":
+        sorted_containers = sorted(scalable_containers, key=lambda c: c["resources"][resource]["current"] - c["resources"][resource]["usage"])
+    if field == "max":
+        sorted_containers = sorted(scalable_containers, key=lambda c: c["resources"][resource]["max"] - c["resources"][resource]["current"])
+    if sorted_containers:
+        best_fit_container = sorted_containers[-1] if amount < 0 else sorted_containers[0]
+
+    return best_fit_container
+
+
 # CAN'T TEST
 def update_resource_in_couchdb(structure, resource, field, value, db_handler, debug, max_tries=3, backoff_time_ms=500):
     old_value = structure["resources"][resource][field]
-    amount_scaled = value - structure["resources"][resource][field]
     put_done, tries = False, 0
     while not put_done:
         if tries >= max_tries:
@@ -282,30 +313,6 @@ def update_resource_in_couchdb(structure, resource, field, value, db_handler, de
         tries += 1
 
     log_info("Resource {0} value for structure {1} has been updated from {2} to {3}".format(resource, structure["name"], old_value, value), debug)
-
-    # If "current" is being updated, host "free" resources must also be updated
-    if structure["subtype"] == "container" and field == "current":
-        put_done, tries = False, 0
-        host = db_handler.get_structure(structure["host"])
-        new_host_free = host["resources"][resource]["free"] - amount_scaled
-        while not put_done:
-            if tries >= max_tries:
-                log_error("Could not update free {0} value for host {1} for {2} tries, aborting"
-                          .format(resource, host["name"], max_tries), debug)
-                return
-
-            host["resources"][resource]["free"] = new_host_free
-            db_handler.update_structure(host)
-
-            time.sleep(backoff_time_ms / 1000)
-
-            host = db_handler.get_structure(structure["host"])
-            put_done = host["resources"][resource]["free"] == new_host_free
-
-            tries += 1
-
-        log_info("Host {0} free {1} has been updated according to structure {2} scaling ({3})".format(structure["host"], resource, structure["name"], amount_scaled), debug)
-
 
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
@@ -374,7 +381,7 @@ def generate_request_name(amount, resource):
         raise ValueError("Invalid amount")
 
 
-def generate_request(structure, amount, resource_label, priority=0):
+def generate_request(structure, amount, resource_label, priority=0, field="current"):
     action = generate_request_name(amount, resource_label)
     request = dict(
         type="request",
@@ -383,13 +390,10 @@ def generate_request(structure, amount, resource_label, priority=0):
         priority=int(priority),
         structure=structure["name"],
         action=action,
+        field=field,
         timestamp=int(time.time()),
         structure_type=structure["subtype"]
     )
-    # For the moment, energy rescaling is uniquely mapped to cpu rescaling
-    if resource_label == "energy":
-        request["resource"] = "cpu"
-        request["for_energy"] = True
 
     # If scaling a container, add its host information as it will be needed
     if structure_is_container(structure):
