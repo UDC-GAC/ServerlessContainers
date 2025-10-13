@@ -26,9 +26,7 @@
 
 from __future__ import print_function
 
-from threading import Thread, Lock, Condition
-from collections import Counter
-from cachetools import LRUCache
+from threading import Thread
 import time
 import traceback
 
@@ -45,8 +43,7 @@ from src.Service.Service import Service
 MODELS_STRUCTURE = "host"
 
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
-                         "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"], "CPU_SHARES_PER_WATT": 5,
-                         "ENERGY_MODEL_NAME": "polyreg_General", "ENERGY_MODEL_RELIABILITY": "low", "ACTIVE": True}
+                         "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"], "ACTIVE": True}
 
 NOT_AVAILABLE_STRING = "n/a"
 
@@ -65,54 +62,8 @@ class Guardian(Service):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.NO_METRIC_DATA_DEFAULT_VALUE = self.opentsdb_handler.NO_METRIC_DATA_DEFAULT_VALUE
-        self.pb_cache = LRUCache(maxsize=128)
         self.window_timelapse, self.window_delay, self.event_timeout, self.debug = None, None, None, None
-        self.structure_guarded, self.guardable_resources, self.cpu_shares_per_watt, self.active = None, None, None, None
-        self.energy_model_name, self.energy_model_reliability, self.current_structures = None, None, None
-        self.last_used_energy_model, self.current_scalings, self.model_is_hw_aware = None, None, None
-
-    def __init_iteration_vars(self, structures):
-        def _create_dict_value(count):
-            lock = Lock()
-            return {"lock": lock, "condition": Condition(lock), "up": [], "down": [], "expected_count": count, "register": []}
-        if structures != self.current_structures:
-            host_counter = Counter(s["host"] for s in structures)
-            self.current_scalings = {host: _create_dict_value(count) for host, count in host_counter.items()}
-            self.current_structures = list(structures)
-        else:
-            for scaling in self.current_scalings.values():
-                scaling["register"].clear()
-                scaling["up"].clear()
-                scaling["down"].clear()
-
-    def __do_condition_register(self, structure, value=None):
-        current_host = structure["host"]
-        name = structure["name"]
-
-        # If structure was already registered, skip
-        if name in self.current_scalings[current_host]["register"]:
-            return False
-
-        # Update the register with current structure
-        self.current_scalings[current_host]["register"].append(name)
-
-        # If some scaling was performed save its value
-        if value:
-            rescale_type = "up" if value > 0 else "down"
-            self.current_scalings[current_host][rescale_type].append(value)
-
-        return True
-
-    def __do_condition_wakeup(self, structure):
-        current_host = structure["host"]
-        if len(self.current_scalings[current_host]["register"]) == self.current_scalings[current_host]["expected_count"]:
-            self.current_scalings[current_host]["condition"].notify_all()
-            return True
-        return False
-
-    def __do_condition_wait(self, structure):
-        current_host = structure["host"]
-        self.current_scalings[current_host]["condition"].wait()
+        self.structure_guarded, self.guardable_resources, self.active = None, None, None
 
     @staticmethod
     def check_unset_values(value, label, resource):
@@ -217,9 +168,9 @@ class Guardian(Service):
             ValueError if the boundary type is not valid
         """
         if boundary_type == "percentage_of_max":
-            return int(resource_values["max"] * boundary / 100)
+            return max(int(resource_values["max"] * boundary / 100), 1)
         elif boundary_type == "percentage_of_current":
-            return int(resource_values["current"] * boundary / 100)
+            return max(int(resource_values["current"] * boundary / 100), 1)
         else:
             raise ValueError("Invalid boundary type for resource {0}: {1}".format(resource_label, boundary_type))
 
@@ -331,36 +282,11 @@ class Guardian(Service):
         return amount
 
     @staticmethod
-    def adjust_cpu_amount_to_manage_energy(amount, structure_resources):
-        """Pre-check and, if needed, adjust the scaled amount with the policy:
-
-        * If new applied value < min value -> Amount to reduce too large, adjust it so that the current value is set to the minimum
-        * If new applied value > max value -> Amount to increase too large, adjust it so that the current value is set to the maximum
-
-        Args:
-            amount (integer): A number representing the amount to reduce or increase from the current value
-            structure_resources (dict): Dictionary with the structure resource control values (min,current,max)
-
-        Returns:
-            (integer) The amount adjusted (trimmed) in case it would exceed any limit
-        """
-        expected_value = structure_resources["current"] + amount
-        max_limit = structure_resources["max"]
-        min_limit = structure_resources["min"]
-
-        if expected_value < min_limit:
-            amount += min_limit - expected_value
-        elif expected_value > max_limit:
-            amount -= expected_value - max_limit
-
-        return amount
-
-    @staticmethod
-    def get_amount_from_fit_reduction(current_resource_limit, resource_margin, current_resource_usage):
-        """Get an amount that will be reduced from the current resource limit using a policy of *fit to the usage*.
+    def get_amount_from_fit_to_usage(current_resource_limit, resource_margin, current_resource_usage):
+        """Get an amount that will be adjusted in the current resource limit using a policy of *fit to the usage*.
         With this policy it is aimed at setting a new current value that gets close to the usage but leaving a boundary
         to avoid causing a severe bottleneck. More specifically, using the boundary configured this policy tries to
-        find a scale down amount that makes the usage value stay between the _now new_ lower and upper limits.
+        find a scale up/down amount that makes the usage value stay between the _now new_ lower and upper limits.
 
         Args:
             current_resource_limit (integer): The current applied limit for this resource
@@ -368,7 +294,7 @@ class Guardian(Service):
             current_resource_usage (integer): The usage value for this resource
 
         Returns:
-            (int) The amount to be reduced using the fit to usage policy.
+            (int) The amount to be scaled using the fit to usage policy.
 
         """
         upper_to_lower_window = resource_margin
@@ -376,407 +302,15 @@ class Guardian(Service):
 
         # Set the limit so that the resource usage is placed in between the upper and lower limits
         # and keeping the boundary between the upper and the real resource limits
-        desired_applied_resource_limit = \
-            current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
+        desired_limit = current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
 
-        return -1 * (current_resource_limit - desired_applied_resource_limit)
-
-    @staticmethod
-    def aggregate_containers_resource_info(containers, resource):
-        """Get the aggregated resource values of a list of container structures
-
-        Args:
-            containers (list): List of container structures
-
-        Returns:
-            (dict) Dictionary containing the aggregated values
-
-        """
-        agg_resource = {"max": 0, "min": 0, "current": 0}
-        for structure in containers:
-            if resource in structure["resources"]:
-                for key in ["max", "min", "current"]:
-                    if key in structure["resources"][resource]:
-                        agg_resource[key] += structure["resources"][resource][key]
-
-        return agg_resource
-
-    def register_scaling(self, structure, value=None, wait=True):
-        current_host = structure["host"]
-        # Take the lock to update the register
-        with self.current_scalings[current_host]["lock"]:
-            # If structure was registered, check the wake up condition and wait in case it is not met
-            if self.__do_condition_register(structure, value) and not self.__do_condition_wakeup(structure) and wait:
-                self.__do_condition_wait(structure)
-
-    def get_host_containers(self, host):
-        """Get a list of container structures running on the specified host
-
-        Args:
-            host (string): Host name
-
-        Returns:
-            (list) List of container structures
-
-        """
-        return [c for c in self.current_structures if c["host"] == host and c["subtype"] == "container"]
-
-    def get_aggregated_containers_usages(self, containers, resources):
-        """Get the aggregated usages of a list of container structures
-
-        Args:
-            containers (list): List of container structures
-            resources (list): List of resources to retrieve and aggregate
-
-        Returns:
-            (dict) Dictionary containing the aggregated resources
-
-        """
-        # For each container in list get and sum its usages
-        total_usages = {}
-        for c in containers:
-            container_usages = utils.get_structure_usages(resources, c, self.window_timelapse,
-                                                          self.window_delay, self.opentsdb_handler, self.debug)
-
-            # Aggregate container data into a global dictionary
-            for metric in container_usages:
-                if metric not in total_usages:
-                    total_usages[metric] = 0
-                total_usages[metric] += container_usages[metric]
-
-        return total_usages
-
-    def get_core_usages(self, structure):
-        """Get the usage of a host disaggregated by core. The usage of each core will be used to predict power
-        with hardware aware models that need this information. The models also need the host cores mapping to know
-        which cores are free in order to rescale up/down.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): The dictionary containing all of the structure resource information
-
-        Returns:
-            host_cores_mapping (dict): Dictionary containing the mapping between host cores and containers
-            core_usages (dict): Dictionary containing the CPU cores as a key and their usage as values
-
-        """
-        tag = utils.get_tag(structure["subtype"])
-        metrics_to_retieve = ["sys.cpu.user", "sys.cpu.kernel"]
-        metrics_to_generate = {
-            "user_load": ["sys.cpu.user"],
-            "system_load": ["sys.cpu.kernel"]
-        }
-
-        core_usages = {}
-        host_info = self.couchdb_handler.get_structure(structure["host"])
-        try:
-            host_cores_mapping = host_info["resources"]["cpu"]["core_usage_mapping"]
-        except KeyError:
-            raise KeyError("No available cores info for structure {0}. HW aware models can't predict power without this information".format(structure['name']), self.debug)
-
-        for core in host_cores_mapping:
-            # Remote database operation
-            core_usage = self.opentsdb_handler.get_structure_timeseries({tag: structure["name"], "core": core},
-                                                                        self.window_timelapse, self.window_delay,
-                                                                        metrics_to_retieve, metrics_to_generate)
-            core_usages[core] = core_usage
-
-        return host_cores_mapping, core_usages
-
-    def power_budget_is_new(self, structure):
-        """Check if we have already applied a rule with this power budget. This is useful for a *modelling-based CPU
-        scaling* policy. The first time a power budget is applied the needed CPU is estimated through power models.
-        Then, the subsequent estimations will be done using a 'proportional' policy to adjust the model error.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): The dictionary containing all of the structure resource information
-
-        Returns:
-            (bool) Whether the power budget has already been used or not
-
-        """
-        return structure["resources"]["energy"]["current"] != self.pb_cache.get(structure['_id'], -1)
-
-    def power_is_near_power_budget(self, structure, usages, limits):
-        """Check whether the current energy usage of a structure is close to its power budget.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): The dictionary containing all of the structure resource information
-            usages (dict): A dictionary with the usages of the resources
-            limits (dict): Dictionary with the structure resource limit values
-
-        Returns:
-            (bool) If energy is close to PB or not
-
-        """
-        power_margin = self.get_margin_from_boundary(limits["energy"]["boundary"], limits["energy"]["boundary_type"], structure["resources"]["energy"], "energy")
-        power_budget = structure["resources"]["energy"]["current"]
-        current_energy_usage = usages[utils.res_to_metric("energy")]
-
-        # If power is within some reasonable limits we do nothing
-        if power_budget < current_energy_usage < power_budget + power_margin:
-            return True
-
-        return False
-
-    def get_amount_from_energy_modelling(self, structure, usages, rescale_type, ignore_system=False):
-        """Get an amount that will be reduced from the current resource limit using *modelling-based CPU scaling*
-        policy, that is, using a power model that relates resource usage with power usage.
-        Using this model it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
-        get closer to a limit.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): Dictionary containing all the structure resource information
-            usages (dict): Dictionary with the usages of the resources
-            rescale_type (str): Direction of the scaling action ("up", "down", "both")
-            ignore_system (bool): If True current system usage is considered zero to get the power model estimation
-
-        Returns:
-            (int) The amount to be reduced using the fit to usage policy.
-
-        """
-        # Update container power budget in order to know that the model has been already applied to this structure
-        self.pb_cache[structure['_id']] = structure["resources"]["energy"]["current"]
-
-        # Get container information
-        structure_name = structure['name']
-        container_power_budget = structure["resources"]["energy"]["current"]
-        container_cpu_limit = structure["resources"]["cpu"]["current"]
-        container_power_usage = usages[utils.res_to_metric("energy")]
-        container_power_diff = container_power_budget - container_power_usage
-
-        # Check that the needed scaling is coherent with the rescale type
-        if (container_power_diff > 0 and rescale_type == "down") or (container_power_diff < 0 and rescale_type == "up"):
-            utils.log_warning("[{0}] Power scaling amount ({1:.2f}) is not coherent with the rescale type ({2}). Amount"
-                              " will be 0".format(structure_name, container_power_diff, rescale_type), self.debug)
-            return 0
-
-        # Get host information
-        current_host = structure["host"]
-        host_containers = self.get_host_containers(current_host)
-        host_cpu_info = self.aggregate_containers_resource_info(host_containers, "cpu")
-        host_usages = self.get_aggregated_containers_usages(host_containers, ["cpu"])
-        cpu_usage_limit = host_cpu_info["current"]
-
-        # Get host power consumption (RAPL)
-        rapl_structure = {"name": f"{current_host}-rapl", "subtype": "container"}
-        rapl_report = utils.get_structure_usages(["energy"], rapl_structure, self.window_timelapse,
-                                                 self.window_delay, self.opentsdb_handler, self.debug)
-        cpu_power_usage = rapl_report[utils.res_to_metric("energy")]
-
-        # Register scaling and wait for other containers on this host to be registered
-        self.register_scaling(structure, value=container_power_diff)
-
-        # Compute CPU desired power based on current scalings of the same rescale type
-        if rescale_type == "both":
-            host_scalings = sum(self.current_scalings[current_host]["up" if container_power_diff > 0 else "down"])
-        else:
-            host_scalings = sum(self.current_scalings[current_host][rescale_type])
-        cpu_desired_power = cpu_power_usage + host_scalings
-
-        # Get model estimation
-        container_amount = 0
-        try:
-            # Set model prediction parameters
-            kwargs = {
-                "user_load": host_usages[utils.res_to_metric("user")],
-                "system_load": host_usages[utils.res_to_metric("kernel")] if not ignore_system else 0.0
-            }
-            # If model is HW aware it also needs core usages information
-            if self.wattwizard_handler.is_hw_aware(MODELS_STRUCTURE, self.energy_model_name):
-                kwargs["host_cores_mapping"], kwargs["core_usages"] = self.get_core_usages(structure)
-
-            result = self.wattwizard_handler.get_usage_meeting_budget(MODELS_STRUCTURE, self.energy_model_name,
-                                                                      cpu_desired_power, **kwargs)
-
-            cpu_amount = (result["value"] - cpu_usage_limit)
-
-            utils.log_warning("[{0}] The whole CPU needs a power scale-{1} of {2:.2f}W from {3:.2f} to {4:.2f}W which "
-                              "means a CPU scale-{5} from {6:.2f} shares to {7:.2f} shares"
-                              .format(structure_name, rescale_type, host_scalings, cpu_power_usage,
-                                      cpu_desired_power, rescale_type, cpu_usage_limit, result["value"]), self.debug)
-
-            # Update amount proportionally to the container scaling
-            container_scale_ratio = container_power_diff / host_scalings
-            container_amount = cpu_amount * container_scale_ratio
-            utils.log_warning("[{0}] Current container just need a scale-{1} of {2:.2f}W, so it will modify its CPU "
-                              "limit from {3:.2f} to {4:.2f} shares ({5:.2f} * {6:.2f})"
-                              .format(structure_name, rescale_type, container_power_diff, container_cpu_limit,
-                                      container_cpu_limit + container_amount, cpu_amount, container_scale_ratio), self.debug)
-
-            # If we want to rescale up, avoid rescaling down and vice versa
-            if (rescale_type == "up" and container_amount < 0) or (rescale_type == "down" and container_amount > 0):
-                container_amount = 0
-
-        except Exception as e:
-            utils.log_error("There was an error trying to get estimated CPU from power models {0}".format(str(e)),
-                            self.debug)
-
-        return int(container_amount)
-
-    def check_power_modelling_rules(self, structure, rules, limits, usages, events):
-        """Manage power modelling rules, when power models are used to apply power budgets (*modelling-based CPU
-        scaling* policy), when the reliability of the model is high enough the current CPU value of all the structures
-        is initially limited to the value indicated in the power model (even if no rule has been activated), then a
-        *proportional energy-based CPU scaling* policy will be applied.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): The dictionary containing all of the structure resource information
-            rules (dict): Dictionary with the current active rules
-            limits (dict): Dictionary with the structure resource limit values (lower,upper)
-            usages (dict): Dictionary with the structure resource usage values
-            events (list): List of triggered events
-
-        Returns:
-            None
-
-        """
-
-        # Power models are only used when power budgeting (using "energy" as a first class resource)
-        if "energy" not in structure["resources"] or "energy" not in limits:
-            return
-
-        # If Guardian don't trust energy models it is better to wait for events to rescale up/down
-        if self.energy_model_reliability == "low":
-            return
-
-        # If structure has already applied a power budget there's nothing to do, i.e. its resources have already been
-        # limited according to the power model
-        if not self.power_budget_is_new(structure):
-            return
-
-        # We check if there exists at least one power modelling rule
-        apply_initial_model_rescaling = False
-        for rule in rules:
-            is_power_modelling_rule = (rule["generates"] == "requests" and
-                                       rule["rescale_type"] in ["up", "down"] and
-                                       rule["rescale_policy"] == "modelling" and
-                                       rule["resource"] == "energy")
-
-            if is_power_modelling_rule:
-                apply_initial_model_rescaling = True
-                break
-
-        # When reliability is set to medium, at least 1 event must have been generated to perform the rescaling
-        if self.energy_model_reliability == "medium":
-            apply_initial_model_rescaling = False
-            for event in events:
-                if "resource" in event and event["resource"] == "energy":
-                    apply_initial_model_rescaling = True
-                    break
-
-        if not apply_initial_model_rescaling:
-            return
-
-        # At this point there's at least one power modelling rule and the structure has a power budget pending to apply
-        # Then, the new current CPU value is estimated using the power model
-        amount = self.get_amount_from_energy_modelling(structure, usages, "both", ignore_system=True)
-        self.print_energy_rescale_info(structure, usages, limits, amount)
-
-        # Ensure that amount is an integer, either by converting float -> int, or string -> int
-        amount = int(amount)
-
-        # Check CPU does not surpass any limit
-        new_amount = self.adjust_cpu_amount_to_manage_energy(amount, structure["resources"]["cpu"])
-        if new_amount != amount:
-            utils.log_warning("Amount generated for structure {0} during initial rescaling "
-                              "through power models has been trimmed from {1} to {2}"
-                              .format(structure["name"], amount, new_amount), self.debug)
-
-        # If amount is 0 ignore this request else generate the request and append it
-        if new_amount == 0:
-            utils.log_warning("Initial rescaling through power models for structure {0} will be ignored "
-                              "because amount is 0".format(structure["name"]), self.debug)
-        else:
-            request = utils.generate_request(structure, new_amount, "energy", priority=1)
-            self.couchdb_handler.add_request(request)
-
-    def get_amount_from_proportional_energy_rescaling(self, structure, usages, resource):
-        """Get an amount that will be reduced from the current resource limit using a policy of *proportional
-        energy-based CPU scaling*.
-        With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
-        get closer to a limit.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): The dictionary containing all of the structure resource information
-            usages (dict): a dictionary with the usages of the resources
-            resource (string): The resource name, used for indexing purposes
-
-        Returns:
-            (int) The amount to be reduced using the fit to usage policy.
-
-        """
-        power_budget = structure["resources"][resource]["current"]
-        current_cpu_limit = structure["resources"]["cpu"]["current"]
-        current_energy_usage = usages[utils.res_to_metric("energy")]
-
-        percentage_error = (power_budget - current_energy_usage) / power_budget
-        amount = current_cpu_limit * percentage_error
-
-        return int(amount)
-
-    def get_amount_from_fixed_ratio(self, structure, resource):
-        """Get an amount that will be reduced from the current resource limit using a policy of *fixed ratio
-        energy-based CPU scaling*.
-        With this policy it is aimed at setting a new current CPU value that makes the energy consumed by a Structure
-        get closer to a limit.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            structure (dict): The dictionary containing all of the structure resource information
-            resource (string): The resource name, used for indexing purposes
-
-        Returns:
-            (int) The amount to be reduced using the fit to usage policy.
-
-        """
-        power_budget = structure["resources"][resource]["current"]
-        current_energy_usage = structure["resources"][resource]["usage"]
-        error = power_budget - current_energy_usage
-        energy_amplification = error * self.cpu_shares_per_watt  # How many cpu shares to rescale per watt
-        return int(energy_amplification)
-
-    def get_container_energy_str(self, resources_dict):
-        """Get a summary string but for the energy resource, which has a different behavior from others such as CPU or
-        Memory.
-
-        *THIS FUNCTION IS USED WITH THE ENERGY CAPPING SCENARIO*, see: http://bdwatchdog.dec.udc.es/energy/index.html
-
-        Args:
-            resources_dict (dict): A dictionary with all the resources' information, including energy
-
-        Returns:
-            (string) A string that summarizes the state of the energy resource
-
-        """
-        energy_dict = resources_dict["energy"]
-        string = list()
-        for field in ["max", "usage", "min"]:
-            string.append(str(self.try_get_value(energy_dict, field)))
-        return ",".join(string)
+        return desired_limit - current_resource_limit
 
     def adjust_container_state(self, resources, limits, resources_to_adjust):
         for resource in resources_to_adjust:
-            if "boundary" not in limits[resource]:
-                raise RuntimeError("Missing boundary value for resource {0}".format(resource))
-            if "boundary_type" not in limits[resource]:
-                raise RuntimeError("Missing boundary type value for resource {0}".format(resource))
-            if "current" not in resources[resource]:
-                raise RuntimeError("Missing current value for resource {0}".format(resource))
-            if "max" not in resources[resource]:
-                raise RuntimeError("Missing max value for resource {0}".format(resource))
+            for field, d in [("boundary", limits), ("boundary_type", limits), ("current", resources), ("max", resources)]:
+                if field not in d[resource]:
+                    raise RuntimeError("Missing {0} value for resource {1}".format(field, resource))
 
             n_loop, errors = 0, True
             while errors:
@@ -850,24 +384,19 @@ class Guardian(Service):
                 jsonLogic(rule["rule"], data)
 
     def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
-
-        resources_with_rules = list()
+        resources_with_rules = set()
         for rule in rules:
-            if rule["resource"] in resources_with_rules:
-                pass
-            else:
-                resources_with_rules.append(rule["resource"])
-                if rule["resource"] == "energy":
-                    resources_with_rules.append("cpu")
+            resources_with_rules.add(rule["resource"])
 
-        useful_resources = list()
+        useful_resources = []
         for resource in self.guardable_resources:
             if resource not in resources_with_rules:
                 utils.log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
             elif usages[utils.res_to_metric(resource)] != self.NO_METRIC_DATA_DEFAULT_VALUE:
                 useful_resources.append(resource)
 
-        data = dict()
+        # Set proper data structure to match the rules using jsonLogic
+        data = {}
         for resource in useful_resources:
             if resource in resources:
                 data[resource] = {
@@ -875,11 +404,10 @@ class Guardian(Service):
                     "structure": {resource: resources[resource]}}
 
         for usage_metric in usages:
-            keys = usage_metric.split(".")
-            struct_type, usage_resource = keys[0], keys[1]
+            struct_type, usage_resource, field = usage_metric.split(".")
             # Split the key from the retrieved data, e.g., structure.mem.usages, where mem is the resource
             if usage_resource in useful_resources:
-                data[usage_resource][struct_type][usage_resource][keys[2]] = usages[usage_metric]
+                data[usage_resource][struct_type][usage_resource][field] = usages[usage_metric]
 
         events = []
         for rule in rules:
@@ -907,18 +435,6 @@ class Guardian(Service):
             timestamp=int(time.time()))
         return event
 
-    def print_energy_rescale_info(self, structure, usages, limits, amount):
-        for res in ["energy", "cpu"]:
-            current_limit = structure["resources"][res]["current"]
-            max_limit = structure["resources"][res]["max"]
-            upper_limit = limits[res]["upper"]
-            res_usage = usages[utils.res_to_metric(res)]
-            if res == "energy":
-                utils.log_warning("POWER BUDGETING -> max : {0} | usa: {1}".format(max_limit, res_usage), self.debug)
-            else:
-                utils.log_warning("PROPORTIONAL CPU -> cur : {0} | upp : {1} | usa: {2} | amount {3}".format(
-                    current_limit, upper_limit, res_usage, amount), self.debug)
-
     def match_rules_and_events(self, structure, rules, events, limits, usages):
         generated_requests = list()
         events_to_remove = dict()
@@ -938,8 +454,8 @@ class Guardian(Service):
                     utils.log_warning("Rule: {0} is missing the 'rescale_type' or the 'rescale_policy' parameter, skipping it".format(rule["name"]), self.debug)
                     continue
 
-                if rule["rescale_type"] == "up" and "amount" not in rule:
-                    utils.log_warning("Rule: {0} is missing a the amount parameter, skipping it".format(rule["name"]), self.debug)
+                if rule["rescale_policy"] in ["amount", "proportional"] and "amount" not in rule:
+                    utils.log_warning("Rule: {0} is missing the 'amount' parameter, skipping it".format(rule["name"]), self.debug)
                     continue
 
             resource_label = rule["resource"]
@@ -953,93 +469,43 @@ class Guardian(Service):
                 continue
 
             # RULE HAS BEEN ACTIVATED
-
             # If rescaling a container, check that the current resource value exists, otherwise there is nothing to rescale
             if utils.structure_is_container(structure) and "current" not in structure["resources"][resource_label]:
-                utils.log_warning("No current value for container' {0}' and "
-                                  "resource '{1}', can't rescale".format(structure["name"], resource_label), self.debug)
+                utils.log_warning("No current value for container' {0}' and resource '{1}', can't rescale"
+                                  .format(structure["name"], resource_label), self.debug)
                 continue
 
-            valid_rescale = True
-            # Get the amount to be applied from the policy set
-            if rule["rescale_type"] == "up":
-                if rule["rescale_policy"] == "amount":
-                    amount = rule["amount"]
-                elif rule["rescale_policy"] == "fixed-ratio" and resource_label == "energy":
-                    amount = self.get_amount_from_fixed_ratio(structure, resource_label)
-                elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
-                    amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
-                elif rule["rescale_policy"] == "modelling" and resource_label == "energy":
-                    if self.power_budget_is_new(structure):
-                        amount = self.get_amount_from_energy_modelling(structure, usages, "up")
-                    else:
-                        amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
-                elif rule["rescale_policy"] == "proportional":
-                    amount = rule["amount"]
-                    current_resource_limit = structure["resources"][resource_label]["current"]
-                    upper_limit = limits[resource_label]["upper"]
-                    usage = usages[utils.res_to_metric(resource_label)]
-                    ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
-                    amount = int(ratio * amount)
-                    utils.log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
-                        current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
-                else:
-                    valid_rescale = False
-                    utils.log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
-                    continue
-            elif rule["rescale_type"] == "down":
-                if rule["rescale_policy"] == "amount":
-                    amount = rule["amount"]
-                elif rule["rescale_policy"] == "fit_to_usage":
-                    current_resource_limit = structure["resources"][resource_label]["current"]
-                    resource_margin = self.get_margin_from_boundary(limits[resource_label]["boundary"],
-                                                                    limits[resource_label]["boundary_type"],
-                                                                    structure["resources"][resource_label],
-                                                                    resource_label)
-                    usage = usages[utils.res_to_metric(resource_label)]
-                    amount = self.get_amount_from_fit_reduction(current_resource_limit, resource_margin, usage)
-                elif rule["rescale_policy"] == "fixed-ratio" and resource_label == "energy":
-                    amount = self.get_amount_from_fixed_ratio(structure, resource_label)
-                elif rule["rescale_policy"] == "proportional" and resource_label == "energy":
-                    amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
-                elif rule["rescale_policy"] == "modelling" and resource_label == "energy":
-                    if self.power_budget_is_new(structure):
-                        amount = self.get_amount_from_energy_modelling(structure, usages, "down")
-                    else:
-                        amount = self.get_amount_from_proportional_energy_rescaling(structure, usages, resource_label)
-                else:
-                    valid_rescale = False
-                    utils.log_warning("Invalid rescale policy '{0} for Rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
-                    continue
-
-            else:
-                valid_rescale = False
+            if rule["rescale_type"] not in ["up", "down"]:
                 utils.log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
                 continue
 
-            # Adjust energy rescaling and print extra information
-            if valid_rescale and resource_label == "energy":
-                # If power is within some reasonable limits we do nothing
-                if self.power_is_near_power_budget(structure, usages, limits):
-                    utils.log_warning("Current energy usage ({0:.2f}) for structure {1} is close to its power budget ({2:.2f}), "
-                                      "setting amount to 0".format(usages[utils.res_to_metric("energy")], structure["name"],
-                                                                   structure["resources"]["energy"]["current"]), self.debug)
-                    amount = 0
-                self.print_energy_rescale_info(structure, usages, limits, amount)
+            # Get the amount to be applied from the policy set
+            if rule["rescale_policy"] == "amount":
+                amount = rule["amount"]
+            elif rule["rescale_policy"] == "fit_to_usage":
+                current_resource_limit = structure["resources"][resource_label]["current"]
+                resource_margin = self.get_margin_from_boundary(limits[resource_label]["boundary"], limits[resource_label]["boundary_type"],
+                                                                structure["resources"][resource_label], resource_label)
+                usage = usages[utils.res_to_metric(resource_label)]
+                amount = self.get_amount_from_fit_to_usage(current_resource_limit, resource_margin, usage)
+            elif rule["rescale_policy"] == "proportional":
+                amount = rule["amount"]
+                current_resource_limit = structure["resources"][resource_label]["current"]
+                upper_limit = limits[resource_label]["upper"]
+                usage = usages[utils.res_to_metric(resource_label)]
+                ratio = min((usage - upper_limit) / (current_resource_limit - upper_limit), 1)
+                amount = int(ratio * amount)
+                utils.log_warning("PROP -> cur : {0} | upp : {1} | usa: {2} | ratio {3} | amount {4}".format(
+                    current_resource_limit, upper_limit, usage, ratio, amount), self.debug)
+            else:
+                utils.log_warning("Invalid rescale policy '{0} for rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+                continue
 
             # Ensure that amount is an integer, either by converting float -> int, or string -> int
             amount = int(amount)
 
-            # If it is 0, because there was a previous floating value between -1 and 1, set it to 0 so that it does not generate any Request
-            if amount == 0:
-                utils.log_warning("Amount generated for structure {0} with rule {1} is 0".format(structure["name"], rule["name"]), self.debug)
-
             # Ensure that the resource does not surpass any limit
-            if resource_label == "energy":
-                # Energy is governed by different rules (it is adjusted indirectly via CPU throttling)
-                new_amount = self.adjust_cpu_amount_to_manage_energy(amount, structure["resources"]["cpu"])
-            else:
-                new_amount = self.adjust_amount(amount, structure["resources"][resource_label], limits[resource_label])
+            new_amount = self.adjust_amount(amount, structure["resources"][resource_label], limits[resource_label])
 
             if new_amount != amount:
                 utils.log_warning("Amount generated for structure {0} with rule {1} has been trimmed from {2} to {3}"
@@ -1063,7 +529,6 @@ class Guardian(Service):
 
     def print_structure_info(self, container, usages, limits, triggered_events, triggered_requests):
         resources = container["resources"]
-
         container_name_str = "@" + container["name"]
         coloured_resources_str = "| "
         uncoloured_resources_str = "| "
@@ -1089,9 +554,6 @@ class Guardian(Service):
 
         # Match usages and rules to generate events
         triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
-
-        # If energy model reliability is high power modelling rules are independent of events the first time they are applied
-        self.check_power_modelling_rules(structure, rules, limits, usages, triggered_events)
 
         # Remote database operation
         if triggered_events:
@@ -1137,23 +599,20 @@ class Guardian(Service):
         # Check if structure is guarded
         if "guard" not in structure or not structure["guard"]:
             utils.log_warning("structure: {0} is set to leave alone, skipping".format(structure["name"]), self.debug)
-            self.register_scaling(structure, wait=False)  # Ensure the structure is registered, even when no scaling is performed
             return
 
         # Check if the structure has any resource set to guarded
         struct_guarded_resources = list()
         for res in self.guardable_resources:
-            if res in structure["resources"] and "guard" in structure["resources"][res] and structure["resources"][res]["guard"]:
+            if structure.get("resources", {}).get(res, {}).get("guard", False):
                 struct_guarded_resources.append(res)
         if not struct_guarded_resources:
             utils.log_warning("Structure {0} is set to guarded but has no resource marked to guard".format(structure["name"]), self.debug)
-            self.register_scaling(structure, wait=False)
             return
 
         # Check if structure is being monitored, otherwise, ignore
         if not utils.structure_subtype_is_supported(structure_subtype):
             utils.log_error("Unknown structure subtype '{0}'".format(structure_subtype), self.debug)
-            self.register_scaling(structure, wait=False)
             return
 
         try:
@@ -1189,23 +648,19 @@ class Guardian(Service):
 
             # Remote database operation
             self.couchdb_handler.update_limit(limits)
+            # TODO: If resources are updated in adjust_container_state, make sure they are persisted in the DB
 
             self.process_serverless_structure(structure, usages, limits_resources, rules)
 
         except Exception as e:
             utils.log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
-        finally:
-            self.register_scaling(structure, wait=False)
 
     def guard_structures(self, structures):
         # Remote database operation
         rules = self.couchdb_handler.get_rules()
 
-        # Initialise iteration dependent variables
-        self.__init_iteration_vars(structures)
-
         threads = []
-        for structure in self.current_structures:
+        for structure in structures:
             thread = Thread(name="process_structure_{0}".format(structure["name"]), target=self.serverless,
                             args=(structure, rules,))
             thread.start()
@@ -1213,12 +668,6 @@ class Guardian(Service):
 
         for process in threads:
             process.join()
-
-    def on_config_updated(self, service_config):
-        if self.energy_model_name != self.last_used_energy_model:
-            self.last_used_energy_model = self.energy_model_name
-            self.power_budget = {}
-            self.model_is_hw_aware = None
 
     def work(self, ):
         thread = None
