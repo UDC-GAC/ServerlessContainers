@@ -772,7 +772,8 @@ def subscribe_app(structure_name):
     for resource in req_app["resources"]:
         get_resource_keys_from_requested_structure(req_app, app, resource, ["max", "min", "guard"], ["weight"])
 
-    app["containers"] = list()
+    app["containers"] = []
+    app["running"] = req_app.get("running", False)
 
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {}}

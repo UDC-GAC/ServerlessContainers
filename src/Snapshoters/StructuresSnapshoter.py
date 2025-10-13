@@ -136,7 +136,7 @@ class StructuresSnapshoter(Service):
         self.structure_tracker.append(db_structure)
 
     def persist_thread(self,):
-        containers, applications = None, None
+        applications = None
         # Get containers information
         ts = time.time()
         containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
@@ -162,7 +162,7 @@ class StructuresSnapshoter(Service):
         if "user" in self.structures_persisted:
             if not applications:
                 applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-            users = self.couchdb_handler.get_users()
+            users = utils.get_users(self.couchdb_handler, self.debug)
             if users:
                 utils.run_in_threads(users, self.update_user, applications)
         utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - ts))), self.debug)

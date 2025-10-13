@@ -273,7 +273,10 @@ def update_resource_in_couchdb(structure, resource, field, value, db_handler, de
 
         time.sleep(backoff_time_ms / 1000)
 
-        structure = db_handler.get_structure(structure["name"])
+        if structure_is_user(structure):
+            structure = db_handler.get_user(structure["name"])
+        else:
+            structure = db_handler.get_structure(structure["name"])
         put_done = structure["resources"][resource][field] == value
 
         tries += 1
@@ -395,6 +398,10 @@ def generate_request(structure, amount, resource_label, priority=0):
         request["host_rescaler_port"] = structure["host_rescaler_port"]
 
     return request
+
+
+def structure_is_user(structure):
+    return structure["subtype"] == "user" or structure["type"] == "user"
 
 
 def structure_is_application(structure):

@@ -257,7 +257,7 @@ class EnergyController(Service):
         return valid
 
     def collect_usages(self, structure):
-        for timelapse in [self.window_timelapse, self.window_timelapse + 5]:
+        for timelapse in [self.window_timelapse, self.window_timelapse + 5, self.window_timelapse + 10]:
             # Remote database operation
             usages = utils.get_structure_usages(["cpu", "energy"], structure, timelapse, self.window_delay, self.opentsdb_handler, self.debug)
             if self.usages_are_valid(structure, usages, timelapse):
@@ -311,11 +311,7 @@ class EnergyController(Service):
         except Exception as e:
             utils.log_error(f"@{name} Error collecting info: {e}", self.debug)
 
-    def control_structures(self, guarded_structures, supported_structures):
-        # Remove old events
-        self.events_cache.remove_old_events(self.event_timeout)
-
-        # Check which power-capping method should be used for each structure and collect necessary info
+    def collect_info(self, guarded_structures, supported_structures):
         self.host_cpu_info.clear()
         if self.control_policy == "model-boosted":
             modelling_candidates = [s for s in guarded_structures if self.pb_cache.is_new(s["_id"], s["resources"]["energy"]["current"])]
@@ -331,6 +327,15 @@ class EnergyController(Service):
         else:
             self.run_in_threads("collect_info", guarded_structures, self.collect_structure_info, [])
             capping_groups = zip(["ppe"], [guarded_structures])
+
+        return capping_groups
+
+    def control_structures(self, guarded_structures, supported_structures):
+        # Remove old events
+        self.events_cache.remove_old_events(self.event_timeout)
+
+        # Check which power-capping method should be used for each structure and collect necessary info
+        capping_groups = self.collect_info(guarded_structures, supported_structures)
 
         for capping_method, structures in capping_groups:
             self.run_in_threads("power_cap", structures, self.structure_power_cap, [capping_method])

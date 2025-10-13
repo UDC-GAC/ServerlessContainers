@@ -112,7 +112,7 @@ class ReFeeder(Service):
         if "user" in self.structures_refeeded:
             if not applications:
                 applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-            users = self.couchdb_handler.get_users()
+            users = utils.get_users(self.couchdb_handler, self.debug)
             if users:
                 utils.run_in_threads(users, self.generate_user_metrics, applications)
         utils.log_info("It took {0} seconds to refeed users".format(str("%.2f" % (time.time() - ts))), self.debug)
