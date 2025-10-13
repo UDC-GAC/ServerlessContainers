@@ -34,7 +34,6 @@ import requests
 import traceback
 
 from requests import HTTPError
-from src.Guardian.Guardian import Guardian
 from src.MyUtils.ConfigValidator import ConfigValidator
 from src.Service.Service import Service
 
@@ -54,6 +53,7 @@ RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem'
                               'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
 
 APP_SCALING_SPLIT_AMOUNT = 5
+USER_SCALING_SPLIT_AMOUNT = 5
 MIN_SHARES_PER_SOCKET = 200
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "DEBUG": True, "CHECK_CORE_MAP": True, "ACTIVE": True}
@@ -97,6 +97,8 @@ class Scaler(Service):
         self.rescaler_http_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
         self.host_info_cache, self.container_info_cache = dict(), dict()
+        self.last_request_retrieval = None
+        self.rollbacks_tracker = {"container": [], "application": [], "user": []}
         self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk_read": self.apply_disk_read_request, "disk_write": self.apply_disk_write_request, "net": self.apply_net_request}
         self.polling_frequency, self.request_timeout, self.debug, self.check_core_map, self.active = None, None, None, None, None
 
@@ -134,7 +136,7 @@ class Scaler(Service):
         return container["resources"]["disk"]["name"]
 
     def check_host_has_enough_free_resources(self, host_info, needed_resources, resource, container_name):
-        if resource in ["disk_read", "disk_write"]:
+        if resource in {"disk_read", "disk_write"}:
             bound_disk = self.get_bound_disk(container_name)
             disk_op = resource.split("_")[-1]
             host_shares = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)]
@@ -148,7 +150,7 @@ class Scaler(Service):
             utils.log_warning("Beware, there are not enough free shares for container {0} for resource {1} in the host, "
                               "there are {2}, missing {3}".format(container_name, resource, host_shares, missing_shares), self.debug)
 
-        if resource == "disk_read" or resource == "disk_write":
+        if resource in {"disk_read", "disk_write"}:
             max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
             max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
             consumed_read = max_read - host_info["resources"]["disks"][bound_disk]["free_read"]
@@ -249,8 +251,8 @@ class Scaler(Service):
         for container in containers:
             c_name = container["name"]
             utils.log_info("Checking container {0}".format(c_name), self.debug)
-            real_resources = self.container_info_cache.get(c_name, {}).get("resources", None)
-            if real_resources is None:
+            real_resources = self.container_info_cache.get(c_name, {}).get("resources", {})
+            if not real_resources:
                 utils.log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name), self.debug)
                 continue
 
@@ -258,31 +260,40 @@ class Scaler(Service):
             errors_detected = errors_detected or errors
         return errors_detected
 
-    def check_invalid_resource_value(self, database_resources, amount, current, resource):
+    @staticmethod
+    def check_invalid_resource_value(database_resources, amount, current, resource, field):
         max_resource_limit = int(database_resources["resources"][resource]["max"])
         min_resource_limit = int(database_resources["resources"][resource]["min"])
-        resource_limit = int(current + amount)
 
-        if resource_limit < 0:
-            raise ValueError("Error in setting {0}, it would be lower than 0".format(resource))
-        elif resource_limit < min_resource_limit:
-            raise ValueError("Error in setting {0}, new value {1} it would be lower than min {2}".format(resource, resource_limit, min_resource_limit))
-        elif resource_limit > max_resource_limit:
-            raise ValueError("Error in setting {0}, new value {1} it would be higher than max {2}".format(resource, resource_limit, max_resource_limit))
+        if field == "max":
+            new_value = int(max_resource_limit + amount)
+            if new_value < current:
+                raise ValueError("Error in setting {0}, new max {1} would be lower than current {2}".format(resource, new_value, current))
+
+        if field == "current":
+            new_value = int(current + amount)
+            if new_value < 0:
+                raise ValueError("Error in setting {0}, current would be lower than 0".format(resource))
+            elif new_value < min_resource_limit:
+                raise ValueError("Error in setting {0}, new current {1} would be lower than min {2}".format(resource, new_value, min_resource_limit))
+            elif new_value > max_resource_limit:
+                raise ValueError("Error in setting {0}, new current {1} would be higher than max {2}".format(resource, new_value, max_resource_limit))
 
     ####################################################################################################################
     # REQUEST MANAGEMENT
     ####################################################################################################################
     def filter_requests(self, request_timeout):
-        fresh_requests, purged_requests, final_requests = list(), list(), list()
-        # Remote database operation
-        all_requests = self.couchdb_handler.get_requests()
+        fresh_requests, purged_requests, final_requests = [], [], []
         purged_counter = 0
         duplicated_counter = 0
 
+        # Remote database operation
+        all_requests = self.couchdb_handler.get_requests()
+        self.last_request_retrieval = time.time()
+
         # First purge the old requests
         for request in all_requests:
-            if request["timestamp"] < time.time() - request_timeout:
+            if request["timestamp"] < self.last_request_retrieval - request_timeout:
                 purged_requests.append(request)
                 purged_counter += 1
             else:
@@ -291,13 +302,13 @@ class Scaler(Service):
         # Then remove repeated requests for the same structure if found
         structure_requests_dict = {}
         for request in fresh_requests:
-            structure = request["structure"]  # The structure name (string), acting as an id
+            structure_name = request["structure"]  # The structure name (string), acting as an id
             action = request["action"]  # The action name (string)
-            stored_request = structure_requests_dict.get(structure, {}).get(action,  None)
+            field = request["field"]  # Structure field that will be modified (i.e., "current" or "max")
+            action_field = "{0}_{1}".format(action, field)  # Used as a unique identifier
+            stored_request = structure_requests_dict.get(structure_name, {}).get(action_field,  None)
             if stored_request:
                 # A previous request was found for this structure, remove old one and leave the newer one
-                stored_request = structure_requests_dict[structure][action]
-
                 if "priority" in stored_request and "priority" in request and stored_request["priority"] != request["priority"]:
                     # First, try comparing priorities
                     higher_priority_request = stored_request if stored_request["priority"] > request["priority"] else request
@@ -311,66 +322,303 @@ class Scaler(Service):
                 else:
                     # The stored request has a lower priority or is older, mark it to be removed and save the retrieved one
                     purged_requests.append(stored_request)
-                    structure_requests_dict[structure][action] = request
+                    structure_requests_dict[structure_name][action_field] = request
 
                 duplicated_counter += 1
             else:
-                structure_requests_dict[structure] = {action: request}
+                structure_requests_dict[structure_name] = {action_field: request}
 
         self.couchdb_handler.delete_requests(purged_requests)
 
         for structure in structure_requests_dict:
-            for action in structure_requests_dict[structure]:
-                final_requests.append(structure_requests_dict[structure][action])
+            for action_field in structure_requests_dict[structure]:
+                final_requests.append(structure_requests_dict[structure][action_field])
 
         utils.log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter), True)
         return final_requests
 
-    def sort_requests(self, new_requests):
-        container_reqs, app_reqs = list(), list()
+    @staticmethod
+    def split_requests_by_structure_type(new_requests):
+        container_reqs, app_reqs, user_reqs = [], [], []
         for r in new_requests:
             if r["structure_type"] == "container":
                 container_reqs.append(r)
-            elif r["structure_type"] == "application":
+            if r["structure_type"] == "application":
                 app_reqs.append(r)
+            if r["structure_type"] == "user":
+                user_reqs.append(r)
+        return container_reqs, app_reqs, user_reqs
+
+    @staticmethod
+    def split_requests_by_action(all_requests):
+        # Sort requests by priority. This is important for prioritizing requests of different structures
+        # Example: ReBalancer requests to scale down container1 and scale up container2, while Guardian requests to
+        # scale up both containers. The scaling down of container1 is executed first. Then, if no priority order is
+        # enforced, the scaling up of container1 could be executed before the scaling up of container2, thus making
+        # the ReBalancer scale down request useless
+        sorted_requests = sorted(all_requests, key=lambda r: r.get("priority", 0), reverse=True)
+        scale_down, scale_up = [], []
+        for request in sorted_requests:
+            if not request.get("action", None):
+                continue
+            elif request["action"].endswith("Down"):
+                scale_down.append(request)
+            elif request["action"].endswith("Up"):
+                scale_up.append(request)
+        return scale_down, scale_up
+
+    @staticmethod
+    def split_requests_by_field(all_requests):
+        # This is important to avoid collisions in rebalancer "max" donations. Donors donate a "max" amount based on its
+        # "current" value. Then, if "current" value is changed before "max" donation, the donated amount may become invalid
+        scale_max, scale_current = [], []
+        for request in all_requests:
+            field = request.get("field", "current")
+            if field == "max":
+                scale_max.append(request)
+            elif field == "current":
+                scale_current.append(request)
+        return scale_max, scale_current
+
+    @staticmethod
+    def flatten_requests(all_requests):
+        final_requests = []
+        requests_dict = {}
+        for request in all_requests:
+            structure_name = request["structure"]  # The structure name (string), acting as an id
+            action = request["action"]  # The action name (string)
+            field = request["field"]  # Structure field that will be modified (i.e., "current" or "max")
+            action_field = "{0}_{1}".format(action, field)  # Used as a unique identifier
+            if not requests_dict.get(structure_name, {}).get(action_field, None):
+                requests_dict[structure_name] = {action_field: request}
             else:
-                pass
-        return container_reqs, app_reqs
+                requests_dict[structure_name][action_field]["amount"] += request["amount"]
+
+        for structure in requests_dict:
+            for action_field in requests_dict[structure]:
+                final_requests.append(requests_dict[structure][action_field])
+
+        return final_requests
+
+    @staticmethod
+    def flatten_requests_by_structure(requests_by_structure):
+        final_requests, rescaled_structures = [], []
+        for structure_name in requests_by_structure:
+            # Copy the first request as the base request
+            flat_request = dict(requests_by_structure[structure_name][0])
+            flat_request["amount"] = sum([r["amount"] for r in requests_by_structure[structure_name]])
+            final_requests.append(flat_request)
+            rescaled_structures.append((structure_name, flat_request["amount"]))
+
+        return final_requests, rescaled_structures
+
+    @staticmethod
+    def rollback_pair_requests(rollback_reqs, pair_reqs):
+        # Create a dict with the amount of each resource pair-swapping that it's going through a rollback
+        rollback_amount = {}
+        unprocessed_rollbacks = []
+        for r in rollback_reqs:
+            _id = "{0}-{1}-{2}".format(r["structure"], r["pair_structure"], r["resource"])
+            rollback_amount[_id] = rollback_amount.get(_id, 0) + abs(r["amount"])
+
+        # Remove the requests that are the counterpart of a pair-swapping request that has suffered a rollback
+        new_reqs = []
+        for r in pair_reqs:
+            if r.get("pair_structure", ""):
+                _id = "{0}-{1}-{2}".format(r["pair_structure"], r["structure"], r["resource"])
+                if rollback_amount.get(_id, 0) > 0:
+                    # Rollback is done -> request is not added to new_reqs
+                    rollback_amount[_id] -= abs(r["amount"])
+                else:
+                    new_reqs.append(r)
+            else:
+                new_reqs.append(r)
+
+        for r in rollback_reqs:
+            _id = "{0}-{1}-{2}".format(r["structure"], r["pair_structure"], r["resource"])
+            if rollback_amount[_id] > 0:
+                new_amount = rollback_amount[_id] if r["amount"] > 0 else -rollback_amount[_id]
+                r["amount"] = new_amount
+                unprocessed_rollbacks.append(r)
+                rollback_amount[_id] = 0
+
+        return new_reqs, unprocessed_rollbacks
+
+    def rollback_generated_requests(self, rollback_reqs, child_reqs, field):
+        parent_type, threads = None, []
+        rollback_amount, updated_parents = {}, {}
+
+        # Create a dict with the amount of each resource pair-swapping that it's going through a rollback
+        for r in rollback_reqs:
+            _id = "{0}-{1}-{2}".format(r["structure"], r["pair_structure"], r["resource"])
+            rollback_amount[_id] = rollback_amount.get(_id, 0) + abs(r["amount"])
+            if parent_type is None:
+                parent_type = r["structure_type"]
+
+        # Remove the child requests that has been generated as part or a pair-swapping that is suffering a rollback
+        new_child_reqs = []
+        for r in child_reqs:
+            structure_key = "for_{0}".format(parent_type)
+            pair_key = "pair_{0}".format(parent_type)
+            if r.get(pair_key, "") and r.get(structure_key, ""):
+                _id = "{0}-{1}-{2}".format(r[pair_key], r[structure_key], r["resource"])
+                if rollback_amount.get(_id, 0) > 0:
+                    # Rollback is done -> request is not added to new_child_reqs
+                    rollback_amount[_id] -= abs(r["amount"])
+                    if field == "max":
+                        updated_parents.setdefault(r[structure_key], {}).setdefault(r["resource"], 0)
+                        updated_parents[r[structure_key]][r["resource"]] += r["amount"]
+                else:
+                    new_child_reqs.append(r)
+            else:
+                new_child_reqs.append(r)
+
+        # If the requests modify "max" field, reset the parent structure to its original "max" value
+        for parent_name, resources in updated_parents.items():
+            if parent_type == "user":
+                parent = self.couchdb_handler.get_user(parent_name)
+            else:
+                parent = self.couchdb_handler.get_structure(parent_name)
+            # Reset "max" value for each affected resource
+            for resource in resources:
+                parent["resources"][resource][field] += updated_parents[parent_name][resource]
+
+            thread = Thread(name="persist_{0}".format(parent["name"]), target=utils.persist_data, args=(parent, self.couchdb_handler, self.debug))
+            thread.start()
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+        return new_child_reqs
+
+    def rollback_scale_ups(self, rollback_reqs):
+        threads = []
+        for r in rollback_reqs:
+            # Example: structure=cont1, pair_structure=cont0 -> cont0 scales -12 and cont1 scales +12
+            # First, cont0 scales -12, then cont1 attempts to scale +12 and fails, so we create a request to
+            # scale cont0 +12 (returning it to its original state)
+            pair_structure_name = r["pair_structure"] # e.g., cont0
+
+            # Retrieve structure info
+            try:
+                pair_structure = self.couchdb_handler.get_structure(pair_structure_name)
+            except (requests.exceptions.HTTPError, ValueError):
+                utils.log_error("Error, couldn't find pair structure {0} in database".format(pair_structure_name), self.debug)
+                continue
+
+            pair_request = dict(r)
+            pair_request["structure"] = r["pair_structure"] # e.g., cont0
+            pair_request["pair_structure"] = r["structure"] # e.g., cont1
+            pair_request["amount"] = r["amount"] # e.g., + 12 shares
+
+            thread, rollback = self.rescale_container(pair_request, pair_structure)
+
+            if rollback:
+                utils.log_error("Another rollback has been triggered while scaling up container '{0}' to rollback pair-swapping "
+                                "with '{1}'".format(pair_request["structure"], pair_request["pair_structure"]))
+
+            threads.append(thread)
+
+        for thread in threads:
+            thread.join()
+
+    def check_unprocessed_rollbacks(self, current_reqs, structure_type):
+        # If no rollback requests from previous iterations, return the original requests list
+        if not self.rollbacks_tracker[structure_type]:
+            return current_reqs
+
+        # Check if some requests correspond with any unprocessed rollback from previous iterations
+        filtered_reqs, unprocesed_rollbacks = self.rollback_pair_requests(self.rollbacks_tracker[structure_type], current_reqs)
+
+        # Update unprocessed rollbacks list for this structure type
+        self.rollbacks_tracker[structure_type].clear()
+        self.rollbacks_tracker[structure_type].extend(unprocesed_rollbacks)
+
+        return filtered_reqs
 
     ####################################################################################################################
     # RESOURCE REQUEST MANAGEMENT
     ####################################################################################################################
-    def process_request(self, request, real_resources, database_resources):
+    def process_container_request(self, request, real_resources, database_resources):
+        thread = None
         # Create a 'fake' container structure with only the required info
         container = {"host_rescaler_ip": request["host_rescaler_ip"],
                      "host_rescaler_port": request["host_rescaler_port"],
                      "name": request["structure"]}
-
         # Apply the request and get the new resources to set
         try:
-            new_resources = self.apply_request(request, real_resources, database_resources)
+            if request["resource"] == "energy" or request["field"] == "max":
+                thread, new_resources = self.update_container_in_couchdb(request, real_resources, database_resources)
+            else:
+                new_resources = self.apply_request(request, real_resources, database_resources)
+
             if new_resources:
-                utils.log_info("Request: {0} for container : {1} for new resources : {2}".format(
-                    request["action"], request["structure"], json.dumps(new_resources)), self.debug)
+                # If field is "current" and resource is not energy, we need to send a request to NodeRescaler
+                if request["resource"] != "energy" and request["field"] != "max":
+                    utils.log_info("Request: {0} for container : {1} for new resources : {2}".format(
+                        request["action"], request["structure"], json.dumps(new_resources)), self.debug)
 
-                # Apply changes through a REST call
-                set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
+                    # Apply changes through a REST call to NodeRescaler
+                    set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
 
-                ## Update container info in cache (useful if there are multiple requests for the same container)
+                # Update container info in cache (useful if there are multiple requests for the same container)
                 self.container_info_cache[request["structure"]]["resources"][request["resource"]] = new_resources[request["resource"]]
 
-        except (ValueError) as e:
+        except ValueError as e:
             utils.log_error("Error with container {0} in applying the request -> {1}".format(request["structure"], str(e)), self.debug)
-            return
-        except (HTTPError) as e:
+            return thread
+        except HTTPError as e:
             utils.log_error("Error setting container {0} resources -> {1}".format(request["structure"], str(e)), self.debug)
-            return
-        except (Exception) as e:
+            return thread
+        except Exception as e:
             utils.log_error("Error with container {0} -> {1}".format(request["structure"], str(e)), self.debug)
-            return
+            return thread
+
+        return thread
+
+    def update_container_in_couchdb(self, request, real_resources, database_resources):
+        amount = int(request["amount"])
+        resource = request["resource"]
+        field = request["field"]
+        resource_dict = {resource: {}}
+        host_info = self.host_info_cache[request["host"]]
+
+        # Get the current resource limit, if unlimited, then max, min or mean
+        _max = database_resources["resources"][resource]["max"]
+        _current = self.get_current_resource_value(real_resources, resource)
+
+        # Check that the resource limits are respected (min <= current <= max)
+        self.check_invalid_resource_value(database_resources, amount, _current, resource, field)
+
+        if field == "max":
+            new_value = _max + amount
+            resource_dict[resource]["{0}_limit".format(resource)] = _current
+        else:
+            new_value = _current + amount
+            resource_dict[resource]["{0}_limit".format(resource)] = new_value
+
+        if field == "current":
+            # When scaling up, check that the host has enough free resources before proceeding
+            if amount > 0:
+                self.check_host_has_enough_free_resources(host_info, amount, resource, request['structure'])
+
+                # TODO: This should be adapted for disk (free must be previously calculated for disk)
+                # Trim amount to avoid surpassing host free resources
+                amount = min(amount, host_info["resources"][resource]["free"])
+
+            # Update host free resources
+            self.host_info_cache[request["host"]]["resources"][resource]["free"] -= amount
+
+        # Update container in CouchDB
+        thread = Thread(name="update_{0}".format(database_resources["name"]), target=utils.update_resource_in_couchdb,
+                        args=(database_resources, resource, field, new_value, self.couchdb_handler, self.debug),
+                        kwargs={"max_tries": 5, "backoff_time_ms": 500})
+        thread.start()
+
+        return thread, resource_dict
 
     def apply_request(self, request, real_resources, database_resources):
-
         amount = int(request["amount"])
 
         host_info = self.host_info_cache[request["host"]]
@@ -380,7 +628,7 @@ class Scaler(Service):
         current_resource_limit = self.get_current_resource_value(real_resources, resource)
 
         # Check that the resource limit is respected, not lower than min or higher than max
-        self.check_invalid_resource_value(database_resources, amount, current_resource_limit, resource)
+        self.check_invalid_resource_value(database_resources, amount, current_resource_limit, resource, request["field"])
 
         if amount > 0:
             # If the request is for scale up, check that the host has enough free resources before proceeding
@@ -421,9 +669,9 @@ class Scaler(Service):
     @staticmethod
     def __generate_core_dist(topology, dist_name):
         core_dist = []
-        supported_distributions = ["Group_P&L", "Group_1P_2L", "Group_PP_LL", "Spread_P&L", "Spread_PP_LL"]
+        supported_distributions = {"Group_P&L", "Group_1P_2L", "Group_PP_LL", "Spread_P&L", "Spread_PP_LL"}
         if dist_name not in supported_distributions:
-            raise ValueError("Invalid core distribution: {0}. Supported {1}.".format(dist_name, supported_distributions))
+            raise ValueError("Invalid core distribution: {0}. Supported: {1}.".format(dist_name, supported_distributions))
 
         # Pairs of physical and logical cores, one socket at a time
         if dist_name == "Group_P&L":
@@ -460,7 +708,7 @@ class Scaler(Service):
                 for sk2_id in other_sk:
                     core_dist.extend(topology[sk2_id].get(core_id, []))
 
-        # Phirst physical cores, then logical cores, alternating between sockets
+        # First physical cores, then logical cores, alternating between sockets
         if dist_name == "Spread_PP_LL":
             other_sk = sorted(topology, key=lambda sk: len(topology[sk]))
             sk_id = other_sk.pop()
@@ -632,213 +880,270 @@ class Scaler(Service):
     # CONTAINER SCALING
     ####################################################################################################################
     def rescale_container(self, request, structure):
+        thread = None
         try:
             # Needed for the resources reported in the database (the 'max, min' values)
             database_resources = structure
 
             # Get the resources the container is using from its host NodeScaler (the 'current' value)
             c_name = structure["name"]
-            if c_name not in self.container_info_cache or "resources" not in self.container_info_cache[c_name]:
+            if self.container_info_cache.get(c_name, {}).get("resources", None) is None:
                 utils.log_error("Couldn't get container's {0} resources, can't rescale".format(c_name), self.debug)
-                return
+                return thread, True if request.get("pair_structure", "") else False
             real_resources = self.container_info_cache[c_name]["resources"]
 
             # Process the request
-            self.process_request(request, real_resources, database_resources)
+            thread = self.process_container_request(request, real_resources, database_resources)
         except Exception as e:
             utils.log_error(str(e) + " " + str(traceback.format_exc()), self.debug)
+            return thread, True if request.get("pair_structure", "") else False
+
+        return thread, False
 
     ####################################################################################################################
     # APPLICATION SCALING
     ####################################################################################################################
-    def sort_containers_by_usage_margin(self, container1, container2, resource):
-        """
-        Parameters:
-            container1: dict -> A container structure
-            container2: dict -> A container structure
-            resource: str -> the resource to be used for sorting
-        Returns:
-            The tuple of the containers with the (lowest,highest) margin between resources used and resources set
-        """
-        c1_current_amount = container1["resources"][resource]["current"]
-        c1_usage_amount = container1["resources"][resource]["usage"]
-        c2_current_amount = container2["resources"][resource]["current"]
-        c2_usage_amount = container2["resources"][resource]["usage"]
-        if c1_current_amount - c1_usage_amount < c2_current_amount - c2_usage_amount:
-            lowest, highest = container1, container2
-        else:
-            lowest, highest = container2, container1
-
-        return lowest, highest
-
-    def lowest_current_to_usage_margin(self, container1, container2, resource):
-        # Return the container with the lowest margin between resources used and resources set (closest bottleneck)
-        lowest, _ = self.sort_containers_by_usage_margin(container1, container2, resource)
-        return lowest
-
-    def highest_current_to_usage_margin(self, container1, container2, resource):
-        # Return the container with the highest margin between resources used and resources set (lowest use)
-        _, highest = self.sort_containers_by_usage_margin(container1, container2, resource)
-        return highest
-
-    def generate_requests(self, new_requests, app_label):
-        rescaled_containers = list()
-        total_amount = 0
-        for req in new_requests:
-            self.couchdb_handler.add_request(req)
-            rescaled_containers.append((req["structure"], req["amount"]))
-            total_amount += req["amount"]
-        utils.log_info("App {0} rescaled {1} shares by rescaling containers: {2}".format(app_label, total_amount, str(rescaled_containers)), self.debug)
-
     def single_container_rescale(self, request, app_containers, resource_usage_cache):
-        amount, resource_label = request["amount"], request["resource"]
+        amount, field, resource_label = request["amount"], request["field"], request["resource"]
         scalable_containers = list()
         resource_shares = abs(amount)
 
         # Look for containers that can be rescaled
-        for container in app_containers:
-            usages = resource_usage_cache[container["name"]]
-            container["resources"][resource_label]["usage"] = usages[resource_label]
+        for container_name, container in app_containers.items():
+            max_value = container["resources"][resource_label]["max"]
+            min_value = container["resources"][resource_label]["min"]
             current_value = container["resources"][resource_label]["current"]
+
+            # When scaling "current" usage information is also needed
+            if field == "current":
+                container["resources"][resource_label]["usage"] = resource_usage_cache[container_name][resource_label]
 
             # Rescale down
             if amount < 0:
-                # Check that the container has enough free resource shares
-                # available to be released and that it would be able
-                # to be rescaled without dropping under the minimum value
-                if current_value < resource_shares:
-                    # Container doesn't have enough resources to free
-                    # ("Container doesn't have enough resources to free", self.debug)
-                    pass
-                elif current_value + amount < container["resources"][resource_label]["min"]:
-                    # Container can't free that amount without dropping under the minimum
-                    # utils.log_error("Container {0} can't free that amount without dropping under the minimum".format(container["name"]), self.debug)
-                    pass
-                else:
+                # "max" can't be scaled below "current"
+                if field == "max" and max_value + amount >= current_value:
+                    scalable_containers.append(container)
+
+                # "current" can't be scaled below "min"
+                if field == "current" and current_value + amount >= min_value:
                     scalable_containers.append(container)
 
             # Rescale up
             else:
-                # Check that the container has enough free resource shares available in the host and that it would be able
-                # to be rescaled without exceeded the maximum value
-                container_host = container["host"]
-
-                if self.host_info_cache[container_host]["resources"][resource_label]["free"] < resource_shares:
-                    # Container's host doesn't have enough free resources
-                    # utils.log_error("Container's host doesn't have enough free resources", self.debug)
-                    pass
-                elif current_value + amount > container["resources"][resource_label]["max"]:
-                    # Container can't get that amount without exceeding the maximum
-                    # utils.log_error("Container can't get that amount without exceeding the maximum", self.debug)
-                    pass
-                else:
+                # TODO: Think if we should check the host free resources for a "max" scaling
+                if field == "max":
                     scalable_containers.append(container)
 
-        # Look for the best fit container for this resource and launch the rescaling request for it
+                if field == "current":
+                    container_host = container["host"]
+                    # Check container's host have enough free resources and "current" is not scaled above "max"
+                    if self.host_info_cache[container_host]["resources"][resource_label]["free"] >= resource_shares and current_value + amount <= max_value:
+                        scalable_containers.append(container)
+
+        # Look for the best fit container for this resource and generate a rescaling request for it
         if scalable_containers:
-            best_fit_container = scalable_containers[0]
-
-            for container in scalable_containers[1:]:
-                if amount < 0:
-                    # If scaling down, look for containers with usages far from the limit (underuse)
-                    best_fit_container = self.highest_current_to_usage_margin(container, best_fit_container, resource_label)
-                else:
-                    # If scaling up, look for containers with usages close to the limit (bottleneck)
-                    best_fit_container = self.lowest_current_to_usage_margin(container, best_fit_container, resource_label)
-
+            success, new_request = False, {}
+            best_fit_container = utils.get_best_fit_container(scalable_containers, resource_label, amount, field)
             # Generate the new request
-            new_request = utils.generate_request(best_fit_container, amount, resource_label)
+            if best_fit_container:
+                new_request = utils.generate_request(best_fit_container, amount, resource_label, field=field)
+                success = True
 
-            return True, best_fit_container, new_request
+            return success, best_fit_container, new_request
         else:
             return False, {}, {}
 
-    def rescale_application(self, request, structure):
+    def rescale_application(self, app_request, app):
+        thread = None
+        resource, field, total_amount = app_request["resource"], app_request["field"], app_request["amount"]
 
         # Get container names that this app uses
-        app_containers_names = structure["containers"]
-        app_containers = list()
-
-        for cont_name in app_containers_names:
+        app_containers = {}
+        for cont_name in app["containers"]:
             # Get the container
             container = self.couchdb_handler.get_structure(cont_name)
-            app_containers.append(container)
-
+            app_containers[cont_name] = container
             # Retrieve host info and cache it in case other containers or applications need it
             if container["host"] not in self.host_info_cache:
                 self.host_info_cache[container["host"]] = self.couchdb_handler.get_structure(container["host"])
 
-        total_amount = request["amount"]
+        # When the app is running, generate scaling requests for its containers
+        if app_containers and app.get("running", False):
+            # Create smaller requests of 'split_amount' size
+            split_amount = -APP_SCALING_SPLIT_AMOUNT if total_amount < 0 else APP_SCALING_SPLIT_AMOUNT
+            base_request = dict(app_request)
+            cont_requests = []
+            for slice_amount in utils.split_amount_in_slices(total_amount, split_amount):
+                base_request["amount"] = slice_amount
+                cont_requests.append(dict(base_request))
 
-        requests = list()
-        remaining_amount = total_amount
-        split_amount = APP_SCALING_SPLIT_AMOUNT * (request["amount"] / abs(request["amount"]))  # This sets the sign
-        request["amount"] = split_amount
+            # Get the request usage for all the containers and cache it (not needed when scaling "max")
+            resource_usage_cache = {}
+            if app_request["field"] == "current":
+                for container_name in app_containers:
+                    metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
+                    resource_usage_cache[container_name] = self.bdwatchdog_handler.get_structure_timeseries(
+                        {"host": container_name}, 10, 20, metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
 
-        # Create smaller requests of 'split_amount' size
-        while abs(remaining_amount) > 0 and abs(remaining_amount) > abs(split_amount):
-            requests.append(dict(request))
-            remaining_amount -= split_amount
+            # Try to generate requests for the containers belonging to the application
+            success, scaled_amount, generated_requests = True, 0, {}
+            while success and len(cont_requests) > 0:
+                request = cont_requests.pop(0)
+                success, container_to_rescale, generated_request = self.single_container_rescale(request, app_containers, resource_usage_cache)
+                if success:
+                    container_name = container_to_rescale["name"]
 
-        # If some remaining amount is left, create the last request
-        if abs(remaining_amount) > 0:
-            request["amount"] = remaining_amount
-            requests.append(dict(request))
+                    # Add application info to the container request (useful context for pair-swapping management)
+                    generated_request["for_application"] = app["name"]
+                    if app_request.get("pair_structure", ""):
+                        generated_request["pair_application"] = app_request["pair_structure"]
 
-        # Get the request usage for all the containers and cache it
-        resource_usage_cache = dict()
-        for container in app_containers:
-            amount, resource = request["amount"], request["resource"]
-            metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
-            resource_usage_cache[container["name"]] = self.bdwatchdog_handler.get_structure_timeseries(
-                {"host": container["name"]}, 10, 20,
-                metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
+                    # Save generated request for the best fit container
+                    generated_requests.setdefault(container_name, []).append(generated_request)
 
-        success, iterations = True, 0
-        generated_requests = dict()
+                    # Update the container's resources for next iteration
+                    container_to_rescale["resources"][resource][field] += request["amount"]
+                    app_containers[container_name] = container_to_rescale
 
-        while success and len(requests) > 0:
-            request = requests.pop(0)
-            success, container_to_rescale, generated_request = self.single_container_rescale(request, app_containers, resource_usage_cache)
-            if success:
-                # If rescaling was successful, update the container's resources as they have been rescaled
-                for c in app_containers:
-                    container_name = c["name"]
-                    if container_name == container_to_rescale["name"]:
-                        # Initialize
-                        if container_name not in generated_requests:
-                            generated_requests[container_name] = list()
+                    scaled_amount += request["amount"]
 
-                        generated_requests[container_name].append(generated_request)
-                        container_to_rescale["resources"][request["resource"]]["current"] += request["amount"]
-                        app_containers.remove(c)
-                        app_containers.append(container_to_rescale)
-                        break
+            # Collapse all the requests to generate just 1 per container
+            final_requests, rescaled_containers = self.flatten_requests_by_structure(generated_requests)
+            utils.log_info("App '{0}' rescaled {1} shares for resource {2} by rescaling containers: {3}".format(app["name"], scaled_amount, app_request["resource"], str(rescaled_containers)), self.debug)
+
+            # Check if application was scaled successfully
+            if len(cont_requests) > 0 and scaled_amount != total_amount:
+                # Couldn't completely rescale the application as some split of a major rescaling operation could not be completed
+                utils.log_warning("App '{0}' could not be completely rescaled, only {1} shares out of {2}".format(app["name"], scaled_amount, total_amount), self.debug)
+
+                # Rollback the scaling if this request was generated from a pair-swapping
+                if app_request.get("pair_structure", ""):
+                    utils.log_warning("This request is part of a pair-swapping between '{0}' and '{1}', both requests will "
+                                      "be aborted (rollback)".format(app["name"], app_request["pair_structure"]), self.debug)
+                    return thread, [], True
+
+        # When app is not running, we directly update it in CouchDB
+        elif not app_containers and not app.get("running", False):
+            scaled_amount = total_amount
+            final_requests = []
+
+        # Any other state is inconsistent (app have containers while it's not running or app is running while not having containers)
+        else:
+            utils.log_warning("Inconsistent state for app '{0}' aborting scaling request for {1} {2} shares".format(app["name"], total_amount, resource), self.debug)
+            rollback = True if app_request.get("pair_structure", "") else False # Also rollback pair requests if needed
+            return thread, [], rollback
+
+        # Update app if "max" is scaled -> field must be updated in StateDatabase ("current" is updated by StructureSnapshoter)
+        if field == "max" and scaled_amount != 0:
+            new_value = app["resources"][resource][field] + scaled_amount
+            thread = Thread(name="update_{0}".format(app["name"]), target=utils.update_resource_in_couchdb,
+                            args=(app, resource, field, new_value, self.couchdb_handler, self.debug),
+                            kwargs={"max_tries": 5, "backoff_time_ms": 500})
+            thread.start()
+
+        return  thread, final_requests, False
+
+    ####################################################################################################################
+    # USER SCALING
+    ####################################################################################################################
+    @staticmethod
+    def single_application_rescale(request, user_apps):
+        amount, field, resource_label = request["amount"], request["field"], request["resource"]
+        scalable_apps = list()
+
+        # Look for applications that can be rescaled
+        for app_name, app in user_apps.items():
+            # Rescale down: "max" can't be scaled below "current"
+            if amount < 0 and app["resources"][resource_label]["max"] + amount >= app["resources"][resource_label].get("current", 0):
+                scalable_apps.append(app)
+            # Rescale up
             else:
-                break
+                scalable_apps.append(app)
 
-            iterations += 1
+        if not scalable_apps:
+            return False, {}, {}
 
-        # Collapse all the requests to generate just 1 per container
-        final_requests = list()
-        for container in generated_requests:
-            # Copy the first request as the base request
-            flat_request = dict(generated_requests[container][0])
-            flat_request["amount"] = 0
-            for request in generated_requests[container]:
-                flat_request["amount"] += request["amount"]
-            final_requests.append(flat_request)
-        self.generate_requests(final_requests, structure["name"])
+        # Look for the best fit application for this resource and generate a rescaling request for it
+        best_fit_app = utils.get_best_fit_app(scalable_apps, resource_label, amount)
 
-        if len(requests) > 0:
-            # Couldn't completely rescale the application as some split of a major rescaling operation could not be completed
-            utils.log_warning("App {0} could not be completely rescaled, only: {1} shares of resource: {2} have been scaled".format(
-                request["structure"], str(int(iterations * split_amount)), request["resource"]), self.debug)
+        return True, best_fit_app, utils.generate_request(best_fit_app, amount, resource_label, field=field)
+
+    def rescale_user(self, user_request, user):
+        thread = None
+        resource, field, total_amount = user_request["resource"], user_request["field"], user_request["amount"]
+
+        if field != "max":
+            utils.log_error("Users can only rescale 'max' field, skipping", self.debug)
+            return thread, {}, False
+
+        # Get app names associated to this user
+        user_apps = {}
+        for app_name in user["clusters"]:
+            # Get the application
+            app = self.couchdb_handler.get_structure(app_name)
+            user_apps[app_name] = app
+
+        if user_apps:
+            split_amount = -USER_SCALING_SPLIT_AMOUNT if total_amount < 0 else USER_SCALING_SPLIT_AMOUNT
+            base_request = dict(user_request)
+            app_requests = []
+            for slice_amount in utils.split_amount_in_slices(total_amount, split_amount):
+                base_request["amount"] = slice_amount
+                app_requests.append(dict(base_request))
+
+            success, scaled_amount, generated_requests = True, 0, {}
+            while success and len(app_requests) > 0:
+                request = app_requests.pop(0)
+                success, app_to_rescale, generated_request = self.single_application_rescale(request, user_apps)
+                if success:
+                    app_name = app_to_rescale["name"]
+
+                    # Add user info to the application request (useful context for pair-swapping management)
+                    generated_request["for_user"] = user["name"]
+                    if user_request.get("pair_structure", ""):
+                        generated_request["pair_user"] = user_request["pair_structure"]
+
+                    # Save generated request for the best fit container
+                    generated_requests.setdefault(app_name, []).append(generated_request)
+
+                    # Update the container's resources for next iteration
+                    app_to_rescale["resources"][resource][field] += request["amount"]
+                    user_apps[app_name] = app_to_rescale
+
+                    scaled_amount += request["amount"]
+
+            # Collapse all the requests to generate just 1 per application
+            final_requests, rescaled_apps = self.flatten_requests_by_structure(generated_requests)
+            utils.log_info("User '{0}' rescaled {1} shares for resource {2} by rescaling apps: {3}".format(user["name"], scaled_amount, user_request["resource"], str(rescaled_apps)), self.debug)
+            if len(app_requests) > 0 and scaled_amount != total_amount:
+                # Couldn't completely rescale the application as some split of a major rescaling operation could not be completed
+                utils.log_warning("User '{0}' could not be completely rescaled, only {1} shares out of {2}".format(user["name"], scaled_amount, total_amount), self.debug)
+
+                # Rollback the scaling if this request was generated from a pair-swapping
+                if user_request.get("pair_structure", ""):
+                    utils.log_warning("This request is part of a pair-swapping between '{0}' and '{1}', both requests will "
+                                      "be aborted (rollback)".format(user["name"], user_request["pair_structure"]), self.debug)
+                    return thread, [], True
+        else:
+            # TODO: Think if we want to scale users that does not have subscribed applications
+            # In that case this branch should return without updating user and set rollback=True if the request comes from a pair-swapping
+            scaled_amount = total_amount
+            final_requests = []
+
+        # Update user in StateDatabase
+        new_value = user["resources"][resource][field] + scaled_amount
+        thread = Thread(name="update_{0}".format(user["name"]), target=utils.update_resource_in_couchdb,
+                        args=(user, resource, field, new_value, self.couchdb_handler, self.debug),
+                        kwargs={"max_tries": 5, "backoff_time_ms": 500})
+        thread.start()
+
+        return thread, final_requests, False
 
     ####################################################################################################################
     # SERVICE METHODS
     ####################################################################################################################
-    def get_cpu_list(self, cpu_num_string):
+    @staticmethod
+    def get_cpu_list(cpu_num_string):
         # Translate something like '2-4,7' to [2,3,7]
         cpu_list = list()
         parts = cpu_num_string.split(",")
@@ -851,8 +1156,10 @@ class Scaler(Service):
                     cpu_list.append(str(n))
         return cpu_list
 
-    def get_current_resource_value(self, real_resources, resource):
-        translation_dict = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk_read": "disk_read_limit", "disk_write": "disk_write_limit"}
+    @staticmethod
+    def get_current_resource_value(real_resources, resource):
+        translation_dict = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk_read": "disk_read_limit",
+                            "disk_write": "disk_write_limit", "energy": "energy_limit"}
 
         if resource not in translation_dict:
             raise ValueError("Resource '{0}' unknown".format(resource))
@@ -877,43 +1184,52 @@ class Scaler(Service):
         return current_resource_limit
 
     def process_requests(self, reqs):
+        new_reqs, rollback_reqs, threads = [], [], []
         for request in reqs:
             structure_name = request["structure"]
 
             # Retrieve structure info
             try:
-                structure = self.couchdb_handler.get_structure(structure_name)
+                if request["structure_type"] == "user":
+                    structure = self.couchdb_handler.get_user(structure_name)
+                else:
+                    structure = self.couchdb_handler.get_structure(structure_name)
             except (requests.exceptions.HTTPError, ValueError):
                 utils.log_error("Error, couldn't find structure {0} in database".format(structure_name), self.debug)
                 continue
 
             # Rescale the structure accordingly, whether it is a container or an application
-            if utils.structure_is_container(structure):
-                self.rescale_container(request, structure)
+            generated_requests, rollback, thread = [], False, None
+            if utils.structure_is_user(structure):
+                thread, generated_requests, rollback = self.rescale_user(request, structure)
             elif utils.structure_is_application(structure):
-                self.rescale_application(request, structure)
+                thread, generated_requests, rollback = self.rescale_application(request, structure)
+            elif utils.structure_is_container(structure):
+                thread, rollback = self.rescale_container(request, structure)
             else:
                 utils.log_error("Unknown type of structure '{0}'".format(structure["subtype"]), self.debug)
 
-            # Remove the request from the database
-            self.couchdb_handler.delete_request(request)
+            # If some thread has been launched to update structure, save it
+            if thread:
+                threads.append(thread)
 
-    def split_requests(self, all_requests):
-        ## Sort requests by priority
-        # This is important for prioritizing requests of different structures
-        # Example: ReBalancer requests to scale down container1 and scale up container2, while Guardian requests to scale up both containers
-        # The scaling down of container1 is executed first. Then, if no priority order is enforced, the scaling up of container1 could be executed before the scaling up of container2, thus making the ReBalancer scale down request useless
-        sorted_requests = sorted(all_requests, key=lambda request: request["priority"] if "priority" in request else 0, reverse=True)
+            # Save the request if a rollback has been done
+            if rollback:
+                rollback_reqs.append(request)
 
-        scale_down, scale_up = list(), list()
-        for request in sorted_requests:
-            if "action" not in request or not request["action"]:
-                continue
-            elif request["action"].endswith("Down"):
-                scale_down.append(request)
-            elif request["action"].endswith("Up"):
-                scale_up.append(request)
-        return scale_down, scale_up
+            # Ensure the request has been persisted in database, otherwise there is no need to remove
+            if request["timestamp"] <= self.last_request_retrieval and request.get("_id", ""):
+                # Remove the request from the database
+                self.couchdb_handler.delete_request(request)
+
+            # Add new generated requests
+            new_reqs.extend(generated_requests)
+
+        # Wait for threads that update structures
+        for thread in threads:
+            thread.join()
+
+        return new_reqs, rollback_reqs
 
     def fill_host_info_cache(self, containers):
         self.host_info_cache = dict()
@@ -936,23 +1252,66 @@ class Scaler(Service):
         for t in threads:
             t.join()
 
-    def scale_structures(self, new_requests):
+    def scale_structures(self, new_requests, structure_type):
         utils.log_info("Processing requests", self.debug)
 
         t0 = time.time()
 
         # Split the requests between scale down and scale up
-        scale_down, scale_up = self.split_requests(new_requests)
+        scale_down, scale_up = self.split_requests_by_action(new_requests)
 
-        # Process first the requests that free resources, then the one that use them
-        self.process_requests(scale_down)
-        self.process_requests(scale_up)
+        scale_down_max, scale_down_current = self.split_requests_by_field(scale_down)
+        scale_up_max, scale_up_current = self.split_requests_by_field(scale_up)
+        new_reqs_acum = []
+        rollback_count = 0
+
+        # 1) First, "current" is scaled down to free host resources and ensure "max" scale-downs are valid
+        new_reqs, rollback_reqs = self.process_requests(scale_down_current)
+        new_reqs_acum.extend(new_reqs)
+        if rollback_reqs:
+            rollback_count += len(rollback_reqs)
+            scale_up_current, unprocessed_rollbacks = self.rollback_pair_requests(rollback_reqs, scale_up_current)
+            self.rollbacks_tracker[structure_type].extend(unprocessed_rollbacks)
+
+        # 2) Then, "max" is scaled down
+        new_reqs, rollback_reqs = self.process_requests(scale_down_max)
+        new_reqs_acum.extend(new_reqs)
+        if rollback_reqs:
+            rollback_count += len(rollback_reqs)
+            scale_up_max, unprocessed_rollbacks = self.rollback_pair_requests(rollback_reqs, scale_up_max)
+            self.rollbacks_tracker[structure_type].extend(unprocessed_rollbacks)
+
+        # 3) Now "max" is scaled up first to give more "space" for "current" scale-ups
+        new_reqs, rollback_reqs = self.process_requests(scale_up_max)
+        new_reqs_acum.extend(new_reqs)
+        if rollback_reqs:
+            rollback_count += len(rollback_reqs)
+            if structure_type == "container":
+                self.rollback_scale_ups(rollback_reqs)
+            else:
+                new_reqs_acum = self.rollback_generated_requests(rollback_reqs, new_reqs_acum, "max")
+
+        # 4) Then, "current" is scaled up
+        new_reqs, rollback_reqs = self.process_requests(scale_up_current)
+        new_reqs_acum.extend(new_reqs)
+        if rollback_reqs:
+            rollback_count += len(rollback_reqs)
+            if structure_type == "container":
+                self.rollback_scale_ups(rollback_reqs)
+            else:
+                new_reqs_acum = self.rollback_generated_requests(rollback_reqs, new_reqs_acum, "current")
+
 
         # Persist the new host information
         self.persist_new_host_information()
 
         t1 = time.time()
         utils.log_info("It took {0} seconds to process requests".format(str("%.2f" % (t1 - t0))), self.debug)
+
+        if len(new_reqs) > 0:
+            utils.log_info("Another {0} new requests have been generated".format(len(new_reqs)), self.debug)
+
+        return new_reqs_acum, rollback_count
 
     ####################################################################################################################
     # MAIN LOOP
@@ -962,25 +1321,7 @@ class Scaler(Service):
         self.filter_requests(0)
         utils.log_info("----------------------\n", True)
 
-    def work(self):
-        # Get the container structures and their resource information as such data is going to be needed
-        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-        try:
-            self.container_info_cache = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)  # Reset the cache
-        except (Exception, RuntimeError) as e:
-            utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
-            utils.log_error(str(e), self.debug)
-            return None
-
-        # Fill the host information cache
-        utils.log_info("Getting host and container info", self.debug)
-        try:
-            self.fill_host_info_cache(containers)
-        except (Exception, RuntimeError) as e:
-            utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
-            utils.log_error(str(e), self.debug)
-            return None
-
+    def work_thread(self, containers):
         # Do the core mapping check-up
         if self.check_core_map:
             utils.log_info("Doing container CPU limits check", self.debug)
@@ -1003,23 +1344,62 @@ class Scaler(Service):
 
         # Get the requests
         new_requests = self.filter_requests(self.request_timeout)
-        container_reqs, app_reqs = self.sort_requests(new_requests)
+        container_reqs, app_reqs, user_reqs = self.split_requests_by_structure_type(new_requests)
 
-        # Process first the application requests, as they generate container ones
-        if app_reqs:
-            utils.log_info("Processing applications requests", self.debug)
-            self.scale_structures(app_reqs)
+        # 1) Process user requests, as they can generate application requests
+        if user_reqs:
+            utils.log_info("Processing user requests", self.debug)
+            user_reqs = self.check_unprocessed_rollbacks(user_reqs, "user")
+            new_app_reqs, rollback_count = self.scale_structures(user_reqs, "user")
+            app_reqs = self.flatten_requests(app_reqs + new_app_reqs)
+            if rollback_count > 0:
+                utils.log_info("User requests that have been rolled back: {0}".format(rollback_count), self.debug)
         else:
-            utils.log_info("No applications requests", self.debug)
+            utils.log_info("No user requests", self.debug)
 
-        # Then process container ones
+        # 2) Process application requests, as they can generate container requests
+        if app_reqs:
+            utils.log_info("Processing application requests", self.debug)
+            app_reqs = self.check_unprocessed_rollbacks(app_reqs, "application")
+            new_container_reqs, rollback_count = self.scale_structures(app_reqs, "application")
+            container_reqs = self.flatten_requests(container_reqs + new_container_reqs)
+            if rollback_count > 0:
+                utils.log_info("Application requests that have been rolled back: {0}".format(rollback_count), self.debug)
+        else:
+            utils.log_info("No application requests", self.debug)
+
+        # 3) Process container requests
         if container_reqs:
             utils.log_info("Processing container requests", self.debug)
-            self.scale_structures(container_reqs)
+            container_reqs = self.check_unprocessed_rollbacks(container_reqs, "container")
+            _, rollback_count = self.scale_structures(container_reqs, "container")
+            if rollback_count > 0:
+                utils.log_info("Container requests that have been rolled back: {0}".format(rollback_count), self.debug)
         else:
             utils.log_info("No container requests", self.debug)
 
         return None
+
+    def work(self):
+        thread = None
+        # Get the container structures and their resource information as such data is going to be needed
+        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+        try:
+            # Reset the container information cache
+            self.container_info_cache = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)
+
+            # Fill the host information cache
+            utils.log_info("Getting host and container info", self.debug)
+            self.fill_host_info_cache(containers)
+        except (Exception, RuntimeError) as e:
+            utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
+            utils.log_error(str(e), self.debug)
+            return thread
+
+        thread = Thread(name="scale_structures", target=self.work_thread, args=(containers,))
+        thread.start()
+
+        return thread
 
     def scale(self, ):
         self.run_loop()
