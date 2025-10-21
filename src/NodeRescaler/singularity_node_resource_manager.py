@@ -235,8 +235,8 @@ class SingularityContainerManager:
                     node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
                     node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
                 else:
-                    node_dict[DICT_DISK_READ_LABEL] = []
-                    node_dict[DICT_DISK_WRITE_LABEL] = []
+                    node_dict[DICT_DISK_READ_LABEL] = {}
+                    node_dict[DICT_DISK_WRITE_LABEL] = {}
 
             except (subprocess.TimeoutExpired, PermissionError):
                 #print("Timeout")
