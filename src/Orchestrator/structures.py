@@ -364,7 +364,7 @@ def subscribe_container_to_app(structure_name, app_name):
             return abort(400, {"message": "Container '{0}' is already subscribed to app '{1}'".format(cont_name, application["name"])})
 
     for resource in container["resources"]:
-        if resource in app["resources"]:
+        if resource in app["resources"] and resource != "disk":
             try:
                 alloc_ratio = container["resources"][resource]["max"] / app["resources"][resource]["max"]
                 container["resources"][resource]["alloc_ratio"] = alloc_ratio

@@ -54,7 +54,14 @@ class BaseRebalancer(ABC):
             setattr(self, attr, val)
 
     def get_needed_resources(self):
-        return set(self.resources_balanced).union(set(["cpu"] if "energy" in self.resources_balanced else []))
+        resources_balanced_set = set(self.resources_balanced)
+
+        ## Change 'disk' resource to 'disk_read' and 'disk_write'
+        if "disk" in resources_balanced_set:
+            resources_balanced_set.remove("disk")
+            resources_balanced_set = resources_balanced_set.union(set(["disk_read", "disk_write"]))
+
+        return resources_balanced_set.union(set(["cpu"] if "energy" in self.resources_balanced else []))
 
     # --------- Functions to be overwritten by specific services ---------
 
