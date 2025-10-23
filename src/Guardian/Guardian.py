@@ -383,13 +383,13 @@ class Guardian(Service):
                 rule["generates"] == "events" and \
                 jsonLogic(rule["rule"], data)
 
-    def match_usages_and_limits(self, structure_name, rules, usages, limits, resources):
+    def match_usages_and_limits(self, structure_name, rules, usages, limits, resources, struct_guarded_resources):
         resources_with_rules = set()
         for rule in rules:
             resources_with_rules.add(rule["resource"])
 
         useful_resources = []
-        for resource in self.guardable_resources:
+        for resource in struct_guarded_resources:
             if resource not in resources_with_rules:
                 utils.log_warning("Resource {0} has no rules applied to it".format(resource), self.debug)
             elif usages[utils.res_to_metric(resource)] != self.NO_METRIC_DATA_DEFAULT_VALUE:
@@ -550,10 +550,10 @@ class Guardian(Service):
         # Log uncoloured string
         utils.log_info(" ".join([container_name_str, uncoloured_resources_str, triggered_requests_and_events]), debug=False)
 
-    def process_serverless_structure(self, structure, usages, limits, rules):
+    def process_serverless_structure(self, structure, usages, limits, rules, struct_guarded_resources):
 
         # Match usages and rules to generate events
-        triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"])
+        triggered_events = self.match_usages_and_limits(structure["name"], rules, usages, limits, structure["resources"], struct_guarded_resources)
 
         # Remote database operation
         if triggered_events:
@@ -650,7 +650,7 @@ class Guardian(Service):
             self.couchdb_handler.update_limit(limits)
             # TODO: If resources are updated in adjust_container_state, make sure they are persisted in the DB
 
-            self.process_serverless_structure(structure, usages, limits_resources, rules)
+            self.process_serverless_structure(structure, usages, limits_resources, rules, struct_guarded_resources)
 
         except Exception as e:
             utils.log_error("Error with structure {0}: {1}".format(structure["name"], str(e)), self.debug)
