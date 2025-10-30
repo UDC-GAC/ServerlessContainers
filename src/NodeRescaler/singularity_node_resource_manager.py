@@ -37,11 +37,13 @@ import re
 from src.NodeRescaler.node_resource_manager import get_node_cpus
 from src.NodeRescaler.node_resource_manager import get_node_mem
 from src.NodeRescaler.node_resource_manager import get_node_disks
+from src.NodeRescaler.node_resource_manager import get_node_energy
 from src.NodeRescaler.node_resource_manager import get_node_networks as cgroups_get_node_networks
 # Setters
 from src.NodeRescaler.node_resource_manager import set_node_cpus
 from src.NodeRescaler.node_resource_manager import set_node_mem
 from src.NodeRescaler.node_resource_manager import set_node_disk
+from src.NodeRescaler.node_resource_manager import set_node_energy
 from src.NodeRescaler.node_resource_manager import set_node_net
 
 ## CGROUPS V2
@@ -62,6 +64,7 @@ DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
 DICT_DISK_READ_LABEL = "disk_read"
 DICT_DISK_WRITE_LABEL = "disk_write"
+DICT_ENERGY_LABEL = "energy"
 DICT_NET_LABEL = "net"
 
 # TODO: get container mount point from vars file
@@ -72,11 +75,12 @@ container_mount_point = "/opt/bind"
 
 class SingularityContainerManager:
 
-    def __init__(self, singularity_command_alias, cgroups_version):
+    def __init__(self, singularity_command_alias, cgroups_version, energy_vcgroup_dir):
         self.userid = os.getuid()
         self.container_engine = "apptainer"
         self.singularity_command_alias = singularity_command_alias
         self.cgroups_version = cgroups_version
+        self.energy_vcgroup_dir = energy_vcgroup_dir
 
     def __get_singularity_instances(self):
         if self.cgroups_version == "v1":
@@ -117,7 +121,7 @@ class SingularityContainerManager:
                 node_pid = container['pid']
 
                 node_dict = dict()
-                (cpu_success, mem_success, disk_read_success, disk_write_success, net_success) = (True, True, True, True, True)
+                (cpu_success, mem_success, disk_read_success, disk_write_success, energy_success, net_success) = (True, True, True, True, True, True)
                 if DICT_CPU_LABEL in resources:
                     if self.cgroups_version == "v1":
                         cpu_success, cpu_resources = set_node_cpus(node_pid, resources[DICT_CPU_LABEL], self.container_engine)
@@ -167,6 +171,9 @@ class SingularityContainerManager:
                     #     disk_success, disk_resource = set_node_disk(node_name, disk)
                     #     disks_changed.append(disk_resource)
                     #     node_dict[DICT_DISK_LABEL] = disks_changed
+                if DICT_ENERGY_LABEL in resources:
+                    energy_success, energy_resource = set_node_energy(node_pid, resources[DICT_ENERGY_LABEL], self.energy_vcgroup_dir)
+                    node_dict[DICT_ENERGY_LABEL] = energy_resource
 
                 if DICT_NET_LABEL in resources:
                     if self.cgroups_version == "v1":
@@ -182,7 +189,7 @@ class SingularityContainerManager:
                     #     networks_changed.append(net_resource)
                     #     node_dict[DICT_NET_LABEL] = networks_changed
 
-                global_success = cpu_success and mem_success and disk_read_success and disk_write_success and net_success
+                global_success = cpu_success and mem_success and disk_read_success and disk_write_success and energy_success and net_success
                 return global_success, node_dict
 
             except AttributeError:
@@ -248,6 +255,10 @@ class SingularityContainerManager:
 
             # TODO support multiple disks
             #
+
+            energy_success, energy_resources = get_node_energy(node_pid, self.energy_vcgroup_dir)
+            node_dict[DICT_ENERGY_LABEL] = energy_resources
+
             # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
             # if net_resources:
             #     node_dict[DICT_NET_LABEL] = net_resources[0]
