@@ -98,6 +98,17 @@ class ReFeeder(Service):
 
         self.app_tracker.append(application)
 
+    def persist_usages(self, data):
+        changes = {"resources": {}}
+        for resource in data["resources"]:
+            changes["resources"][resource] = {"usage": data["resources"][resource]["usage"]}
+        if data["type"] == "user" or data["subtype"] == "user":
+            utils.partial_update_user(data, changes, self.couchdb_handler, self.debug)  # Remote database operation
+        elif data["type"] == "structure":
+            utils.partial_update_structure(data, changes, self.couchdb_handler, self.debug)  # Remote database operation
+        else:
+            utils.log_error("Trying to persist unknown data type '{0}'".format(data["type"]), self.debug)
+
     def refeed_thread(self, ):
         applications = None
 
@@ -118,7 +129,7 @@ class ReFeeder(Service):
         utils.log_info("It took {0} seconds to refeed users".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         ts = time.time()
-        utils.run_in_threads(self.app_tracker + self.user_tracker, utils.persist_data, self.couchdb_handler, self.debug)
+        utils.run_in_threads(self.app_tracker + self.user_tracker, self.persist_usages)
         self.app_tracker.clear()
         self.user_tracker.clear()
         utils.log_info("It took {0} seconds to persist refeeded data in StateDatabase".format(str("%.2f" % (time.time() - ts))), self.debug)

@@ -75,11 +75,13 @@ def set_service_information(service_name):
     service = retrieve_service(service_name)
     put_done = False
     tries = 0
+    changes = {"config": {}}
     while not put_done:
         tries += 1
         for key in data:
             service["config"][key] = data[key]
-        get_db().update_service(service)
+            changes["config"][key] = data[key]
+        get_db().partial_update_service(service, changes)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
         put_done = True
@@ -121,7 +123,7 @@ def set_service_value(service_name, key):
     while not put_done:
         tries += 1
         service["config"][key] = value
-        get_db().update_service(service)
+        get_db().partial_update_service(service, {"config": {key: value}})
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
         service = retrieve_service(service_name)
