@@ -25,6 +25,7 @@ class EnergyController(Service):
         self.opentsdb_handler = bdwatchdog.OpenTSDBServer()
         self.couchdb_handler = couchdb.CouchDBServer()
         self.wattwizard_handler = wattwizard.WattWizardUtils()
+        self.P_idle = self.wattwizard_handler.get_idle_consumption("host", "polyreg_General")
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
         self.polling_frequency, self.window_timelapse, self.window_delay, self.debug = None, None, None, None
         self.structure_guarded, self.active, self.control_policy, self.power_model = None, None, None, None
@@ -136,19 +137,23 @@ class EnergyController(Service):
         # Compute desired host power budget based on current scalings
         P_budget_host = P_usage_host + P_scaling_host
 
+        # 76 is the point where single core model and general model cross their predictions
+        # TODO: Retrieve this value automatically depending on the CPU
+        power_model = "polyreg_General" if P_budget_host > 76 else "polyreg_Single_Core"
+
         # Get model estimation
         U_scaling_cap = 0
         try:
             # Use power model to get host CPU scaling required to comply with the new power budget
-            result = self.wattwizard_handler.get_usage_meeting_budget("host", self.power_model, P_budget_host, user_load=U_user_host, system_load=U_system_host)
-            U_scaling_host = result["value"] - U_alloc_host
+            result = self.wattwizard_handler.get_usage_meeting_budget("host", power_model, P_budget_host, user_load=U_user_host, system_load=U_system_host)
+            U_scaling_host = result["value"] - U_user_host
 
             # Compute proportional CPU scaling for structure
             U_scaling = U_scaling_host * (P_scaling / P_scaling_host)
             U_scaling_cap = max(min(U_scaling, U_max - U_alloc), - (U_alloc - U_min))
 
             # Print scaling info
-            self.print_scaling_info(host, P_usage_host, P_budget_host, U_alloc_host, result['value'])
+            self.print_scaling_info(host, P_usage_host, P_budget_host, U_user_host, result['value'])
             self.print_scaling_info(name, P_usage, P_budget, U_alloc, U_alloc + U_scaling_cap)
 
             # If we want to scale up power, avoid scaling down CPU and vice versa
@@ -168,8 +173,8 @@ class EnergyController(Service):
         # Unpack structure info
         U_max, U_min, U_alloc, P_budget, U_usage, P_usage, P_scaling = self._unpack_structure(structure)
 
-        error = P_budget - P_usage
-        U_alloc_new = U_alloc * (1 + (error/P_budget))
+        error = P_budget - P_usage  # This would be + P_idle in both sides of the subtraction, so it can be omitted
+        U_alloc_new = U_alloc * (1 + (error / (P_budget + self.P_idle)))
         U_alloc_new_cap = max(min(U_alloc_new, U_max), U_min)
         U_scaling = U_alloc_new_cap - U_alloc
         self.print_scaling_info(name, P_usage, P_budget, U_alloc, U_alloc_new_cap)
