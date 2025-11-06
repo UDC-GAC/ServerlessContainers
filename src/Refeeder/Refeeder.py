@@ -89,12 +89,13 @@ class ReFeeder(Service):
         if application_info: # check that application_info has been loaded with the information of at least one container
             for resource in self.generated_metrics:
                 if resource in application["resources"]:
-                    if resource == "disk":  # Generate aggregated I/O usage
-                        application["resources"][resource]["usage"] = application_info.get(utils.res_to_metric("disk_read"), 0) + application_info.get(utils.res_to_metric("disk_write"), 0)
-                    else:
-                        application["resources"][resource]["usage"] = application_info[utils.res_to_metric(resource)]
+                    application["resources"][resource]["usage"] = application_info[utils.res_to_metric(resource)]
                 else:
                     utils.log_warning("No resource {0} info for application {1}".format(resource, application["name"]), self.debug)
+
+            # Generate aggregated I/O usage
+            if all(res in self.generated_metrics and res in application["resources"] for res in ['disk_read', 'disk_write']):
+                application["resources"]["disk"]["usage"] = application_info.get(utils.res_to_metric("disk_read"), 0) + application_info.get(utils.res_to_metric("disk_write"), 0)
 
         self.app_tracker.append(application)
 
