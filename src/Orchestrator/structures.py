@@ -370,7 +370,7 @@ def subscribe_container_to_app(structure_name, app_name):
 
     container_changes = {"resources": {}}
     for resource in container["resources"]:
-        if resource in app["resources"]:
+        if resource in app["resources"] and resource != "disk":
             try:
                 alloc_ratio = container["resources"][resource]["max"] / app["resources"][resource]["max"]
                 container["resources"][resource]["alloc_ratio"] = alloc_ratio
