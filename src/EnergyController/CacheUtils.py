@@ -48,7 +48,7 @@ class PowerBudgetCache:
             self._cache[structure_id] = pb
 
     def is_new(self, structure_id, pb):
-        return pb != self._cache.get(structure_id, -1)
+        return structure_id not in self._cache
 
 
 class CPUAllocationCache:

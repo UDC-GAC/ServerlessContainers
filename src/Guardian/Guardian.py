@@ -302,9 +302,9 @@ class Guardian(Service):
 
         # Set the limit so that the resource usage is placed in between the upper and lower limits
         # and keeping the boundary between the upper and the real resource limits
-        desired_limit = current_resource_usage + int(upper_to_lower_window / 2) + current_to_upper_window
+        desired_limit = current_resource_usage + max(int(upper_to_lower_window / 2), 1) + current_to_upper_window
 
-        return desired_limit - current_resource_limit
+        return int(desired_limit) - current_resource_limit
 
     def adjust_container_state(self, resources, limits, resources_to_adjust):
         for resource in resources_to_adjust:

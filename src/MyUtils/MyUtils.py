@@ -84,7 +84,7 @@ def resilient_beat(db_handler, service_name, max_tries=10):
         service = db_handler.get_service(service_name)
         service["heartbeat_human"] = time.strftime("%D %H:%M:%S", time.localtime())
         service["heartbeat"] = time.time()
-        db_handler.update_service(service)
+        db_handler.partial_update_service(service, {"heartbeat_human": service["heartbeat_human"], "heartbeat": service["heartbeat"]})
     except (requests.exceptions.HTTPError, ValueError) as e:
         if max_tries > 0:
             time.sleep((1000 + random.randint(1, 200)) / 1000)
@@ -292,6 +292,7 @@ def get_best_fit_container(scalable_containers, resource, amount, field):
 # CAN'T TEST
 def update_resource_in_couchdb(structure, resource, field, value, db_handler, debug, max_tries=3, backoff_time_ms=500):
     old_value = structure["resources"][resource][field]
+    changes = {"resources": {resource: {field: value}}}
     put_done, tries = False, 0
     while not put_done:
         if tries >= max_tries:
@@ -300,7 +301,7 @@ def update_resource_in_couchdb(structure, resource, field, value, db_handler, de
             return
 
         structure["resources"][resource][field] = value
-        persist_data(structure, db_handler, debug)
+        partial_persist_data(structure, changes, db_handler, debug)
 
         time.sleep(backoff_time_ms / 1000)
 
@@ -321,6 +322,13 @@ def update_structure(structure, db_handler, debug, max_tries=10):
     except requests.exceptions.HTTPError:
         log_error("Error updating {0} {1}: {2} ".format(structure["subtype"].capitalize(), structure["name"], traceback.format_exc()), debug)
 
+def partial_update_structure(structure, changes, db_handler, debug, max_tries=10):
+    try:
+        db_handler.partial_update_structure(structure, changes, max_tries=max_tries)
+        log_info("{0} {1} ->  partially updated".format(structure["subtype"].capitalize(), structure["name"]), debug)
+    except requests.exceptions.HTTPError:
+        log_error("Error partially updating {0} {1}: {2}".format(structure["subtype"].capitalize(), structure["name"], traceback.format_exc()), debug)
+
 
 def update_user(user, db_handler, debug, max_tries=10):
     try:
@@ -329,12 +337,26 @@ def update_user(user, db_handler, debug, max_tries=10):
     except requests.exceptions.HTTPError:
         log_error("Error updating user {0}: {1} ".format(user["name"], traceback.format_exc()), debug)
 
+def partial_update_user(user, changes, db_handler, debug, max_tries=10):
+    try:
+        db_handler.partial_update_user(user, changes, max_tries=max_tries)
+        log_info("User {0} ->  updated".format(user["name"]), debug)
+    except requests.exceptions.HTTPError:
+        log_error("Error updating user {0}: {1} ".format(user["name"], traceback.format_exc()), debug)
 
 def persist_data(data, db_handler, debug):
     if data["type"] == "user" or data["subtype"] == "user":
         update_user(data, db_handler, debug)  # Remote database operation
     elif data["type"] == "structure":
         update_structure(data, db_handler, debug)  # Remote database operation
+    else:
+        log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
+
+def partial_persist_data(data, changes, db_handler, debug):
+    if data["type"] == "user" or data["subtype"] == "user":
+        partial_update_user(data, changes, db_handler, debug)  # Remote database operation
+    elif data["type"] == "structure":
+        partial_update_structure(data, changes, db_handler, debug)  # Remote database operation
     else:
         log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
 
@@ -562,8 +584,8 @@ def get_container_resources_dict(containers, rescaler_http_session, debug):
                         "host '{1}', and that the host is alive and with the Node Scaler service running"
                         .format(container_name, container["host"]), debug)
             continue
-        # Manually add energy limit as there is no physical limit that can be obtained from NodeRescaler
-        if "energy" in container["resources"]:
+        # Until energy limit is virtually initialised through NodeRescaler, the value from StateDatabase is used
+        if "energy" in container["resources"] and "energy_limit" not in container_info[container_name].get("energy", {}):
             container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
         container_resources_dict[container_name] = dict(container)
         container_resources_dict[container_name]["resources"] = container_info[container_name]

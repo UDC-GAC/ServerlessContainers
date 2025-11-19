@@ -216,6 +216,37 @@ class CouchDBServer:
                 r.raise_for_status()
         return False
 
+    def __resilient_partial_update_doc(self, database, doc, changes, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
+        if not changes:
+            return False
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        if r.status_code != 200 and r.status_code != 201:
+            if r.status_code == 409:
+                # Conflict error, document may have been updated (e.g., heartbeat of services),
+                # update revision and retry after slightly random wait
+                if 0 <= previous_tries < max_tries:
+                    time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                    matches = self.__find_documents_by_matches(database, {"_id": doc["_id"]})
+                    if len(matches) > 0:
+                        new_doc = matches[0]
+                        doc["_rev"] = new_doc["_rev"]
+                        doc = self.__merge(changes, new_doc)
+                        return self.__resilient_partial_update_doc(database, doc, changes, previous_tries=previous_tries + 1,
+                                                                   max_tries=max_tries)
+                    else:
+                        return self.__resilient_partial_update_doc(database, doc, changes, previous_tries=previous_tries + 1,
+                                                                   max_tries=max_tries)
+                else:
+                    r.raise_for_status()
+            elif r.status_code == 404:
+                # Database may have been reinitialized (deleted and recreated), wait and retry again
+                time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
+                return self.__resilient_partial_update_doc(database, doc, changes, previous_tries + 1)
+            else:
+                r.raise_for_status()
+        return False
+
+
     # TODO This new method should work, test it in isolation and new commit
     # def __resilient_update_doc(self, database, doc, max_tries=10):
     #     time_backoff_milliseconds = 100
@@ -283,6 +314,9 @@ class CouchDBServer:
     def update_structure(self, structure, max_tries=10):
         return self.__resilient_update_doc(self.__structures_db_name, structure, max_tries=max_tries)
 
+    def partial_update_structure(self, structure, changes, max_tries=10):
+        return self.__resilient_partial_update_doc(self.__structures_db_name, structure, changes, max_tries=max_tries)
+
     # EVENTS #
     def add_event(self, event):
         self.__add_doc(self.__events_db_name, event)
@@ -326,6 +360,9 @@ class CouchDBServer:
 
     def update_limit(self, limit):
         return self.__resilient_update_doc(self.__limits_db_name, limit)
+
+    def partial_update_limit(self, limit, changes):
+        return self.__resilient_partial_update_doc(self.__limits_db_name, limit, changes)
 
     # REQUESTS #
     def get_requests(self, structure=None):
@@ -372,6 +409,9 @@ class CouchDBServer:
     def update_user(self, user, max_tries=10):
         return self.__resilient_update_doc(self.__users_db_name, user, max_tries=max_tries)
 
+    def partial_update_user(self, user, changes, max_tries=10):
+        return self.__resilient_partial_update_doc(self.__users_db_name, user, changes, max_tries=max_tries)
+
     def delete_user(self, user):
         self.__resilient_delete_doc(self.__users_db_name, user)
 
@@ -387,6 +427,9 @@ class CouchDBServer:
 
     def update_service(self, service):
         return self.__resilient_update_doc(self.__services_db_name, service)
+
+    def partial_update_service(self, service, changes):
+        return self.__resilient_partial_update_doc(self.__services_db_name, service, changes)
 
     def delete_service(self, service):
         return self.__resilient_delete_doc(self.__services_db_name, service)

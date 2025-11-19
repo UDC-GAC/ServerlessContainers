@@ -34,18 +34,22 @@ from pylxd.exceptions import NotFound
 from src.NodeRescaler.node_resource_manager import get_node_cpus
 from src.NodeRescaler.node_resource_manager import get_node_mem
 from src.NodeRescaler.node_resource_manager import get_node_disks as cgroups_get_node_disks
+from src.NodeRescaler.node_resource_manager import get_node_energy
 from src.NodeRescaler.node_resource_manager import get_node_networks as cgroups_get_node_networks
 # Setters
 from src.NodeRescaler.node_resource_manager import set_node_cpus
 from src.NodeRescaler.node_resource_manager import set_node_mem
 from src.NodeRescaler.node_resource_manager import set_node_disk
+from src.NodeRescaler.node_resource_manager import set_node_energy
 from src.NodeRescaler.node_resource_manager import set_node_net
+
 
 urllib3.disable_warnings()
 
 DICT_CPU_LABEL = "cpu"
 DICT_MEM_LABEL = "mem"
 DICT_DISK_LABEL = "disk"
+DICT_ENERGY_LABEL = "energy"
 DICT_NET_LABEL = "net"
 
 
@@ -57,10 +61,11 @@ class LXDContainerManager:
         self.LXD_KEY = '/${LXD_KEY_PATH}/${LXD_KEY_NAME}.key'
         self.LXD_ENDPOINT = 'https://localhost:8443'
 
-    def __init__(self, cgroups_version):
+    def __init__(self, cgroups_version, energy_vcgroup_dir):
         # TODO add support for lxc with cgroups v2
         self.container_engine = "lxc"
         self.cgroups_version = cgroups_version
+        self.energy_vcgroup_dir = energy_vcgroup_dir
         self.read_keys()
         # TODO Deal with error if key does not exist
         self.client = Client(
@@ -116,6 +121,9 @@ class LXDContainerManager:
                         #     disk_success, disk_resource = set_node_disk(node_name, disk)
                         #     disks_changed.append(disk_resource)
                         #     node_dict[DICT_DISK_LABEL] = disks_changed
+                    if DICT_ENERGY_LABEL in resources:
+                        energy_success, energy_resource = set_node_energy(node_name, resources[DICT_ENERGY_LABEL], self.energy_vcgroup_dir)
+                        node_dict[DICT_ENERGY_LABEL] = energy_resource
 
                     if DICT_NET_LABEL in resources:
                         net_success, net_resource = set_node_net(resources[DICT_NET_LABEL])
@@ -151,6 +159,9 @@ class LXDContainerManager:
 
                 mem_success, mem_resources = get_node_mem(node_name, self.container_engine)
                 node_dict[DICT_MEM_LABEL] = mem_resources
+
+                energy_success, energy_resources = get_node_energy(node_name, self.energy_vcgroup_dir)
+                node_dict[DICT_ENERGY_LABEL] = energy_resources
 
                 # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
                 # if type(disk_resources) == list and len(disk_resources) > 0:

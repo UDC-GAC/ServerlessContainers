@@ -67,6 +67,15 @@ def write_cgroup_file_value(file_path, value):
     except IOError as e:
         return {"success": False, "error": str(e)}
 
+def write_vcgroup_file_value(file_path, value):
+    # File is created if it does not exists (first time it doesn't exists because is virtually created by NodeRescaler)
+    try:
+        with open(file_path, 'w') as file_handler:
+            file_handler.write(str(value))
+        return {"success": True, "data": value}
+    except IOError as e:
+        return {"success": False, "error": str(e)}
+
 
 # CPU #
 CPU_LIMIT_CPUS_LABEL = "cpu_num"
@@ -541,6 +550,39 @@ def get_node_disks(container_id, device, device_mountpoint, container_engine):
 
 #     return True, retrieved_disks
 
+
+# ENERGY #
+ENERGY_LIMIT_LABEL = "energy_limit"
+LOWER_LIMIT_WATTS = 0
+
+def get_node_energy(container_id, energy_vcgroup_dir):
+    energy_limit_path = "/".join([energy_vcgroup_dir, str(container_id)])
+    op = read_cgroup_file_value(energy_limit_path)
+    if op["success"]:
+        return True, {ENERGY_LIMIT_LABEL: op["data"]}
+
+    return False, op
+
+
+def set_node_energy(container_id, energy_resource, energy_vcgroup_dir):
+    # Assume an integer for megabytes, add the M and set to cgroups
+    if ENERGY_LIMIT_LABEL in energy_resource:
+        value = int(energy_resource[ENERGY_LIMIT_LABEL])
+        if value < LOWER_LIMIT_WATTS:
+            # Don't allow negative energy limits
+            return False, {"error": "Energy limit is too low, less than {0} W".format(str(LOWER_LIMIT_WATTS))}
+
+        # Save energy limit in a virtual cgroup file
+        energy_limit_path = "/".join([energy_vcgroup_dir, str(container_id)])
+        energy_op = write_vcgroup_file_value(energy_limit_path, value)
+
+        if not energy_op["success"]:
+            # Something happened with energy limit
+            return False, "Energy error {0}".format(energy_op)
+
+        return True, {ENERGY_LIMIT_LABEL: value}
+    else:
+        return True, {}
 
 # NET #
 NET_UNIT_NAME_LABEL = "unit"

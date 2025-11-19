@@ -88,8 +88,12 @@ class ReBalancer(Service):
         if "user" in self.structures_balanced:
             users = utils.get_users(self.couchdb_handler, self.debug)
         if "application" in self.structures_balanced:
+            if not users:
+                users = utils.get_users(self.couchdb_handler, self.debug)
             applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
         if "container" in self.structures_balanced:
+            if not applications:
+                applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
             containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
 
         return users, applications, containers

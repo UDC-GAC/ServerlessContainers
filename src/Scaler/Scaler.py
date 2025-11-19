@@ -96,10 +96,10 @@ class Scaler(Service):
         super().__init__("scaler", ConfigValidator(min_frequency=3), CONFIG_DEFAULT_VALUES, sleep_attr="polling_frequency")
         self.rescaler_http_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
-        self.host_info_cache, self.container_info_cache = dict(), dict()
+        self.host_info_cache, self.host_changes, self.container_info_cache = {}, {}, {}
         self.last_request_retrieval = None
         self.rollbacks_tracker = {"container": [], "application": [], "user": []}
-        self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk_read": self.apply_disk_read_request, "disk_write": self.apply_disk_write_request, "net": self.apply_net_request}
+        self.apply_request_by_resource = {"cpu": self.apply_cpu_request, "mem": self.apply_mem_request, "disk_read": self.apply_disk_read_request, "disk_write": self.apply_disk_write_request, "energy": self.apply_energy_request, "net": self.apply_net_request}
         self.polling_frequency, self.request_timeout, self.debug, self.check_core_map, self.active = None, None, None, None, None
 
     ####################################################################################################################
@@ -548,14 +548,14 @@ class Scaler(Service):
                      "name": request["structure"]}
         # Apply the request and get the new resources to set
         try:
-            if request["resource"] == "energy" or request["field"] == "max":
+            if request["field"] == "max":
                 thread, new_resources = self.update_container_in_couchdb(request, real_resources, database_resources)
             else:
                 new_resources = self.apply_request(request, real_resources, database_resources)
 
             if new_resources:
                 # If field is "current" and resource is not energy, we need to send a request to NodeRescaler
-                if request["resource"] != "energy" and request["field"] != "max":
+                if request["field"] != "max":
                     utils.log_info("Request: {0} for container : {1} for new resources : {2}".format(
                         request["action"], request["structure"], json.dumps(new_resources)), self.debug)
 
@@ -582,7 +582,6 @@ class Scaler(Service):
         resource = request["resource"]
         field = request["field"]
         resource_dict = {resource: {}}
-        host_info = self.host_info_cache[request["host"]]
 
         # Get the current resource limit, if unlimited, then max, min or mean
         _max = database_resources["resources"][resource]["max"]
@@ -591,24 +590,8 @@ class Scaler(Service):
         # Check that the resource limits are respected (min <= current <= max)
         self.check_invalid_resource_value(database_resources, amount, _current, resource, field)
 
-        if field == "max":
-            new_value = _max + amount
-            resource_dict[resource]["{0}_limit".format(resource)] = _current
-        else:
-            new_value = _current + amount
-            resource_dict[resource]["{0}_limit".format(resource)] = new_value
-
-        if field == "current":
-            # When scaling up, check that the host has enough free resources before proceeding
-            if amount > 0:
-                self.check_host_has_enough_free_resources(host_info, amount, resource, request['structure'])
-
-                # TODO: This should be adapted for disk (free must be previously calculated for disk)
-                # Trim amount to avoid surpassing host free resources
-                amount = min(amount, host_info["resources"][resource]["free"])
-
-            # Update host free resources
-            self.host_info_cache[request["host"]]["resources"][resource]["free"] -= amount
+        new_value = _max + amount
+        resource_dict[resource]["{0}_limit".format(resource)] = _current
 
         # Update container in CouchDB
         thread = Thread(name="update_{0}".format(database_resources["name"]), target=utils.update_resource_in_couchdb,
@@ -786,7 +769,9 @@ class Scaler(Service):
 
         # No error thrown, so persist the new mapping to the cache
         self.host_info_cache[request["host"]]["resources"]["cpu"]["core_usage_mapping"] = core_usage_map
+        self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("cpu", {})["core_usage_mapping"] = core_usage_map
         self.host_info_cache[request["host"]]["resources"]["cpu"]["free"] -= amount
+        self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("cpu", {})["free"] = self.host_info_cache[request["host"]]["resources"]["cpu"]["free"]
 
         resource_dict = {resource: {}}
         resource_dict["cpu"]["cpu_num"] = ",".join(used_cores)
@@ -805,6 +790,7 @@ class Scaler(Service):
 
         # No error thrown, so persist the new mapping to the cache
         self.host_info_cache[request["host"]]["resources"]["mem"]["free"] -= amount
+        self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("mem", {})["free"] = self.host_info_cache[request["host"]]["resources"]["mem"]["free"]
 
         # Return the dictionary to set the resources
         resource_dict["mem"]["mem_limit"] = str(int(amount + current_mem_limit))
@@ -832,6 +818,7 @@ class Scaler(Service):
 
         # No error thrown, so persist the new mapping to the cache
         self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_read"] -= amount
+        self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_read"] = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_read"]
 
         # Return the dictionary to set the resources
         current_read_limit = self.get_current_resource_value(real_resources, request["resource"])
@@ -860,10 +847,27 @@ class Scaler(Service):
 
         # No error thrown, so persist the new mapping to the cache
         self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_write"] -= amount
+        self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_write"] = self.host_info_cache[request["host"]]["resources"]["disks"][bound_disk]["free_write"]
 
         # Return the dictionary to set the resources
         current_write_limit = self.get_current_resource_value(real_resources, request["resource"])
         resource_dict["disk_write"]["disk_write_limit"] = str(int(amount + current_write_limit))
+
+        return resource_dict
+
+    def apply_energy_request(self, request, database_resources, real_resources, amount):
+        resource_dict = {request["resource"]: {}}
+        current_energy_limit = self.get_current_resource_value(real_resources, request["resource"])
+        current_energy_free = self.host_info_cache[request["host"]]["resources"]["energy"]["free"]
+
+        amount = min(amount, current_energy_free)
+
+        # No error thrown, so persist the new mapping to the cache
+        self.host_info_cache[request["host"]]["resources"]["energy"]["free"] -= amount
+        self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("energy", {})["free"] = self.host_info_cache[request["host"]]["resources"]["energy"]["free"]
+
+        # Return the dictionary to set the resources
+        resource_dict["energy"]["energy_limit"] = str(int(current_energy_limit + amount))
 
         return resource_dict
 
@@ -1241,16 +1245,23 @@ class Scaler(Service):
     def persist_new_host_information(self, ):
         def persist_thread(self, host):
             data = self.host_info_cache[host]
-            utils.update_structure(data, self.couchdb_handler, self.debug)
+            changes = self.host_changes[host]
+            utils.partial_update_structure(data, changes, self.couchdb_handler, self.debug)
 
         threads = list()
         for host in self.host_info_cache:
-            t = Thread(target=persist_thread, args=(self, host,))
-            t.start()
-            threads.append(t)
+            if host in self.host_changes:
+                t = Thread(target=persist_thread, args=(self, host))
+                t.start()
+                threads.append(t)
+            else:
+                utils.log_info("Host {0} has not been modified, skipping persist", self.debug)
 
         for t in threads:
             t.join()
+
+        # Clean changes as they have been persisted
+        self.host_changes.clear()
 
     def scale_structures(self, new_requests, structure_type):
         utils.log_info("Processing requests", self.debug)
@@ -1300,7 +1311,6 @@ class Scaler(Service):
                 self.rollback_scale_ups(rollback_reqs)
             else:
                 new_reqs_acum = self.rollback_generated_requests(rollback_reqs, new_reqs_acum, "current")
-
 
         # Persist the new host information
         self.persist_new_host_information()

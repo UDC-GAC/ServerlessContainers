@@ -104,10 +104,11 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
 
     put_done = False
     tries = 0
+    changes = {"resources": {resource: {parameter: value}}}
     while not put_done:
         tries += 1
         structure["resources"][resource][parameter] = value
-        get_db().update_structure(structure)
+        get_db().partial_update_structure(structure, changes)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
@@ -130,10 +131,11 @@ def set_structure_boolean_parameter(structure_name, parameter, state):
 
     put_done = False
     tries = 0
+    changes = {parameter: state}
     while not put_done:
         tries += 1
         structure[parameter] = state
-        get_db().update_structure(structure)
+        get_db().partial_update_structure(structure, changes)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
@@ -189,8 +191,10 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
     # 1st check, in case nothing has to be done really
     put_done = True
     structure = retrieve_structure(structure_name)
+    changes = {"resources": {}}
     for resource in resources:
         put_done = put_done and structure["resources"][resource]["guard"] == state
+        changes["resources"][resource] = {"guard": state}
 
     tries = 0
     while not put_done:
@@ -198,7 +202,7 @@ def set_structure_multiple_resources_to_guard_state(structure_name, resources, s
         for resource in resources:
             structure["resources"][resource]["guard"] = state
 
-        get_db().update_structure(structure)
+        get_db().partial_update_structure(structure, changes)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
@@ -272,6 +276,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
     structure_limits = get_db().get_limits(structure)
 
     current_boundary = structure_limits.get("resources", {}).get(resource, {}).get("boundary", -1)
+    changes = {"resources": {resource: {"boundary": value}}}
 
     if current_boundary == value:
         pass
@@ -281,7 +286,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
         while not put_done:
             tries += 1
             structure_limits["resources"][resource]["boundary"] = value
-            get_db().update_limit(structure_limits)
+            get_db().partial_update_limit(structure_limits, changes)
 
             time.sleep(BACK_OFF_TIME_MS / 1000)
 
@@ -313,7 +318,7 @@ def set_structure_resource_limit_boundary_type(structure_name, resource):
     structure_limits = get_db().get_limits(structure)
 
     current_boundary_type = structure_limits.get("resources", {}).get(resource, {}).get("boundary_type", "")
-
+    changes = {"resources": {resource: {"boundary_type": value}}}
     if current_boundary_type == value:
         pass
     else:
@@ -322,7 +327,7 @@ def set_structure_resource_limit_boundary_type(structure_name, resource):
         while not put_done:
             tries += 1
             structure_limits["resources"][resource]["boundary_type"] = value
-            get_db().update_limit(structure_limits)
+            get_db().partial_update_limit(structure_limits, changes)
 
             time.sleep(BACK_OFF_TIME_MS / 1000)
 
@@ -339,7 +344,7 @@ def set_structure_resource_limit_boundary_type(structure_name, resource):
 
 def disable_scaler(scaler_service):
     scaler_service["config"]["ACTIVE"] = False
-    get_db().update_service(scaler_service)
+    get_db().partial_update_service(scaler_service, {"config": {"ACTIVE": False}})
 
     # Wait a little bit, half the polling time of the Scaler
     polling_freq = scaler_service["config"].get("POLLING_FREQUENCY", SCALER_CONFIG_DEFAULTS["POLLING_FREQUENCY"])
@@ -348,7 +353,7 @@ def disable_scaler(scaler_service):
 
 def restore_scaler_state(scaler_service, previous_state):
     scaler_service["config"]["ACTIVE"] = previous_state
-    get_db().update_service(scaler_service)
+    get_db().partial_update_service(scaler_service, {"config": {"ACTIVE": previous_state}})
 
 
 @structure_routes.route("/structure/container/<structure_name>/<app_name>", methods=['PUT'])
@@ -363,19 +368,21 @@ def subscribe_container_to_app(structure_name, app_name):
         if cont_name in application["containers"]:
             return abort(400, {"message": "Container '{0}' is already subscribed to app '{1}'".format(cont_name, application["name"])})
 
+    container_changes = {"resources": {}}
     for resource in container["resources"]:
-        if resource in app["resources"] and resource != "disk":
+        if resource in app["resources"]:
             try:
                 alloc_ratio = container["resources"][resource]["max"] / app["resources"][resource]["max"]
                 container["resources"][resource]["alloc_ratio"] = alloc_ratio
+                container_changes["resources"][resource] = {"alloc_ratio": alloc_ratio}
             except (ZeroDivisionError, KeyError) as e:
                 return abort(400, {"message": "Couldn't set allocation ratio for container '{0}' and "
                                               "application '{1}': {2}".format(cont_name, app_name, str(e))})
 
     app["containers"].append(cont_name)
 
-    get_db().update_structure(container)
-    get_db().update_structure(app)
+    get_db().partial_update_structure(container, container_changes)
+    get_db().partial_update_structure(app, {"containers": app["containers"]})
     return jsonify(201)
 
 
@@ -389,7 +396,7 @@ def desubscribe_container_from_app(structure_name, app_name):
         return abort(400, {"message": "Container '{0}' missing in app '{1}'".format(cont_name, app_name)})
     else:
         app["containers"].remove(cont_name)
-        get_db().update_structure(app)
+        get_db().partial_update_structure(app, {"containers": app["containers"]})
     return jsonify(201)
 
 
@@ -405,6 +412,8 @@ def free_container_cores(cont_name, host):
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] += freed_shares
 
+    return {"core_usage_mapping": host["resources"]["cpu"]["core_usage_mapping"], "free": host["resources"]["cpu"]["free"]}
+
 
 def free_container_disks(container, host):
     disk_name = container["resources"]["disk"]["name"]
@@ -412,7 +421,7 @@ def free_container_disks(container, host):
         return abort(400, {"message": "Host does not have disks"})
     else:
         try:
-            if "disk_read" not in container["resources"] or "disk_write" not in container["resources"]: 
+            if "disk_read" not in container["resources"] or "disk_write" not in container["resources"]:
                 return abort(400, {"message": "Missing disk read or write bandwidth in container {0}".format(container)})
 
             current_disk_read_bw = container["resources"]["disk_read"]["current"]
@@ -421,22 +430,29 @@ def free_container_disks(container, host):
             host["resources"]["disks"][disk_name]["free_read"] += current_disk_read_bw
             host["resources"]["disks"][disk_name]["free_write"] += current_disk_write_bw
             host["resources"]["disks"][disk_name]["load"] -= 1
+            return {disk_name: {
+                "free_read": host["resources"]["disks"][disk_name]["free_read"],
+                "free_write": host["resources"]["disks"][disk_name]["free_write"],
+                "load": host["resources"]["disks"][disk_name]["load"]
+            }}
         except KeyError:
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
 
 def free_container_resources(container, host):
     cont_name = container["name"]
+    changes = {"resources": {}}
     for resource in container["resources"]:
         if resource == 'cpu':
-            free_container_cores(cont_name, host)
+            changes["resources"]["cpu"] = free_container_cores(cont_name, host)
         elif resource in ['disk_read', 'disk_write']:
             continue
         elif resource == 'disk':
-            free_container_disks(container, host)
+            changes["resources"]["disks"] = free_container_disks(container, host)
         else:
             host["resources"][resource]["free"] += container["resources"][resource]["current"]
-
+            changes["resources"][resource] = {"free": host["resources"][resource]["free"]}
+    return changes
 
 @structure_routes.route("/structure/container/<structure_name>", methods=['DELETE'])
 def desubscribe_container(structure_name):
@@ -457,9 +473,9 @@ def desubscribe_container(structure_name):
 
     # Free host resources used by this container
     host = get_db().get_structure(container["host"])
-    free_container_resources(container, host)
+    changes = free_container_resources(container, host)
 
-    get_db().update_structure(host)
+    get_db().partial_update_structure(host, changes)
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -526,7 +542,7 @@ def map_container_to_host_cores(cont_name, host, needed_shares):
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] -= needed_shares
 
-    return used_cores
+    return used_cores, {"core_usage_mapping": core_map, "free": host["resources"]["cpu"]["free"]}
 
 def map_container_to_host_disks(resource_dict, container, host):
     disk_name = container["resources"]["disk"]["name"]
@@ -553,17 +569,22 @@ def map_container_to_host_disks(resource_dict, container, host):
         host["resources"]["disks"][disk_name]["free_write"] -= needed_disk_write_bw
         host["resources"]["disks"][disk_name]["load"] += 1
 
-        return needed_disk_read_bw, needed_disk_write_bw
+        return needed_disk_read_bw, needed_disk_write_bw, {
+            disk_name: {"free_read": host["resources"]["disks"][disk_name]["free_read"],
+                        "free_write": host["resources"]["disks"][disk_name]["free_write"],
+                        "load": host["resources"]["disks"][disk_name]["load"]}
+        }
 
 def map_container_to_host_resources(container, host):
     cont_name = container["name"]
     resource_dict = {}
+    changes = {"resources": {}}
     for resource in container["resources"]:
         if resource in ['disk_read', 'disk_write']:
             continue
         resource_dict[resource] = {}
         if resource == 'disk':
-            read_limit, write_limit = map_container_to_host_disks(resource_dict, container, host)
+            read_limit, write_limit, changes["resources"]["disks"] = map_container_to_host_disks(resource_dict, container, host)
             resource_dict["disk_read"] = {"disk_read_limit": read_limit}
             resource_dict["disk_write"] = {"disk_write_limit": write_limit}
         else:
@@ -572,13 +593,14 @@ def map_container_to_host_resources(container, host):
                 return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
             if resource == 'cpu':
                 resource_dict[resource]["cpu_allowance_limit"] = needed_amount
-                used_cores = map_container_to_host_cores(cont_name, host, needed_amount)
+                used_cores, changes["resources"]["cpu"] = map_container_to_host_cores(cont_name, host, needed_amount)
                 resource_dict[resource]["cpu_num"] = ",".join(used_cores)
             else:
                 host["resources"][resource]["free"] -= needed_amount
+                changes["resources"][resource] = {"free": host["resources"][resource]["free"]}
                 resource_dict[resource][f"{resource}_limit"] = needed_amount
 
-    return resource_dict
+    return resource_dict, changes
 
 
 def check_name_mismatch(name1, name2):
@@ -633,20 +655,20 @@ def subscribe_container(structure_name):
     mandatory_resource_keys = ["max", "min", "current", "guard"]
     optional_resource_keys = ["weight"]
     mandatory_keys = {
-        "cpu": mandatory_resource_keys, 
-        "mem": mandatory_resource_keys, 
-        "energy": mandatory_resource_keys, 
-        "disk": ["name", "path"], 
-        "disk_read": mandatory_resource_keys, 
+        "cpu": mandatory_resource_keys,
+        "mem": mandatory_resource_keys,
+        "energy": mandatory_resource_keys,
+        "disk": ["name", "path"],
+        "disk_read": mandatory_resource_keys,
         "disk_write": mandatory_resource_keys
     }
     optional_keys = {
-        "cpu": optional_resource_keys, 
-        "mem": optional_resource_keys, 
-        "energy": optional_resource_keys, 
+        "cpu": optional_resource_keys,
+        "mem": optional_resource_keys,
+        "energy": optional_resource_keys,
         "disk": [],
-        "disk_read": optional_resource_keys, 
-        "disk_write": optional_resource_keys  
+        "disk_read": optional_resource_keys,
+        "disk_write": optional_resource_keys
     }
     for resource in req_cont["resources"]:
         get_resource_keys_from_requested_structure(req_cont, container, resource, mandatory_keys[resource], optional_keys[resource])
@@ -666,18 +688,17 @@ def subscribe_container(structure_name):
 
     # Get the host info
     host = get_db().get_structure(container["host"])
-
-    resource_dict = map_container_to_host_resources(container, host)
+    resource_dict, changes = map_container_to_host_resources(container, host)
     set_container_resources(node_scaler_session, container, resource_dict, True)
 
     get_db().add_structure(container)
-    get_db().update_structure(host)
+    get_db().partial_update_structure(host, changes)
 
     # Check if limits already exist
     try:
         existing_limit = get_db().get_limits(container)
         existing_limit['resources'] = limits['resources']
-        get_db().update_limit(existing_limit)
+        get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
     except ValueError:
         # Limits do not exist yet
         get_db().add_limit(limits)
@@ -789,7 +810,7 @@ def subscribe_app(structure_name):
     try:
         existing_limit = get_db().get_limits(app)
         existing_limit['resources'] = limits['resources']
-        get_db().update_limit(existing_limit)
+        get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
     except ValueError:
         # Limits do not exist yet
         get_db().add_limit(limits)
@@ -831,6 +852,7 @@ def add_disks_to_host(structure_name):
         return abort(400, {"message": "Missing resource information on request"})
 
     # Check that all the needed data is present on the request
+    changes = {"resources": {"disks": {}}}
     for disk in data['resources']['disks']:
 
         if "name" not in disk:
@@ -846,8 +868,9 @@ def add_disks_to_host(structure_name):
                 new_disk[key] = disk[key]
 
         host["resources"]["disks"][disk["name"]] = new_disk
+        changes["resources"]["disks"][disk["name"]] = new_disk
 
-    get_db().update_structure(host)
+    get_db().partial_update_structure(host, changes)
 
     return jsonify(201)
 
@@ -868,6 +891,7 @@ def update_host_disks(structure_name):
         return abort(400, {"message": "Missing resource information on request"})
 
     # Check that all the needed data is present on the request
+    changes = {"resources": {"disks": {}}}
     for disk in data['resources']['disks']:
 
         if "name" not in disk:
@@ -877,17 +901,19 @@ def update_host_disks(structure_name):
             return abort(404, {"message": "Missing disk {0} in host {1}".format(disk, structure_name)})
 
         disk_info = host['resources']['disks'][disk['name']]
-
+        changes["resources"]["disks"][disk['name']] = {}
         for max_key, free_key in [("max_read", "free_read"), ("max_write", "free_write")]:
             if max_key not in disk:
                 return abort(400, {"message": "Missing key '{0}'".format(max_key)})
 
             busy_bw = disk_info[max_key] - disk_info[free_key]
             disk_info[max_key] = disk[max_key]
+            changes["resources"]["disks"][disk['name']][max_key] = disk[max_key]
 
             ## Update free BW
             disk_info[free_key] = disk_info[max_key] - busy_bw
+            changes["resources"]["disks"][disk['name']][free_key] = disk_info[max_key] - busy_bw
 
-    get_db().update_structure(host)
+    get_db().partial_update_structure(host, changes)
 
     return jsonify(201)

@@ -56,10 +56,14 @@ def initialize_ContainerEngine(f):
         singularity_command_alias = config['SINGULARITY_COMMAND_ALIAS']
         cgroups_version = config['CGROUPS_VERSION']
 
+        # Create directory to manage an energy virtual cgroup
+        energy_vcgroup_dir = serverless_path + "/energy_vcgroup"
+        os.makedirs(energy_vcgroup_dir, exist_ok=True, mode=0o700)
+
         if container_engine == "lxc":
-            initialize_LXD(cgroups_version)
+            initialize_LXD(cgroups_version, energy_vcgroup_dir)
         elif container_engine == "apptainer":
-            initialize_Singularity(singularity_command_alias, cgroups_version)
+            initialize_Singularity(singularity_command_alias, cgroups_version, energy_vcgroup_dir)
         else:
             raise Exception("Error: a non-valid container engine was specified")
 
@@ -67,22 +71,22 @@ def initialize_ContainerEngine(f):
 
     return wrap
 
-def initialize_Singularity(singularity_command_alias, cgroups_version):
+def initialize_Singularity(singularity_command_alias, cgroups_version, energy_vcgroup_dir):
 
     global node_resource_manager
     if not node_resource_manager:
-        node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version)
+        node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version, energy_vcgroup_dir)
         if not node_resource_manager:
             raise Exception("Could not instantiate Singularity Manager")
     else:
         pass
 
 
-def initialize_LXD(cgroups_version):
+def initialize_LXD(cgroups_version, energy_vcgroup_dir):
 
     global node_resource_manager
     if not node_resource_manager:
-        node_resource_manager = LXDContainerManager(cgroups_version)
+        node_resource_manager = LXDContainerManager(cgroups_version, energy_vcgroup_dir)
         if not node_resource_manager:
             raise Exception("Could not instantiate LXD Manager")
     else:
@@ -220,10 +224,14 @@ if __name__ == "__main__":
     singularity_command_alias = config['SINGULARITY_COMMAND_ALIAS']
     cgroups_version = config['CGROUPS_VERSION']
 
+    # Create directory to manage an energy virtual cgroup
+    energy_vcgroup_dir = serverless_path + "/energy_vcgroup"
+    os.makedirs(energy_vcgroup_dir, exist_ok=True, mode=0o700)
+
     if container_engine == "lxc":
-        node_resource_manager = LXDContainerManager(cgroups_version)
+        node_resource_manager = LXDContainerManager(cgroups_version, energy_vcgroup_dir)
     elif container_engine == "apptainer":
-        node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version)
+        node_resource_manager = SingularityContainerManager(singularity_command_alias, cgroups_version, energy_vcgroup_dir)
     else:
         raise Exception("Error: a non-valid container engine was specified")
 
