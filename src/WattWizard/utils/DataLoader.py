@@ -59,6 +59,10 @@ class DataLoader:
                 except Exception as e:
                     log(f"Error while reading {csv_path}: {str(e)}", "WARN")
 
+        if not self.config.get_argument("influxdb_host"):
+            log("InfluxDB host not configured. Cannot retrieve time series data.", "ERR")
+            return None
+
         # If CSV not available, get data from InfluxDB
         log(f"Retrieving data from InfluxDB using timestamps file: {timestamps_path}")
         # Parse file with the timestamps corresponding to InfluxDB data
