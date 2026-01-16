@@ -58,7 +58,7 @@ class ApplicationRebalancer(BaseRebalancer):
             user_request = user_requests.get(user["name"], {})
             user_apps = [app for app in applications if app["name"] in user.get("clusters", [])]
             if user_request and user_apps:
-                self.simulate_scaler_request_processing(user, user_apps, user_request)
+                self.simulate_scaler_request_processing(user["name"], user_apps, user_request)
 
     def filter_rebalanceable_apps(self, applications):
         rebalanceable_apps = []

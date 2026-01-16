@@ -134,13 +134,13 @@ class BaseRebalancer(ABC):
                     return False
         return True
 
-    def simulate_scaler_request_processing(self, parent, childs, parent_request):
+    def simulate_scaler_request_processing(self, parent_name, childs, parent_request):
         resource = parent_request["resource"]
         total_amount = parent_request["amount"]
 
         if parent_request["field"] != "max":
             utils.log_warning("Parent request processing can only manage requests to scale 'max' limits, skipping "
-                              "request for structure '{0}'".format(parent["name"]), self.debug)
+                              "request for structure '{0}'".format(parent_name), self.debug)
             return
 
         # Create smaller requests of 'split_amount' size for childs
@@ -157,7 +157,7 @@ class BaseRebalancer(ABC):
             request = child_requests.pop(0)
             # Look for childs that can be rescaled
             if request["amount"] < 0:
-                scalable_childs = [s for s in childs if s["resources"][resource]["max"] + request["amount"] > s["resources"][resource]["current"]]
+                scalable_childs = [s for s in childs if s["resources"][resource]["max"] + request["amount"] > s["resources"][resource]["min"]]
             else:
                 scalable_childs = childs
 
@@ -217,6 +217,10 @@ class BaseRebalancer(ABC):
 
             # Check if structure activates the rule: it has low resource usage (donors) or a bottleneck (receivers)
             if valid_resources:
+                # Avoid division by zero when "max" is zero
+                for r in data:
+                    data[r]["structure"][r]["max"] = max(data[r]["structure"][r]["max"], 1e-30)
+
                 for role in valid_roles:
                     if jsonLogic(rule[role]["rule"], data):
                         filtered_structures[role].append(structure)

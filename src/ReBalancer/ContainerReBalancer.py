@@ -44,7 +44,7 @@ class ContainerRebalancer(BaseRebalancer):
     @staticmethod
     def get_donor_slice_key(structure, resource):
         # Containers can only donate to and receive from other containers on the same host (and same disk if needed)
-        return structure["host"] + "_{0}".format(structure["resources"]["disk"]["name"]) if resource == "disk" else ""
+        return structure["host"] + ("_{0}".format(structure["resources"]["disk"]["name"]) if resource == "disk" else "")
 
     @staticmethod
     def get_best_fit_child(scalable_containers, resource, amount):
@@ -58,12 +58,11 @@ class ContainerRebalancer(BaseRebalancer):
         # If usage its near its current it is a receiver -> (current - usage) < diff_percentage * current
         return (data["current"] - data["usage"]) < (self.diff_percentage * data["current"])
 
-    def process_app_requests(self, applications, containers, app_requests):
-        for app in applications:
-            app_request = app_requests.get(app["name"], {})
-            app_containers = [c for c in containers if c["name"] in app.get("containers", [])]
+    def process_app_requests(self, app_containers_dict, app_requests):
+        for app_name, app_containers in app_containers_dict.items():
+            app_request = app_requests.get(app_name, {})
             if app_request and app_containers:
-                self.simulate_scaler_request_processing(app, app_containers, app_request)
+                self.simulate_scaler_request_processing(app_name, app_containers, app_request)
 
     def filter_rebalanceable_apps(self, applications):
         rebalanceable_apps = []
@@ -71,8 +70,8 @@ class ContainerRebalancer(BaseRebalancer):
             # Unless otherwise specified, all applications are rebalanced
             if not app.get("rebalance", True):
                 continue
-            # Applications that doesn't have containers subscribed cannot perform an internal rebalancing
-            if len(app["containers"]) == 0:
+            # Single-container applications cannot perform an internal rebalancing
+            if len(app["containers"]) <= 1:
                 continue
 
             # If app match the criteria, it is added to the list
@@ -298,8 +297,7 @@ class ContainerRebalancer(BaseRebalancer):
         # APPLICATION SCOPE: Balancing the resources between containers of the same application
         if self.containers_scope == "application":
 
-            # First check if there are application requests to be processed
-            self.process_app_requests(applications, containers, app_requests)
+
 
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
             rebalanceable_apps = self.filter_rebalanceable_apps(applications)
@@ -314,6 +312,9 @@ class ContainerRebalancer(BaseRebalancer):
                 # Get the container usages
                 app_containers[app_name] = [c for c in containers if c["name"] in app.get("containers", [])]
                 app_containers[app_name] = self.fill_containers_with_usage_info(app_containers[app_name])
+
+            # First check if there are application requests to be processed
+            self.process_app_requests(app_containers, app_requests)
 
             # Rebalance applications
             for app in rebalanceable_apps:
