@@ -15,7 +15,7 @@ from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
                          "DEBUG": True, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
-                         "POWER_MODEL": "polyreg_General", "ACTIVE": True}
+                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "ACTIVE": True}
 
 
 class EnergyController(Service):
@@ -27,9 +27,9 @@ class EnergyController(Service):
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.P_idle = self.wattwizard_handler.get_idle_consumption("host", "polyreg_General")
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
-        self.polling_frequency, self.window_timelapse, self.window_delay, self.debug = None, None, None, None
-        self.structure_guarded, self.active, self.control_policy, self.power_model = None, None, None, None
-        self.event_timeout = None
+        self.polling_frequency, self.event_timeout, self.window_timelapse, self.window_delay = None, None, None, None
+        self.debug, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
+        self.events_system, self.active = None, None
         self.events_cache = cache_utils.EventsCache()
         self.pb_cache = cache_utils.PowerBudgetCache()
         self.alloc_cache = cache_utils.CPUAllocationCache()
@@ -46,13 +46,13 @@ class EnergyController(Service):
         # Unpacks structure dictionary to values: (U_max, U_min, U_alloc, P_budget, U_usage, P_usage, P_scaling)
         res = structure["resources"]
 
-        return  (res["cpu"]["max"], # U_max
-                 res["cpu"]["min"], # U_min
-                 res["cpu"]["current"], # U_alloc
-                 res["energy"]["current"], # P_budget
-                 self.get_resource_usage("cpu", structure), # U_usage
-                 self.get_resource_usage("energy", structure), # P_usage
-                 self.get_power_scaling(structure)) # P_scaling
+        return (res["cpu"]["max"],  # U_max
+                res["cpu"]["min"],  # U_min
+                res["cpu"]["current"],  # U_alloc
+                res["energy"]["current"],  # P_budget
+                self.get_resource_usage("cpu", structure),  # U_usage
+                self.get_resource_usage("energy", structure),  # P_usage
+                self.get_power_scaling(structure))  # P_scaling
 
     def _unpack_host(self, host):
         # Unpacks host dictionary to values: (U_alloc, U_user, U_system, P_usage, P_scaling)
@@ -222,7 +222,7 @@ class EnergyController(Service):
         if self.power_is_near_pb(structure, P_usage):
             return 0
 
-        # If power exceeds "current" and "current" < "max", Guardian should scale "current" instead of the Controller scaling down CPU
+        # If power exceeds "current" and "current" < "max", energy "current" must be scaled instead of the controller scaling down CPU
         if self.error_is_below_potential_pb(structure, P_usage):
             return 0
 
@@ -240,12 +240,20 @@ class EnergyController(Service):
         op_events = self.events_cache.get_events(structure_id, opposite)
         self.print_events_info(structure, direction, dir_events, op_events)
 
-        # Higher error requires fewer consecutive events to trigger scaling
-        abs_ppe = abs(P_scaling / P_budget)
-        for ppe_threshold, event_threshold in [(0.25, 1), (0.15, 2), (0.05, 4)]:
-            if abs_ppe >= ppe_threshold and dir_events >= event_threshold and op_events == 0:
+        # Events threshold is always the same regardless of the error
+        if self.events_system == "static":
+            event_threshold = 4
+            if dir_events >= event_threshold and op_events == 0:
                 self.events_cache.clear_events(structure_id)
                 return P_scaling
+
+        # Higher error requires fewer consecutive events to trigger scaling
+        elif self.events_system == "dynamic":
+            abs_ppe = abs(P_scaling / P_budget)
+            for ppe_threshold, event_threshold in [(0.25, 1), (0.15, 2), (0.05, 4)]:
+                if abs_ppe >= ppe_threshold and dir_events >= event_threshold and op_events == 0:
+                    self.events_cache.clear_events(structure_id)
+                    return P_scaling
 
         return 0
 
