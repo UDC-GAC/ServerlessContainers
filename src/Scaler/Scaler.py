@@ -45,12 +45,14 @@ BDWATCHDOG_CONTAINER_METRICS = {"cpu": ['proc.cpu.user', 'proc.cpu.kernel'],
                                 #"disk": ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
                                 "disk_read": ['proc.disk.reads.mb'],
                                 "disk_write": ['proc.disk.writes.mb'],
-                                "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
+                                "net": ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
+                                "energy": ['structure.energy.usage']}
 RESCALER_CONTAINER_METRICS = {'cpu': ['proc.cpu.user', 'proc.cpu.kernel'], 'mem': ['proc.mem.resident'],
                               #'disk': ['proc.disk.reads.mb', 'proc.disk.writes.mb'],
                               'disk_read': ['proc.disk.reads.mb'],
                               'disk_write': ['proc.disk.writes.mb'],
-                              'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb']}
+                              'net': ['proc.net.tcp.in.mb', 'proc.net.tcp.out.mb'],
+                              'energy': ['structure.energy.usage']}
 
 APP_SCALING_SPLIT_AMOUNT = 5
 USER_SCALING_SPLIT_AMOUNT = 5
@@ -261,23 +263,16 @@ class Scaler(Service):
         return errors_detected
 
     @staticmethod
-    def check_invalid_resource_value(database_resources, amount, current, resource, field):
+    def check_invalid_resource_value(database_resources, amount, current, resource):
         max_resource_limit = int(database_resources["resources"][resource]["max"])
         min_resource_limit = int(database_resources["resources"][resource]["min"])
-
-        if field == "max":
-            new_value = int(max_resource_limit + amount)
-            if new_value < current:
-                raise ValueError("Error in setting {0}, new max {1} would be lower than current {2}".format(resource, new_value, current))
-
-        if field == "current":
-            new_value = int(current + amount)
-            if new_value < 0:
-                raise ValueError("Error in setting {0}, current would be lower than 0".format(resource))
-            elif new_value < min_resource_limit:
-                raise ValueError("Error in setting {0}, new current {1} would be lower than min {2}".format(resource, new_value, min_resource_limit))
-            elif new_value > max_resource_limit:
-                raise ValueError("Error in setting {0}, new current {1} would be higher than max {2}".format(resource, new_value, max_resource_limit))
+        new_value = int(current + amount)
+        if new_value < 0:
+            raise ValueError("Error in setting {0}, current would be lower than 0".format(resource))
+        elif new_value < min_resource_limit:
+            raise ValueError("Error in setting {0}, new current {1} would be lower than min {2}".format(resource, new_value, min_resource_limit))
+        elif new_value > max_resource_limit:
+            raise ValueError("Error in setting {0}, new current {1} would be higher than max {2}".format(resource, new_value, max_resource_limit))
 
     ####################################################################################################################
     # REQUEST MANAGEMENT
@@ -549,18 +544,21 @@ class Scaler(Service):
         # Apply the request and get the new resources to set
         try:
             if request["field"] == "max":
-                thread, new_resources = self.update_container_in_couchdb(request, real_resources, database_resources)
-            else:
-                new_resources = self.apply_request(request, real_resources, database_resources)
+                thread, amount_for_current = self.process_container_max_request(request, real_resources, database_resources)
 
+                utils.log_info("Request: {0} for container: {1} to scale 'max' limit: {2} 'current' will be scaled "
+                               "accordingly".format(request["action"], request["structure"], request["amount"]), self.debug)
+                # Update the request to also modify 'current' field accordingly
+                request["field"] = "current"
+                request["amount"] = amount_for_current
+
+            new_resources = self.apply_request(request, real_resources, database_resources)
             if new_resources:
-                # If field is "current" and resource is not energy, we need to send a request to NodeRescaler
-                if request["field"] != "max":
-                    utils.log_info("Request: {0} for container : {1} for new resources : {2}".format(
-                        request["action"], request["structure"], json.dumps(new_resources)), self.debug)
+                utils.log_info("Request: {0} for container: {1} to scale 'current' limit: {2}".format(
+                    request["action"], request["structure"], json.dumps(new_resources)), self.debug)
 
-                    # Apply changes through a REST call to NodeRescaler
-                    set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
+                # Apply changes through a REST call to NodeRescaler
+                set_container_resources(self.rescaler_http_session, container, new_resources, self.debug)
 
                 # Update container info in cache (useful if there are multiple requests for the same container)
                 self.container_info_cache[request["structure"]]["resources"][request["resource"]] = new_resources[request["resource"]]
@@ -577,29 +575,32 @@ class Scaler(Service):
 
         return thread
 
-    def update_container_in_couchdb(self, request, real_resources, database_resources):
-        amount = int(request["amount"])
-        resource = request["resource"]
-        field = request["field"]
-        resource_dict = {resource: {}}
+    def update_max_in_couchdb(self, resource, amount, database_resources):
+        # Calculate new 'max' value
+        new_value = database_resources["resources"][resource]["max"] + amount
 
-        # Get the current resource limit, if unlimited, then max, min or mean
-        _max = database_resources["resources"][resource]["max"]
-        _current = self.get_current_resource_value(real_resources, resource)
-
-        # Check that the resource limits are respected (min <= current <= max)
-        self.check_invalid_resource_value(database_resources, amount, _current, resource, field)
-
-        new_value = _max + amount
-        resource_dict[resource]["{0}_limit".format(resource)] = _current
-
-        # Update container in CouchDB
+        # Update 'max' in CouchDB
         thread = Thread(name="update_{0}".format(database_resources["name"]), target=utils.update_resource_in_couchdb,
-                        args=(database_resources, resource, field, new_value, self.couchdb_handler, self.debug),
+                        args=(database_resources, resource, "max", new_value, self.couchdb_handler, self.debug),
                         kwargs={"max_tries": 5, "backoff_time_ms": 500})
         thread.start()
 
-        return thread, resource_dict
+        return thread
+
+    def process_container_max_request(self, request, real_resources, database_resources):
+        if request["field"] != "max":
+            raise ValueError("Trying to process 'max' request for resource {0} and structure {1}, but field is {2}"
+                             .format(request["resource"], database_resources["name"], request["field"]))
+
+        resource = request["resource"]
+        amount = int(request["amount"])
+        _max = database_resources["resources"][resource]["max"]
+        _current = self.get_current_resource_value(real_resources, resource)
+
+        # If max is changed, 'current' will always be adjusted to max
+        amount_for_current = (_max + amount) - _current
+
+        return self.update_max_in_couchdb(resource, amount, database_resources), amount_for_current
 
     def apply_request(self, request, real_resources, database_resources):
         amount = int(request["amount"])
@@ -611,7 +612,7 @@ class Scaler(Service):
         current_resource_limit = self.get_current_resource_value(real_resources, resource)
 
         # Check that the resource limit is respected, not lower than min or higher than max
-        self.check_invalid_resource_value(database_resources, amount, current_resource_limit, resource, request["field"])
+        self.check_invalid_resource_value(database_resources, amount, current_resource_limit, resource)
 
         if amount > 0:
             # If the request is for scale up, check that the host has enough free resources before proceeding
@@ -884,7 +885,7 @@ class Scaler(Service):
     # CONTAINER SCALING
     ####################################################################################################################
     def rescale_container(self, request, structure):
-        thread = None
+        threads, rollback = [], False
         try:
             # Needed for the resources reported in the database (the 'max, min' values)
             database_resources = structure
@@ -893,16 +894,22 @@ class Scaler(Service):
             c_name = structure["name"]
             if self.container_info_cache.get(c_name, {}).get("resources", None) is None:
                 utils.log_error("Couldn't get container's {0} resources, can't rescale".format(c_name), self.debug)
-                return thread, True if request.get("pair_structure", "") else False
+                return threads, True if request.get("pair_structure", "") else False
             real_resources = self.container_info_cache[c_name]["resources"]
 
             # Process the request
             thread = self.process_container_request(request, real_resources, database_resources)
+            if thread:
+                threads.append(thread)
         except Exception as e:
             utils.log_error(str(e) + " " + str(traceback.format_exc()), self.debug)
-            return thread, True if request.get("pair_structure", "") else False
+            rollback = True if request.get("pair_structure", "") else False
 
-        return thread, False
+        # TODO: Manage unsuccessful scalings here, we are assuming all container scalings are successful
+        #   -> If container couldn't be rescaled and rollback is not done
+        #   -> Check if request comes from an application and update application limits accordingly (-amount_for_container or -amount_not_rescaled)
+
+        return threads, rollback
 
     ####################################################################################################################
     # APPLICATION SCALING
@@ -916,33 +923,19 @@ class Scaler(Service):
         for container_name, container in app_containers.items():
             max_value = container["resources"][resource_label]["max"]
             min_value = container["resources"][resource_label]["min"]
-            current_value = container["resources"][resource_label]["current"]
 
-            # When scaling "current" usage information is also needed
-            if field == "current":
-                container["resources"][resource_label]["usage"] = resource_usage_cache[container_name][resource_label]
+            # Usage information is needed
+            container["resources"][resource_label]["usage"] = resource_usage_cache[container_name][resource_label]
 
             # Rescale down
             if amount < 0:
                 # "max" can't be scaled below "current"
-                if field == "max" and max_value + amount >= current_value:
+                if field == "max" and max_value + amount >= min_value:
                     scalable_containers.append(container)
-
-                # "current" can't be scaled below "min"
-                if field == "current" and current_value + amount >= min_value:
-                    scalable_containers.append(container)
-
             # Rescale up
             else:
                 # TODO: Think if we should check the host free resources for a "max" scaling
-                if field == "max":
-                    scalable_containers.append(container)
-
-                if field == "current":
-                    container_host = container["host"]
-                    # Check container's host have enough free resources and "current" is not scaled above "max"
-                    if self.host_info_cache[container_host]["resources"][resource_label]["free"] >= resource_shares and current_value + amount <= max_value:
-                        scalable_containers.append(container)
+                scalable_containers.append(container)
 
         # Look for the best fit container for this resource and generate a rescaling request for it
         if scalable_containers:
@@ -958,8 +951,12 @@ class Scaler(Service):
             return False, {}, {}
 
     def rescale_application(self, app_request, app):
-        thread = None
+        threads, rollback, scaled_amount, final_requests = [], False, 0, None
         resource, field, total_amount = app_request["resource"], app_request["field"], app_request["amount"]
+
+        if field != "max":
+            utils.log_error("Applications can only rescale 'max' field, skipping", self.debug)
+            return threads, {}, False
 
         # Get container names that this app uses
         app_containers = {}
@@ -981,16 +978,15 @@ class Scaler(Service):
                 base_request["amount"] = slice_amount
                 cont_requests.append(dict(base_request))
 
-            # Get the request usage for all the containers and cache it (not needed when scaling "max")
+            # Get the request usage for all the containers and cache it
             resource_usage_cache = {}
-            if app_request["field"] == "current":
-                for container_name in app_containers:
-                    metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
-                    resource_usage_cache[container_name] = self.bdwatchdog_handler.get_structure_timeseries(
-                        {"host": container_name}, 10, 20, metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
+            for container_name in app_containers:
+                metrics_to_retrieve = BDWATCHDOG_CONTAINER_METRICS[resource]
+                resource_usage_cache[container_name] = self.bdwatchdog_handler.get_structure_timeseries(
+                    {"host": container_name}, 10, 20, metrics_to_retrieve, RESCALER_CONTAINER_METRICS)
 
             # Try to generate requests for the containers belonging to the application
-            success, scaled_amount, generated_requests = True, 0, {}
+            success, generated_requests = True, {}
             while success and len(cont_requests) > 0:
                 request = cont_requests.pop(0)
                 success, container_to_rescale, generated_request = self.single_container_rescale(request, app_containers, resource_usage_cache)
@@ -1011,7 +1007,7 @@ class Scaler(Service):
 
                     scaled_amount += request["amount"]
 
-            # Collapse all the requests to generate just 1 per container
+            # Collapse all the requests to generate just one per container
             final_requests, rescaled_containers = self.flatten_requests_by_structure(generated_requests)
             utils.log_info("App '{0}' rescaled {1} shares for resource {2} by rescaling containers: {3}".format(app["name"], scaled_amount, app_request["resource"], str(rescaled_containers)), self.debug)
 
@@ -1019,33 +1015,42 @@ class Scaler(Service):
             if len(cont_requests) > 0 and scaled_amount != total_amount:
                 # Couldn't completely rescale the application as some split of a major rescaling operation could not be completed
                 utils.log_warning("App '{0}' could not be completely rescaled, only {1} shares out of {2}".format(app["name"], scaled_amount, total_amount), self.debug)
-
                 # Rollback the scaling if this request was generated from a pair-swapping
-                if app_request.get("pair_structure", ""):
-                    utils.log_warning("This request is part of a pair-swapping between '{0}' and '{1}', both requests will "
-                                      "be aborted (rollback)".format(app["name"], app_request["pair_structure"]), self.debug)
-                    return thread, [], True
+                rollback = True if app_request.get("pair_structure", "") else False  # Also rollback pair requests if needed
 
-        # When app is not running, we directly update it in CouchDB
+        # When app is not running, it is updated in CouchDB but no container requests are generated
         elif not app_containers and not app.get("running", False):
             scaled_amount = total_amount
             final_requests = []
 
-        # Any other state is inconsistent (app have containers while it's not running or app is running while not having containers)
+        # INCONSISTENT STATE: App have containers while it's not running or app is running while not having containers
         else:
             utils.log_warning("Inconsistent state for app '{0}' aborting scaling request for {1} {2} shares".format(app["name"], total_amount, resource), self.debug)
-            rollback = True if app_request.get("pair_structure", "") else False # Also rollback pair requests if needed
-            return thread, [], rollback
+            rollback = True if app_request.get("pair_structure", "") else False  # Also rollback pair requests if needed
 
-        # Update app if "max" is scaled -> field must be updated in StateDatabase ("current" is updated by StructureSnapshoter)
+        if rollback:
+            utils.log_warning("This request is part of a pair-swapping between '{0}' and '{1}', both requests will "
+                              "be aborted (rollback)".format(app["name"], app_request["pair_structure"]), self.debug)
+            scaled_amount = 0
+            final_requests = []
+
+        # If app is scaled update value in CouchDB
         if field == "max" and scaled_amount != 0:
-            new_value = app["resources"][resource][field] + scaled_amount
-            thread = Thread(name="update_{0}".format(app["name"]), target=utils.update_resource_in_couchdb,
-                            args=(app, resource, field, new_value, self.couchdb_handler, self.debug),
-                            kwargs={"max_tries": 5, "backoff_time_ms": 500})
-            thread.start()
+            thread = self.update_max_in_couchdb(resource, scaled_amount, app)
+            threads.append(thread)
 
-        return  thread, final_requests, False
+        # If request was generated from a user rescale and app wasn't completely rescaled, we must fix the user rescaled amount
+        # In case there is a rollback, this will be fixed later if needed
+        if scaled_amount != total_amount and not rollback:
+            user_name = app_request.get("for_user", "")
+            if user_name:
+                user = self.couchdb_handler.get_user(user_name)
+                diff_amount = (total_amount - scaled_amount) * -1
+                thread = self.update_max_in_couchdb(resource, diff_amount, user)
+                threads.append(thread)
+                utils.log_warning("Request for application {0} comes from user {1}, updating amount not rescaled ({2}) for user".format(app["name"], user_name, diff_amount), self.debug)
+
+        return threads, final_requests, rollback
 
     ####################################################################################################################
     # USER SCALING
@@ -1057,11 +1062,15 @@ class Scaler(Service):
 
         # Look for applications that can be rescaled
         for app_name, app in user_apps.items():
-            # Rescale down: "max" can't be scaled below "current"
-            if amount < 0 and app["resources"][resource_label]["max"] + amount >= app["resources"][resource_label].get("current", 0):
+            # Inconsistent state for app, it can't be scaled
+            if bool(app.get("containers", [])) ^ app.get("running", False):
+                continue
+
+            # Rescale down: "max" can't be scaled below "min"
+            if amount < 0 and app["resources"][resource_label]["max"] + amount >= app["resources"][resource_label].get("min", 0):
                 scalable_apps.append(app)
             # Rescale up
-            else:
+            elif amount > 0:
                 scalable_apps.append(app)
 
         if not scalable_apps:
@@ -1073,12 +1082,12 @@ class Scaler(Service):
         return True, best_fit_app, utils.generate_request(best_fit_app, amount, resource_label, field=field)
 
     def rescale_user(self, user_request, user):
-        thread = None
+        threads = []
         resource, field, total_amount = user_request["resource"], user_request["field"], user_request["amount"]
 
         if field != "max":
             utils.log_error("Users can only rescale 'max' field, skipping", self.debug)
-            return thread, {}, False
+            return threads, {}, False
 
         # Get app names associated to this user
         user_apps = {}
@@ -1127,21 +1136,20 @@ class Scaler(Service):
                 if user_request.get("pair_structure", ""):
                     utils.log_warning("This request is part of a pair-swapping between '{0}' and '{1}', both requests will "
                                       "be aborted (rollback)".format(user["name"], user_request["pair_structure"]), self.debug)
-                    return thread, [], True
+                    return threads, [], True
         else:
             # TODO: Think if we want to scale users that does not have subscribed applications
-            # In that case this branch should return without updating user and set rollback=True if the request comes from a pair-swapping
+            # If user does not have applications, we scale its max without generating application requests
+            # In case we don't want to do this, the branch should return here and set rollback=True if the
+            # request comes from a pair-swapping
             scaled_amount = total_amount
             final_requests = []
 
-        # Update user in StateDatabase
-        new_value = user["resources"][resource][field] + scaled_amount
-        thread = Thread(name="update_{0}".format(user["name"]), target=utils.update_resource_in_couchdb,
-                        args=(user, resource, field, new_value, self.couchdb_handler, self.debug),
-                        kwargs={"max_tries": 5, "backoff_time_ms": 500})
-        thread.start()
+        # Update user "max" value in StateDatabase
+        thread = self.update_max_in_couchdb(resource, scaled_amount, user)
+        threads.append(thread)
 
-        return thread, final_requests, False
+        return threads, final_requests, False
 
     ####################################################################################################################
     # SERVICE METHODS
@@ -1194,28 +1202,25 @@ class Scaler(Service):
 
             # Retrieve structure info
             try:
-                if request["structure_type"] == "user":
-                    structure = self.couchdb_handler.get_user(structure_name)
-                else:
-                    structure = self.couchdb_handler.get_structure(structure_name)
+                structure = utils.get_data(structure_name, request["structure_type"], self.couchdb_handler, self.debug)
             except (requests.exceptions.HTTPError, ValueError):
                 utils.log_error("Error, couldn't find structure {0} in database".format(structure_name), self.debug)
                 continue
 
             # Rescale the structure accordingly, whether it is a container or an application
-            generated_requests, rollback, thread = [], False, None
+            generated_requests, rollback, structure_threads = [], False, []
             if utils.structure_is_user(structure):
-                thread, generated_requests, rollback = self.rescale_user(request, structure)
+                structure_threads, generated_requests, rollback = self.rescale_user(request, structure)
             elif utils.structure_is_application(structure):
-                thread, generated_requests, rollback = self.rescale_application(request, structure)
+                structure_threads, generated_requests, rollback = self.rescale_application(request, structure)
             elif utils.structure_is_container(structure):
-                thread, rollback = self.rescale_container(request, structure)
+                structure_threads, rollback = self.rescale_container(request, structure)
             else:
                 utils.log_error("Unknown type of structure '{0}'".format(structure["subtype"]), self.debug)
 
             # If some thread has been launched to update structure, save it
-            if thread:
-                threads.append(thread)
+            if structure_threads:
+                threads.extend(structure_threads)
 
             # Save the request if a rollback has been done
             if rollback:
@@ -1255,7 +1260,7 @@ class Scaler(Service):
                 t.start()
                 threads.append(t)
             else:
-                utils.log_info("Host {0} has not been modified, skipping persist", self.debug)
+                utils.log_info("Host {0} has not been modified, skipping persist".format(host), self.debug)
 
         for t in threads:
             t.join()
