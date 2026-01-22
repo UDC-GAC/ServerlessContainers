@@ -46,6 +46,7 @@ VALID_RESOURCES = {"cpu", "mem", "disk", "disk_read", "disk_write", "net", "ener
 LOGGING_FORMAT = '[%(asctime)s]%(levelname)s:%(name)s:%(message)s'
 LOGGING_DATEFMT = '%Y-%m-%d %H:%M:%S%z'
 
+
 class MyConfig:
 
     _config = None
@@ -227,6 +228,14 @@ def split_amount_in_slices(total_amount, slice_amount):
     return [slice_amount] * number_of_slices + ([last_slice_amount] if abs(last_slice_amount) > 0 else [])
 
 
+def split_amount_in_num_slices(total_amount, number_of_slices):
+    slice_amount = int(total_amount // number_of_slices)
+    last_slice_amount = total_amount % number_of_slices
+    if slice_amount == 0:
+        return [last_slice_amount]
+    return [slice_amount + last_slice_amount] + [slice_amount] * (number_of_slices - 1)
+
+
 # TESTED
 # Tranlsate something like '2-5,7' to [2,3,4,7]
 def get_cpu_list(cpu_num_string):
@@ -266,12 +275,14 @@ def get_resource(structure, resource):
 def get_best_fit_app(scalable_apps, resource, amount):
     stopped_apps, running_apps = [], []
     for app in scalable_apps:
+        if "usage" not in app["resources"][resource]:
+            continue
         if app["resources"][resource].get("current", 0) == 0 and not app.get("running", False):
             stopped_apps.append(app)
         else:
             running_apps.append(app)
     # When scaling down, stopped apps are preferred, when scaling up, running apps are preferred
-    sorted_apps = sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["current"])
+    sorted_apps = sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["usage"])
     sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"])
 
     return sorted_apps[-1] if amount < 0 else sorted_apps[0]
@@ -279,10 +290,7 @@ def get_best_fit_app(scalable_apps, resource, amount):
 
 def get_best_fit_container(scalable_containers, resource, amount, field):
     best_fit_container, sorted_containers = {}, []
-    if field == "current":
-        sorted_containers = sorted(scalable_containers, key=lambda c: c["resources"][resource]["current"] - c["resources"][resource]["usage"])
-    if field == "max":
-        sorted_containers = sorted(scalable_containers, key=lambda c: c["resources"][resource]["max"] - c["resources"][resource]["current"])
+    sorted_containers = sorted(scalable_containers, key=lambda c: c["resources"][resource][field] - c["resources"][resource]["usage"])
     if sorted_containers:
         best_fit_container = sorted_containers[-1] if amount < 0 else sorted_containers[0]
 
@@ -305,15 +313,14 @@ def update_resource_in_couchdb(structure, resource, field, value, db_handler, de
 
         time.sleep(backoff_time_ms / 1000)
 
-        if structure_is_user(structure):
-            structure = db_handler.get_user(structure["name"])
-        else:
-            structure = db_handler.get_structure(structure["name"])
+        structure = get_data(structure["name"], structure["subtype"], db_handler, debug)
+
         put_done = structure["resources"][resource][field] == value
 
         tries += 1
 
     log_info("Resource {0} value for structure {1} has been updated from {2} to {3}".format(resource, structure["name"], old_value, value), debug)
+
 
 def update_structure(structure, db_handler, debug, max_tries=10):
     try:
@@ -321,6 +328,7 @@ def update_structure(structure, db_handler, debug, max_tries=10):
         log_info("{0} {1} ->  updated".format(structure["subtype"].capitalize(), structure["name"]), debug)
     except requests.exceptions.HTTPError:
         log_error("Error updating {0} {1}: {2} ".format(structure["subtype"].capitalize(), structure["name"], traceback.format_exc()), debug)
+
 
 def partial_update_structure(structure, changes, db_handler, debug, max_tries=10):
     try:
@@ -337,6 +345,7 @@ def update_user(user, db_handler, debug, max_tries=10):
     except requests.exceptions.HTTPError:
         log_error("Error updating user {0}: {1} ".format(user["name"], traceback.format_exc()), debug)
 
+
 def partial_update_user(user, changes, db_handler, debug, max_tries=10):
     try:
         db_handler.partial_update_user(user, changes, max_tries=max_tries)
@@ -344,18 +353,20 @@ def partial_update_user(user, changes, db_handler, debug, max_tries=10):
     except requests.exceptions.HTTPError:
         log_error("Error updating user {0}: {1} ".format(user["name"], traceback.format_exc()), debug)
 
+
 def persist_data(data, db_handler, debug):
-    if data["type"] == "user" or data["subtype"] == "user":
+    if structure_is_user(data):
         update_user(data, db_handler, debug)  # Remote database operation
-    elif data["type"] == "structure":
+    elif structure_is_container(data) or structure_is_application(data):
         update_structure(data, db_handler, debug)  # Remote database operation
     else:
         log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
 
+
 def partial_persist_data(data, changes, db_handler, debug):
-    if data["type"] == "user" or data["subtype"] == "user":
+    if structure_is_user(data):
         partial_update_user(data, changes, db_handler, debug)  # Remote database operation
-    elif data["type"] == "structure":
+    elif structure_is_container(data) or structure_is_application(data):
         partial_update_structure(data, changes, db_handler, debug)  # Remote database operation
     else:
         log_error("Trying to persist unknown data type '{0}'".format(data["type"]), debug)
@@ -376,6 +387,20 @@ def get_users(db_handler, debug):
     except (requests.exceptions.HTTPError, ValueError):
         log_warning("Couldn't retrieve users info.", debug=debug)
         return None
+
+
+def get_data(structure_name, data_type, db_handler, debug):
+    structure = None
+    try:
+        if data_type == "user":
+            structure = db_handler.get_user(structure_name)
+        elif data_type == "container" or data_type == "application":
+            structure = db_handler.get_structure(structure_name)
+        else:
+            log_warning("Trying to get unknown data type '{0}'".format(data_type), debug)
+    except (requests.exceptions.HTTPError, ValueError):
+        log_warning("Couldn't retrieve {0} info.".format(data_type), debug=debug)
+    return structure
 
 
 def run_in_threads(structures, worker_fn, *worker_args):
