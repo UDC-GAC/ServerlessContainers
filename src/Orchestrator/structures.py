@@ -471,11 +471,18 @@ def desubscribe_container(structure_name):
     if previous_state:
         disable_scaler(scaler_service)
 
-    # Free host resources used by this container
-    host = get_db().get_structure(container["host"])
-    changes = free_container_resources(container, host)
-
-    get_db().partial_update_structure(host, changes)
+    success, tries, max_tries = False, 0, 10
+    while not success and tries < max_tries:
+        try:
+            # Free host resources used by this container
+            host = get_db().get_structure(container["host"])
+            changes = free_container_resources(container, host)
+            get_db().safe_update_structure(host, changes)
+            success = True
+        except Exception as e:
+            tries += 1
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
+            time.sleep(BACK_OFF_TIME_MS / 1000)
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -687,21 +694,30 @@ def subscribe_container(structure_name):
         disable_scaler(scaler_service)
 
     # Get the host info
-    host = get_db().get_structure(container["host"])
-    resource_dict, changes = map_container_to_host_resources(container, host)
-    set_container_resources(node_scaler_session, container, resource_dict, True)
+    success, tries, max_tries = False, 0, 10
+    while not success and tries < max_tries:
+        try:
+            host = get_db().get_structure(container["host"])
+            resource_dict, changes = map_container_to_host_resources(container, host)
+            set_container_resources(node_scaler_session, container, resource_dict, True)
 
-    get_db().add_structure(container)
-    get_db().partial_update_structure(host, changes)
+            get_db().add_structure(container)
+            get_db().safe_update_structure(host, changes)
 
-    # Check if limits already exist
-    try:
-        existing_limit = get_db().get_limits(container)
-        existing_limit['resources'] = limits['resources']
-        get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
-    except ValueError:
-        # Limits do not exist yet
-        get_db().add_limit(limits)
+            # Check if limits already exist
+            try:
+                existing_limit = get_db().get_limits(container)
+                existing_limit['resources'] = limits['resources']
+                get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
+            except ValueError:
+                # Limits do not exist yet
+                get_db().add_limit(limits)
+
+            success = True
+        except Exception as e:
+            tries += 1
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
+            time.sleep(BACK_OFF_TIME_MS / 1000)
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
