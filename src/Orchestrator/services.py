@@ -36,7 +36,7 @@ service_routes = Blueprint('services', __name__)
 STR_KEYS = {
     "STRUCTURE_GUARDED", "ENERGY_MODEL_NAME", "ENERGY_MODEL_RELIABILITY",   # Guardian
     "CONTAINERS_SCOPE", "BALANCING_METHOD", "BALANCING_POLICY",             # ReBalancer
-    "CONTROL_POLICY", "POWER_MODEL"                                         # EnergyController
+    "CONTROL_POLICY", "POWER_MODEL", "EVENTS_SYSTEM"                        # EnergyController
 }
 BOOL_VALUES = {"true", "false"}
 
