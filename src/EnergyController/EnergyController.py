@@ -298,10 +298,18 @@ class EnergyController(Service):
             new_alloc = self.alloc_cache.get_new(structure["_id"], read_alloc)
             if read_alloc != new_alloc:
                 if read_alloc == old_alloc:
-                    utils.log_warning(f"@{name} CPU allocation is not up to date, a cached value will be used (read = {read_alloc} | cached = {new_alloc})", self.debug)
-                    structure["resources"]["cpu"]["current"] = new_alloc
+                    self.alloc_cache.count_outdated(structure["_id"], new_alloc)
+                    # TODO: Make request to NodeRescaler to have updated allocation value??
+                    if self.alloc_cache.get_outdated_count(structure["_id"], new_alloc) < 4:
+                        utils.log_warning(f"@{name} CPU allocation is not up to date, a cached value will be used (read = {read_alloc} | cached = {new_alloc})", self.debug)
+                        structure["resources"]["cpu"]["current"] = new_alloc
+                    else:
+                        self.alloc_cache.reset_outdated(structure["_id"], new_alloc)
+                        utils.log_warning(f"@{name} CPU allocation is outdated for four consecutive iterations, maybe Scaler couldn't perform scaling, using read value ({read_alloc})", self.debug)
                 else:
                     utils.log_warning(f"@{name} Scaler had some trouble scaling from {old_alloc} to {new_alloc} (read = {read_alloc})", self.debug)
+            else:
+                self.alloc_cache.reset_outdated(structure["_id"], new_alloc)
 
             # Retrieve structure resource limits
             limits = self.couchdb_handler.get_limits(structure)
