@@ -3,6 +3,7 @@ from __future__ import print_function
 
 from threading import Thread, Lock
 import time
+import math
 import traceback
 
 import src.MyUtils.MyUtils as utils
@@ -139,9 +140,9 @@ class EnergyController(Service):
         # Compute desired host power budget based on current scalings
         P_budget_host = P_usage_host + P_scaling_host
 
-        # 76 is the point where single core model and general model cross their predictions
+        # 74 is the point where single core model and general model cross their predictions
         # TODO: Retrieve this value automatically depending on the CPU
-        power_model = "polyreg_General" if P_budget_host > 76 else "polyreg_Single_Core"
+        power_model = "polyreg_General" if P_budget_host > 74 else "polyreg_Single_Core"
 
         # Get model estimation
         U_scaling_cap = 0
@@ -216,8 +217,9 @@ class EnergyController(Service):
     def compute_power_scaling(self, structure, limits, usages):
         structure_id = structure["_id"]
         U_usage, P_usage = usages[utils.res_to_metric("cpu")], usages[utils.res_to_metric("energy")]
-        P_budget = structure["resources"]["energy"]["current"]
+        P_budget = max(structure["resources"]["energy"]["current"], 1e-30)
         P_scaling = P_budget - P_usage
+        abs_ppe = abs(P_scaling / P_budget)
         direction, opposite = ("up", "down") if P_scaling > 0 else ("down", "up")
 
         # If power is already near the power budget the structure doesn't need to scale power
