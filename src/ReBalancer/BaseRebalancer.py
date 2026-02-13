@@ -321,13 +321,6 @@ class BaseRebalancer(ABC):
             if receivers:
                 self.print_donors_and_receivers(donors, receivers)
 
-                # Structures that have a "current" closer to its "max" receive first
-                if d_field == "max":
-                    receivers = sorted(receivers, key=lambda s: (1 - s["resources"][resource]["current"] / s["resources"][resource]["max"]))
-                # Order the structures from lower to upper resource limit
-                else:
-                    receivers = sorted(receivers, key=lambda s: s["resources"][resource][d_field])
-
                 donor_slices = dict()
                 for structure in donors:
                     # Ensure this request will be successfully processed, otherwise we are 'giving' away extra resources
@@ -352,7 +345,7 @@ class BaseRebalancer(ABC):
 
                     # Divide the total amount to donate in slices of 25 units
                     key = self.get_donor_slice_key(structure, resource)
-                    for slice_amount in utils.split_amount_in_slices(int(stolen_amount), 25):
+                    for slice_amount in utils.split_amount_in_num_slices(int(stolen_amount), len(receivers)):
                         donor_slices.setdefault(key, []).append((structure, slice_amount))
 
                 # Remove donor slices that cannot be given to any receiver
@@ -362,13 +355,22 @@ class BaseRebalancer(ABC):
                     else:
                         donor_slices[key] = sorted(donor_slices[key], key=lambda c: c[1])
 
-                received_amount = {}
+                received_amount = {receiver["name"]: 0 for receiver in receivers}
                 while donor_slices:
                     # Print current donor slices
                     self.print_donor_slices(donor_slices)
 
+                    # If no receivers left, stop redistribution process
                     if not receivers:
                         break
+
+                    # Order receivers to prioritise donations
+                    if d_field == "max":
+                        # Structures that have usage closer to its "max" limit receive first
+                        receivers = sorted(receivers, key=lambda s: (1 - s["resources"][resource]["usage"] / (s["resources"][resource]["max"] + received_amount[s["name"]])))
+                    else:
+                        # Structures that have a lower "current" limit receive first
+                        receivers = sorted(receivers, key=lambda s: s["resources"][resource][d_field])
 
                     # The loop iterates over a copy so that the list of receivers can be modified inside the loop
                     for receiver in list(receivers):
