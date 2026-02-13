@@ -1344,16 +1344,19 @@ class Scaler(Service):
             errors_detected = self.check_host_cpu_limits()
             if errors_detected:
                 utils.log_error("Errors detected during host CPU limits check", self.debug)
+                return
 
             utils.log_info("Second containers", self.debug)
             errors_detected = self.check_containers_cpu_limits(containers)
             if errors_detected:
                 utils.log_error("Errors detected during container CPU limits check", self.debug)
+                return
 
             utils.log_info("Doing core mapping check", self.debug)
             errors_detected = self.check_core_mapping(containers)
             if errors_detected:
                 utils.log_error("Errors detected during container CPU map check", self.debug)
+                return
         else:
             utils.log_warning("Core map check has been disabled", self.debug)
 
