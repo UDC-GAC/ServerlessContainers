@@ -273,24 +273,34 @@ def get_resource(structure, resource):
 
 
 def get_best_fit_app(scalable_apps, resource, amount):
-    stopped_apps, running_apps = [], []
+    stopped_apps, below_min_apps, running_apps = [], [], []
     for app in scalable_apps:
         if "usage" not in app["resources"][resource]:
             continue
         if app["resources"][resource].get("current", 0) == 0 and not app.get("running", False):
             stopped_apps.append(app)
         else:
-            running_apps.append(app)
-    # When scaling down, stopped apps are preferred, when scaling up, running apps are preferred
-    sorted_apps = sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["usage"])
+            if app["resources"][resource]["max"] < app["resources"][resource]["min"]:
+                below_min_apps.append(app)
+            else:
+                running_apps.append(app)
+    # When scaling down, stopped apps are preferred, when scaling up, apps below min are prioritised and then running apps are preferred
+    sorted_apps = sorted(below_min_apps, key=lambda a: a["resources"][resource]["max"] / a["resources"][resource]["min"])
+    sorted_apps += sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["usage"])
     sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"])
 
     return sorted_apps[-1] if amount < 0 else sorted_apps[0]
 
 
 def get_best_fit_container(scalable_containers, resource, amount, field):
-    best_fit_container, sorted_containers = {}, []
-    sorted_containers = sorted(scalable_containers, key=lambda c: c["resources"][resource][field] - c["resources"][resource]["usage"])
+    best_fit_container, normal_containers, below_min_containers = {}, [], []
+    for container in scalable_containers:
+        if container["resources"][resource][field] < container["resources"][resource]["min"]:
+            below_min_containers.append(container)
+        else:
+            normal_containers.append(container)
+    sorted_containers = sorted(below_min_containers, key=lambda c: c["resources"][resource]["max"] / c["resources"][resource]["min"])
+    sorted_containers += sorted(normal_containers, key=lambda c: c["resources"][resource][field] - c["resources"][resource]["usage"])
     if sorted_containers:
         best_fit_container = sorted_containers[-1] if amount < 0 else sorted_containers[0]
 
@@ -605,10 +615,9 @@ def get_container_resources_dict(containers, rescaler_http_session, debug):
     for container in containers:
         container_name = container["name"]
         if container_name not in container_info:
-            log_warning("Container info for {0} not found, check that it is really living in its supposed "
-                        "host '{1}', and that the host is alive and with the Node Scaler service running"
-                        .format(container_name, container["host"]), debug)
-            continue
+            raise Exception("Container info for {0} not found, check that it is really living in its supposed "
+                            "host '{1}', and that the host is alive and with the Node Scaler service running"
+                            .format(container_name, container["host"]), debug)
         # Until energy limit is virtually initialised through NodeRescaler, the value from StateDatabase is used
         if "energy" in container["resources"] and "energy_limit" not in container_info[container_name].get("energy", {}):
             container_info[container_name]["energy"] = {"energy_limit": container["resources"]["energy"]["current"]}
