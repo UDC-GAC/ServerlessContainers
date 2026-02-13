@@ -13,28 +13,44 @@ class EventsCache:
     def add_event(self, structure_id, direction):
         now = time.time()
         with self._lock:
-            self._cache.setdefault(structure_id, {}).setdefault(direction, deque()).append(now)
+            entry = self._cache.setdefault(structure_id, {"events": deque(), "counts": {"up": 0, "down": 0}})
+            entry["events"].append((now, direction))
+            entry["counts"][direction] += 1
 
     def get_events(self, structure_id, direction):
-        return len(self._cache.get(structure_id, {}).get(direction, deque()))
+        return self._cache.get(structure_id, {}).get("counts", {}).get(direction, 0)
 
     def get_events_info(self, structure_id):
         return f"EVENTS: UP {self.get_events(structure_id, 'up')} | DOWN {self.get_events(structure_id, 'down')}"
 
     def clear_events(self, structure_id):
         with self._lock:
-            events = self._cache.get(structure_id)
-            if events:
-                for dq in events.values():
-                    dq.clear()
+            entry = self._cache.get(structure_id)
+            if entry:
+                entry["events"].clear()
+                entry["counts"]["up"] = 0
+                entry["counts"]["down"] = 0
+
+    def keep_last_n_events(self, structure_id, num_events):
+        if num_events < 0:
+            raise ValueError("The number of events to keep must be positive: {0}".format(num_events))
+
+        with self._lock:
+            entry = self._cache.get(structure_id)
+            if not entry:
+                return
+
+            while len(entry["events"]) > num_events:
+                _, direction = entry["events"].popleft()
+                entry["counts"][direction] -= 1
 
     def remove_old_events(self, timeout):
         cutoff = time.time() - timeout
         with self._lock:
-            for events in self._cache.values():
-                for direction, dq in events.items():
-                    while dq and dq[0] < cutoff:
-                        dq.popleft()
+            for entry in self._cache.values():
+                while entry["events"] and entry["events"][0][0] < cutoff:
+                    _, direction = entry["events"].popleft()
+                    entry["counts"][direction] -= 1
 
 
 class PowerBudgetCache:

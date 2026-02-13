@@ -14,8 +14,8 @@ from src.MyUtils.ConfigValidator import ConfigValidator
 from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
-                         "DEBUG": True, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
-                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "ACTIVE": True}
+                         "ALLOWED_ERROR": 0.05, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
+                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "DEBUG": True, "ACTIVE": True}
 
 
 class EnergyController(Service):
@@ -28,8 +28,8 @@ class EnergyController(Service):
         self.P_idle = self.wattwizard_handler.get_idle_consumption("host", "polyreg_General")
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
         self.polling_frequency, self.event_timeout, self.window_timelapse, self.window_delay = None, None, None, None
-        self.debug, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
-        self.events_system, self.active = None, None
+        self.allowed_error, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
+        self.events_system, self.debug, self.active = None, None, None
         self.events_cache = cache_utils.EventsCache()
         self.pb_cache = cache_utils.PowerBudgetCache()
         self.alloc_cache = cache_utils.CPUAllocationCache()
@@ -84,9 +84,11 @@ class EnergyController(Service):
 
     def power_is_near_pb(self, structure, value):
         P_budget = structure["resources"]["energy"]["current"]
-        is_near = (P_budget * 0.95) < value < (P_budget * 1.05) # P_budget < value < (P_budget + margin)
+        upper_limit = P_budget * (1 + self.allowed_error / 2)
+        lower_limit = P_budget * (1 - self.allowed_error / 2)
+        is_near = lower_limit < value < upper_limit
         if is_near:
-            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {P_budget * 0.95} < {value} < {P_budget * 1.05}", self.debug)
+            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {lower_limit} < {value} < {upper_limit}", self.debug)
 
         return is_near
 
@@ -206,10 +208,10 @@ class EnergyController(Service):
         except Exception as e:
             utils.log_error(f"{structure['name']} Error capping structure: {e}", self.debug)
 
-    def print_events_info(self, structure, direction, dir_events, op_events):
+    def print_events_info(self, structure, direction, dir_events, op_events, required_events):
         up_events = dir_events if direction == "up" else op_events
         down_events = dir_events if direction == "down" else op_events
-        utils.log_info(f"@{structure['name']} EVENTS: DOWN {down_events} | UP {up_events}", self.debug)
+        utils.log_info(f"@{structure['name']} EVENTS: DOWN {down_events} | UP {up_events} | REQUIRED {required_events} ({direction})", self.debug)
 
     def compute_power_scaling(self, structure, limits, usages):
         structure_id = structure["_id"]
@@ -236,24 +238,22 @@ class EnergyController(Service):
 
         # Add event and get accumulated events
         self.events_cache.add_event(structure_id, direction)
+
+        # Static events threshold -> Threshold is the same regardless of the error
+        required_events = 4
+        if self.events_system == "dynamic":
+            # Dynamic events threshold -> Higher error requires fewer consecutive events to trigger scaling
+            N_min, N_max, alpha = 1, 4, 1
+            required_events = N_max * (self.allowed_error / abs_ppe) ** alpha
+            required_events = max(min(math.ceil(required_events), N_max), N_min)
+
+        self.events_cache.keep_last_n_events(structure_id, required_events)
         dir_events = self.events_cache.get_events(structure_id, direction)
         op_events = self.events_cache.get_events(structure_id, opposite)
-        self.print_events_info(structure, direction, dir_events, op_events)
-
-        # Events threshold is always the same regardless of the error
-        if self.events_system == "static":
-            event_threshold = 4
-            if dir_events >= event_threshold and op_events == 0:
-                self.events_cache.clear_events(structure_id)
-                return P_scaling
-
-        # Higher error requires fewer consecutive events to trigger scaling
-        elif self.events_system == "dynamic":
-            abs_ppe = abs(P_scaling / P_budget)
-            for ppe_threshold, event_threshold in [(0.25, 1), (0.15, 2), (0.05, 4)]:
-                if abs_ppe >= ppe_threshold and dir_events >= event_threshold and op_events == 0:
-                    self.events_cache.clear_events(structure_id)
-                    return P_scaling
+        self.print_events_info(structure, direction, dir_events, op_events, required_events)
+        if dir_events >= required_events and op_events == 0:
+            self.events_cache.clear_events(structure_id)
+            return P_scaling
 
         return 0
 
