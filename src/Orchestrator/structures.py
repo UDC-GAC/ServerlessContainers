@@ -368,21 +368,9 @@ def subscribe_container_to_app(structure_name, app_name):
         if cont_name in application["containers"]:
             return abort(400, {"message": "Container '{0}' is already subscribed to app '{1}'".format(cont_name, application["name"])})
 
-    container_changes = {"resources": {}}
-    for resource in container["resources"]:
-        if resource in app["resources"]:
-            try:
-                alloc_ratio = container["resources"][resource]["max"] / app["resources"][resource]["max"]
-                container["resources"][resource]["alloc_ratio"] = alloc_ratio
-                container_changes["resources"][resource] = {"alloc_ratio": alloc_ratio}
-            except (ZeroDivisionError, KeyError) as e:
-                return abort(400, {"message": "Couldn't set allocation ratio for container '{0}' and "
-                                              "application '{1}': {2}".format(cont_name, app_name, str(e))})
-
     app["containers"].append(cont_name)
-
-    get_db().partial_update_structure(container, container_changes)
     get_db().partial_update_structure(app, {"containers": app["containers"]})
+
     return jsonify(201)
 
 
