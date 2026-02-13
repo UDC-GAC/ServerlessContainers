@@ -460,6 +460,7 @@ def desubscribe_container(structure_name):
         disable_scaler(scaler_service)
 
     success, tries, max_tries = False, 0, 10
+    couchdb_error = None
     while not success and tries < max_tries:
         try:
             # Free host resources used by this container
@@ -469,8 +470,13 @@ def desubscribe_container(structure_name):
             success = True
         except Exception as e:
             tries += 1
+            couchdb_error = str(e)
             print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
             time.sleep(BACK_OFF_TIME_MS / 1000)
+
+    if tries >= max_tries:
+        restore_scaler_state(scaler_service, previous_state)
+        return abort(400, {"message": "ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, couchdb_error)})
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -676,6 +682,7 @@ def subscribe_container(structure_name):
     limits["name"] = container["name"]
 
     # Disable the Scaler as we will modify the core mapping of a host
+    # TODO: Maybe Scaler could be active as host is updated with safe operations
     scaler_service = get_db().get_service("scaler")
     previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
     if previous_state:
@@ -683,6 +690,7 @@ def subscribe_container(structure_name):
 
     # Get the host info
     success, tries, max_tries = False, 0, 10
+    couchdb_error = None
     while not success and tries < max_tries:
         try:
             host = get_db().get_structure(container["host"])
@@ -704,11 +712,15 @@ def subscribe_container(structure_name):
             success = True
         except Exception as e:
             tries += 1
+            couchdb_error = str(e)
             print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
             time.sleep(BACK_OFF_TIME_MS / 1000)
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
+
+    if tries >= max_tries:
+        return abort(400, {"message": "ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, couchdb_error)})
 
     return jsonify(201)
 
