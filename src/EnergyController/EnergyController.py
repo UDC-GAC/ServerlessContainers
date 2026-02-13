@@ -229,8 +229,12 @@ class EnergyController(Service):
             return 0
 
         # If CPU usage exceeds current allocation, power consumption won't show the effect of recent allocation changes
-        if self.cpu_usage_is_above_allocation(structure, U_usage):
-            return 0
+        if P_scaling < 0 and self.cpu_usage_is_above_allocation(structure, U_usage):
+            # However, if power error is too high avoid blocking chained scale-downs
+            if abs_ppe >= self.allowed_error:
+                utils.log_warning(f"@{structure['name']} Power error is too high ({abs_ppe:.2f}), adding event anyway",self.debug)
+            else:
+                return 0
 
         # If structure needs a power scale-up but CPU is below boundary (no CPU bottleneck), skip power scale
         if P_scaling > 0 and self.cpu_is_below_boundary(structure, limits, U_usage):
