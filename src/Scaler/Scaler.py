@@ -927,11 +927,9 @@ class Scaler(Service):
             # Usage information is needed
             container["resources"][resource_label]["usage"] = resource_usage_cache[container_name][resource_label]
 
-            # Rescale down
-            if amount < 0:
-                # "max" can't be scaled below "current"
-                if field == "max" and max_value + amount >= min_value:
-                    scalable_containers.append(container)
+            # Rescale down: "max" can't be scaled below "min"
+            if amount < 0 and max_value + amount >= min_value:
+                scalable_containers.append(container)
             # Rescale up
             else:
                 # TODO: Think if we should check the host free resources for a "max" scaling
@@ -1066,10 +1064,12 @@ class Scaler(Service):
             if bool(app.get("containers", [])) ^ app.get("running", False):
                 continue
 
-            # Rescale down: "max" can't be scaled below "min"
-            if amount < 0 and app["resources"][resource_label]["max"] + amount >= app["resources"][resource_label].get("min", 0):
-                scalable_apps.append(app)
-            # Rescale up
+            # Rescale down: if app is running "max" can't be scaled below "min"
+            if amount < 0:
+                lower_limit = app["resources"][resource_label].get("min", 0) if app.get("running", False) else 0
+                if app["resources"][resource_label]["max"] + amount >= lower_limit:
+                    scalable_apps.append(app)
+            # Rescale up: always
             elif amount > 0:
                 scalable_apps.append(app)
 
@@ -1400,14 +1400,16 @@ class Scaler(Service):
         # Get the container structures and their resource information as such data is going to be needed
         containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
         try:
+            utils.log_info("Getting host and container info", self.debug)
+
             # Reset the container information cache
             self.container_info_cache = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)
 
             # Fill the host information cache
-            utils.log_info("Getting host and container info", self.debug)
             self.fill_host_info_cache(containers)
+
         except (Exception, RuntimeError) as e:
-            utils.log_error("Error getting host document, skipping epoch altogether", self.debug)
+            utils.log_error("Error getting documents, skipping epoch altogether", self.debug)
             utils.log_error(str(e), self.debug)
             return thread
 
