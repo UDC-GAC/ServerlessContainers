@@ -21,7 +21,9 @@ class PolynomialRegression(Model):
 
     def get_coefs(self):
         if self.pretrained or self.times_trained > 0:
-            return self.model.coef_.tolist()
+            coef_list = self.model.coef_.tolist()
+            coef_list[0] = self.model.intercept_
+            return coef_list
         return None
 
     def get_intercept(self):
