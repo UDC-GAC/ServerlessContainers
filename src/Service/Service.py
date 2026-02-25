@@ -20,6 +20,15 @@ class Service:
         self.couchdb_handler = couchdb.CouchDBServer()
         self.active, self.debug = None, None
 
+    def log_info(self, msg):
+        utils.log_info(msg, self.debug)
+
+    def log_warning(self, msg):
+        utils.log_warning(msg, self.debug)
+
+    def log_error(self, msg):
+        utils.log_error(msg, self.debug)
+
     # --------- Functions to be overwritten by specific services ---------
 
     def on_start(self):
