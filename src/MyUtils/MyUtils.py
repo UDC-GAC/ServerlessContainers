@@ -289,7 +289,7 @@ def get_best_fit_app(scalable_apps, resource, amount):
     sorted_apps += sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["usage"])
     sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"])
 
-    return sorted_apps[-1] if amount < 0 else sorted_apps[0]
+    return sorted_apps[0] if amount > 0 else sorted_apps[-1]
 
 
 def get_best_fit_container(scalable_containers, resource, amount, field):
@@ -302,7 +302,7 @@ def get_best_fit_container(scalable_containers, resource, amount, field):
     sorted_containers = sorted(below_min_containers, key=lambda c: c["resources"][resource]["max"] / c["resources"][resource]["min"])
     sorted_containers += sorted(normal_containers, key=lambda c: c["resources"][resource][field] - c["resources"][resource]["usage"])
     if sorted_containers:
-        best_fit_container = sorted_containers[-1] if amount < 0 else sorted_containers[0]
+        best_fit_container = sorted_containers[0] if amount > 0 else sorted_containers[-1]
 
     return best_fit_container
 
@@ -625,3 +625,17 @@ def get_container_resources_dict(containers, rescaler_http_session, debug):
         container_resources_dict[container_name]["resources"] = container_info[container_name]
 
     return container_resources_dict
+
+
+def set_container_resources(node_scaler_session, container, resources, debug):
+    rescaler_ip = container["host_rescaler_ip"]
+    rescaler_port = container["host_rescaler_port"]
+    container_name = container["name"]
+    r = node_scaler_session.put("http://{0}:{1}/container/{2}".format(rescaler_ip, rescaler_port, container_name),
+                                  data=json.dumps(resources), headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
+    if r.status_code == 201:
+        return dict(r.json())
+    else:
+        log_error("Error processing container resource change in host in IP {0}".format(rescaler_ip), debug)
+        log_error(str(json.dumps(r.json())), debug)
+        r.raise_for_status()

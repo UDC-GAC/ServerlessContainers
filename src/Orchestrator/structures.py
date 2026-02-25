@@ -32,7 +32,7 @@ import time
 
 import src.MyUtils.MyUtils as utils
 from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
-from src.Scaler.Scaler import set_container_resources, CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
+from src.Scaler.Scaler import CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 
 structure_routes = Blueprint('structures', __name__)
 
@@ -695,7 +695,7 @@ def subscribe_container(structure_name):
         try:
             host = get_db().get_structure(container["host"])
             resource_dict, changes = map_container_to_host_resources(container, host)
-            set_container_resources(node_scaler_session, container, resource_dict, True)
+            utils.set_container_resources(node_scaler_session, container, resource_dict, True)
 
             get_db().add_structure(container)
             get_db().safe_update_structure(host, changes)
