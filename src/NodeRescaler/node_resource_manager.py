@@ -559,7 +559,7 @@ def get_node_energy(container_id, energy_vcgroup_dir):
     energy_limit_path = "/".join([energy_vcgroup_dir, str(container_id)])
     op = read_cgroup_file_value(energy_limit_path)
     if op["success"]:
-        return True, {ENERGY_LIMIT_LABEL: op["data"]}
+        return True, {ENERGY_LIMIT_LABEL: int(op["data"])}
 
     return False, op
 

@@ -68,7 +68,7 @@ DICT_ENERGY_LABEL = "energy"
 DICT_NET_LABEL = "net"
 
 # TODO: get container mount point from vars file
-container_mount_point = "/opt/bind"
+CONTAINER_MOUNT_POINT = "/opt/bind"
 
 # At the moment, apptainer instances with cgroups V1 can only be started with root/sudo
 # TODO properly support Net for cgroups v1 and add support for cgroups v2
@@ -117,6 +117,7 @@ class SingularityContainerManager:
             return False, {}
         else:
             try:
+
                 container = self.__get_singularity_instance_by_name(node_name)
                 node_pid = container['pid']
 
@@ -141,7 +142,7 @@ class SingularityContainerManager:
                 if DICT_DISK_READ_LABEL in resources or DICT_DISK_WRITE_LABEL in resources:
 
                     # TODO: maybe pass disk path as parameter from an HTTP request instead of getting it here
-                    command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
+                    command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], CONTAINER_MOUNT_POINT)
                     output,error  = subprocess.Popen(
                                         command, universal_newlines=True, shell=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
@@ -196,74 +197,78 @@ class SingularityContainerManager:
                 # If node not found, pass
                 return False, {}
 
-    def get_node_resources_by_name(self, container_name):
-        container = self.__get_singularity_instance_by_name(container_name)
-        return self.get_node_resources(container)
-
-    def get_node_resources(self, container):
+    def get_node_resources(self, container, needed_resources=None):
+        if needed_resources is None:
+            needed_resources = {"cpu": True, "mem": True, "disk": True, "energy": True, "net": True}
         try:
             node_pid = container['pid']
+            node_dict = {}
 
-            node_dict = dict()
-
-            if self.cgroups_version == "v1":
-                cpu_success, cpu_resources = get_node_cpus(node_pid, self.container_engine)
-                mem_success, mem_resources = get_node_mem(node_pid, self.container_engine)
-            else:
-                cpu_success, cpu_resources = get_node_cpus_cgroupsv2(self.userid, node_pid, self.container_engine)
-                mem_success, mem_resources = get_node_mem_cgroupsv2(self.userid, node_pid, self.container_engine)
-
-            node_dict[DICT_CPU_LABEL] = cpu_resources
-            node_dict[DICT_MEM_LABEL] = mem_resources
-
-            command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], container_mount_point)
-            try:
-                output = subprocess.run(
-                                command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout
-                source = output.split()[5]
-                if ":" in source:
-                    ## Device mounted on NFS
-                    #device, mount_point = source.split(":")
-                    ## Cant' access disk information of a remote disk
-                    disk_resources = None
+            # CPU
+            if needed_resources.get("cpu", False):
+                if self.cgroups_version == "v1":
+                    cpu_success, cpu_resources = get_node_cpus(node_pid, self.container_engine)
                 else:
-                    device = source.split("[")[0]
-                    mount_point= re.findall(r'\[([^]]*)\]', source)[0]
-                    if self.cgroups_version == "v1":
-                        disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
-                        # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                    cpu_success, cpu_resources = get_node_cpus_cgroupsv2(self.userid, node_pid, self.container_engine)
+                node_dict[DICT_CPU_LABEL] = cpu_resources
+
+            # Memory
+            if needed_resources.get("mem", False):
+                if self.cgroups_version == "v1":
+                    mem_success, mem_resources = get_node_mem(node_pid, self.container_engine)
+                else:
+                    mem_success, mem_resources = get_node_mem_cgroupsv2(self.userid, node_pid, self.container_engine)
+                node_dict[DICT_MEM_LABEL] = mem_resources
+
+            if needed_resources.get("disk", False):
+                command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], CONTAINER_MOUNT_POINT)
+                try:
+                    output = subprocess.run(command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout
+                    source = output.split()[5]
+                    if ":" in source:
+                        ## Device mounted on NFS
+                        #device, mount_point = source.split(":")
+                        ## Cant' access disk information of a remote disk
+                        disk_resources = None
                     else:
-                        disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
+                        device = source.split("[")[0]
+                        mount_point= re.findall(r'\[([^]]*)\]', source)[0]
+                        if self.cgroups_version == "v1":
+                            disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
+                            # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
+                        else:
+                            disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
 
-                if type(disk_resources) == list and len(disk_resources) > 0:
-                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[0][DICT_DISK_READ_LABEL]
-                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[0][DICT_DISK_WRITE_LABEL]
-                elif disk_resources:
-                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
-                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
-                else:
-                    node_dict[DICT_DISK_READ_LABEL] = {}
-                    node_dict[DICT_DISK_WRITE_LABEL] = {}
+                    if type(disk_resources) == list and len(disk_resources) > 0:
+                        node_dict[DICT_DISK_READ_LABEL] = disk_resources[0][DICT_DISK_READ_LABEL]
+                        node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[0][DICT_DISK_WRITE_LABEL]
+                    elif disk_resources:
+                        node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
+                        node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
+                    else:
+                        node_dict[DICT_DISK_READ_LABEL] = {}
+                        node_dict[DICT_DISK_WRITE_LABEL] = {}
 
-            except (subprocess.TimeoutExpired, PermissionError):
-                #print("Timeout")
-                pass
-            except IndexError:
-                # If there are not subscribed containers that don't have a mount point on /opt/bind
-                # Subprocess will return an empty string and output.split()[5] will raise an IndexError
-                print("Container {0} not subscribed".format(container['instance']))
+                except (subprocess.TimeoutExpired, PermissionError):
+                    #print("Timeout")
+                    pass
+                except IndexError:
+                    # If there are not subscribed containers that don't have a mount point on /opt/bind
+                    # Subprocess will return an empty string and output.split()[5] will raise an IndexError
+                    print("Container {0} not subscribed".format(container['instance']))
 
-            # TODO support multiple disks
-            #
+                # TODO support multiple disks
+                #
+            if needed_resources.get("energy", False):
+                energy_success, energy_resources = get_node_energy(node_pid, self.energy_vcgroup_dir)
+                node_dict[DICT_ENERGY_LABEL] = energy_resources
 
-            energy_success, energy_resources = get_node_energy(node_pid, self.energy_vcgroup_dir)
-            node_dict[DICT_ENERGY_LABEL] = energy_resources
-
-            # net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
-            # if net_resources:
-            #     node_dict[DICT_NET_LABEL] = net_resources[0]
-            # else:
-            #     node_dict[DICT_NET_LABEL] = []
+            # if needed_resources.get("net", False):
+            #   net_success, net_resources = self.get_node_networks(container)  # LXD Dependent
+            #   if net_resources:
+            #       node_dict[DICT_NET_LABEL] = net_resources[0]
+            #   else:
+            #       node_dict[DICT_NET_LABEL] = []
             # # TODO support multiple networks
 
             return node_dict
@@ -272,10 +277,13 @@ class SingularityContainerManager:
             # If node not found, pass
             pass
 
-    def get_all_nodes(self):
+    def get_node_resources_by_name(self, container_name, needed_resources=None):
+        container = self.__get_singularity_instance_by_name(container_name)
+        return self.get_node_resources(container, needed_resources)
+
+    def get_all_nodes(self, needed_resources=None):
         containers = self.__get_singularity_instances()
         containers_dict = dict()
-
         for c in containers:
-            containers_dict[c['instance']] = self.get_node_resources(c)
+            containers_dict[c['instance']] = self.get_node_resources(c, needed_resources)
         return containers_dict
