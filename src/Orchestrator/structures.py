@@ -644,7 +644,7 @@ def subscribe_container(structure_name):
 
     # Check that its supposed host exists and that it reports this container
     check_structure_exists(container["host"], "host", True)
-    host_containers = utils.get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
+    host_containers = utils.get_containers_info_from_rescaler(container["host_rescaler_ip"], container["host_rescaler_port"], [], node_scaler_session, True)
     if container["name"] not in host_containers:
         return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
 
@@ -695,7 +695,7 @@ def subscribe_container(structure_name):
         try:
             host = get_db().get_structure(container["host"])
             resource_dict, changes = map_container_to_host_resources(container, host)
-            utils.set_container_resources(node_scaler_session, container, resource_dict, True)
+            utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
 
             get_db().add_structure(container)
             get_db().safe_update_structure(host, changes)
@@ -741,7 +741,7 @@ def subscribe_host(structure_name):
 
     # Check that this supposed host exists and has its node scaler up
     try:
-        host_containers = utils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        host_containers = utils.get_containers_info_from_rescaler(host["host_rescaler_ip"], host["host_rescaler_port"], [], node_scaler_session, True)
         if host_containers is None:
             raise RuntimeError()
     except Exception:
