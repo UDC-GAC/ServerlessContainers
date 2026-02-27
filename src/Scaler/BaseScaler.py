@@ -69,11 +69,10 @@ class BaseScaler(ABC):
         return amount, structure
 
     @staticmethod
-    def _create_bogus_operation(scope, structure_name, request, resource, field, amount, priority):
-        return ResourceOperation("SCALE_DOWN" if amount < 0 else "SCALE_UP", scope, request,
-                                 structure_name if "SCALE_DOWN" else "system",
-                                 structure_name if "SCALE_UP" else "system",
-                                 resource, field, amount, priority)
+    def _create_bogus_operation(op_type, scope, structure_name, request, resource, field, amount, priority):
+        donor = structure_name if amount < 0 else "system"
+        receiver = structure_name if amount > 0 else "system"
+        return ResourceOperation(op_type, scope, request, donor, receiver, resource, field, abs(amount), priority)
 
     @staticmethod
     def _apply_execution_priority(items):
@@ -149,12 +148,7 @@ class BaseScaler(ABC):
 
             # Check if the request is part of a pair-swapping
             if "pair_structure" in req:
-                # If operation was created when processing the pair request, skip it to avoid duplicates
-                # TODO: If ReBalancer only sends one request per swap this is not necessary
-                if (req["pair_structure"], req["structure"], resource, amount) in already_added_pairs:
-                    continue
                 op_type = "SWAP"
-                already_added_pairs.add((req["structure"], req["pair_structure"], resource, amount))
 
             operations.append(ResourceOperation(op_type, scope, req, donor, receiver, resource, field, amount, priority))
 

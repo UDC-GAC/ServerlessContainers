@@ -172,15 +172,13 @@ class BaseRebalancer(ABC):
             scaled_amount += request["amount"]
             success = True
 
-    def manage_rebalancing(self, donor, receiver, resource, d_field, amount_to_scale, requests):
+    def manage_swap(self, donor, receiver, resource, d_field, amount_to_scale, requests):
         if amount_to_scale == 0:
             utils.log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor.get("name"), receiver.get("name")), self.debug)
             return
         # Create the pair of scaling requests
-        if receiver:
+        if donor and receiver:
             self.add_scaling_request(receiver, resource, d_field, amount_to_scale, requests, donor)
-        if donor:
-            self.add_scaling_request(donor, resource, d_field, -amount_to_scale, requests, receiver)
 
     def map_role_to_rule(self, resource, role):
         if role == "donors":
@@ -408,7 +406,7 @@ class BaseRebalancer(ABC):
                             del donor_slices[key]
 
                         # Manage necessary scalings to rebalance resource between donor and receiver
-                        self.manage_rebalancing(donor, receiver, resource, d_field, amount_to_scale, requests)
+                        self.manage_swap(donor, receiver, resource, d_field, amount_to_scale, requests)
 
                         # Update the received amount for this container
                         received_amount[receiver_name] += amount_to_scale
