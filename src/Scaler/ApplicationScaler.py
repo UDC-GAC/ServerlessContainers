@@ -39,7 +39,7 @@ class ApplicationScaler(ContainerScaler):
         best_fit_container = utils.get_best_fit_container(scalable_containers, resource, amount, field)
         success = best_fit_container is not None
 
-        return success, best_fit_container, utils.generate_request(best_fit_container, amount, resource, field, priority)
+        return success, best_fit_container, utils.generate_request(best_fit_container, amount, resource, priority, field)
 
     def propagate_application_request(self, app, containers, app_request):
         amount, resource, field, priority = app_request["amount"], app_request["resource"], app_request["field"], app_request["priority"]
@@ -62,7 +62,7 @@ class ApplicationScaler(ContainerScaler):
         data_to_update = {"applications": {}, "containers": {}, "container_resources": {}}
 
         # Get info from operation
-        op_type, resource = operation.type, operation.resource
+        op_type, resource = operation.op_type, operation.resource
         amount, structure_name = self._get_amount_and_structure(operation, swap_part)
         field, priority = operation.field, operation.priority
 
@@ -86,7 +86,7 @@ class ApplicationScaler(ContainerScaler):
         flattened_container_reqs = self.flatten_requests_by_structure(container_reqs)
         for cont_name, cont_req in flattened_container_reqs.items():
             total_amount = cont_req["amount"]
-            bogus_op = self._create_bogus_operation("container", cont_name, cont_req, total_amount, resource, priority)
+            bogus_op = self._create_bogus_operation("container", cont_name, cont_req, resource, field, total_amount, priority)
             success, child_requests, child_data = super().plan_operation(data_context, bogus_op)
             if not success:
                 return False, [], None

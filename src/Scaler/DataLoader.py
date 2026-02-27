@@ -25,10 +25,10 @@ class DataLoader:
         self.debug = debug
 
         # Data caches
-        self._cache = {"container": None, "application": None, "user": None, "host": None, "container_resources": None}
+        self._cache = {"container": None, "application": None, "user": None, "host": None, "container_resources": None, "container_usages": None}
 
         # Loaded status
-        self._loaded = {"container": False, "application": False, "user": False, "host": False, "container_resources": False}
+        self._loaded = {"container": False, "application": False, "user": False, "host": False, "container_resources": False, "container_usages": False}
 
         self.needed_resources = None
 

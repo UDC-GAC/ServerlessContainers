@@ -34,7 +34,7 @@ class UserScaler(ApplicationScaler):
         best_fit_app = utils.get_best_fit_app(scalable_apps, resource, amount)
         success = best_fit_app is not None
 
-        return success, best_fit_app, utils.generate_request(best_fit_app, amount, resource, field, priority)
+        return success, best_fit_app, utils.generate_request(best_fit_app, amount, resource, priority, field)
 
     def propagate_user_request(self, user, applications, user_request):
         amount, resource, field, priority = user_request["amount"], user_request["resource"], user_request["field"], user_request["priority"]
@@ -57,7 +57,7 @@ class UserScaler(ApplicationScaler):
         data_to_update = {"users": {}, "applications": {}, "containers": {}, "container_resources": {}}
 
         # Get info from operation
-        op_type, resource = operation.type, operation.resource
+        op_type, resource = operation.op_type, operation.resource
         amount, structure_name = self._get_amount_and_structure(operation, swap_part)
         field, priority = operation.field, operation.priority
 
@@ -82,7 +82,7 @@ class UserScaler(ApplicationScaler):
         flattened_app_reqs = self.flatten_requests_by_structure(app_reqs)
         for app_name, app_req in flattened_app_reqs.items():
             total_amount = app_req["amount"]
-            bogus_op = self._create_bogus_operation("application", app_name, app_req, total_amount, resource, priority)
+            bogus_op = self._create_bogus_operation("application", app_name, app_req, resource, field, total_amount, priority)
             success, child_requests, child_data = super().plan_operation(data_context, bogus_op)
             if not success:
                 return False, [], None

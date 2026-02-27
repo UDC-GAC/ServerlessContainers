@@ -7,12 +7,13 @@ import src.MyUtils.MyUtils as utils
 
 class ResourceOperation:
 
-    def __init__(self, op_type, scope, request, donor, receiver, resource, amount, priority=0):
+    def __init__(self, op_type, scope, request, donor, receiver, resource, field, amount, priority=0):
         self.op_type = op_type  # SCALE_UP, SCALE_DOWN or SWAP
         self.scope = scope
         self.donor = donor
         self.receiver = receiver
         self.resource = resource
+        self.field = field
         self.amount = abs(amount)
         self.priority = priority
         self._original_request = request
@@ -21,7 +22,7 @@ class ResourceOperation:
 
     def __repr__(self):
         unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "energy": "W"}
-        return "OPERATION: @{0} @{1} ({2} {3}) @{4} -> @{5}".format(
+        return "OPERATION: @{0} @{1} @{2} {3} @{4} -> @{5}".format(
             self.op_type, self.resource, self.amount, unit[self.resource], self.donor, self.receiver)
 
     # Compatibility with dict-like functions
@@ -101,6 +102,8 @@ class StructureRequest:
     def __init__(self, request, couchdb_handler, rescaler_session, debug=False):
         self._request = request
         self.structure_name = request["structure"]
+        self.amount = request["amount"]
+        self.field = request["field"]
         self.couchdb_handler = couchdb_handler
         self.rescaler_session = rescaler_session
         self.debug = debug
@@ -108,8 +111,8 @@ class StructureRequest:
 
     def __repr__(self):
         unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "energy": "W"}
-        return "{0} REQUEST: @{1} ({2} {3}) @{4}".format(
-            self.TYPE.upper(), self._request["resource"], self._request["amount"], unit[self._request["resource"]], self.structure_name)
+        return "{0} REQUEST: @{1} @{2} {3} @{4}".format(
+            self.TYPE.upper(), self._request["resource"], self.amount, unit[self._request["resource"]], self.structure_name)
 
     @property
     def request(self):
@@ -140,7 +143,7 @@ class StructureRequest:
 
         # Update 'max' in CouchDB
         thread = Thread(name="update_{0}".format(database_resources["name"]), target=utils.update_resource_in_couchdb,
-                        args=(database_resources, resource, "max", new_value, self.couchdb_handler, self.debug),
+                        args=(database_resources, resource, "max", new_value, self.couchdb_handler, False),
                         kwargs={"max_tries": 5, "backoff_time_ms": 500})
         thread.start()
 
@@ -149,18 +152,21 @@ class StructureRequest:
     def execute(self, data_context, **kwargs):
         #thread = None
         try:
-            amount, resource = self._request["amount"], self._request["resource"]
+            resource = self._request["resource"]
 
             # Get structure info from data context
             structure = getattr(data_context, self.TYPE + "s", {}).get(self.structure_name, {})
+            old_value = structure["resources"][resource]["max"]
+            new_value = old_value + self.amount
             #thread = self.update_max_in_couchdb(resource, amount, structure)
-            new_value = structure["resources"][resource]["max"] + amount
             utils.update_resource_in_couchdb(structure, resource, "max", new_value,
-                                             self.couchdb_handler, self.debug,
+                                             self.couchdb_handler, False,
                                              max_tries=5, backoff_time_ms=500)
 
             # Update 'max' value in data context for future requests
-            structure["resources"][resource]["max"] += amount
+            structure["resources"][resource]["max"] = new_value
+
+            self.log_info("@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
 
             self.applied = True
         except Exception as e:
@@ -171,9 +177,9 @@ class StructureRequest:
 
     def rollback(self, data_context, **kwargs):
         if self.applied:
-            self._request["amount"] = -self._request["amount"]
+            self.amount= -self.amount
             success = self.execute(data_context, **kwargs)
-            self._request["amount"] = -self._request["amount"]  # revert the amount change for future rollbacks if needed
+            self.amount = -self.amount  # revert the amount change for future rollbacks if needed
             if success:
                 self.log_info("Rollback successful for request: {0} and structure: {1}".format(self._request["action"], self.structure_name))
             else:
@@ -220,7 +226,7 @@ class ContainerRequest(StructureRequest):
         self.host_changes, self.host_lock = None, None
 
     def _get_resource_phy_limit(self, data_context, container_name, resource):
-        return data_context.container_resources.get(container_name, {}).get(resource, {}).get(self.translate(resource))
+        return int(data_context.container_resources.get(container_name, {}).get("resources", {}).get(resource, {}).get(self.translate(resource)))
 
     @staticmethod
     def _get_cpu_list(cpu_num_string):
@@ -338,7 +344,7 @@ class ContainerRequest(StructureRequest):
         # Get container info from NodeRescaler
         cont_phy_resources = data_context.container_resources.get(container_name, {})
         current_cpu_limit = self._get_resource_phy_limit(data_context, container_name, resource)
-        container_cpu_list = self._get_cpu_list(cont_phy_resources["cpu"]["cpu_num"])
+        container_cpu_list = self._get_cpu_list(cont_phy_resources["resources"]["cpu"]["cpu_num"])
         used_cores = list(container_cpu_list)  # copy
 
         # Get CPU topology from host and generate core distribution
@@ -512,7 +518,7 @@ class ContainerRequest(StructureRequest):
             couchdb_thread = None
             resource, field = self._request["resource"], self._request["field"]
             container = data_context.containers.get(self.structure_name, {})
-            amount_for_current = int(self._request["amount"])
+            amount_for_current = int(self.amount)
 
             # If 'max' is changed it is updated in CouchDB and 'current' is adjusted accordingly
             if field == "max":
@@ -520,6 +526,9 @@ class ContainerRequest(StructureRequest):
                 _max = container["resources"][resource]["max"]
                 _current = self._get_resource_phy_limit(data_context, self.structure_name, resource)
                 couchdb_thread = self.update_max_in_couchdb(resource, amount, container)
+
+                # Print max scaling info
+                self.log_info("@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, _max, _max + amount))
 
                 # Update the 'max' value in the data context for future requests
                 container["resources"][resource]["max"] += amount
@@ -530,11 +539,12 @@ class ContainerRequest(StructureRequest):
             # Update container "current" value getting host free resources
             new_resources = self.apply_request_by_resource[resource](self._request, amount_for_current, data_context)
             if new_resources:
-                self.log_info("Request: {0} for container: {1} to scale 'current' limit: {2}".format(
-                    self._request["action"], self.structure_name, json.dumps(new_resources)))
-
                 # Apply changes through a REST call to NodeRescaler
-                utils.set_container_resources(self.rescaler_session, container, new_resources, self.debug)
+                utils.set_container_physical_resources(self.rescaler_session, container, new_resources, self.debug)
+
+                old_value = self._get_resource_phy_limit(data_context, self.structure_name, resource)
+                new_value = new_resources[resource][self.translate(resource)]
+                self.log_info("@{0} @{1} @current {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
 
                 # Update container in data context (useful if there are multiple requests for the same container)
                 data_context.container_resources[self.structure_name]["resources"][resource] = new_resources[resource]

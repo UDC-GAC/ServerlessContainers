@@ -190,7 +190,7 @@ class Scaler(Service):
         for hostname in self.original_data.hosts:
             if hostname in host_changes:
                 host = self.original_data.hosts[hostname]
-                t = Thread(target=persist_thread, args=(self, host, host_changes[hostname], self.couchdb_handler, self.debug))
+                t = Thread(target=persist_thread, args=(host, host_changes[hostname], self.couchdb_handler, self.debug))
                 t.start()
                 threads.append(t)
             else:
@@ -205,21 +205,21 @@ class Scaler(Service):
 
         # 1) Plan user requests execution and generate user operations
         if user_reqs:
-            self.log_info(f"\n--- Processing {len(user_reqs)} user requests ---")
+            self.log_info("--- Processing {0} user requests ---".format(len(user_reqs)))
             user_operations = self.user_scaler.plan(user_reqs)
-            self.log_info(f"Generated {len(user_operations)} user operations")
+            self.log_info("--- Generated {0} user operations ---".format(len(user_operations)))
 
         # 2) Plan application requests execution and generate application operations
         if app_reqs:
-            self.log_info(f"\n--- Processing {len(app_reqs)} application requests ---")
+            self.log_info("--- Processing {0} application requests ---".format(len(app_reqs)))
             app_operations = self.application_scaler.plan(app_reqs)
-            self.log_info(f"Generated {len(app_operations)} application operations")
+            self.log_info("--- Generated {0} application operations ---".format(len(app_operations)))
 
         # 3) Plan container requests execution and generate container operations
         if cont_reqs:
-            self.log_info(f"\n--- Processing {len(cont_reqs)} container requests ---")
+            self.log_info("--- Processing {0} container requests ---".format(len(cont_reqs)))
             cont_operations = self.container_scaler.plan(cont_reqs)
-            self.log_info(f"Generated {len(cont_operations)} container operations")
+            self.log_info("--- Generated {0} container operations ---".format(len(cont_operations)))
 
         t1 = time.time()
         self._print_time("Planning phase completed", t0, t1)

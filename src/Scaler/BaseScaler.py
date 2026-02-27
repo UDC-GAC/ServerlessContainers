@@ -57,9 +57,9 @@ class BaseScaler(ABC):
     @staticmethod
     def _get_amount_and_structure(operation, swap_part=None):
         """Get amount and structure name from operation info"""
-        amount = -operation.amount if operation.type == "SCALE_DOWN" else operation.amount
-        structure = operation.donor if operation.type == "SCALE_DOWN" else operation.receiver
-        if operation.type == "SWAP":
+        amount = -operation.amount if operation.op_type == "SCALE_DOWN" else operation.amount
+        structure = operation.donor if operation.op_type == "SCALE_DOWN" else operation.receiver
+        if operation.op_type == "SWAP":
             if swap_part is None:
                 raise ValueError("Swap part not indicated in a swap operation: {0}".format(operation))
             if swap_part not in {"donor", "receiver"}:
@@ -69,11 +69,11 @@ class BaseScaler(ABC):
         return amount, structure
 
     @staticmethod
-    def _create_bogus_operation(scope, structure_name, request, amount, resource, priority):
+    def _create_bogus_operation(scope, structure_name, request, resource, field, amount, priority):
         return ResourceOperation("SCALE_DOWN" if amount < 0 else "SCALE_UP", scope, request,
                                  structure_name if "SCALE_DOWN" else "system",
                                  structure_name if "SCALE_UP" else "system",
-                                 resource, amount, priority)
+                                 resource, field, amount, priority)
 
     @staticmethod
     def _apply_execution_priority(items):
@@ -135,27 +135,28 @@ class BaseScaler(ABC):
         for req in requests:
             resource, priority = req["resource"], req.get("priority", 0)
             op_type = "SCALE_UP" if req["amount"] > 0 else "SCALE_DOWN"
+            field = req["field"]
             amount = abs(req["amount"])
             donor, receiver = None, None
 
             if op_type == "SCALE_UP":
                 donor = req.get("pair_structure", "system")
-                receiver = req["structure_name"]
+                receiver = req["structure"]
 
             if op_type == "SCALE_DOWN":
-                donor = req["structure_name"]
+                donor = req["structure"]
                 receiver = req.get("pair_structure", "system")
 
             # Check if the request is part of a pair-swapping
             if "pair_structure" in req:
                 # If operation was created when processing the pair request, skip it to avoid duplicates
                 # TODO: If ReBalancer only sends one request per swap this is not necessary
-                if (req["pair_structure"], req["structure_name"], resource, amount) in already_added_pairs:
+                if (req["pair_structure"], req["structure"], resource, amount) in already_added_pairs:
                     continue
                 op_type = "SWAP"
-                already_added_pairs.add((req["structure_name"], req["pair_structure"], resource, amount))
+                already_added_pairs.add((req["structure"], req["pair_structure"], resource, amount))
 
-            operations.append(ResourceOperation(op_type, scope, req, donor, receiver, resource, amount, priority))
+            operations.append(ResourceOperation(op_type, scope, req, donor, receiver, resource, field, amount, priority))
 
         return operations
 
@@ -170,18 +171,18 @@ class BaseScaler(ABC):
             generated_requests, donor_requests, receiver_requests = [], [], []
             data_to_update = {}
 
-            if op.type == "SWAP":
+            if op.op_type == "SWAP":
                 donor_success, donor_requests, data_to_update = self.plan_operation(data_context_copy, op, "donor")
                 if donor_success:
                     receiver_success, receiver_requests, receiver_data = self.plan_operation(data_context_copy, op, "receiver")
                     data_to_update.update(receiver_data)
                 success = donor_success and receiver_success
-                generated_requests = donor_requests, receiver_requests
+                generated_requests = donor_requests + receiver_requests
 
-            if op.type == "SCALE_UP":
+            if op.op_type == "SCALE_UP":
                 success, generated_requests, data_to_update = self.plan_operation(data_context_copy, op)
 
-            if op.type == "SCALE_DOWN":
+            if op.op_type == "SCALE_DOWN":
                 success, generated_requests, data_to_update = self.plan_operation(data_context_copy, op)
 
             if success:
@@ -213,6 +214,12 @@ class BaseScaler(ABC):
         # Order operations and order generated requests inside each operation by execution priority
         sorted_operations = self._apply_execution_priority(final_operations)
         for op in sorted_operations:
-            op.set_generated_requests(self._apply_execution_priority(op.generated_requests))
+            for structure_type in op.generated_requests:
+                op.generated_requests[structure_type] = self._apply_execution_priority(op.generated_requests[structure_type])
+
+            # Print operation info
+            self.log_info("Generated {0} operation with requests:".format(self.CURRENT_LEVEL))
+            for req in op.all_requests:
+                self.log_info("\t{0}".format(req))
 
         return sorted_operations

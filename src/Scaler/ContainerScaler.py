@@ -72,7 +72,7 @@ class ContainerScaler(BaseScaler):
                 return scaled_amount
 
         # CURRENT SCALING: If "max" was previously scaled, "current" will be adjusted to max
-        physical_limit = container_resources[resource].get(translation_dict[resource])
+        physical_limit = int(container_resources["resources"][resource].get(translation_dict[resource]))
         if physical_limit is None:
             self.log_warning("Resource '{0}' limit for container '{1}' not found in NodeRescaler info".format(resource, container["name"]))
             return False, 0
@@ -93,7 +93,7 @@ class ContainerScaler(BaseScaler):
             scaled_amount = amount_for_current - missing_shares
 
         container["resources"][resource]["current"] += scaled_amount
-        container_resources[resource][translation_dict[resource]] += scaled_amount
+        container_resources["resources"][resource][translation_dict[resource]] += scaled_amount
         # If "current" scaling comes from a "max" scaling, update "max" to the final current level (they should be equal
         # at this point, but in some cases "current" can be lower than "max" due to free host resources limitations)
         if request["field"] == "max":
@@ -105,7 +105,7 @@ class ContainerScaler(BaseScaler):
         data_to_update = {"containers": {}, "container_resources": {}}
 
         # Get info from operation
-        op_type, resource = operation.type, operation.resource
+        op_type, resource = operation.op_type, operation.resource
         amount, structure_name = self._get_amount_and_structure(operation, swap_part)
         field, priority = operation.field, operation.priority
 
