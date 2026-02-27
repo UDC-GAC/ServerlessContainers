@@ -1,4 +1,3 @@
-import json
 from requests import HTTPError
 from threading import Thread
 
@@ -223,7 +222,7 @@ class ContainerRequest(StructureRequest):
             "disk_read": self.apply_disk_read_request, "disk_write": self.apply_disk_write_request,
             "energy": self.apply_energy_request, "net": self.apply_net_request
         }
-        self.host_changes, self.host_lock = None, None
+        self.host_changes, self.host_journal, self.host_lock = None, None, None
 
     def _get_resource_phy_limit(self, data_context, container_name, resource):
         return int(data_context.container_resources.get(container_name, {}).get("resources", {}).get(resource, {}).get(self.translate(resource)))
@@ -301,12 +300,11 @@ class ContainerRequest(StructureRequest):
         return [str(c) for c in core_dist]
 
     @staticmethod
-    def _scale_cpu(core_usage_map, take_core_list, used_cores, structure_name, amount, scale_up=True):
+    def _scale_cpu(core_usage_map, core_map_journal, take_core_list, used_cores, structure_name, amount, scale_up=True):
         # When scaling up, we take shares from 'free' and put them into the structure_name
         # when scaling down, we take shares from the structure_name and put them into 'free'
         from_key = "free" if scale_up else structure_name
         to_key = structure_name if scale_up else "free"
-
         original_amount = amount
         for core in take_core_list:
             if amount <= 0:
@@ -315,6 +313,9 @@ class ContainerRequest(StructureRequest):
                 take = min(core_usage_map[core][from_key], amount)
                 core_usage_map[core][from_key] -= take
                 core_usage_map[core][to_key] += take
+                core_map_journal.setdefault(core, {})
+                core_map_journal[core][from_key] = core_map_journal[core].get(from_key, 0) - take
+                core_map_journal[core][to_key] = core_map_journal[core].get(to_key, 0) + take
                 amount -= take
 
                 # If we are scaling up, we add the core to the used_cores list if it is not already there
@@ -338,6 +339,33 @@ class ContainerRequest(StructureRequest):
         self.log_error("Error getting CPU topology from host in IP {0}".format(rescaler_ip))
         r.raise_for_status()
 
+    def _revert_host_changes(self, data_context, resource, host):
+        if not self.host_journal:
+            return
+
+        with self.host_lock:
+            host_info = data_context.hosts.get(host)
+            if resource in {"cpu", "mem", "energy"}:
+                host_info["resources"][resource]["free"] -= self.host_journal.get("delta", 0)
+                self.host_changes.setdefault(host, {}).setdefault("resources", {}).setdefault(resource, {})["free"] = host_info["resources"][resource]["free"]
+
+                # If resource is cpu also revert core map changes
+                if resource == "cpu":
+                    core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
+                    for core, changes in self.host_journal.get("core_map_journal", {}).items():
+                        for key, delta in changes.items():
+                            core_usage_map[core][key] -= delta  # reverse the delta
+                    host_info["resources"]["cpu"]["core_usage_mapping"] = core_usage_map
+                    self.host_changes.setdefault(host, {}).setdefault("resources", {}).setdefault("cpu", {})["core_usage_mapping"] = core_usage_map
+
+            # Disk changes must be applied on a specific bound disk
+            elif resource in {"disk_read", "disk_write"}:
+                bound_disk = self.host_journal.get("bound_disk")
+                free_key = "free_{0}".format(resource.split("_")[-1])
+                if bound_disk:
+                    host_info["resources"]["disks"][bound_disk][free_key] -= self.host_journal.get("delta", 0)
+                    self.host_changes.setdefault(host, {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})[free_key] = host_info["resources"]["disks"][bound_disk][free_key]
+
     def apply_cpu_request(self, request, amount, data_context):
         container_name, resource = request["structure"], request["resource"]
 
@@ -355,6 +383,7 @@ class ContainerRequest(StructureRequest):
         # Using lock to read and update host free resources
         with self.host_lock:
             # Get host info from data context
+            core_map_journal = {}
             host_info = data_context.hosts.get(request["host"])
             core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
             host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
@@ -369,19 +398,19 @@ class ContainerRequest(StructureRequest):
 
                 # 1) Fill first the already used cores following core distribution order
                 used_cores_sorted = [c for c in core_distribution if c in used_cores]
-                needed_shares, assigned = self._scale_cpu(core_usage_map, used_cores_sorted, used_cores, container_name, needed_shares)
+                needed_shares, assigned = self._scale_cpu(core_usage_map, core_map_journal, used_cores_sorted, used_cores, container_name, needed_shares)
 
                 # 2) Fill the completely free cores following core distribution order
                 completely_free_cores = [c for c in core_distribution if c not in used_cores and core_usage_map[c]["free"] == 100]
-                needed_shares, assigned = self._scale_cpu(core_usage_map, completely_free_cores, used_cores, container_name, needed_shares)
+                needed_shares, assigned = self._scale_cpu(core_usage_map, core_map_journal, completely_free_cores, used_cores, container_name, needed_shares)
 
                 # 3) Fill the remaining cores that are not completely free, following core distribution order
                 remaining_cores = [c for c in core_distribution if c not in used_cores and core_usage_map[c]["free"] < 100]
-                needed_shares, assigned = self._scale_cpu(core_usage_map, remaining_cores, used_cores, container_name, needed_shares)
+                needed_shares, assigned = self._scale_cpu(core_usage_map, core_map_journal, remaining_cores, used_cores, container_name, needed_shares)
 
                 if needed_shares > 0:
                     self.log_warning("Container {0} couldn't get as much CPU shares as intended ({1}), instead it got {2}"
-                                      .format(container_name, amount, amount - needed_shares))
+                                     .format(container_name, amount, amount - needed_shares))
                     amount = amount - needed_shares
 
             # RESCALE DOWN
@@ -394,12 +423,14 @@ class ContainerRequest(StructureRequest):
 
                 # 1) Free cores starting with the least used ones and following reverse core distribution order
                 least_used_cores = sorted(used_cores_sorted, key=lambda c: core_usage_map[c][container_name])
-                shares_to_free, freed = self._scale_cpu(core_usage_map, least_used_cores, used_cores, container_name, shares_to_free, scale_up=False)
+                shares_to_free, freed = self._scale_cpu(core_usage_map, core_map_journal, least_used_cores, used_cores, container_name, shares_to_free, scale_up=False)
 
                 if shares_to_free > 0:
                     raise ValueError("Error in setting cpu, couldn't free the resources properly")
 
             # No error thrown, so persist the new mapping to the cache
+            self.host_journal["core_map_journal"] = core_map_journal
+            self.host_journal["delta"] = -amount
             host_info["resources"]["cpu"]["core_usage_mapping"] = core_usage_map
             host_info["resources"]["cpu"]["free"] -= amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("cpu", {})["core_usage_mapping"] = core_usage_map
@@ -418,6 +449,7 @@ class ContainerRequest(StructureRequest):
             amount = min(amount, host_mem_free)
 
             # No error thrown, so persist the new mapping to the cache
+            self.host_journal["delta"] = -amount
             host_info["resources"]["mem"]["free"] -= amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("mem", {})["free"] = host_info["resources"]["mem"]["free"]
 
@@ -446,6 +478,8 @@ class ContainerRequest(StructureRequest):
             amount = min(amount, current_disk_free)  # Total available bandwidth
 
             # No error thrown, so persist the new mapping to the cache
+            self.host_journal["delta"] = -amount
+            self.host_journal["bound_disk"] = bound_disk
             host_info["resources"]["disks"][bound_disk]["free_read"] -= amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_read"] = host_info["resources"]["disks"][bound_disk]["free_read"]
 
@@ -474,6 +508,8 @@ class ContainerRequest(StructureRequest):
             amount = min(amount, current_disk_free)  # Total available bandwidth
 
             # No error thrown, so persist the new mapping to the cache
+            self.host_journal["delta"] = -amount
+            self.host_journal["bound_disk"] = bound_disk
             host_info["resources"]["disks"][bound_disk]["free_write"] -= amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_write"] = host_info["resources"]["disks"][bound_disk]["free_write"]
 
@@ -491,6 +527,7 @@ class ContainerRequest(StructureRequest):
             amount = min(amount, host_energy_free)
 
             # No error thrown, so persist the new mapping to the cache
+            self.host_journal["delta"] = -amount
             host_info["resources"]["energy"]["free"] -= amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("energy", {})["free"] = host_info["resources"]["energy"]["free"]
 
@@ -505,13 +542,14 @@ class ContainerRequest(StructureRequest):
         return {"net": {"net_limit": str(int(amount + current_net_limit))}}
 
     def execute(self, data_context, **kwargs):
+        # Get host changes and lock from kwargs, needed to update host free resources when applying the request
+        if "host_changes" not in kwargs:
+            raise ValueError("Host changes dictionary must be provided in kwargs to execute a container request")
+        if "host_lock" not in kwargs:
+            raise ValueError("Host lock must be provided in kwargs to execute a container request")
 
+        self.host_journal = {}
         try:
-            # Get host changes and lock from kwargs, needed to update host free resources when applying the request
-            if "host_changes" not in kwargs:
-                raise ValueError("Host changes dictionary must be provided in kwargs to execute a container request")
-            if "host_lock" not in kwargs:
-                raise ValueError("Host lock must be provided in kwargs to execute a container request")
             self.host_changes = kwargs["host_changes"]
             self.host_lock = kwargs["host_lock"]
 
@@ -550,15 +588,18 @@ class ContainerRequest(StructureRequest):
             if couchdb_thread:
                 couchdb_thread.join()  # Wait for the CouchDB update to finish before marking the request as applied
 
-            self.applied = True
+            success, self.applied = True, True
         except ValueError as e:
             self.log_error("Error with container {0} during request application -> {1}".format(self.structure_name, str(e)))
-            return False
+            success = False
         except HTTPError as e:
             self.log_error("Error setting container {0} resources -> {1}".format(self.structure_name, str(e)))
-            return False
+            success = False
         except Exception as e:
             self.log_error("Error with container {0} -> {1}".format(self.structure_name, str(e)))
-            return False
+            success = False
 
-        return True
+        if not success:
+            self._revert_host_changes(data_context, self._request["resource"], self._request["host"])
+
+        return success
