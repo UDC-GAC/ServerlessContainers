@@ -1,3 +1,6 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 import src.MyUtils.MyUtils as utils
 
 
@@ -36,16 +39,12 @@ class DataLoader:
     def get_structures_types_to_load(requests):
         # Check if there are user-level requests
         if any(r.get("structure_type") == "user" for r in requests):
-            return ["user", "application", "container"]
+            return ["container", "host", "application", "user"]
         # Check if there are application-level requests
         if any(r.get("structure_type") == "application" for r in requests):
-            return ["application", "container"]
-
-        ## Check if there are container-level requests
-        #if any(r.get("structure_type") == "container" for r in requests):
-        #    return ["container"]
-
-        return ["container"]
+            return ["container", "host", "application"]
+        # Containers and hosts are always needed
+        return ["container", "host"]
 
     @staticmethod
     def get_resources_to_load(requests):
@@ -57,37 +56,28 @@ class DataLoader:
 
         # Check which structure types are involved in current requests
         structures_to_load = self.get_structures_types_to_load(requests)
-        self.log_info(f"Structures to load based on requests: {structures_to_load}")
+        self.log_info("Structures to load based on requests: {0}".format(structures_to_load))
 
-        if "container" in structures_to_load:
-            # Load containers
-            if self._load_structures("container") is None:
-                self.log_error("Failed to load containers, cannot proceed")
-                return False
+        # Load data structures in parallel
+        futures = {}
+        with ThreadPoolExecutor() as executor:
+            for structure_type in structures_to_load:
+                futures[structure_type + "s"] = executor.submit(self._load_structures, structure_type)
 
-            # Load container resources
-            if self._load_container_resources() is None:
-                self.log_error("Failed to load container resources, cannot proceed")
-                return False
+        # Wait for containers to be loaded before proceeding with next loading methods (data dependency)
+        if futures["containers"].result() is None:
+            return False
 
-            # Hosts are needed to understand container topology
-            if self._load_structures("host") is None:
-                self.log_error("Failed to load hosts, cannot proceed")
-                return False
+        # Load container resources and usages if needed
+        with ThreadPoolExecutor() as executor:
+            if "container" in structures_to_load:
+                futures["container resources"] = executor.submit(self._load_container_resources)
+            if "application" in structures_to_load or "user" in structures_to_load:
+                futures["container usages"] = executor.submit(self._load_container_usages)
 
-        if "application" in structures_to_load:
-            if self._load_structures("application") is None:
-                self.log_error("Failed to load applications, cannot proceed")
-                return False
-
-        if "user" in structures_to_load:
-            if self._load_structures("user") is None:
-                self.log_error("Failed to load users, cannot proceed")
-                return False
-
-        if "application" in structures_to_load or "user" in structures_to_load:
-            if self._load_container_usages() is None:
-                self.log_error("Failed to load container usages, cannot proceed")
+        # Wait for all loading methods to finish
+        for data_type, future in futures.items():
+            if future.result() is None:
                 return False
 
         return True
@@ -102,17 +92,19 @@ class DataLoader:
         try:
             self.log_info(f"-> Loading {structure_type}s from CouchDB...")
 
+            t0 = time.time()
             data = utils.get_structures(self.couchdb_handler, self.debug, subtype=structure_type)
-
             if not data:
                 self.log_warning(f"No {structure_type} found in CouchDB")
                 cache = {}
             else:
                 cache = {structure["name"]: structure for structure in data}
-                self.log_info(f"Successfully loaded {len(cache)} {structure_type}s")
 
             self._cache[structure_type] = cache
             self._loaded[structure_type] = True
+
+            t1 = time.time()
+            self.log_info(f"\tLoaded {len(cache)} {structure_type}s in {t1 - t0:.2f} seconds")
 
             return cache
 
@@ -125,7 +117,6 @@ class DataLoader:
             return self._cache["container_resources"]
 
         self.log_info(f"-> Loading container resources limits from NodeRescaler...")
-
         try:
             if not self._loaded["container"]:
                 self.log_warning("Must load containers before loading container resources")
@@ -137,8 +128,9 @@ class DataLoader:
                 self._cache["container_resources"] = {}
                 return self._cache["container_resources"]
 
+            t0 = time.time()
 
-            cache = utils.get_container_resources_dict(self._cache["container"], self.rescaler_session, self.debug)
+            cache = utils.get_container_physical_resources(self._cache["container"].values(), self.needed_resources, self.rescaler_session, self.debug)
 
             if not cache:
                 self.log_error("Failed to get container resources")
@@ -147,7 +139,9 @@ class DataLoader:
             self._loaded["container_resources"] = True
             self._cache['container_resources'] = cache
 
-            self.log_info(f"Successfully loaded resources for {len(cache)} containers")
+            t1 = time.time()
+
+            self.log_info(f"\tLoaded resources for {len(cache)} containers in {t1 - t0:.2f} seconds")
             return cache
 
         except Exception as e:
@@ -171,6 +165,8 @@ class DataLoader:
                 self._cache["container_usages"] = {}
                 return self._cache["container_usages"]
 
+            t0 = time.time()
+
             metrics_to_retrieve, metrics_to_generate = utils.get_metrics_to_retrieve_and_generate(
                 list(self.needed_resources), "container")
 
@@ -188,7 +184,9 @@ class DataLoader:
             self._loaded["container_usages"] = True
             self._cache["container_usages"] = container_usages
 
-            self.log_info(f"Successfully loaded usages for {len(container_usages)} containers")
+            t1 = time.time()
+
+            self.log_info(f"\tLoaded usages for {len(container_usages)} containers in {t1 - t0:.2f} seconds")
             return container_usages
 
         except Exception as e:
