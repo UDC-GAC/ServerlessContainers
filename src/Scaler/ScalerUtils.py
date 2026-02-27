@@ -525,13 +525,11 @@ class ContainerRequest(StructureRequest):
                 amount = amount_for_current
                 _max = container["resources"][resource]["max"]
                 _current = self._get_resource_phy_limit(data_context, self.structure_name, resource)
+                # CAUTION!! This method updates container dictionary in data context, don't update "max" twice
                 couchdb_thread = self.update_max_in_couchdb(resource, amount, container)
 
                 # Print max scaling info
                 self.log_info("@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, _max, _max + amount))
-
-                # Update the 'max' value in the data context for future requests
-                container["resources"][resource]["max"] += amount
 
                 # If max is changed, 'current' will always be adjusted to max
                 amount_for_current = (_max + amount) - _current

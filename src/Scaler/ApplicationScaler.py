@@ -86,8 +86,8 @@ class ApplicationScaler(ContainerScaler):
         flattened_container_reqs = self.flatten_requests_by_structure(container_reqs)
         for cont_name, cont_req in flattened_container_reqs.items():
             total_amount = cont_req["amount"]
-            bogus_op = self._create_bogus_operation("container", cont_name, cont_req, resource, field, total_amount, priority)
-            success, child_requests, child_data = super().plan_operation(data_context, bogus_op)
+            bogus_op = self._create_bogus_operation(op_type, "container", cont_name, cont_req, resource, field, total_amount, priority)
+            success, child_requests, child_data = super().plan_operation(data_context, bogus_op, swap_part)
             if not success:
                 return False, [], None
 

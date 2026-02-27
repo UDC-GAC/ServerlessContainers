@@ -82,8 +82,8 @@ class UserScaler(ApplicationScaler):
         flattened_app_reqs = self.flatten_requests_by_structure(app_reqs)
         for app_name, app_req in flattened_app_reqs.items():
             total_amount = app_req["amount"]
-            bogus_op = self._create_bogus_operation("application", app_name, app_req, resource, field, total_amount, priority)
-            success, child_requests, child_data = super().plan_operation(data_context, bogus_op)
+            bogus_op = self._create_bogus_operation(op_type, "application", app_name, app_req, resource, field, total_amount, priority)
+            success, child_requests, child_data = super().plan_operation(data_context, bogus_op, swap_part)
             if not success:
                 return False, [], None
 

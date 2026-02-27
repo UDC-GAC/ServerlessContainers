@@ -381,13 +381,24 @@ def get_users(db_handler, debug):
         log_warning("Couldn't retrieve users info.", debug=debug)
         return None
 
+def get_data_structures(data_type, db_handler, debug):
+    try:
+        if data_type == "user":
+            return get_users(db_handler, debug)
+        elif data_type in {"container", "application", "host"}:
+            return get_structures(db_handler, debug, subtype=data_type)
+        else:
+            log_warning("Trying to get unknown data type '{0}'".format(data_type), debug)
+    except (requests.exceptions.HTTPError, ValueError):
+        log_warning("Couldn't retrieve {0} info.".format(data_type), debug=debug)
+    return None
 
 def get_data(structure_name, data_type, db_handler, debug):
     structure = None
     try:
         if data_type == "user":
             structure = db_handler.get_user(structure_name)
-        elif data_type == "container" or data_type == "application":
+        elif data_type in {"container", "application", "host"}:
             structure = db_handler.get_structure(structure_name)
         else:
             log_warning("Trying to get unknown data type '{0}'".format(data_type), debug)
@@ -558,8 +569,8 @@ def get_structure_usages(resources, structure, window_difference, window_delay, 
 
 def get_containers_info_from_rescaler(container_host_ip, container_host_port, needed_resources, rescaler_http_session, debug):
     try:
-        params = {resource: None for resource in needed_resources}
-        full_address = "http://{0}:{1}/container/resources".format(container_host_ip, container_host_port)
+        params = {resource: 1 for resource in needed_resources}
+        full_address = "http://{0}:{1}/container/resources/".format(container_host_ip, container_host_port)
         r = rescaler_http_session.get(full_address, params=params, headers={'Accept': 'application/json'})
         if r.status_code == 200:
             return dict(r.json())

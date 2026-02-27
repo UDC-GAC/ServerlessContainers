@@ -93,7 +93,7 @@ class DataLoader:
             self.log_info(f"-> Loading {structure_type}s from CouchDB...")
 
             t0 = time.time()
-            data = utils.get_structures(self.couchdb_handler, self.debug, subtype=structure_type)
+            data = utils.get_data_structures(structure_type, self.couchdb_handler, self.debug)
             if not data:
                 self.log_warning(f"No {structure_type} found in CouchDB")
                 cache = {}
@@ -171,13 +171,11 @@ class DataLoader:
                 list(self.needed_resources), "container")
 
             # Get the request usage for all the containers and cache it
-            container_usages = {}
-            for container_name in self._cache["container"]:
-                # TODO: Check if we can do this in a single request
-                container_usages[container_name] = self.bdwatchdog_handler.get_structure_timeseries(
-                    {"host": container_name}, 10, 20, metrics_to_retrieve, metrics_to_generate)
+            container_usages = self.bdwatchdog_handler.get_structure_timeseries_bulk(
+                "host", self._cache["container"].keys(), 10, 20, metrics_to_retrieve, metrics_to_generate)
 
-                # Populate containers cache with usage data
+            # Populate containers cache with usage data
+            for container_name in container_usages:
                 for resource in self.needed_resources:
                     self._cache["container"][container_name]["resources"][resource]["usage"] = container_usages[container_name][utils.res_to_metric(resource)]
 

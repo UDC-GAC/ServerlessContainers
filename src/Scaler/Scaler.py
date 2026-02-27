@@ -261,9 +261,8 @@ class Scaler(Service):
 
     def scale_structures(self, new_requests):
         try:
-            # Initialise execution context
-            self.data_context = self.data_loader.get_data_context()
-            self.original_data = deepcopy(self.data_context)  # Copy for execution phase
+            # Create a copy of data context for execution phase
+            self.original_data = deepcopy(self.data_context)
 
             # Initialise scalers with data context
             self.container_scaler = ContainerScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
@@ -313,6 +312,9 @@ class Scaler(Service):
             if not self.data_loader.load_data(new_requests):
                 self.log_error("Failed to load data, aborting all requests")
                 return thread
+
+            # Get data context
+            self.data_context = self.data_loader.get_data_context()
 
             t1 = time.time()
             self._print_time("Data loaded", t0, t1)

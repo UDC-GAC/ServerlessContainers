@@ -169,7 +169,8 @@ class BaseScaler(ABC):
                 donor_success, donor_requests, data_to_update = self.plan_operation(data_context_copy, op, "donor")
                 if donor_success:
                     receiver_success, receiver_requests, receiver_data = self.plan_operation(data_context_copy, op, "receiver")
-                    data_to_update.update(receiver_data)
+                    if receiver_success:
+                        data_to_update.update(receiver_data)
                 success = donor_success and receiver_success
                 generated_requests = donor_requests + receiver_requests
 

@@ -58,18 +58,21 @@ class ContainerScaler(BaseScaler):
         _max = container["resources"][resource]["max"]
         amount_for_current = request["amount"]
 
+
         # MAX SCALING: Check max is above min
+        scaled_max_amount = 0
         if request["field"] == "max":
             if _max + request["amount"] < _min:
-                scaled_amount = _max - _min
+                scaled_max_amount = _max - _min
                 self.log_warning("Container '{0}' cannot be scaled: max would be lower than min (aborting)".format(container["name"]))
             else:
-                scaled_amount = request["amount"]
-            _max += scaled_amount
+                scaled_max_amount = request["amount"]
+            _max += scaled_max_amount
+            container["resources"][resource]["max"] = _max
             amount_for_current = _max - _current
 
-            if scaled_amount == 0:
-                return scaled_amount
+            if scaled_max_amount == 0:
+                return scaled_max_amount
 
         # CURRENT SCALING: If "max" was previously scaled, "current" will be adjusted to max
         physical_limit = int(container_resources["resources"][resource].get(translation_dict[resource]))
@@ -87,19 +90,24 @@ class ContainerScaler(BaseScaler):
             self.log_warning("Trimming {0} value, new current {1} would be higher than max {2}".format(resource, new_value, _max))
 
         # Check if host has enough free resources for the new current value
-        scaled_amount = amount_for_current
+        scaled_current_amount = amount_for_current
         if amount_for_current > 0:
             success, missing_shares = self.check_host_has_enough_free_resources(container["host"], amount_for_current, resource, container)
-            scaled_amount = amount_for_current - missing_shares
+            scaled_current_amount = amount_for_current - missing_shares
 
-        container["resources"][resource]["current"] += scaled_amount
-        container_resources["resources"][resource][translation_dict[resource]] += scaled_amount
-        # If "current" scaling comes from a "max" scaling, update "max" to the final current level (they should be equal
-        # at this point, but in some cases "current" can be lower than "max" due to free host resources limitations)
+        container["resources"][resource]["current"] += scaled_current_amount
+        container_resources["resources"][resource][translation_dict[resource]] += scaled_current_amount
+
         if request["field"] == "max":
-            container["resources"][resource]["max"] = container["resources"][resource]["current"]
+            # If "current" scaling comes from a "max" scaling, and "current" could not be adjusted to "max" (due to free
+            # host resources limitations), update "max" to the final current level -> should only happen in scale-ups
+            if container["resources"][resource]["current"] != container["resources"][resource]["max"]:
+                scaled_max_amount -= container["resources"][resource]["max"] - container["resources"][resource]["current"]
+                container["resources"][resource]["max"] = container["resources"][resource]["current"]
 
-        return scaled_amount
+            return scaled_max_amount
+        else:
+            return scaled_current_amount
 
     def plan_operation(self, data_context, operation, swap_part=None):
         data_to_update = {"containers": {}, "container_resources": {}}
