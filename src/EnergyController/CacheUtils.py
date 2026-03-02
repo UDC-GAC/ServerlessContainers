@@ -85,7 +85,7 @@ class CPUAllocationCache:
 
     def reset_outdated(self, structure_id, value):
         with self._outdated_lock:
-            self._outdated_count[structure_id][value] = 0
+            self._outdated_count.setdefault(structure_id, {})[value] = 0
 
     def get_old(self, structure_id, read):
         return self._cache.get(structure_id, {}).get("old", read)
