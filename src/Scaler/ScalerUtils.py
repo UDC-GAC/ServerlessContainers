@@ -21,8 +21,9 @@ class ResourceOperation:
 
     def __repr__(self):
         unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "energy": "W"}
-        return "OPERATION: @{0} @{1} @{2} {3} @{4} -> @{5}".format(
-            self.op_type, self.resource, self.amount, unit[self.resource], self.donor, self.receiver)
+        return "{0} OPERATION: @{1} @{2} {3} @{4} {5} -> @{6}".format(self.scope.upper(), self.op_type,
+                                                                      self.resource, self.amount, unit[self.resource],
+                                                                      self.donor, self.receiver)
 
     # Compatibility with dict-like functions
     def get(self, key, default=None):
@@ -165,7 +166,7 @@ class StructureRequest:
             # Update 'max' value in data context for future requests
             structure["resources"][resource]["max"] = new_value
 
-            self.log_info("@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
+            self.log_info("\t@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
 
             self.applied = True
         except Exception as e:
@@ -228,17 +229,16 @@ class ContainerRequest(StructureRequest):
         return int(data_context.container_resources.get(container_name, {}).get("resources", {}).get(resource, {}).get(self.translate(resource)))
 
     @staticmethod
-    def _get_cpu_list(cpu_num_string):
+    def get_cpu_list(cpu_num_string):
         # Translate something like '2-4,7' to [2,3,7]
-        cpu_list = list()
-        parts = cpu_num_string.split(",")
-        for part in parts:
-            ranges = part.split("-")
-            if len(ranges) == 1:
-                cpu_list.append(ranges[0])
+        cpu_list = []
+        for part in cpu_num_string.split(","):
+            part = part.strip()
+            if "-" in part:
+                start, end = part.split("-")
+                cpu_list.extend(str(n) for n in range(int(start), int(end) + 1))
             else:
-                for n in range(int(ranges[0]), int(ranges[1]) + 1):
-                    cpu_list.append(str(n))
+                cpu_list.append(part)
         return cpu_list
 
     @staticmethod
@@ -372,7 +372,7 @@ class ContainerRequest(StructureRequest):
         # Get container info from NodeRescaler
         cont_phy_resources = data_context.container_resources.get(container_name, {})
         current_cpu_limit = self._get_resource_phy_limit(data_context, container_name, resource)
-        container_cpu_list = self._get_cpu_list(cont_phy_resources["resources"]["cpu"]["cpu_num"])
+        container_cpu_list = self.get_cpu_list(cont_phy_resources["resources"]["cpu"]["cpu_num"])
         used_cores = list(container_cpu_list)  # copy
 
         # Get CPU topology from host and generate core distribution
@@ -387,10 +387,8 @@ class ContainerRequest(StructureRequest):
             host_info = data_context.hosts.get(request["host"])
             core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
             host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
-            host_cpu_list = [str(i) for i in range(host_max_cores)]
-            for core in host_cpu_list:
-                core_usage_map.setdefault(core, {"free": 100})
-                core_usage_map[core].setdefault(container_name, 0)
+            for core in range(host_max_cores):
+                core_usage_map.setdefault(str(core), {"free": 100}).setdefault(container_name, 0)
 
             # RESCALE UP
             if amount > 0:
@@ -567,7 +565,7 @@ class ContainerRequest(StructureRequest):
                 couchdb_thread = self.update_max_in_couchdb(resource, amount, container)
 
                 # Print max scaling info
-                self.log_info("@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, _max, _max + amount))
+                self.log_info("\t@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, _max, _max + amount))
 
                 # If max is changed, 'current' will always be adjusted to max
                 amount_for_current = (_max + amount) - _current
@@ -580,7 +578,7 @@ class ContainerRequest(StructureRequest):
 
                 old_value = self._get_resource_phy_limit(data_context, self.structure_name, resource)
                 new_value = new_resources[resource][self.translate(resource)]
-                self.log_info("@{0} @{1} @current {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
+                self.log_info("\t@{0} @{1} @current {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
 
                 # Update container in data context (useful if there are multiple requests for the same container)
                 data_context.container_resources[self.structure_name]["resources"][resource] = new_resources[resource]

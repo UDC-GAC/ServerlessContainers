@@ -54,6 +54,7 @@ class Scaler(Service):
         self.rescaler_session = requests.Session()
         self.bdwatchdog_handler = bdwatchdog.OpenTSDBServer()
         self.host_info_cache, self.host_changes, self.container_info_cache = {}, {}, {}
+        self.invalid_containers = set()
 
         self.polling_frequency, self.request_timeout, self.check_core_map, self.active, self.debug = None, None, None, None, None
 
@@ -62,11 +63,35 @@ class Scaler(Service):
         self.data_loader, self.last_request_retrieval = None, None
 
     @staticmethod
-    def _split_requests_by_type(requests):
-        user_reqs = [r for r in requests if r["structure_type"] == "user"]
-        app_reqs = [r for r in requests if r["structure_type"] == "application"]
-        cont_reqs = [r for r in requests if r["structure_type"] == "container"]
+    def _split_requests_by_type(_requests):
+        user_reqs = [r for r in _requests if r["structure_type"] == "user"]
+        app_reqs = [r for r in _requests if r["structure_type"] == "application"]
+        cont_reqs = [r for r in _requests if r["structure_type"] == "container"]
         return user_reqs, app_reqs, cont_reqs
+
+    @staticmethod
+    def _get_resource_phy_limit(physical_resources, resource):
+        if resource not in TRANSLATION_DICT:
+            raise ValueError("Resource '{0}' unknown".format(resource))
+        else:
+            resource_translated = TRANSLATION_DICT[resource]
+
+        if resource not in physical_resources:
+            raise ValueError("Resource '{0}' info missing in NodeRescaler ({1})".format(resource, physical_resources))
+
+        if resource_translated not in physical_resources[resource]:
+            raise ValueError("Current value for resource '{0}' missing in NodeRescaler info".format(resource))
+
+        current_resource_limit = physical_resources[resource][resource_translated]
+
+        if current_resource_limit == -1:
+            raise ValueError("Resource {0} has not a 'current' value set, that is, it is unlimited".format(resource))
+        else:
+            try:
+                current_resource_limit = int(current_resource_limit)
+            except ValueError:
+                raise ValueError("Bad current {0} limit value (cannot be converted to int)".format(resource))
+        return current_resource_limit
 
     def _print_header(self, header):
         self.log_info("=" * 80)
@@ -136,7 +161,7 @@ class Scaler(Service):
         self.log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter))
         return final_requests
 
-    def _process_requests(self, _requests, method, op, host_changes, host_locks, max_tries=1):
+    def _process_requests(self, _requests, method, op, host_changes=None, host_locks=None, max_tries=1):
         removed, failed, tries = False, [], 0
         while _requests and tries < max_tries:
             tries += 1
@@ -145,8 +170,7 @@ class Scaler(Service):
                 for req in _requests:
                     kwargs = {}
                     if req.get_type() == "container":
-                        lock = host_locks.setdefault(req.host, Lock())
-                        kwargs = {"host_changes": host_changes, "host_lock": lock}
+                        kwargs = {"host_changes": host_changes, "host_lock": host_locks.setdefault(req.host, Lock())}
 
                     fn = getattr(req, method)
                     futures.append((executor.submit(fn, self.original_data, **kwargs), req))
@@ -190,7 +214,7 @@ class Scaler(Service):
         for hostname in self.original_data.hosts:
             if hostname in host_changes:
                 host = self.original_data.hosts[hostname]
-                t = Thread(target=persist_thread, args=(host, host_changes[hostname], self.couchdb_handler, self.debug))
+                t = Thread(target=persist_thread, args=(host, host_changes[hostname], self.couchdb_handler, False))
                 t.start()
                 threads.append(t)
             else:
@@ -230,25 +254,22 @@ class Scaler(Service):
         host_changes, host_locks = {}, {}
         t0 = time.time()
 
-        # Operation requests are executed in bottom-top order: Container -> Application -> User
+        # Operation requests are executed as they were planned: User -> Application -> Container
         for op in user_operations + app_operations + cont_operations:
             # Print operation info
             self.log_info(op)
 
-            # Process container requests
-            failed = self._process_requests(op.container_requests, method="execute", op=op,
-                                            host_changes=host_changes, host_locks=host_locks)
+            # Inside each operation bottom-up order is applied: Container -> Application -> User
+            failed = self._process_requests(op.container_requests, method="execute", op=op, host_changes=host_changes, host_locks=host_locks)
 
             # Process application and user requests only if all container requests have succeeded
             if not failed:
-                failed += self._process_requests(op.application_requests + op.user_requests, method="execute",
-                                                 op=op, host_changes=None, host_locks=None)
+                failed += self._process_requests(op.application_requests + op.user_requests, method="execute", op=op)
 
             # If some request has failed, rollback the full operation
             if failed:
                 # Rollback application and user requests
-                self._process_requests(reversed(op.application_executed_requests + op.user_executed_requests),
-                                       method="rollback", op=op, host_changes=None, host_locks=None, max_tries=3)
+                self._process_requests(reversed(op.application_executed_requests + op.user_executed_requests), method="rollback", op=op, max_tries=3)
 
                 # Rollback container requests
                 self._process_requests(reversed(op.container_executed_requests), method="rollback", op=op,
@@ -260,47 +281,44 @@ class Scaler(Service):
         self._print_time("Execution phase completed", t0, t1)
 
     def scale_structures(self, new_requests):
-        try:
-            # Create a copy of data context for execution phase
-            self.original_data = deepcopy(self.data_context)
+        # Create a copy of data context for execution phase
+        self.original_data = deepcopy(self.data_context)
 
-            # Initialise scalers with data context
-            self.container_scaler = ContainerScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
-            self.application_scaler = ApplicationScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
-            self.user_scaler = UserScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
+        # Initialise scalers with data context
+        self.container_scaler = ContainerScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
+        self.application_scaler = ApplicationScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
+        self.user_scaler = UserScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
 
-            # 1) PLANNING PHASE
-            self._print_header("PHASE 1: PLANNING")
-            # Split requests by structure type (user, application, container)
-            user_reqs, app_reqs, cont_reqs = self._split_requests_by_type(new_requests)
-            # Create atomic operations based on current requests
-            user_operations, app_operations, cont_operations = self.planning_phase(user_reqs, app_reqs, cont_reqs)
+        # 1) PLANNING PHASE
+        self._print_header("PHASE 1: PLANNING")
+        # Split requests by structure type (user, application, container)
+        user_reqs, app_reqs, cont_reqs = self._split_requests_by_type(new_requests)
+        # Create atomic operations based on current requests
+        user_operations, app_operations, cont_operations = self.planning_phase(user_reqs, app_reqs, cont_reqs)
 
-            # 2) EXECUTION PHASE
-            self._print_header("PHASE 2: EXECUTION")
-            # Execute atomic operations and rollback if some request fails
-            self.execution_phase(user_operations, app_operations, cont_operations)
-            # Remove requests from database
-            self._remove_requests(new_requests)
-
-        finally:
-            # Clean context for next iteration
-            self._reset_env()
+        # 2) EXECUTION PHASE
+        self._print_header("PHASE 2: EXECUTION")
+        # Execute atomic operations and rollback if some request fails
+        self.execution_phase(user_operations, app_operations, cont_operations)
+        # Remove requests from database
+        self._remove_requests(new_requests)
 
     def on_start(self):
         self.log_info("Purging any previous requests")
         self._filter_requests(0)
         self.log_info("----------------------\n")
 
-    def work(self,):
-        thread = None
+    def work_thread(self):
+        # Clean context from previous iteration
+        self._reset_env()
+
         try:
             # Get new requests
             new_requests = self._filter_requests(self.request_timeout)
 
             if not new_requests and not self.check_core_map:
                 self.log_info("No requests to process and core map check is not enabled, skipping epoch")
-                return thread
+                return
 
             t0 = time.time()
 
@@ -311,7 +329,7 @@ class Scaler(Service):
             self._print_header("LOADING DATA")
             if not self.data_loader.load_data(new_requests):
                 self.log_error("Failed to load data, aborting all requests")
-                return thread
+                return
 
             # Get data context
             self.data_context = self.data_loader.get_data_context()
@@ -326,13 +344,17 @@ class Scaler(Service):
         except (Exception, RuntimeError) as e:
             self.log_error("Error loading data, skipping epoch altogether")
             self.log_error(str(e))
-            return thread
+            return
 
         if not new_requests:
             self.log_info("No requests to process, skipping epoch")
-            return thread
+            return
 
-        thread = Thread(name="scale_structures", target=self.scale_structures, args=(new_requests,))
+        # Process new requests and scale structures
+        self.scale_structures(new_requests)
+
+    def work(self,):
+        thread = Thread(name="work_thread", target=self.work_thread)
         thread.start()
         return thread
 

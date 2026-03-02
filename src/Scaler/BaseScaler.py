@@ -76,23 +76,18 @@ class BaseScaler(ABC):
 
     @staticmethod
     def _apply_execution_priority(items):
-        def _intra_priority_order(_i):
+        def _priority(_i):
+            amount, field = _i.get("amount"), _i.get("field")
             # 1) First, "current" is scaled down to free host resources and ensure "max" scale-downs are valid
-            if _i.get("amount") < 0 and _i.get("field") == "current":
-                return 3
             # 2) Then, "max" is scaled down
-            elif _i.get("amount") < 0 and _i.get("field") == "max":
-                return 2
+            if amount < 0:
+                return 2 if field == "max" else 3
             # 3) Now "max" is scaled up first to give more "space" for "current" scale-ups
-            elif _i.get("amount") > 0 and _i.get("field") == "max":
-                return 1
             # 4) Then, "current" is scaled up
-            elif _i.get("amount") > 0 and _i.get("field") == "current":
-                return 0
-            else:
-                raise ValueError("Unexpected combination: {0}, {1}".format(_i.get("amount"), _i.get("field")))
-
-        return sorted(items, key=lambda _i: (_i.get("priority", 0), _intra_priority_order(_i)), reverse=True)
+            elif amount > 0:
+                return 1 if field == "max" else 0
+            raise ValueError("Amount is 0 for request {0}".format(_i))
+        return sorted(items, key=lambda _i: (_priority(_i), _i.get("priority", 0)), reverse=True)
 
     @staticmethod
     def distribute_splits(childs, splits, resource, field, priority, selector):
@@ -208,13 +203,5 @@ class BaseScaler(ABC):
 
         # Order operations and order generated requests inside each operation by execution priority
         sorted_operations = self._apply_execution_priority(final_operations)
-        for op in sorted_operations:
-            for structure_type in op.generated_requests:
-                op.generated_requests[structure_type] = self._apply_execution_priority(op.generated_requests[structure_type])
-
-            # Print operation info
-            self.log_info("Generated {0} operation with requests:".format(self.CURRENT_LEVEL))
-            for req in op.all_requests:
-                self.log_info("\t{0}".format(req))
 
         return sorted_operations

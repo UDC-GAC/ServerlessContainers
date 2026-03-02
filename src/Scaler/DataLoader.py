@@ -48,7 +48,7 @@ class DataLoader:
 
     @staticmethod
     def get_resources_to_load(requests):
-        return set([r.get("resource") for r in requests])
+        return {"cpu"}.union(set([r.get("resource") for r in requests]))
 
     def load_data(self, requests):
         # Save the needed resources and containers just in case BDWatchdog time series are later needed
