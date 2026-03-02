@@ -41,7 +41,10 @@ from src.Scaler.UserScaler import UserScaler
 from src.Scaler.DataLoader import DataLoader
 from src.MyUtils.ConfigValidator import ConfigValidator
 from src.Service.Service import Service
+from src.Scaler.ScalerUtils import ContainerRequest
 
+TRANSLATION_DICT = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk_read": "disk_read_limit",
+                    "disk_write": "disk_write_limit", "energy": "energy_limit"}
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "REQUEST_TIMEOUT": 60, "CHECK_CORE_MAP": True, "ACTIVE": True, "DEBUG": True}
 
@@ -105,6 +108,118 @@ class Scaler(Service):
     def _reset_env(self):
         self.execution_context, self.data_context, self.original_data = None, None, None
         self.container_scaler, self.application_scaler, self.user_scaler = None, None, None
+        self.invalid_containers = set()
+
+    # ----------------------------------- Core map checkers -----------------------------------
+
+    def _check_host_cpu_limits(self):
+        for host in self.data_context.hosts.values():
+            all_accounted_shares = sum(value for core in host["resources"]["cpu"]["core_usage_mapping"].values() for name, value in core.items() if name != "free")
+            if all_accounted_shares > host["resources"]["cpu"]["max"]:
+                utils.log_error("Host {0} has more mapped shares than its maximum".format(host["name"]), self.debug)
+                return True
+        return False
+
+    def _check_containers_cpu_limits(self,):
+        errors_detected = False
+        for container in self.data_context.containers.values():
+            database_resources = container["resources"]
+
+            if "max" not in database_resources["cpu"]:
+                errors_detected = True
+                self.log_error("Container {0} has not a maximum value set, check its configuration".format(container["name"]))
+                self.invalid_containers.add(container["name"])
+                continue
+
+            _max = database_resources["cpu"]["max"]
+            try:
+                physical_resources = self.data_context.container_resources.get(container["name"], {}).get("resources", {})
+                _current = self._get_resource_phy_limit(physical_resources, "cpu")
+                if _current > _max:
+                    self.log_error("Container {0} has, somehow, more shares ({1}) than the maximum ({2}), check the max"
+                                   " parameter in its configuration".format(container["name"], _current, _max))
+                    errors_detected = True
+            except KeyError:
+                self.log_error("Container {0} not found, maybe is down or has been desubscribed".format(container["name"]))
+                errors_detected = True
+            except ValueError as e:
+                self.log_error("Current value of structure {0} is not valid: {1}".format(container["name"], str(e)))
+                errors_detected = True
+
+            if errors_detected:
+                self.invalid_containers.add(container["name"])
+
+        return errors_detected
+
+    def _fix_container_core_mapping(self, container, used_cores, used_shares):
+        resource_dict = {"cpu": {"cpu_num": ",".join(used_cores), "cpu_allowance_limit": int(used_shares)}}
+        if used_shares <= 0:
+            self.log_warning("Container {0} core mapping not fixed because accounted shares are 0".format(container["name"]))
+            return False
+        try:
+            utils.set_container_physical_resources(self.rescaler_session, container, resource_dict, self.debug)
+        except Exception as e:
+            self.log_error("Error fixing container {0} core mapping: {1}".format(container["name"], str(e)))
+            return False
+        return True
+
+    def _check_container_core_mapping(self, container, physical_resources):
+        cont_name = container["name"]
+        errors_detected = False
+        if container["host"] not in self.data_context.hosts:
+            self.log_error("Host info '{0}' for container '{1}' is missing".format(container["host"], container["name"]))
+            return True
+        try:
+            current_cpu_limit = self._get_resource_phy_limit(physical_resources, "cpu")
+        except ValueError as e:
+            self.log_error(str(e))
+            return True
+
+        # Check container core mapping from NodeRescaler matches host core mapping in CouchDB
+        host_info = self.data_context.hosts.get(container["host"])
+        host_max_cores = host_info["resources"]["cpu"]["max"] // 100
+        container_core_list = ContainerRequest.get_cpu_list(physical_resources["cpu"]["cpu_num"])
+        accounted_shares, accounted_cores = 0, []
+        for core, usages in host_info["resources"]["cpu"]["core_usage_mapping"].items():
+            if int(core) >= host_max_cores:
+                continue
+            if usages.get(cont_name, 0) != 0:
+                accounted_shares += usages[cont_name]
+                accounted_cores.append(core)
+
+        # If container core mapping is not valid try to fix it
+        map_host_valid = (sorted(container_core_list) == sorted(accounted_cores) and current_cpu_limit == accounted_shares)
+        if not map_host_valid:
+            errors_detected = True
+            self.log_error("Detected invalid core mapping for container {0}, has {1}-{2}, should be {3}-{4}".format(
+                cont_name, container_core_list, current_cpu_limit, accounted_cores, accounted_shares))
+            self.log_error("Trying to automatically fix")
+            success = self._fix_container_core_mapping(container, accounted_cores, accounted_shares)
+            if success:
+                self.log_error("Container {0} core mapping successfully fixed".format(container["name"]))
+                errors_detected = False
+
+        return errors_detected
+
+    def _check_core_mapping(self,):
+        errors_detected = False
+        for container in self.data_context.containers.values():
+            c_name = container["name"]
+            self.log_info("Checking container {0}".format(c_name))
+            physical_resources = self.data_context.container_resources.get(c_name, {}).get("resources", {})
+            if not physical_resources:
+                errors_detected = True
+                self.invalid_containers.add(c_name)
+                self.log_error("Couldn't get container's {0} resources, can't check its sanity".format(c_name))
+                continue
+
+            failed = self._check_container_core_mapping(container, physical_resources)
+            if failed:
+                self.invalid_containers.add(c_name)
+                errors_detected = True
+        return errors_detected
+
+    # ----------------------------------- Request processing -----------------------------------
 
     def _filter_requests(self, request_timeout):
         fresh_requests, purged_requests, final_requests = [], [], []
@@ -338,11 +453,35 @@ class Scaler(Service):
             self._print_time("Data loaded", t0, t1)
 
             if self.check_core_map:
+                t0 = time.time()
                 self._print_header("CHECKING CORE MAP")
-                # TODO: Add core map checking here
+                self.log_info("Checking host CPU limits")
+                failed = False
+                failed = failed or self._check_host_cpu_limits()
+
+                self.log_info("Checking containers CPU limits ")
+                failed = failed or self._check_containers_cpu_limits()
+
+                self.log_info("Checking containers core maps")
+                failed = failed or self._check_core_mapping()
+
+                # Don't process requests involving invalid containers in this iteration
+                if failed:
+                    reqs_before = len(new_requests)
+                    new_requests = [r for r in new_requests if r.get("structure") not in self.invalid_containers]
+                    reqs_after = len(new_requests)
+                    skipped_reqs = reqs_before - reqs_after
+                    if skipped_reqs > 0:
+                        self.log_warning("Skipping {0} requests because some containers info is not consistent: {1}"
+                                         .format(reqs_before - reqs_after, self.invalid_containers))
+
+                t1 = time.time()
+                self._print_time("Core map checked", t0, t1)
+            else:
+                self.log_warning("Core map check has been disabled")
 
         except (Exception, RuntimeError) as e:
-            self.log_error("Error loading data, skipping epoch altogether")
+            self.log_error("Error loading data or during core map checking, skipping epoch altogether")
             self.log_error(str(e))
             return
 
