@@ -157,7 +157,11 @@ class BaseRebalancer(ABC):
             request = child_requests.pop(0)
             # Look for childs that can be rescaled
             if request["amount"] < 0:
-                scalable_childs = [s for s in childs if s["resources"][resource]["max"] + request["amount"] > s["resources"][resource]["min"]]
+                scalable_childs = []
+                for s in childs:
+                    lower_limit = 0 if self.REBALANCING_LEVEL == "application" and not s.get("running", False) else s["resources"][resource]["min"]
+                    if s["resources"][resource]["max"] + request["amount"] >= lower_limit:
+                        scalable_childs.append(s)
             else:
                 scalable_childs = childs
 
