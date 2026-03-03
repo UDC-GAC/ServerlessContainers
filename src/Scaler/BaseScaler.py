@@ -115,7 +115,7 @@ class BaseScaler(ABC):
             return True
         return False
 
-    def update_request(self, request, scaled_amount):
+    def update_request_amount(self, request, scaled_amount):
         if scaled_amount != request["amount"]:
             self.log_warning("Structure '{0}' scaling could not be fully planned, only {1} shares out of {2}"
                              .format(request["structure"], scaled_amount, request["amount"]))
@@ -174,7 +174,7 @@ class BaseScaler(ABC):
             if op.op_type == "SCALE_DOWN":
                 success, generated_requests, data_to_update = self.plan_operation(data_context_copy, op)
 
-            if success:
+            if success and generated_requests:
                 # Add generated requests to operations
                 op.add_requests(generated_requests)
                 # Update data context as operation was successful

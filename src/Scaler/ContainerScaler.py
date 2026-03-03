@@ -108,7 +108,7 @@ class ContainerScaler(BaseScaler):
             return scaled_current_amount
 
     def plan_operation(self, data_context, operation, swap_part=None):
-        data_to_update = {"containers": {}, "container_resources": {}}
+        final_requests, data_to_update = [], {"containers": {}, "container_resources": {}}
 
         # Get info from operation
         op_type, resource = operation.op_type, operation.resource
@@ -126,11 +126,12 @@ class ContainerScaler(BaseScaler):
         scaled_amount = self.check_container_request(container, container_resources, container_request)
         if self.op_should_be_aborted(op_type, container_request, scaled_amount):
             return False, [], None
-        self.update_request(container_request, scaled_amount)
+        self.update_request_amount(container_request, scaled_amount)
 
         # Create final container request and set data that has been updated
-        final_requests = [ContainerRequest(container_request, self.couchdb_handler, self.rescaler_session, self.debug)]
-        data_to_update["containers"][structure_name] = container
-        data_to_update["container_resources"][structure_name] = container_resources
+        if container_request["amount"] != 0:
+            final_requests = [ContainerRequest(container_request, self.couchdb_handler, self.rescaler_session, self.debug)]
+            data_to_update["containers"][structure_name] = container
+            data_to_update["container_resources"][structure_name] = container_resources
 
         return True, final_requests, data_to_update

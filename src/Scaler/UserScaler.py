@@ -75,7 +75,7 @@ class UserScaler(ApplicationScaler):
             return False, [], None
 
         # Update user data with the final scaled amount
-        self.update_request(user_request, scaled_amount)
+        self.update_request_amount(user_request, scaled_amount)
         user["resources"][resource][field] += scaled_amount
 
         # Check generated application requests can be fully performed
@@ -98,8 +98,9 @@ class UserScaler(ApplicationScaler):
                 user["resources"][resource][field] -= (app_amount - app_scaled_amount)
 
         # Add user request and data to update
-        final_requests.append(UserRequest(user_request, self.couchdb_handler, self.rescaler_session, self.debug))
-        data_to_update["users"][structure_name] = user
+        if user_request["amount"]:
+            final_requests.append(UserRequest(user_request, self.couchdb_handler, self.rescaler_session, self.debug))
+            data_to_update["users"][structure_name] = user
 
         return True, final_requests, data_to_update
 

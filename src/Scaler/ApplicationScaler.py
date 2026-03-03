@@ -80,7 +80,7 @@ class ApplicationScaler(ContainerScaler):
             return False, [], None
 
         # Update application data with the final scaled amount
-        self.update_request(app_request, scaled_amount)
+        self.update_request_amount(app_request, scaled_amount)
         application["resources"][resource][field] += scaled_amount
 
         # Check generated container requests can be fully performed
@@ -103,7 +103,8 @@ class ApplicationScaler(ContainerScaler):
                 application["resources"][resource][field] -= (container_amount - container_scaled_amount)
 
         # Add application request and data to update
-        final_requests.append(ApplicationRequest(app_request, self.couchdb_handler, self.rescaler_session, self.debug))
-        data_to_update["applications"][structure_name] = application
+        if app_request["amount"] != 0:
+            final_requests.append(ApplicationRequest(app_request, self.couchdb_handler, self.rescaler_session, self.debug))
+            data_to_update["applications"][structure_name] = application
 
         return True, final_requests, data_to_update
