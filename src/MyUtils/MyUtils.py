@@ -567,29 +567,44 @@ def get_structure_usages(resources, structure, window_difference, window_delay, 
     return usages
 
 
-def get_containers_info_from_rescaler(container_host_ip, container_host_port, needed_resources, rescaler_http_session, debug):
+def query_node_rescaler(rescaler_session, address, params, debug):
     try:
-        params = {resource: 1 for resource in needed_resources}
-        full_address = "http://{0}:{1}/container/resources/".format(container_host_ip, container_host_port)
-        r = rescaler_http_session.get(full_address, params=params, headers={'Accept': 'application/json'})
+        r = rescaler_session.get(address, params=params, headers={'Accept': 'application/json'})
         if r.status_code == 200:
             return dict(r.json())
         else:
             r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        log_error("Error trying to get container info {0} {1}".format(str(e), traceback.format_exc()), debug)
+        log_error("Error trying to get containers info {0} {1}".format(str(e), traceback.format_exc()), debug)
         return None
 
-def fill_container_dict(hosts_targets, needed_resources, rescaler_http_session, debug):
+
+def get_single_container_info_from_rescaler(container_host_ip, container_host_port, container_name, needed_resources, rescaler_session, debug):
+    params = {resource: 1 for resource in needed_resources}
+    full_address = "http://{0}:{1}/container/resources/{2}".format(container_host_ip, container_host_port, container_name)
+    return query_node_rescaler(rescaler_session, full_address, params, debug)
+
+
+def get_containers_info_from_rescaler(container_host_ip, container_host_port, needed_resources, rescaler_session, debug):
+    params = {resource: 1 for resource in needed_resources}
+    full_address = "http://{0}:{1}/container/resources/".format(container_host_ip, container_host_port)
+    return query_node_rescaler(rescaler_session, full_address, params, debug)
+
+
+def fill_container_dict(hosts_targets, needed_resources, rescaler_session, debug):
     def _req(_ip, _port, _resources, _info, _valid, _session, _debug):
-        host_containers = get_containers_info_from_rescaler(_ip, _port, _resources, _session, _debug)
+        if len(_valid) == 1:
+            cont_name = next(iter(_valid))
+            host_containers = {cont_name: get_single_container_info_from_rescaler(_ip, _port, next(iter(_valid)), _resources, _session, _debug)}
+        else:
+            host_containers = get_containers_info_from_rescaler(_ip, _port, _resources, _session, _debug)
         for cont_name in host_containers:
             if cont_name in _valid:
                 _info[cont_name] = host_containers[cont_name]
 
     threads, container_info = [], {}
     for (host_ip, host_port), valid_containers in hosts_targets.items():
-        t = Thread(target=_req, args=(host_ip, host_port, needed_resources, container_info, valid_containers, rescaler_http_session, debug))
+        t = Thread(target=_req, args=(host_ip, host_port, needed_resources, container_info, valid_containers, rescaler_session, debug))
         t.start()
         threads.append(t)
 
@@ -599,7 +614,7 @@ def fill_container_dict(hosts_targets, needed_resources, rescaler_http_session, 
     return container_info
 
 
-def get_container_physical_resources(containers, needed_resources, rescaler_http_session, debug):
+def get_container_physical_resources(containers, needed_resources, rescaler_session, debug):
     if not containers:
         return {}
 
@@ -609,7 +624,7 @@ def get_container_physical_resources(containers, needed_resources, rescaler_http
         hosts_targets.setdefault(host_key, set()).add(c["name"])
 
     # Retrieve all the containers on the host and persist the ones that we look for
-    container_info = fill_container_dict(hosts_targets, needed_resources, rescaler_http_session, debug)
+    container_info = fill_container_dict(hosts_targets, needed_resources, rescaler_session, debug)
     cont_phy_resources = {}
     for container in containers:
         container_name = container["name"]
@@ -626,12 +641,12 @@ def get_container_physical_resources(containers, needed_resources, rescaler_http
     return cont_phy_resources
 
 
-def set_container_physical_resources(node_scaler_session, container, resources, debug):
+def set_container_physical_resources(rescaler_session, container, resources, debug):
     rescaler_ip = container["host_rescaler_ip"]
     rescaler_port = container["host_rescaler_port"]
     container_name = container["name"]
-    r = node_scaler_session.put("http://{0}:{1}/container/{2}".format(rescaler_ip, rescaler_port, container_name),
-                                data=json.dumps(resources), headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
+    r = rescaler_session.put("http://{0}:{1}/container/{2}".format(rescaler_ip, rescaler_port, container_name),
+                             data=json.dumps(resources), headers={'Content-Type': 'application/json', 'Accept': 'application/json'})
     if r.status_code == 201:
         return dict(r.json())
     else:

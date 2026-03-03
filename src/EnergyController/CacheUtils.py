@@ -53,7 +53,7 @@ class EventsCache:
                     entry["counts"][direction] -= 1
 
 
-class PowerBudgetCache:
+class ResourceCache:
 
     def __init__(self):
         self._cache = LRUCache(maxsize=128)
@@ -63,35 +63,8 @@ class PowerBudgetCache:
         with self._lock:
             self._cache[structure_id] = pb
 
+    def get(self, structure_id, default=None):
+        return self._cache.get(structure_id, default)
+
     def is_new(self, structure_id, pb):
         return structure_id not in self._cache
-
-
-class CPUAllocationCache:
-
-    def __init__(self):
-        self._cache = LRUCache(maxsize=128)
-        self._outdated_count = LRUCache(maxsize=128)
-        self._outdated_max = 3
-        self._cache_lock,self._outdated_lock = Lock(), Lock()
-
-    def add(self, structure_id, old, new):
-        with self._cache_lock:
-            self._cache[structure_id] = {"old": old, "new": new}
-
-    def count_outdated(self, structure_id, value):
-        with self._outdated_lock:
-            self._outdated_count.setdefault(structure_id, {})[value] = self._outdated_count.get(structure_id, {}).get(value, 0) + 1
-
-    def reset_outdated(self, structure_id, value):
-        with self._outdated_lock:
-            self._outdated_count.setdefault(structure_id, {})[value] = 0
-
-    def get_old(self, structure_id, read):
-        return self._cache.get(structure_id, {}).get("old", read)
-
-    def get_new(self, structure_id, read):
-        return self._cache.get(structure_id, {}).get("new", read)
-
-    def get_outdated_count(self, structure_id, value):
-        return self._outdated_count.get(structure_id, {}).get(value, 0)
