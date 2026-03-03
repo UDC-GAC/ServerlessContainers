@@ -24,6 +24,7 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 import requests
+from requests.exceptions import HTTPError
 from flask import Blueprint
 from flask import abort
 from flask import jsonify
@@ -460,7 +461,7 @@ def desubscribe_container(structure_name):
         disable_scaler(scaler_service)
 
     success, tries, max_tries = False, 0, 10
-    couchdb_error = None
+    error = None
     while not success and tries < max_tries:
         try:
             # Free host resources used by this container
@@ -468,15 +469,20 @@ def desubscribe_container(structure_name):
             changes = free_container_resources(container, host)
             get_db().safe_update_structure(host, changes)
             success = True
-        except Exception as e:
+        except HTTPError as e:
             tries += 1
-            couchdb_error = str(e)
-            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
+            error = str(e)
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
             time.sleep(BACK_OFF_TIME_MS / 1000)
+        except Exception as e:
+            tries = max_tries
+            error = str(e)
+            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
+            break
 
     if tries >= max_tries:
         restore_scaler_state(scaler_service, previous_state)
-        return abort(400, {"message": "ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, couchdb_error)})
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -690,7 +696,7 @@ def subscribe_container(structure_name):
 
     # Get the host info
     success, tries, max_tries = False, 0, 10
-    couchdb_error = None
+    error = None
     while not success and tries < max_tries:
         try:
             host = get_db().get_structure(container["host"])
@@ -710,17 +716,22 @@ def subscribe_container(structure_name):
                 get_db().add_limit(limits)
 
             success = True
-        except Exception as e:
+        except HTTPError as e:
             tries += 1
-            couchdb_error = str(e)
-            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
+            error = str(e)
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
             time.sleep(BACK_OFF_TIME_MS / 1000)
+        except Exception as e:
+            tries = max_tries
+            error = str(e)
+            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
+            break
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
 
     if tries >= max_tries:
-        return abort(400, {"message": "ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, couchdb_error)})
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
 
     return jsonify(201)
 
