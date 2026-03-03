@@ -316,7 +316,7 @@ class Scaler(Service):
                     thread.start()
                     threads.append(thread)
                 except Exception as e:
-                    self.log_error(f"Failed to remove request {req}: {str(e)}")
+                    self.log_error("Failed to remove request {0}: {1}".format(req, str(e)))
                     continue
 
         for thread in threads:
@@ -374,20 +374,12 @@ class Scaler(Service):
             # Print operation info
             self.log_info(op)
 
-            # Inside each operation bottom-up order is applied: Container -> Application -> User
-            failed = self._process_requests(op.container_requests, method="execute", op=op, host_changes=host_changes, host_locks=host_locks)
+            # Inside each operation all requests are executed in parallel
+            failed = self._process_requests(op.all_requests, method="execute", op=op, host_changes=host_changes, host_locks=host_locks)
 
-            # Process application and user requests only if all container requests have succeeded
-            if not failed:
-                failed += self._process_requests(op.application_requests + op.user_requests, method="execute", op=op)
-
-            # If some request has failed, rollback the full operation
+            # If any request has failed, rollback the full operation
             if failed:
-                # Rollback application and user requests
-                self._process_requests(reversed(op.application_executed_requests + op.user_executed_requests), method="rollback", op=op, max_tries=3)
-
-                # Rollback container requests
-                self._process_requests(reversed(op.container_executed_requests), method="rollback", op=op,
+                self._process_requests(reversed(op.executed_requests), method="rollback", op=op,
                                        host_changes=host_changes, host_locks=host_locks, max_tries=3)
 
         self._persist_new_host_information(host_changes)
@@ -423,7 +415,12 @@ class Scaler(Service):
         self._filter_requests(0)
         self.log_info("----------------------\n")
 
-    def work_thread(self):
+    def compute_sleep_time(self):
+        return self.polling_frequency - (time.time() % self.polling_frequency)
+
+    def work(self,):
+        thread = None
+
         # Clean context from previous iteration
         self._reset_env()
 
@@ -433,27 +430,25 @@ class Scaler(Service):
 
             if not new_requests and not self.check_core_map:
                 self.log_info("No requests to process and core map check is not enabled, skipping epoch")
-                return
+                return thread
 
-            t0 = time.time()
-
-            # Initialise data loader
-            self.data_loader = DataLoader(self.couchdb_handler, self.bdwatchdog_handler, self.rescaler_session, self.debug)
+            t0_data = time.time()
 
             # Load data
             self._print_header("LOADING DATA")
+            self.data_loader = DataLoader(self.couchdb_handler, self.bdwatchdog_handler, self.rescaler_session, self.debug)
             if not self.data_loader.load_data(new_requests):
                 self.log_error("Failed to load data, aborting all requests")
-                return
+                return thread
 
             # Get data context
             self.data_context = self.data_loader.get_data_context()
 
-            t1 = time.time()
-            self._print_time("Data loaded", t0, t1)
+            t1_data = time.time()
+            self._print_time("Data loaded", t0_data, t1_data)
 
             if self.check_core_map:
-                t0 = time.time()
+                t0_core_map = time.time()
                 self._print_header("CHECKING CORE MAP")
                 self.log_info("Checking host CPU limits")
                 failed = False
@@ -475,25 +470,21 @@ class Scaler(Service):
                         self.log_warning("Skipping {0} requests because some containers info is not consistent: {1}"
                                          .format(reqs_before - reqs_after, self.invalid_containers))
 
-                t1 = time.time()
-                self._print_time("Core map checked", t0, t1)
+                t1_core_map = time.time()
+                self._print_time("Core map checked", t0_core_map, t1_core_map)
             else:
                 self.log_warning("Core map check has been disabled")
 
         except (Exception, RuntimeError) as e:
-            self.log_error("Error loading data or during core map checking, skipping epoch altogether")
+            self.log_error("Error loading data, skipping epoch altogether")
             self.log_error(str(e))
-            return
+            return thread
 
         if not new_requests:
             self.log_info("No requests to process, skipping epoch")
-            return
+            return thread
 
-        # Process new requests and scale structures
-        self.scale_structures(new_requests)
-
-    def work(self,):
-        thread = Thread(name="work_thread", target=self.work_thread)
+        thread = Thread(name="scale_structures", target=self.scale_structures, args=(new_requests,))
         thread.start()
         return thread
 

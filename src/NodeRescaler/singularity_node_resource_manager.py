@@ -143,9 +143,7 @@ class SingularityContainerManager:
 
                     # TODO: maybe pass disk path as parameter from an HTTP request instead of getting it here
                     command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], CONTAINER_MOUNT_POINT)
-                    output,error  = subprocess.Popen(
-                                        command, universal_newlines=True, shell=True,
-                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
+                    output, error = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
                     source = output.split()[5]
                     if ":" in source:
                         ## Device mounted on NFS

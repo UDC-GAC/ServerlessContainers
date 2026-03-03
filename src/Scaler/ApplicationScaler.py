@@ -78,6 +78,7 @@ class ApplicationScaler(ContainerScaler):
         container_reqs, scaled_amount = self.propagate_application_request(application, containers_copy, app_request)
         if self.op_should_be_aborted(op_type, app_request, scaled_amount):
             return False, [], None
+
         # Update application data with the final scaled amount
         self.update_request(app_request, scaled_amount)
         application["resources"][resource][field] += scaled_amount
@@ -85,8 +86,8 @@ class ApplicationScaler(ContainerScaler):
         # Check generated container requests can be fully performed
         flattened_container_reqs = self.flatten_requests_by_structure(container_reqs)
         for cont_name, cont_req in flattened_container_reqs.items():
-            total_amount = cont_req["amount"]
-            bogus_op = self._create_bogus_operation(op_type, "container", cont_name, cont_req, resource, field, total_amount, priority)
+            container_amount = cont_req["amount"]
+            bogus_op = self._create_bogus_operation(op_type, "container", cont_name, cont_req, resource, field, container_amount, priority)
             success, child_requests, child_data = super().plan_operation(data_context, bogus_op, swap_part)
             if not success:
                 return False, [], None
@@ -96,10 +97,10 @@ class ApplicationScaler(ContainerScaler):
             final_requests.extend(child_requests)
 
             # Update application data with the final scaled amount
-            scaled_amount = sum([r.request["amount"] for r in child_requests if r.get_type() == "container"])
-            if scaled_amount != total_amount:
-                app_request["amount"] -= (total_amount - scaled_amount)
-                application["resources"][resource][field] -= (total_amount - scaled_amount)
+            container_scaled_amount = sum([r.request["amount"] for r in child_requests if r.get_type() == "container"])
+            if container_scaled_amount != container_amount:
+                app_request["amount"] -= (container_amount - container_scaled_amount)
+                application["resources"][resource][field] -= (container_amount - container_scaled_amount)
 
         # Add application request and data to update
         final_requests.append(ApplicationRequest(app_request, self.couchdb_handler, self.rescaler_session, self.debug))

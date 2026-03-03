@@ -1,3 +1,4 @@
+import time
 from requests import HTTPError
 from threading import Thread
 
@@ -21,7 +22,7 @@ class ResourceOperation:
 
     def __repr__(self):
         unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "energy": "W"}
-        return "{0} OPERATION: @{1} @{2} {3} @{4} {5} -> @{6}".format(self.scope.upper(), self.op_type,
+        return "{0} OPERATION: @{1} @{2} @{3} {4} {5} -> @{6}".format(self.scope.upper(), self.op_type,
                                                                       self.resource, self.amount, unit[self.resource],
                                                                       self.donor, self.receiver)
 
@@ -144,7 +145,7 @@ class StructureRequest:
         # Update 'max' in CouchDB
         thread = Thread(name="update_{0}".format(database_resources["name"]), target=utils.update_resource_in_couchdb,
                         args=(database_resources, resource, "max", new_value, self.couchdb_handler, False),
-                        kwargs={"max_tries": 5, "backoff_time_ms": 500})
+                        kwargs={"max_tries": 5, "backoff_time_ms": 100})
         thread.start()
 
         return thread
@@ -152,6 +153,7 @@ class StructureRequest:
     def execute(self, data_context, **kwargs):
         #thread = None
         try:
+            t0 = time.time()
             resource = self._request["resource"]
 
             # Get structure info from data context
@@ -161,12 +163,12 @@ class StructureRequest:
             #thread = self.update_max_in_couchdb(resource, amount, structure)
             utils.update_resource_in_couchdb(structure, resource, "max", new_value,
                                              self.couchdb_handler, False,
-                                             max_tries=5, backoff_time_ms=500)
+                                             max_tries=5, backoff_time_ms=100)
 
             # Update 'max' value in data context for future requests
             structure["resources"][resource]["max"] = new_value
-
-            self.log_info("\t@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
+            t1 = time.time()
+            self.log_info("\t@{0} @{1} @max  {2} -> {3} [{4:.2f} seconds]".format(self.structure_name, resource, old_value, new_value, t1 - t0))
 
             self.applied = True
         except Exception as e:
@@ -556,21 +558,21 @@ class ContainerRequest(StructureRequest):
             container = data_context.containers.get(self.structure_name, {})
             amount_for_current = int(self.amount)
 
+
             # If 'max' is changed it is updated in CouchDB and 'current' is adjusted accordingly
             if field == "max":
+                t0_couchdb = time.time()
                 amount = amount_for_current
                 _max = container["resources"][resource]["max"]
                 _current = self._get_resource_phy_limit(data_context, self.structure_name, resource)
                 # CAUTION!! This method updates container dictionary in data context, don't update "max" twice
                 couchdb_thread = self.update_max_in_couchdb(resource, amount, container)
 
-                # Print max scaling info
-                self.log_info("\t@{0} @{1} @max  {2} -> {3}".format(self.structure_name, resource, _max, _max + amount))
-
                 # If max is changed, 'current' will always be adjusted to max
                 amount_for_current = (_max + amount) - _current
 
             # Update container "current" value getting host free resources
+            t0 = time.time()
             new_resources = self.apply_request_by_resource[resource](self._request, amount_for_current, data_context)
             if new_resources:
                 # Apply changes through a REST call to NodeRescaler
@@ -578,13 +580,19 @@ class ContainerRequest(StructureRequest):
 
                 old_value = self._get_resource_phy_limit(data_context, self.structure_name, resource)
                 new_value = new_resources[resource][self.translate(resource)]
-                self.log_info("\t@{0} @{1} @current {2} -> {3}".format(self.structure_name, resource, old_value, new_value))
+
 
                 # Update container in data context (useful if there are multiple requests for the same container)
                 data_context.container_resources[self.structure_name]["resources"][resource] = new_resources[resource]
 
+                t1 = time.time()
+                self.log_info("\t@{0} @{1} @current {2} -> {3} [{4:.2f} seconds]".format(self.structure_name, resource, old_value, new_value, t1 - t0))
+
             if couchdb_thread:
                 couchdb_thread.join()  # Wait for the CouchDB update to finish before marking the request as applied
+                t1_couchdb = time.time()
+                # Print max scaling info
+                self.log_info("\t@{0} @{1} @max  {2} -> {3} [{4:.2f} seconds]".format(self.structure_name, resource, _max, _max + amount, t1_couchdb - t0_couchdb))
 
             success, self.applied = True, True
         except ValueError as e:
@@ -598,6 +606,7 @@ class ContainerRequest(StructureRequest):
             success = False
 
         if not success:
+            # TODO: Save max and current before changes and check if they have been changed here to revert changes
             self._revert_host_changes(data_context, self._request["resource"], self._request["host"])
 
         return success

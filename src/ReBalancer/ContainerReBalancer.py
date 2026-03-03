@@ -296,9 +296,6 @@ class ContainerRebalancer(BaseRebalancer):
 
         # APPLICATION SCOPE: Balancing the resources between containers of the same application
         if self.containers_scope == "application":
-
-
-
             # Filter out the ones that do not accept rebalancing or that do not need any internal rebalancing
             rebalanceable_apps = self.filter_rebalanceable_apps(applications)
             if not rebalanceable_apps:

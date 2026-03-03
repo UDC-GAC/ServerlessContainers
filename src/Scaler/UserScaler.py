@@ -81,8 +81,8 @@ class UserScaler(ApplicationScaler):
         # Check generated application requests can be fully performed
         flattened_app_reqs = self.flatten_requests_by_structure(app_reqs)
         for app_name, app_req in flattened_app_reqs.items():
-            total_amount = app_req["amount"]
-            bogus_op = self._create_bogus_operation(op_type, "application", app_name, app_req, resource, field, total_amount, priority)
+            app_amount = app_req["amount"]
+            bogus_op = self._create_bogus_operation(op_type, "application", app_name, app_req, resource, field, app_amount, priority)
             success, child_requests, child_data = super().plan_operation(data_context, bogus_op, swap_part)
             if not success:
                 return False, [], None
@@ -92,10 +92,10 @@ class UserScaler(ApplicationScaler):
             final_requests.extend(child_requests)
 
             # Update user data with the final scaled amount
-            scaled_amount = sum([r.request["amount"] for r in child_requests if r.get_type() == "application"])
-            if scaled_amount != total_amount:
-                user_request["amount"] -= (total_amount - scaled_amount)
-                user["resources"][resource][field] -= (total_amount - scaled_amount)
+            app_scaled_amount = sum([r.request["amount"] for r in child_requests if r.get_type() == "application"])
+            if app_scaled_amount != app_amount:
+                user_request["amount"] -= (app_amount - app_scaled_amount)
+                user["resources"][resource][field] -= (app_amount - app_scaled_amount)
 
         # Add user request and data to update
         final_requests.append(UserRequest(user_request, self.couchdb_handler, self.rescaler_session, self.debug))

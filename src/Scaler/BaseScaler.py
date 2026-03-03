@@ -91,7 +91,7 @@ class BaseScaler(ABC):
 
     @staticmethod
     def distribute_splits(childs, splits, resource, field, priority, selector):
-        success, scaled_amount, generated_requests, received = True, 0, {}, {}
+        success, scaled_amount, generated_requests = True, 0, {}
         while success and len(splits) > 0:
             amount = splits.pop(0)
             success, best_child, generated_request = selector(childs, amount, resource, field, priority)
@@ -102,7 +102,6 @@ class BaseScaler(ABC):
                 generated_requests.setdefault(child_name, []).append(generated_request)
 
                 # Update the child's resources for next iteration
-                received[child_name] = received.get(child_name, 0) + amount
                 best_child["resources"][resource][field] += amount
                 childs[child_name] = best_child
                 scaled_amount += amount

@@ -77,18 +77,18 @@ class Service:
             setattr(self, k.lower(), v)
 
     def _print_config(self, service_config):
-        utils.log_info("Config is as follows:", self.debug)
-        utils.log_info(".............................................", self.debug)
+        self.log_info("Config is as follows:")
+        self.log_info(".............................................")
 
         for key in service_config.get_config().keys():
             value = getattr(self, key.lower(), None)
-            utils.log_info(f"{key.replace('_', ' ').capitalize()} -> {value}", self.debug)
+            self.log_info(f"{key.replace('_', ' ').capitalize()} -> {value}")
 
-        utils.log_info(".............................................", self.debug)
+        self.log_info(".............................................")
 
     def _start_epoch(self):
-        utils.log_info("----------------------", self.debug)
-        utils.log_info("Starting Epoch", self.debug)
+        self.log_info("----------------------")
+        self.log_info("Starting Epoch")
         return time.time()
 
     def _end_epoch(self, window_difference, t0):
@@ -96,8 +96,8 @@ class Service:
         time_proc = "%.2f" % (t1 - t0 - window_difference)
         time_total = "%.2f" % (t1 - t0)
         window_difference_str = "%.2f" % window_difference
-        utils.log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, window_difference_str), self.debug)
-        utils.log_info("----------------------\n", self.debug)
+        self.log_info("Epoch processed in {0} seconds ({1} processing and {2} sleeping)".format(time_total, time_proc, window_difference_str))
+        self.log_info("----------------------\n")
 
     def _wait_operation_thread(self, thread):
         """This is used in services like the snapshoters or the Guardian that use threads to carry out operations.
@@ -107,12 +107,12 @@ class Service:
             thread (Python Thread): The thread that has spawned the basic threads that carry out operations as needed
         """
         if thread and thread.is_alive():
-            utils.log_warning("Previous thread didn't finish and next poll should start now", self.debug)
-            utils.log_warning("Going to wait until thread finishes before proceeding", self.debug)
+            self.log_warning("Previous thread didn't finish and next poll should start now")
+            self.log_warning("Going to wait until thread finishes before proceeding")
             delay_start = time.time()
             thread.join()
             delay_end = time.time()
-            utils.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)), self.debug)
+            self.log_warning("Resulting delay of: {0} seconds".format(str(delay_end - delay_start)))
 
     # --------- Main loop function ---------
 
@@ -139,10 +139,10 @@ class Service:
             # Validate configuration
             invalid, message = self.invalid_conf(service_config)
             if invalid:
-                utils.log_error(message, self.debug)
+                self.log_error(message)
 
             if not self.active:
-                utils.log_warning("{0} is not activated".format(self.service_name.capitalize()), self.debug)
+                self.log_warning("{0} is not activated".format(self.service_name.capitalize()))
 
             # Do main work
             thread = None
