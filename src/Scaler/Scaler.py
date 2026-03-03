@@ -276,6 +276,47 @@ class Scaler(Service):
         self.log_info("Number of purged/duplicated requests was {0}/{1}".format(purged_counter, duplicated_counter))
         return final_requests
 
+    def _validate_requests(self, _requests):
+        valid_requests =  []
+        missing = set()
+        for r in _requests:
+            structure = self.data_context.get(r["structure_type"] + "s").get(r["structure"])
+            if structure is None:
+                missing.add(r["structure"])
+                continue
+
+            valid = True
+            involved_containers = []
+            if structure["subtype"] == "user":
+                for app_name in structure.get("clusters"):
+                    if app_name not in self.data_context.applications:
+                        missing.add(app_name)
+                        valid = False
+                        break
+                    involved_containers.extend(self.data_context.applications[app_name].get("containers", []))
+            if structure["subtype"] == "application":
+                involved_containers = structure.get("containers", [])
+            if structure["subtype"] == "container":
+                involved_containers = [structure["name"]]
+
+            for c in involved_containers:
+                if c not in self.data_context.containers:
+                    valid = False
+                    missing.add(c)
+                    break
+
+            valid = valid and not any(c in self.invalid_containers for c in involved_containers)
+            if valid:
+                valid_requests.append(r)
+
+        skipped_reqs = len(_requests) - len(valid_requests)
+        if skipped_reqs > 0:
+            self.log_warning("Skipping {0} requests because info for some needed structures is missing or is not valid: {1}"
+                             .format(skipped_reqs, self.missing.union(self.invalid_containers)))
+
+        return valid_requests
+
+
     def _process_requests(self, _requests, method, op, host_changes=None, host_locks=None, max_tries=1):
         removed, failed, tries = False, [], 0
         while _requests and tries < max_tries:
@@ -388,6 +429,10 @@ class Scaler(Service):
         self._print_time("Execution phase completed", t0, t1)
 
     def scale_structures(self, new_requests):
+
+        # Remove requests that involve structures that are not available
+        valid_requests = self._validate_requests(new_requests)
+
         # Create a copy of data context for execution phase
         self.original_data = deepcopy(self.data_context)
 
@@ -399,7 +444,7 @@ class Scaler(Service):
         # 1) PLANNING PHASE
         self._print_header("PHASE 1: PLANNING")
         # Split requests by structure type (user, application, container)
-        user_reqs, app_reqs, cont_reqs = self._split_requests_by_type(new_requests)
+        user_reqs, app_reqs, cont_reqs = self._split_requests_by_type(valid_requests)
         # Create atomic operations based on current requests
         user_operations, app_operations, cont_operations = self.planning_phase(user_reqs, app_reqs, cont_reqs)
 
@@ -408,7 +453,7 @@ class Scaler(Service):
         # Execute atomic operations and rollback if some request fails
         self.execution_phase(user_operations, app_operations, cont_operations)
         # Remove requests from database
-        self._remove_requests(new_requests)
+        self._remove_requests(valid_requests)
 
     def on_start(self):
         self.log_info("Purging any previous requests")
@@ -438,8 +483,7 @@ class Scaler(Service):
             self._print_header("LOADING DATA")
             self.data_loader = DataLoader(self.couchdb_handler, self.bdwatchdog_handler, self.rescaler_session, self.debug)
             if not self.data_loader.load_data(new_requests):
-                self.log_error("Failed to load data, aborting all requests")
-                return thread
+                self.log_warning("Failed to load data, some requests could be affected")
 
             # Get data context
             self.data_context = self.data_loader.get_data_context()
@@ -451,24 +495,13 @@ class Scaler(Service):
                 t0_core_map = time.time()
                 self._print_header("CHECKING CORE MAP")
                 self.log_info("Checking host CPU limits")
-                failed = False
-                failed = failed or self._check_host_cpu_limits()
+                self._check_host_cpu_limits()
 
                 self.log_info("Checking containers CPU limits ")
-                failed = failed or self._check_containers_cpu_limits()
+                self._check_containers_cpu_limits()
 
                 self.log_info("Checking containers core maps")
-                failed = failed or self._check_core_mapping()
-
-                # Don't process requests involving invalid containers in this iteration
-                if failed:
-                    reqs_before = len(new_requests)
-                    new_requests = [r for r in new_requests if r.get("structure") not in self.invalid_containers]
-                    reqs_after = len(new_requests)
-                    skipped_reqs = reqs_before - reqs_after
-                    if skipped_reqs > 0:
-                        self.log_warning("Skipping {0} requests because some containers info is not consistent: {1}"
-                                         .format(reqs_before - reqs_after, self.invalid_containers))
+                self._check_core_mapping()
 
                 t1_core_map = time.time()
                 self._print_time("Core map checked", t0_core_map, t1_core_map)

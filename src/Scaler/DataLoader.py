@@ -76,11 +76,12 @@ class DataLoader:
                 futures["container usages"] = executor.submit(self._load_container_usages)
 
         # Wait for all loading methods to finish
+        success = True
         for data_type, future in futures.items():
             if future.result() is None:
-                return False
+                success = False
 
-        return True
+        return success
 
     def get_data_context(self):
         return DataContext(**{_type: self._cache[_type] for _type in self._cache if self._loaded[_type]})
@@ -90,8 +91,6 @@ class DataLoader:
             return self._cache.get(structure_type)
 
         try:
-            self.log_info(f"-> Loading {structure_type}s from CouchDB...")
-
             t0 = time.time()
             data = utils.get_data_structures(structure_type, self.couchdb_handler, self.debug)
             if not data:
@@ -104,7 +103,7 @@ class DataLoader:
             self._loaded[structure_type] = True
 
             t1 = time.time()
-            self.log_info(f"\tLoaded {len(cache)} {structure_type}s in {t1 - t0:.2f} seconds")
+            self.log_info(f"-> Loaded {len(cache)} {structure_type}s from CouchDB in {t1 - t0:.2f} seconds")
 
             return cache
 
@@ -116,7 +115,6 @@ class DataLoader:
         if self._loaded["container_resources"]:
             return self._cache["container_resources"]
 
-        self.log_info(f"-> Loading container resources limits from NodeRescaler...")
         try:
             if not self._loaded["container"]:
                 self.log_warning("Must load containers before loading container resources")
@@ -141,7 +139,7 @@ class DataLoader:
 
             t1 = time.time()
 
-            self.log_info(f"\tLoaded resources for {len(cache)} containers in {t1 - t0:.2f} seconds")
+            self.log_info(f"-> Loaded resources for {len(cache)} containers from NodeRescaler in {t1 - t0:.2f} seconds")
             return cache
 
         except Exception as e:
@@ -152,7 +150,7 @@ class DataLoader:
         if self._loaded["container_usages"]:
             return self._cache["container_usages"]
 
-        self.log_info(f"-> Loading container usages from BDWatchdog...")
+        #self.log_info(f"-> Loading container usages from BDWatchdog...")
 
         try:
             if not self._loaded["container"]:
@@ -184,7 +182,7 @@ class DataLoader:
 
             t1 = time.time()
 
-            self.log_info(f"\tLoaded usages for {len(container_usages)} containers in {t1 - t0:.2f} seconds")
+            self.log_info(f"-> Loaded usages for {len(container_usages)} containers from BDWatchdog in {t1 - t0:.2f} seconds")
             return container_usages
 
         except Exception as e:
