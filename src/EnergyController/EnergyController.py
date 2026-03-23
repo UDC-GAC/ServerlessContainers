@@ -389,7 +389,7 @@ class EnergyController(Service):
     def get_supported_structures(self, structures):
         validation_steps = [
             # Check structures have supported subtype
-            (lambda s: utils.structure_subtype_is_supported(s["subtype"]), "All the structures have an unknown structure subtype"),
+            (lambda s: utils.structure_subtype_is_supported(s["subtype"]), "Some structures subtype is not supported"),
         ]
         return self.validate(structures, validation_steps)
 
@@ -401,7 +401,7 @@ class EnergyController(Service):
 
     def work(self, ):
         # Remote database operation
-        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
+        structures = utils.get_structures(self.couchdb_handler, self.debug, self.structure_guarded)
         # Get all the structures supported by this controller (i.e. containers)
         supported_structures = self.get_supported_structures(structures)
         # Get the structures that have energy set to guarded

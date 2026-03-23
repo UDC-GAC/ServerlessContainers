@@ -365,7 +365,7 @@ class Scaler(Service):
 
     def _persist_new_host_information(self, host_changes):
         def persist_thread(_host, _changes, _handler, _debug):
-            utils.partial_update_structure(_host, _changes, _handler, _debug)
+            utils.update_structure(_host, _handler, _debug, partial=True, changes=_changes)
         threads = []
         for hostname in self.original_data.hosts:
             if hostname in host_changes:

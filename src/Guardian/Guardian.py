@@ -470,7 +470,7 @@ class Guardian(Service):
 
             # RULE HAS BEEN ACTIVATED
             # If rescaling a container, check that the current resource value exists, otherwise there is nothing to rescale
-            if utils.structure_is_container(structure) and "current" not in structure["resources"][resource_label]:
+            if utils.structure_is(structure, {"container"}) and "current" not in structure["resources"][resource_label]:
                 utils.log_warning("No current value for container' {0}' and resource '{1}', can't rescale"
                                   .format(structure["name"], resource_label), self.debug)
                 continue
@@ -671,7 +671,7 @@ class Guardian(Service):
 
     def work(self, ):
         thread = None
-        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
+        structures = utils.get_structures(self.couchdb_handler, self.debug, self.structure_guarded)
         if structures:
             utils.log_info("{0} Structures to process, launching threads".format(len(structures)), self.debug)
             thread = Thread(name="guard_structures", target=self.guard_structures, args=(structures,))

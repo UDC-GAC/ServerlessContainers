@@ -261,22 +261,6 @@ class BaseRebalancer(ABC):
 
         return donors, receivers
 
-    def update_structures_in_couchdb(self, structures, resource, d_field, requests):
-        threads = []
-        for structure in structures:
-            amount_to_scale = requests.get(structure["name"], {}).get("amount", 0)
-            if amount_to_scale != 0:
-                utils.log_info("    {0}: {1}".format(structure["name"], amount_to_scale), self.debug)
-                new_value = structure["resources"][resource][d_field] + amount_to_scale
-                thread = Thread(name="update_{0}".format(structure["name"]), target=utils.update_resource_in_couchdb,
-                                args=(structure, resource, d_field, new_value, self.couchdb_handler, self.debug),
-                                kwargs={"max_tries": 5, "backoff_time_ms": 500})
-                thread.start()
-                threads.append(thread)
-
-        for thread in threads:
-            thread.join()
-
     def send_final_requests(self, requests):
         if not requests:
             return {}
@@ -297,14 +281,7 @@ class BaseRebalancer(ABC):
         for r in final_requests:
             utils.log_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
             self.couchdb_handler.add_request(r)
-            # if d_field == "current" and resource != "energy":
-            #     for r in final_requests:
-            #         utils.log_info("    {0}: {1}".format(r["structure"], r["amount"]), self.debug)
-            #         self.couchdb_handler.add_request(r)
-            # else:
-            #     # Max limits are directly updated in CouchDB.
-            #     # Energy "current" is also updated in CouchDB as NodeRescaler cannot modify an energy physical limit
-            #     self.update_structures_in_couchdb(structures, resource, d_field, final_requests_by_name)
+
         return final_requests_by_name
 
     # --------- Rebalancing algorithms ---------

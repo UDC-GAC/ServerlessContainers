@@ -328,7 +328,7 @@ class ContainerRebalancer(BaseRebalancer):
 
         # HOST SCOPE: Balancing the resources between containers on the same host
         if self.containers_scope == "host":
-            hosts = utils.get_structures(self.couchdb_handler, self.debug, subtype="host")
+            hosts = utils.get_structures(self.couchdb_handler, self.debug, "host")
             if not hosts:
                 utils.log_warning("Trying to balance containers at 'host' scope but no hosts were found", self.debug)
                 return

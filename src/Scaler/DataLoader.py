@@ -92,7 +92,7 @@ class DataLoader:
 
         try:
             t0 = time.time()
-            data = utils.get_data_structures(structure_type, self.couchdb_handler, self.debug)
+            data = utils.get_structures(self.couchdb_handler, self.debug, structure_type)
             if not data:
                 self.log_warning(f"No {structure_type} found in CouchDB")
                 cache = {}
