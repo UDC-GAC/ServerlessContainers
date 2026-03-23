@@ -151,7 +151,7 @@ class StructuresSnapshoter(Service):
         # Get containers information
         ts = time.time()
         containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-        container_resources_dict = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)
+        container_resources_dict = utils.get_container_physical_resources(containers, self.resources_persisted, self.rescaler_http_session, self.debug)
         utils.log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Update containers if information is available

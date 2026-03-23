@@ -4,6 +4,7 @@ from __future__ import print_function
 from threading import Thread, Lock
 import time
 import math
+import requests
 import traceback
 
 import src.MyUtils.MyUtils as utils
@@ -32,8 +33,8 @@ class EnergyController(Service):
         self.allowed_error, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
         self.events_system, self.debug, self.active = None, None, None
         self.events_cache = cache_utils.EventsCache()
-        self.pb_cache = cache_utils.PowerBudgetCache()
-        self.alloc_cache = cache_utils.CPUAllocationCache()
+        self.pb_cache = cache_utils.ResourceCache()
+        self.alloc_cache = cache_utils.ResourceCache()
 
     def get_resource_usage(self, resource, structure):
         name, host = structure["name"], structure["host"]
@@ -203,8 +204,7 @@ class EnergyController(Service):
             if amount != 0:
                 request = utils.generate_request(structure, amount, "cpu")
                 self.couchdb_handler.add_request(request)
-                self.alloc_cache.add(structure["_id"], structure["resources"]["cpu"]["current"],
-                                     structure["resources"]["cpu"]["current"] + amount)
+                self.alloc_cache.add(structure["_id"], structure["resources"]["cpu"]["current"] + amount)
 
         except Exception as e:
             utils.log_error(f"{structure['name']} Error capping structure: {e}", self.debug)
@@ -296,22 +296,22 @@ class EnergyController(Service):
 
             # Make sure CPU allocation is up to date since last changes (i.e., CPU scalings from previous iterations)
             read_alloc = structure["resources"]["cpu"]["current"]
-            old_alloc = self.alloc_cache.get_old(structure["_id"], read_alloc)
-            new_alloc = self.alloc_cache.get_new(structure["_id"], read_alloc)
-            if read_alloc != new_alloc:
-                if read_alloc == old_alloc:
-                    self.alloc_cache.count_outdated(structure["_id"], new_alloc)
-                    # TODO: Make request to NodeRescaler to have updated allocation value??
-                    if self.alloc_cache.get_outdated_count(structure["_id"], new_alloc) < 4:
-                        utils.log_warning(f"@{name} CPU allocation is not up to date, a cached value will be used (read = {read_alloc} | cached = {new_alloc})", self.debug)
-                        structure["resources"]["cpu"]["current"] = new_alloc
-                    else:
-                        self.alloc_cache.reset_outdated(structure["_id"], new_alloc)
-                        utils.log_warning(f"@{name} CPU allocation is outdated for four consecutive iterations, maybe Scaler couldn't perform scaling, using read value ({read_alloc})", self.debug)
+            cached_alloc = self.alloc_cache.get(structure["_id"], default=read_alloc)
+            if read_alloc != cached_alloc:
+                utils.log_warning(f"@{name} CPU allocation is not up to date (read = {read_alloc} | cached = {cached_alloc}), getting actual value from NodeRescaler ", self.debug)
+                try:
+                    container_resources = utils.get_container_physical_resources([structure], {"cpu"}, requests.Session(), self.debug)
+                    actual_alloc = container_resources.get(structure["name"], {}).get("resources", {}).get("cpu", {}).get("cpu_allowance_limit")
+                except Exception as e:
+                    actual_alloc = None
+                    utils.log_warning(f"@{name} Error getting CPU allocation from NodeRescaler: {str(e)}", self.debug)
+                if actual_alloc is None:
+                    utils.log_warning(f"@{name} CPU allocation couldn't be obtained from NodeRescaler, using cached value {cached_alloc}", self.debug)
+                    structure["resources"]["cpu"]["current"] = cached_alloc
                 else:
-                    utils.log_warning(f"@{name} Scaler had some trouble scaling from {old_alloc} to {new_alloc} (read = {read_alloc})", self.debug)
-            else:
-                self.alloc_cache.reset_outdated(structure["_id"], new_alloc)
+                    utils.log_warning(f"@{name} Actual CPU allocation is {actual_alloc}, setting this value", self.debug)
+                    structure["resources"]["cpu"]["current"] = actual_alloc
+                    self.alloc_cache.add(structure["_id"], actual_alloc)
 
             # Retrieve structure resource limits
             limits = self.couchdb_handler.get_limits(structure)

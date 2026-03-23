@@ -24,6 +24,7 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 import requests
+from requests.exceptions import HTTPError
 from flask import Blueprint
 from flask import abort
 from flask import jsonify
@@ -32,7 +33,7 @@ import time
 
 import src.MyUtils.MyUtils as utils
 from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
-from src.Scaler.Scaler import set_container_resources, CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
+from src.Scaler.Scaler import CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 
 structure_routes = Blueprint('structures', __name__)
 
@@ -460,7 +461,7 @@ def desubscribe_container(structure_name):
         disable_scaler(scaler_service)
 
     success, tries, max_tries = False, 0, 10
-    couchdb_error = None
+    error = None
     while not success and tries < max_tries:
         try:
             # Free host resources used by this container
@@ -468,15 +469,20 @@ def desubscribe_container(structure_name):
             changes = free_container_resources(container, host)
             get_db().safe_update_structure(host, changes)
             success = True
-        except Exception as e:
+        except HTTPError as e:
             tries += 1
-            couchdb_error = str(e)
-            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
+            error = str(e)
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
             time.sleep(BACK_OFF_TIME_MS / 1000)
+        except Exception as e:
+            tries = max_tries
+            error = str(e)
+            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
+            break
 
     if tries >= max_tries:
         restore_scaler_state(scaler_service, previous_state)
-        return abort(400, {"message": "ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, couchdb_error)})
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -644,7 +650,7 @@ def subscribe_container(structure_name):
 
     # Check that its supposed host exists and that it reports this container
     check_structure_exists(container["host"], "host", True)
-    host_containers = utils.get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
+    host_containers = utils.get_containers_info_from_rescaler(container["host_rescaler_ip"], container["host_rescaler_port"], [], node_scaler_session, True)
     if container["name"] not in host_containers:
         return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
 
@@ -690,12 +696,12 @@ def subscribe_container(structure_name):
 
     # Get the host info
     success, tries, max_tries = False, 0, 10
-    couchdb_error = None
+    error = None
     while not success and tries < max_tries:
         try:
             host = get_db().get_structure(container["host"])
             resource_dict, changes = map_container_to_host_resources(container, host)
-            set_container_resources(node_scaler_session, container, resource_dict, True)
+            utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
 
             get_db().add_structure(container)
             get_db().safe_update_structure(host, changes)
@@ -710,17 +716,22 @@ def subscribe_container(structure_name):
                 get_db().add_limit(limits)
 
             success = True
-        except Exception as e:
+        except HTTPError as e:
             tries += 1
-            couchdb_error = str(e)
-            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, str(e)))
+            error = str(e)
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
             time.sleep(BACK_OFF_TIME_MS / 1000)
+        except Exception as e:
+            tries = max_tries
+            error = str(e)
+            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
+            break
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
 
     if tries >= max_tries:
-        return abort(400, {"message": "ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, couchdb_error)})
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
 
     return jsonify(201)
 
@@ -741,7 +752,7 @@ def subscribe_host(structure_name):
 
     # Check that this supposed host exists and has its node scaler up
     try:
-        host_containers = utils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        host_containers = utils.get_containers_info_from_rescaler(host["host_rescaler_ip"], host["host_rescaler_port"], [], node_scaler_session, True)
         if host_containers is None:
             raise RuntimeError()
     except Exception:

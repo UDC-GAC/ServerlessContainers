@@ -157,7 +157,11 @@ class BaseRebalancer(ABC):
             request = child_requests.pop(0)
             # Look for childs that can be rescaled
             if request["amount"] < 0:
-                scalable_childs = [s for s in childs if s["resources"][resource]["max"] + request["amount"] > s["resources"][resource]["min"]]
+                scalable_childs = []
+                for s in childs:
+                    lower_limit = 0 if self.REBALANCING_LEVEL == "application" and not s.get("running", False) else s["resources"][resource]["min"]
+                    if s["resources"][resource]["max"] + request["amount"] >= lower_limit:
+                        scalable_childs.append(s)
             else:
                 scalable_childs = childs
 
@@ -172,15 +176,13 @@ class BaseRebalancer(ABC):
             scaled_amount += request["amount"]
             success = True
 
-    def manage_rebalancing(self, donor, receiver, resource, d_field, amount_to_scale, requests):
+    def manage_swap(self, donor, receiver, resource, d_field, amount_to_scale, requests):
         if amount_to_scale == 0:
             utils.log_info("Amount to rebalance from {0} to {1} is 0, skipping".format(donor.get("name"), receiver.get("name")), self.debug)
             return
         # Create the pair of scaling requests
-        if receiver:
+        if donor and receiver:
             self.add_scaling_request(receiver, resource, d_field, amount_to_scale, requests, donor)
-        if donor:
-            self.add_scaling_request(donor, resource, d_field, -amount_to_scale, requests, receiver)
 
     def map_role_to_rule(self, resource, role):
         if role == "donors":
@@ -408,7 +410,7 @@ class BaseRebalancer(ABC):
                             del donor_slices[key]
 
                         # Manage necessary scalings to rebalance resource between donor and receiver
-                        self.manage_rebalancing(donor, receiver, resource, d_field, amount_to_scale, requests)
+                        self.manage_swap(donor, receiver, resource, d_field, amount_to_scale, requests)
 
                         # Update the received amount for this container
                         received_amount[receiver_name] += amount_to_scale
