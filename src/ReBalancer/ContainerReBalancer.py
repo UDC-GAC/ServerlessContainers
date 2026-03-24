@@ -97,7 +97,7 @@ class ContainerRebalancer(BaseRebalancer):
         return containers_with_usages
 
     # HOSTS BY WEIGHT
-    def rebalance_host_containers_by_weight(self, containers, host):
+    def rebalance_host_containers_by_weight(self, containers, host, applications):
 
         balanceable_resources = {"cpu": {"diff_percentage": self.diff_percentage},
                                  "disk": {"diff_percentage": self.diff_percentage},
@@ -155,23 +155,71 @@ class ContainerRebalancer(BaseRebalancer):
             weight_sum = 0
             weight_read_sum = 0
             weight_write_sum = 0
+            weight_dual_read_sum = 0
+            weight_dual_write_sum = 0
             participants = {"disk_read": [], "disk_write": []}
+
+            ## Find DN container for this disk (if any) and adjust ratio for requesting apps
+            global_hdfs_app_name = 'global_hdfs'
+            adjusted_reading_ratio = 1
+            adjusted_writing_ratio = 1
+            for container in containers:
+                if container['app']['name'] == global_hdfs_app_name:
+                    ## We divide by 2 since transfers between global and local through the same disk will require both read and write bandwidth in different ends of the transaction
+                    adjusted_reading_ratio  = container["resources"]["disk_read"]["weight"] / 2
+                    adjusted_writing_ratio = container["resources"]["disk_write"]["weight"] / 2
+                    break
+
             for container in containers:
                 if all("weight" in container.get("resources", {}).get(res, {}) for res in ["disk_read", "disk_write"]):
                     read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < balanceable_resources["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
                     write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < balanceable_resources["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
 
                     if read_usage_threshold:
-                        participants["disk_read"].append({"container_info": container})
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
-                        weight_sum      += container["resources"]["disk_read"]["weight"]
-                        weight_read_sum += container["resources"]["disk_read"]["weight"]
+                        if container['app']['name'] != global_hdfs_app_name:
+                            if container['app']['state'] == 'writing':
+                                container["resources"]["disk_read"]["weight"] * adjusted_writing_ratio
+                                weight_dual_write_sum += container["resources"]["disk_read"]["weight"]
+                            weight_sum      += container["resources"]["disk_read"]["weight"]
+                            weight_read_sum += container["resources"]["disk_read"]["weight"]
+
+                        participants["disk_read"].append({"container_info": container})
 
                     if write_usage_threshold:
-                        participants["disk_write"].append({"container_info": container})
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
-                        weight_sum       += container["resources"]["disk_write"]["weight"]
-                        weight_write_sum += container["resources"]["disk_write"]["weight"]
+                        if container['app']['name'] != global_hdfs_app_name:
+                            if container['app']['state'] == 'reading':
+                                container["resources"]["disk_write"]["weight"] * adjusted_reading_ratio
+                                weight_dual_read_sum += container["resources"]["disk_write"]["weight"]
+                            weight_sum       += container["resources"]["disk_write"]["weight"]
+                            weight_write_sum += container["resources"]["disk_write"]["weight"]
+
+                        participants["disk_write"].append({"container_info": container})
+
+            ## Global HDFS app weights:
+            # If there are apps reading from global, that translates into heavy read load in global HDFS and heavy write load in such apps
+            # If there are apps writing to global, that translates into heavy write load in global HDFS and heavy read load in such apps
+            # Global I/O bandwidth must be distributed properly to apps to satisfy their request.
+            # e.g., app1 and app2 are reading from global. app1 write w=1 and app2 write w=3 --> global needs read w=4 to proportionally distribute bandwidth to both apps
+            # to cover the case when there are other apps sharing the HDFS disks but not transfering data from/to global, the weights of the hdfs apps are reduced to half to accomodate the global weight
+            for container in participants["disk_read"]:
+                if container['container_info']['app']['name'] == global_hdfs_app_name:
+                    if weight_dual_read_sum > 0:
+                        container['container_info']['resources']["disk_read"]['weight'] = weight_dual_read_sum
+                    weight_sum      += container['container_info']["resources"]["disk_read"]["weight"]
+                    weight_read_sum += container['container_info']["resources"]["disk_read"]["weight"]
+
+                    break ## we only deploy one datanode on each host
+
+            for container in participants["disk_write"]:
+                if container['container_info']['app']['name'] == global_hdfs_app_name:
+                    if weight_dual_write_sum > 0:
+                        container['container_info']['resources']["disk_write"]['weight'] = weight_dual_write_sum
+                    weight_sum       += container['container_info']["resources"]["disk_write"]["weight"]
+                    weight_write_sum += container['container_info']["resources"]["disk_write"]["weight"]
+
+                    break ## we only deploy one datanode on each host
 
             if weight_sum > 0:
                 read_distribution = total_allocated_bw * (weight_read_sum / weight_sum)
@@ -255,6 +303,14 @@ class ContainerRebalancer(BaseRebalancer):
                 if "disks" not in host["resources"]:
                     utils.log_error("There are no disks in host {0}".format(host["name"]), self.debug)
                     continue
+
+                ## Set apps for containers
+                for container in containers:
+                    for app in applications:
+                        if container['name'] in app['containers']:
+                            container['app'] = app
+                            break
+
                 if len(host["resources"]["disks"]) > 1:
                     ## if host has more than one disk the balancing needs to be performed on each disk
                     for disk in host["resources"]["disks"]:
@@ -351,6 +407,6 @@ class ContainerRebalancer(BaseRebalancer):
                     self.pair_swapping(host_containers[host_name], container_requests)
                     self.send_final_requests(container_requests)
                 elif self.balancing_method == "weights":
-                    self.rebalance_host_containers_by_weight(host_containers[host_name], host)
+                    self.rebalance_host_containers_by_weight(host_containers[host_name], host, applications)
                 else:
                     utils.log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.debug)
