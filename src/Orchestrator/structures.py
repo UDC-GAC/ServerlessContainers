@@ -801,7 +801,7 @@ def subscribe_app(structure_name):
 
     app["containers"] = []
     app["running"] = req_app.get("running", False)
-    app["state"] = req_app.get("state", "running")
+    app["state"] = req_app.get("state", "stopped")
 
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {}}
