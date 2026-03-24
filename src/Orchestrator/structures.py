@@ -120,42 +120,48 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
     return jsonify(201)
 
 
-def set_structure_boolean_parameter(structure_name, parameter, state):
-    if state not in [True, False]:
-        return abort(400, {"message": "Invalid {0} state".format(parameter)})
-
+def set_structure_parameter(structure_name, parameter, value):
     structure = retrieve_structure(structure_name)
 
-    if parameter in structure and structure[parameter] == state:
+    if parameter in structure and structure[parameter] == value:
         return jsonify(201)
 
     put_done = False
     tries = 0
-    changes = {parameter: state}
+    changes = {parameter: value}
     while not put_done:
         tries += 1
-        structure[parameter] = state
+        structure[parameter] = value
         get_db().partial_update_structure(structure, changes)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
         structure = retrieve_structure(structure_name)
-        put_done = structure[parameter] == state
+        put_done = structure[parameter] == value
 
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
+
+def set_structure_boolean_parameter(structure_name, parameter, state):
+    if state not in [True, False]:
+        return abort(400, {"message": "Invalid {0} state".format(parameter)})
+
+    set_structure_parameter(structure_name, parameter, state)
 
 
 @structure_routes.route("/structure/<structure_name>/run", methods=['PUT'])
 def set_structure_to_running(structure_name):
     return set_structure_boolean_parameter(structure_name, "running", True)
 
-
 @structure_routes.route("/structure/<structure_name>/stop", methods=['PUT'])
 def set_structure_to_stop(structure_name):
     return set_structure_boolean_parameter(structure_name, "running", False)
 
+@structure_routes.route("/structure/<structure_name>/state", methods=['POST'])
+def set_structure_state(structure_name):
+    data = request.json
+    return set_structure_parameter(structure_name, "state", data['state'])
 
 @structure_routes.route("/structure/<structure_name>/guard", methods=['PUT'])
 def set_structure_to_guarded(structure_name):
@@ -795,6 +801,7 @@ def subscribe_app(structure_name):
 
     app["containers"] = []
     app["running"] = req_app.get("running", False)
+    app["state"] = req_app.get("state", "running")
 
     # Check that all the needed data for resources is present on the requested container LIMITS
     limits = {"resources": {}}
