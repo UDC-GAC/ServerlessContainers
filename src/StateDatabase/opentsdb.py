@@ -73,7 +73,7 @@ class OpenTSDBServer:
             f.write(json.dumps(json_documents).encode())
 
         try:
-            r = self.session.post("{0}/{1}".format(self.server, "api/put"), headers=headers, data=out.getvalue(),
+            r = self.session.post("{0}/{1}?details".format(self.server, "api/put"), headers=headers, data=out.getvalue(),
                                   timeout=self.__TIMEOUT)
             if r.status_code != 204:
                 return False, {"error": r.json()}
