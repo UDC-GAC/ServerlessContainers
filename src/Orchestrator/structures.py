@@ -147,7 +147,7 @@ def set_structure_boolean_parameter(structure_name, parameter, state):
     if state not in [True, False]:
         return abort(400, {"message": "Invalid {0} state".format(parameter)})
 
-    set_structure_parameter(structure_name, parameter, state)
+    return set_structure_parameter(structure_name, parameter, state)
 
 
 @structure_routes.route("/structure/<structure_name>/run", methods=['PUT'])
