@@ -139,19 +139,15 @@ class StructuresSnapshoter(Service):
         changes = {"resources": {}}
         for resource in data["resources"]:
             changes["resources"][resource] = {"current": data["resources"][resource]["current"]}
-        if data["type"] == "user" or data["subtype"] == "user":
-            utils.partial_update_user(data, changes, self.couchdb_handler, self.debug)  # Remote database operation
-        elif data["type"] == "structure":
-            utils.partial_update_structure(data, changes, self.couchdb_handler, self.debug)  # Remote database operation
-        else:
-            utils.log_error("Trying to persist unknown data type '{0}'".format(data["type"]), self.debug)
+
+        utils.update_structure(data, self.couchdb_handler, self.debug, partial=True, changes=changes)
 
     def persist_thread(self,):
         applications = None
         # Get containers information
         ts = time.time()
-        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
-        container_resources_dict = utils.get_container_resources_dict(containers, self.rescaler_http_session, self.debug)
+        containers = utils.get_structures(self.couchdb_handler, self.debug, "container")
+        container_resources_dict = utils.get_container_physical_resources(containers, self.resources_persisted, self.rescaler_http_session, self.debug)
         utils.log_info("It took {0} seconds to get container info".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         # Update containers if information is available
@@ -163,7 +159,7 @@ class StructuresSnapshoter(Service):
         # Update applications if information is available
         ts = time.time()
         if "application" in self.structures_persisted:
-            applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
+            applications = utils.get_structures(self.couchdb_handler, self.debug, "application")
             if applications:
                 utils.run_in_threads(applications, self.update_application, container_resources_dict)
         utils.log_info("It took {0} seconds to update applications".format(str("%.2f" % (time.time() - ts))), self.debug)
@@ -172,8 +168,8 @@ class StructuresSnapshoter(Service):
         ts = time.time()
         if "user" in self.structures_persisted:
             if not applications:
-                applications = utils.get_structures(self.couchdb_handler, self.debug, subtype="application")
-            users = utils.get_users(self.couchdb_handler, self.debug)
+                applications = utils.get_structures(self.couchdb_handler, self.debug, "application")
+            users = utils.get_structures(self.couchdb_handler, self.debug, "user")
             if users:
                 utils.run_in_threads(users, self.update_user, applications)
         utils.log_info("It took {0} seconds to update users".format(str("%.2f" % (time.time() - ts))), self.debug)

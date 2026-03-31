@@ -103,38 +103,43 @@ class OpenTSDBServer:
             else:
                 self.get_points(query, tries)
 
-
     def get_structure_timeseries(self, tags, window_difference, window_delay, retrieve_metrics, generate_metrics, downsample=5):
-        usages = dict()
-        subquery = list()
-        for metric in retrieve_metrics:
-            usages[metric] = self.NO_METRIC_DATA_DEFAULT_VALUE
-            subquery.append(dict(aggregator='zimsum', metric=metric, tags=tags, downsample=str(downsample) + "s-avg"))
+        result = self.get_structure_timeseries_bulk(list(tags.keys())[0], [list(tags.values())[0]],
+                                                    window_difference, window_delay, retrieve_metrics,
+                                                    generate_metrics, downsample)
+        return next(iter(result.values()))
 
+    def get_structure_timeseries_bulk(self, tag_key, structures, window_difference, window_delay, retrieve_metrics, generate_metrics, downsample=5):
+        # Build query info
+        tags = {tag_key: "|".join(structures)}
+        usages, subqueries = {}, []
+        for metric in retrieve_metrics:
+            subqueries.append(dict(aggregator='zimsum', metric=metric, tags=tags, downsample=str(downsample) + "s-avg"))
+            for structure_name in structures:
+                usages.setdefault(structure_name, {})[metric] = self.NO_METRIC_DATA_DEFAULT_VALUE
         start = int(time.time() - (window_difference + window_delay))
         end = int(time.time() - window_delay)
-        query = dict(start=start, end=end, queries=subquery)
+        query = dict(start=start, end=end, queries=subqueries)
+
+        # Send query and process result
         result = self.get_points(query)
-
         if result:
-            for metric in result:
-                dps = metric["dps"]
-                summatory = sum(dps.values())
-                if len(dps) > 0:
-                    average_real = summatory / len(dps)
-                else:
-                    average_real = 0
-                usages[metric["metric"]] = average_real
+            for entry in result:
+                structure_name = str(entry["tags"][tag_key])
+                dps = entry["dps"]
+                average_real = sum(dps.values()) / len(dps) if len(dps) > 0 else 0
+                usages[structure_name][entry["metric"]] = average_real
 
-        final_values = dict()
-
-        for value in generate_metrics:
-            final_values[value] = self.NO_METRIC_DATA_DEFAULT_VALUE
-            for metric in generate_metrics[value]:
-                if metric in usages and usages[metric] != self.NO_METRIC_DATA_DEFAULT_VALUE:
-                    if final_values[value] == self.NO_METRIC_DATA_DEFAULT_VALUE:
-                        final_values[value] = usages[metric]
-                    else:
-                        final_values[value] += usages[metric]
+        # Transform retrieved metrics from OpenTSDB to generated metrics
+        final_values = {}
+        for structure_name in structures:
+            final_values[structure_name] = {}
+            for gen_metric, sub_metrics in generate_metrics.items():
+                values = []
+                for sub_metric in sub_metrics:
+                    value = usages[structure_name].get(sub_metric, self.NO_METRIC_DATA_DEFAULT_VALUE)
+                    if value != self.NO_METRIC_DATA_DEFAULT_VALUE:
+                        values.append(value)
+                final_values[structure_name][gen_metric] = sum(values) if values else self.NO_METRIC_DATA_DEFAULT_VALUE
 
         return final_values

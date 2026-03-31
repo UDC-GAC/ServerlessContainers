@@ -107,21 +107,9 @@ def subscribe_app_to_user(user_name, app_name):
         if app_name in u["clusters"]:
             return abort(400, {"message": "Application '{0}' already subscribed to user '{1}'".format(app_name, u["name"])})
 
-    app_changes = {"resources": {}}
-    for resource in app["resources"]:
-        if resource in user["resources"]:
-            try:
-                alloc_ratio = app["resources"][resource]["max"] / user["resources"][resource]["max"]
-                app["resources"][resource]["alloc_ratio"] = alloc_ratio
-                app_changes["resources"][resource] = {"alloc_ratio": alloc_ratio}
-            except (ZeroDivisionError, KeyError) as e:
-                return abort(400, {"message": "Couldn't set allocation ratio for application '{0}' and "
-                                              "user '{1}': {2}".format(app_name, user_name, str(e))})
-
     user["clusters"].append(app_name)
-
-    get_db().partial_update_structure(app, app_changes)
     get_db().partial_update_user(user, {"clusters": user["clusters"]})
+
     return jsonify(201)
 
 

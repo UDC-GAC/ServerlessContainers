@@ -246,6 +246,11 @@ class CouchDBServer:
                 r.raise_for_status()
         return False
 
+    def __safe_update_doc(self, database, doc):
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        if r.status_code != 200 and r.status_code != 201:
+            r.raise_for_status()
+        return False
 
     # TODO This new method should work, test it in isolation and new commit
     # def __resilient_update_doc(self, database, doc, max_tries=10):
@@ -316,6 +321,9 @@ class CouchDBServer:
 
     def partial_update_structure(self, structure, changes, max_tries=10):
         return self.__resilient_partial_update_doc(self.__structures_db_name, structure, changes, max_tries=max_tries)
+
+    def safe_update_structure(self, structure, changes, max_tries=10):
+        return self.__safe_update_doc(self.__structures_db_name, structure)
 
     # EVENTS #
     def add_event(self, event):

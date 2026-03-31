@@ -115,7 +115,7 @@ class WattTrainer(Service):
                     self.train_model(container["name"], "host", model, container_usages)
 
     def train_thread(self):
-        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+        containers = utils.get_structures(self.couchdb_handler, self.debug, "container")
         if containers:
             self.train_models_with_containers_info(containers)
 
@@ -158,7 +158,7 @@ class WattTrainer(Service):
 
     def work(self, ):
         thread = None
-        containers = utils.get_structures(self.couchdb_handler, self.debug, subtype="container")
+        containers = utils.get_structures(self.couchdb_handler, self.debug, "container")
         if len(self.models_to_train) == 0:
             # Models to train couldn't be checked
             utils.log_info("No models to train", self.debug)

@@ -83,3 +83,6 @@ TRANSLATOR_DICT = {
     "net": "structure.net.usage",
     "energy": "structure.energy.usage"
 }
+
+# Set containing valid resources
+VALID_RESOURCES = {"cpu", "mem", "disk", "disk_read", "disk_write", "net", "energy"}

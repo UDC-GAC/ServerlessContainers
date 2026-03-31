@@ -24,6 +24,7 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 import requests
+from requests.exceptions import HTTPError
 from flask import Blueprint
 from flask import abort
 from flask import jsonify
@@ -32,7 +33,7 @@ import time
 
 import src.MyUtils.MyUtils as utils
 from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
-from src.Scaler.Scaler import set_container_resources, CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
+from src.Scaler.Scaler import CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 
 structure_routes = Blueprint('structures', __name__)
 
@@ -374,21 +375,9 @@ def subscribe_container_to_app(structure_name, app_name):
         if cont_name in application["containers"]:
             return abort(400, {"message": "Container '{0}' is already subscribed to app '{1}'".format(cont_name, application["name"])})
 
-    container_changes = {"resources": {}}
-    for resource in container["resources"]:
-        if resource in app["resources"] and resource != "disk":
-            try:
-                alloc_ratio = container["resources"][resource]["max"] / app["resources"][resource]["max"]
-                container["resources"][resource]["alloc_ratio"] = alloc_ratio
-                container_changes["resources"][resource] = {"alloc_ratio": alloc_ratio}
-            except (ZeroDivisionError, KeyError) as e:
-                return abort(400, {"message": "Couldn't set allocation ratio for container '{0}' and "
-                                              "application '{1}': {2}".format(cont_name, app_name, str(e))})
-
     app["containers"].append(cont_name)
-
-    get_db().partial_update_structure(container, container_changes)
     get_db().partial_update_structure(app, {"containers": app["containers"]})
+
     return jsonify(201)
 
 
@@ -477,11 +466,29 @@ def desubscribe_container(structure_name):
     if previous_state:
         disable_scaler(scaler_service)
 
-    # Free host resources used by this container
-    host = get_db().get_structure(container["host"])
-    changes = free_container_resources(container, host)
+    success, tries, max_tries = False, 0, 10
+    error = None
+    while not success and tries < max_tries:
+        try:
+            # Free host resources used by this container
+            host = get_db().get_structure(container["host"])
+            changes = free_container_resources(container, host)
+            get_db().safe_update_structure(host, changes)
+            success = True
+        except HTTPError as e:
+            tries += 1
+            error = str(e)
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
+            time.sleep(BACK_OFF_TIME_MS / 1000)
+        except Exception as e:
+            tries = max_tries
+            error = str(e)
+            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
+            break
 
-    get_db().partial_update_structure(host, changes)
+    if tries >= max_tries:
+        restore_scaler_state(scaler_service, previous_state)
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -649,7 +656,7 @@ def subscribe_container(structure_name):
 
     # Check that its supposed host exists and that it reports this container
     check_structure_exists(container["host"], "host", True)
-    host_containers = utils.get_host_containers(container["host_rescaler_ip"], container["host_rescaler_port"], node_scaler_session, True)
+    host_containers = utils.get_containers_info_from_rescaler(container["host_rescaler_ip"], container["host_rescaler_port"], [], node_scaler_session, True)
     if container["name"] not in host_containers:
         return abort(400, {"message": "Container host does not report any container named '{0}'".format(container["name"])})
 
@@ -687,30 +694,50 @@ def subscribe_container(structure_name):
     limits["name"] = container["name"]
 
     # Disable the Scaler as we will modify the core mapping of a host
+    # TODO: Maybe Scaler could be active as host is updated with safe operations
     scaler_service = get_db().get_service("scaler")
     previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
     if previous_state:
         disable_scaler(scaler_service)
 
     # Get the host info
-    host = get_db().get_structure(container["host"])
-    resource_dict, changes = map_container_to_host_resources(container, host)
-    set_container_resources(node_scaler_session, container, resource_dict, True)
+    success, tries, max_tries = False, 0, 10
+    error = None
+    while not success and tries < max_tries:
+        try:
+            host = get_db().get_structure(container["host"])
+            resource_dict, changes = map_container_to_host_resources(container, host)
+            utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
 
-    get_db().add_structure(container)
-    get_db().partial_update_structure(host, changes)
+            get_db().add_structure(container)
+            get_db().safe_update_structure(host, changes)
 
-    # Check if limits already exist
-    try:
-        existing_limit = get_db().get_limits(container)
-        existing_limit['resources'] = limits['resources']
-        get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
-    except ValueError:
-        # Limits do not exist yet
-        get_db().add_limit(limits)
+            # Check if limits already exist
+            try:
+                existing_limit = get_db().get_limits(container)
+                existing_limit['resources'] = limits['resources']
+                get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
+            except ValueError:
+                # Limits do not exist yet
+                get_db().add_limit(limits)
+
+            success = True
+        except HTTPError as e:
+            tries += 1
+            error = str(e)
+            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
+            time.sleep(BACK_OFF_TIME_MS / 1000)
+        except Exception as e:
+            tries = max_tries
+            error = str(e)
+            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
+            break
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
+
+    if tries >= max_tries:
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
 
     return jsonify(201)
 
@@ -731,7 +758,7 @@ def subscribe_host(structure_name):
 
     # Check that this supposed host exists and has its node scaler up
     try:
-        host_containers = utils.get_host_containers(host["host_rescaler_ip"], host["host_rescaler_port"], node_scaler_session, True)
+        host_containers = utils.get_containers_info_from_rescaler(host["host_rescaler_ip"], host["host_rescaler_port"], [], node_scaler_session, True)
         if host_containers is None:
             raise RuntimeError()
     except Exception:

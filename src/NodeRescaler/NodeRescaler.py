@@ -153,6 +153,14 @@ def __get_topology_from_procfs():
     return topology
 
 
+def __get_needed_resources(_request):
+    needed_resources = {"cpu": False, "mem": False, "disk": False, "energy": False, "net": False}
+    for resource in needed_resources.keys():
+        if resource in _request.args:
+            needed_resources[resource] = True
+    return needed_resources
+
+
 @node_rescaler.route("/host/cpu_topology", methods=['GET'])
 def get_cpu_topology():
     if os.path.exists("/proc/cpuinfo"):
@@ -173,6 +181,33 @@ def get_containers_resources():
 
     if container_name is not None:
         return jsonify(node_resource_manager.get_node_resources_by_name(container_name))
+    else:
+        return jsonify(node_resource_manager.get_all_nodes())
+
+@node_rescaler.route("/container/resources/", methods=['GET'])
+@initialize_ContainerEngine
+def get_container_specific_resources():
+    try:
+        container_name = request.form['name']
+    except KeyError:
+        container_name = request.args.get('name')
+
+    needed_resources = __get_needed_resources(request)
+    if container_name is not None:
+        return jsonify(node_resource_manager.get_node_resources_by_name(container_name, needed_resources))
+    else:
+        return jsonify(node_resource_manager.get_all_nodes(needed_resources))
+
+@node_rescaler.route("/container/resources/<container_name>", methods=['GET'])
+@initialize_ContainerEngine
+def get_container_specific_resources_by_name(container_name):
+    needed_resources = __get_needed_resources(request)
+    if container_name != "":
+        data = node_resource_manager.get_node_resources_by_name(container_name, needed_resources)
+        if data is not None:
+            return jsonify(data)
+        else:
+            return abort(404)
     else:
         return jsonify(node_resource_manager.get_all_nodes())
 
@@ -197,7 +232,7 @@ def set_container_resources(container_name):
 
 @node_rescaler.route("/container/<container_name>", methods=['GET'])
 @initialize_ContainerEngine
-def get_container_resources(container_name):
+def get_container_resources_by_name(container_name):
     if container_name != "":
         data = node_resource_manager.get_node_resources_by_name(container_name)
         if data is not None:

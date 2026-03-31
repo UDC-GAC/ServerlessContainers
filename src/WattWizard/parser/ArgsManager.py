@@ -96,6 +96,18 @@ class ArgsManager:
 
     @staticmethod
     def check_influxdb_args(args):
+        # If InfluxDB host is not specified, check if CSV caching is activated
+        if not args.get("influxdb_host", ""):
+            if not args.get("csv_caching_train", False):
+                log("InfluxDB host not specified and train CSV caching is not activated", "ERR")
+                exit(1)
+            if args.get("test_files", "") and not args.get("csv_caching_test", False):
+                log(f"InfluxDB host not specified and test CSV caching is not activated while test files are provided", "ERR")
+                exit(1)
+            log(f"InfluxDB host not specified, data will be retrieved from CSV cache", "WARN")
+            return
+
+        # If InfluxDB host is specified, check that all InfluxDB parameters are provided
         influxdb_args = sum(1 for name in args if name.startswith("influxdb"))
         if influxdb_args == 4:
             with InfluxDBHandler(args["influxdb_host"], args["influxdb_bucket"], args["influxdb_token"], args["influxdb_org"]) as conn:

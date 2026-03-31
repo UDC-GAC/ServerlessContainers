@@ -3,6 +3,8 @@ from __future__ import print_function
 
 from threading import Thread, Lock
 import time
+import math
+import requests
 import traceback
 
 import src.MyUtils.MyUtils as utils
@@ -14,8 +16,8 @@ from src.MyUtils.ConfigValidator import ConfigValidator
 from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
-                         "DEBUG": True, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
-                         "POWER_MODEL": "polyreg_General", "ACTIVE": True}
+                         "ALLOWED_ERROR": 0.05, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
+                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "DEBUG": True, "ACTIVE": True}
 
 
 class EnergyController(Service):
@@ -27,12 +29,12 @@ class EnergyController(Service):
         self.wattwizard_handler = wattwizard.WattWizardUtils()
         self.P_idle = self.wattwizard_handler.get_idle_consumption("host", "polyreg_General")
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
-        self.polling_frequency, self.window_timelapse, self.window_delay, self.debug = None, None, None, None
-        self.structure_guarded, self.active, self.control_policy, self.power_model = None, None, None, None
-        self.event_timeout = None
+        self.polling_frequency, self.event_timeout, self.window_timelapse, self.window_delay = None, None, None, None
+        self.allowed_error, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
+        self.events_system, self.debug, self.active = None, None, None
         self.events_cache = cache_utils.EventsCache()
-        self.pb_cache = cache_utils.PowerBudgetCache()
-        self.alloc_cache = cache_utils.CPUAllocationCache()
+        self.pb_cache = cache_utils.ResourceCache()
+        self.alloc_cache = cache_utils.ResourceCache()
 
     def get_resource_usage(self, resource, structure):
         name, host = structure["name"], structure["host"]
@@ -46,13 +48,13 @@ class EnergyController(Service):
         # Unpacks structure dictionary to values: (U_max, U_min, U_alloc, P_budget, U_usage, P_usage, P_scaling)
         res = structure["resources"]
 
-        return  (res["cpu"]["max"], # U_max
-                 res["cpu"]["min"], # U_min
-                 res["cpu"]["current"], # U_alloc
-                 res["energy"]["current"], # P_budget
-                 self.get_resource_usage("cpu", structure), # U_usage
-                 self.get_resource_usage("energy", structure), # P_usage
-                 self.get_power_scaling(structure)) # P_scaling
+        return (res["cpu"]["max"],  # U_max
+                res["cpu"]["min"],  # U_min
+                res["cpu"]["current"],  # U_alloc
+                res["energy"]["current"],  # P_budget
+                self.get_resource_usage("cpu", structure),  # U_usage
+                self.get_resource_usage("energy", structure),  # P_usage
+                self.get_power_scaling(structure))  # P_scaling
 
     def _unpack_host(self, host):
         # Unpacks host dictionary to values: (U_alloc, U_user, U_system, P_usage, P_scaling)
@@ -84,9 +86,11 @@ class EnergyController(Service):
 
     def power_is_near_pb(self, structure, value):
         P_budget = structure["resources"]["energy"]["current"]
-        is_near = (P_budget * 0.95) < value < (P_budget * 1.05) # P_budget < value < (P_budget + margin)
+        upper_limit = P_budget * (1 + self.allowed_error / 2)
+        lower_limit = P_budget * (1 - self.allowed_error / 2)
+        is_near = lower_limit < value < upper_limit
         if is_near:
-            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {P_budget * 0.95} < {value} < {P_budget * 1.05}", self.debug)
+            utils.log_warning(f"@{structure['name']} Power consumption is near power budget: {lower_limit} < {value} < {upper_limit}", self.debug)
 
         return is_near
 
@@ -137,9 +141,9 @@ class EnergyController(Service):
         # Compute desired host power budget based on current scalings
         P_budget_host = P_usage_host + P_scaling_host
 
-        # 76 is the point where single core model and general model cross their predictions
+        # 74 is the point where single core model and general model cross their predictions
         # TODO: Retrieve this value automatically depending on the CPU
-        power_model = "polyreg_General" if P_budget_host > 76 else "polyreg_Single_Core"
+        power_model = "polyreg_General" if P_budget_host > 74 else "polyreg_Single_Core"
 
         # Get model estimation
         U_scaling_cap = 0
@@ -200,35 +204,39 @@ class EnergyController(Service):
             if amount != 0:
                 request = utils.generate_request(structure, amount, "cpu")
                 self.couchdb_handler.add_request(request)
-                self.alloc_cache.add(structure["_id"], structure["resources"]["cpu"]["current"],
-                                     structure["resources"]["cpu"]["current"] + amount)
+                self.alloc_cache.add(structure["_id"], structure["resources"]["cpu"]["current"] + amount)
 
         except Exception as e:
             utils.log_error(f"{structure['name']} Error capping structure: {e}", self.debug)
 
-    def print_events_info(self, structure, direction, dir_events, op_events):
+    def print_events_info(self, structure, direction, dir_events, op_events, required_events):
         up_events = dir_events if direction == "up" else op_events
         down_events = dir_events if direction == "down" else op_events
-        utils.log_info(f"@{structure['name']} EVENTS: DOWN {down_events} | UP {up_events}", self.debug)
+        utils.log_info(f"@{structure['name']} EVENTS: DOWN {down_events} | UP {up_events} | REQUIRED {required_events} ({direction})", self.debug)
 
     def compute_power_scaling(self, structure, limits, usages):
         structure_id = structure["_id"]
         U_usage, P_usage = usages[utils.res_to_metric("cpu")], usages[utils.res_to_metric("energy")]
-        P_budget = structure["resources"]["energy"]["current"]
+        P_budget = max(structure["resources"]["energy"]["current"], 1e-30)
         P_scaling = P_budget - P_usage
+        abs_ppe = abs(P_scaling / P_budget)
         direction, opposite = ("up", "down") if P_scaling > 0 else ("down", "up")
 
         # If power is already near the power budget the structure doesn't need to scale power
         if self.power_is_near_pb(structure, P_usage):
             return 0
 
-        # If power exceeds "current" and "current" < "max", Guardian should scale "current" instead of the Controller scaling down CPU
+        # If power exceeds "current" and "current" < "max", energy "current" must be scaled instead of the controller scaling down CPU
         if self.error_is_below_potential_pb(structure, P_usage):
             return 0
 
         # If CPU usage exceeds current allocation, power consumption won't show the effect of recent allocation changes
-        if self.cpu_usage_is_above_allocation(structure, U_usage):
-            return 0
+        if P_scaling < 0 and self.cpu_usage_is_above_allocation(structure, U_usage):
+            # However, if power error is too high avoid blocking chained scale-downs
+            if abs_ppe >= self.allowed_error:
+                utils.log_warning(f"@{structure['name']} Power error is too high ({abs_ppe:.2f}), adding event anyway",self.debug)
+            else:
+                return 0
 
         # If structure needs a power scale-up but CPU is below boundary (no CPU bottleneck), skip power scale
         if P_scaling > 0 and self.cpu_is_below_boundary(structure, limits, U_usage):
@@ -236,16 +244,22 @@ class EnergyController(Service):
 
         # Add event and get accumulated events
         self.events_cache.add_event(structure_id, direction)
+
+        # Static events threshold -> Threshold is the same regardless of the error
+        required_events = 4
+        if self.events_system == "dynamic":
+            # Dynamic events threshold -> Higher error requires fewer consecutive events to trigger scaling
+            N_min, N_max, alpha = 1, 4, 1
+            required_events = N_max * (self.allowed_error / abs_ppe) ** alpha
+            required_events = max(min(math.ceil(required_events), N_max), N_min)
+
+        self.events_cache.keep_last_n_events(structure_id, required_events)
         dir_events = self.events_cache.get_events(structure_id, direction)
         op_events = self.events_cache.get_events(structure_id, opposite)
-        self.print_events_info(structure, direction, dir_events, op_events)
-
-        # Higher error requires fewer consecutive events to trigger scaling
-        abs_ppe = abs(P_scaling / P_budget)
-        for ppe_threshold, event_threshold in [(0.25, 1), (0.15, 2), (0.05, 4)]:
-            if abs_ppe >= ppe_threshold and dir_events >= event_threshold and op_events == 0:
-                self.events_cache.clear_events(structure_id)
-                return P_scaling
+        self.print_events_info(structure, direction, dir_events, op_events, required_events)
+        if dir_events >= required_events and op_events == 0:
+            self.events_cache.clear_events(structure_id)
+            return P_scaling
 
         return 0
 
@@ -282,14 +296,22 @@ class EnergyController(Service):
 
             # Make sure CPU allocation is up to date since last changes (i.e., CPU scalings from previous iterations)
             read_alloc = structure["resources"]["cpu"]["current"]
-            old_alloc = self.alloc_cache.get_old(structure["_id"], read_alloc)
-            new_alloc = self.alloc_cache.get_new(structure["_id"], read_alloc)
-            if read_alloc != new_alloc:
-                if read_alloc == old_alloc:
-                    utils.log_warning(f"@{name} CPU allocation is not up to date, a cached value will be used (read = {read_alloc} | cached = {new_alloc})", self.debug)
-                    structure["resources"]["cpu"]["current"] = new_alloc
+            cached_alloc = self.alloc_cache.get(structure["_id"], default=read_alloc)
+            if read_alloc != cached_alloc:
+                utils.log_warning(f"@{name} CPU allocation is not up to date (read = {read_alloc} | cached = {cached_alloc}), getting actual value from NodeRescaler ", self.debug)
+                try:
+                    container_resources = utils.get_container_physical_resources([structure], {"cpu"}, requests.Session(), self.debug)
+                    actual_alloc = container_resources.get(structure["name"], {}).get("resources", {}).get("cpu", {}).get("cpu_allowance_limit")
+                except Exception as e:
+                    actual_alloc = None
+                    utils.log_warning(f"@{name} Error getting CPU allocation from NodeRescaler: {str(e)}", self.debug)
+                if actual_alloc is None:
+                    utils.log_warning(f"@{name} CPU allocation couldn't be obtained from NodeRescaler, using cached value {cached_alloc}", self.debug)
+                    structure["resources"]["cpu"]["current"] = cached_alloc
                 else:
-                    utils.log_warning(f"@{name} Scaler had some trouble scaling from {old_alloc} to {new_alloc} (read = {read_alloc})", self.debug)
+                    utils.log_warning(f"@{name} Actual CPU allocation is {actual_alloc}, setting this value", self.debug)
+                    structure["resources"]["cpu"]["current"] = actual_alloc
+                    self.alloc_cache.add(structure["_id"], actual_alloc)
 
             # Retrieve structure resource limits
             limits = self.couchdb_handler.get_limits(structure)
@@ -367,7 +389,7 @@ class EnergyController(Service):
     def get_supported_structures(self, structures):
         validation_steps = [
             # Check structures have supported subtype
-            (lambda s: utils.structure_subtype_is_supported(s["subtype"]), "All the structures have an unknown structure subtype"),
+            (lambda s: utils.structure_subtype_is_supported(s["subtype"]), "Some structures subtype is not supported"),
         ]
         return self.validate(structures, validation_steps)
 
@@ -379,7 +401,7 @@ class EnergyController(Service):
 
     def work(self, ):
         # Remote database operation
-        structures = utils.get_structures(self.couchdb_handler, self.debug, subtype=self.structure_guarded)
+        structures = utils.get_structures(self.couchdb_handler, self.debug, self.structure_guarded)
         # Get all the structures supported by this controller (i.e. containers)
         supported_structures = self.get_supported_structures(structures)
         # Get the structures that have energy set to guarded
