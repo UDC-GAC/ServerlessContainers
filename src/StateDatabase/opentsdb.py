@@ -75,7 +75,7 @@ class OpenTSDBServer:
         try:
             r = self.session.post("{0}/{1}?details".format(self.server, "api/put"), headers=headers, data=out.getvalue(),
                                   timeout=self.__TIMEOUT)
-            if r.status_code != 204:
+            if not r.ok:
                 return False, {"error": r.json()}
             else:
                 return True, {}
