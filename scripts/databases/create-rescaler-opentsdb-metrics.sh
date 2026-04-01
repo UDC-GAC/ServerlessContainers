@@ -40,7 +40,7 @@ METRICS=(
   structure.mem.max
   structure.mem.min
   # - DISK
-  #structure.disk.usage
+  structure.disk.usage
   structure.disk.current
   #   * READS
   structure.disk_read.usage
