@@ -218,7 +218,8 @@ class SingularityContainerManager:
                     mem_success, mem_resources = get_node_mem_cgroupsv2(self.userid, node_pid, self.container_engine)
                 node_dict[DICT_MEM_LABEL] = mem_resources
 
-            if needed_resources.get("disk", False):
+            # Disk
+            if needed_resources.get("disk", False) or needed_resources.get("disk_read", False) or needed_resources.get("disk_write", False):
                 command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], CONTAINER_MOUNT_POINT)
                 try:
                     output = subprocess.run(command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout

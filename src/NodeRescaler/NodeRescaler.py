@@ -154,7 +154,7 @@ def __get_topology_from_procfs():
 
 
 def __get_needed_resources(_request):
-    needed_resources = {"cpu": False, "mem": False, "disk": False, "energy": False, "net": False}
+    needed_resources = {"cpu": False, "mem": False, "disk": False, "disk_read": False, "disk_write": False, "energy": False, "net": False}
     for resource in needed_resources.keys():
         if resource in _request.args:
             needed_resources[resource] = True
