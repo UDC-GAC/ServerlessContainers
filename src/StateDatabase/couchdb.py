@@ -420,6 +420,9 @@ class CouchDBServer:
     def partial_update_user(self, user, changes, max_tries=10):
         return self.__resilient_partial_update_doc(self.__users_db_name, user, changes, max_tries=max_tries)
 
+    def safe_update_user(self, user, changes, max_tries=10):
+        return self.__safe_update_doc(self.__users_db_name, user)
+
     def delete_user(self, user):
         self.__resilient_delete_doc(self.__users_db_name, user)
 

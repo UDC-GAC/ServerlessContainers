@@ -55,8 +55,7 @@ class BaseRebalancer(ABC):
 
     def get_needed_resources(self):
         resources_balanced_set = set(self.resources_balanced)
-
-        ## Change 'disk' resource to 'disk_read' and 'disk_write'
+        # Change 'disk' resource to 'disk_read' and 'disk_write'
         if "disk" in resources_balanced_set:
             resources_balanced_set.remove("disk")
             resources_balanced_set = resources_balanced_set.union(set(["disk_read", "disk_write"]))
