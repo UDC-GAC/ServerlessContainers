@@ -312,7 +312,7 @@ class Scaler(Service):
         skipped_reqs = len(_requests) - len(valid_requests)
         if skipped_reqs > 0:
             self.log_warning("Skipping {0} requests because info for some needed structures is missing or is not valid: {1}"
-                             .format(skipped_reqs, self.missing.union(self.invalid_containers)))
+                             .format(skipped_reqs, missing.union(self.invalid_containers)))
 
         return valid_requests
 

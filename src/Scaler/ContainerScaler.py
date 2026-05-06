@@ -65,28 +65,36 @@ class ContainerScaler(BaseScaler):
         # MAX SCALING: Check max is above min
         scaled_max_amount = 0
         if request["field"] == "max":
-            if _max + request["amount"] < _min:
-                scaled_max_amount = _max - _min
-                self.log_warning("Container '{0}' cannot be fully scaled: max would be lower than min".format(container["name"]))
-            else:
-                scaled_max_amount = request["amount"]
+            scaled_max_amount = request["amount"]
+            if request["amount"] < 0:
+                if _max < _min:
+                    return 0 # If "max" is already below "min", container cannot be scaled down
+                else:
+                    scaled_max_amount = - min(abs(request["amount"]), _max - _min) # Ensure "max" doesn't go below "min"
             _max += scaled_max_amount
             container["resources"][resource]["max"] = _max
-            amount_for_current = _max - _current
+            amount_for_current = _max - _current  # If max was previously scaled, current will be adjusted to max
 
-            if scaled_max_amount == 0:
-                return scaled_max_amount
+        # CURRENT SCALING: Check current is above min
+        if request["field"] == "current":
+            new_value = _current + amount_for_current
+            # Trim amount for current if new value would be out of bounds
+            if amount_for_current < 0 and new_value < _min:
+                # If scale-down causes "current" to fall below "min", the scaling amount is limited
+                # Scaling down if "current" is already below "min" for unexpected reasons is avoided, in fact "current"
+                # will be scaled up to "min", as "current" should never be lower than "min"
+                if _current < _min:
+                    self.log_warning("Trying to scale down {0} current {1} that was already lower than min {2} (scaling up instead)".format(resource, _current, _min))
+                else:
+                    self.log_warning("Trimming {0} value, new current {1} would be lower than min {2}".format(resource, new_value, _min))
+                amount_for_current = _min - _current
 
-        # CURRENT SCALING: If "max" was previously scaled, "current" will be adjusted to max
-        new_value = _current + amount_for_current
-
-        # Trim amount for current if new value would be out of bounds
-        if new_value < _min:
-            self.log_warning("Trimming {0} value, new current {1} would be lower than min {2}".format(resource, new_value, _min))
-            amount_for_current = _min - _current
-        elif new_value > _max:
-            self.log_warning("Trimming {0} value, new current {1} would be higher than max {2}".format(resource, new_value, _max))
-            amount_for_current = _max - _current
+            elif new_value > _max:
+                if _current < _max:
+                    self.log_warning("Trying to scale up {0} current {1} that was already higher than max {2} (scaling down instead)".format(resource, _current, _max))
+                else:
+                    self.log_warning("Trimming {0} value, new current {1} would be higher than max {2}".format(resource, new_value, _max))
+                amount_for_current = _max - _current
 
         # Check if host has enough free resources for the new current value
         scaled_current_amount = amount_for_current

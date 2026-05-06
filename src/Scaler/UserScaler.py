@@ -18,7 +18,7 @@ class UserScaler(ApplicationScaler):
             if bool(app.get("containers", [])) ^ app.get("running", False):
                 continue
 
-            # Rescale down: if app is running "max" can't be scaled below "min"
+            # Rescale down: if app is running, "max" can't be scaled below "min"
             if amount < 0:
                 lower_limit = app["resources"][resource].get("min", 0) if app.get("running", False) else 0
                 if app["resources"][resource]["max"] + amount >= lower_limit:
@@ -67,6 +67,24 @@ class UserScaler(ApplicationScaler):
 
         # Generate user base request
         user_request = utils.generate_request(user, amount, resource, priority, field)
+
+        # Check user can be scaled respecting QoS contraints
+        if amount < 0:
+            lower_limit = 0
+            if any(applications.get(app_name).get("running", False) for app_name in user.get("clusters", [])):
+                lower_limit = user["resources"][resource]["min"]
+            new_amount = max(min(lower_limit - user["resources"][resource][field], 0), amount)
+            if self.op_should_be_aborted(op_type, user_request, new_amount):
+                return False, [], None
+            user_request["amount"] = new_amount
+
+
+        # When scaling user down, check if max/current limit will go below min
+        if user_request["amount"] < 0 and user["resources"][resource][field] < user["resources"][resource]["min"]:
+            # If user has at least one application running, "max"/"current" can't be scaled below "min"
+            for app_name in user.get("clusters", []):
+                if applications.get(app_name).get("running", False):
+                    return False, [], None
 
         # Propagate user request to applications (if they exist)
         applications_copy = deepcopy(applications)  # Make a copy to avoid modifying original applications here

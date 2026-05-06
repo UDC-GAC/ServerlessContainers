@@ -73,6 +73,14 @@ class ApplicationScaler(ContainerScaler):
         # Generate application base request
         app_request = utils.generate_request(application, amount, resource, priority, field)
 
+        # Check application can be scaled respecting QoS contraints
+        if amount < 0:
+            lower_limit = application["resources"][resource].get("min", 0) if application.get("running", False) else 0
+            new_amount = max(min(lower_limit - application["resources"][resource][field], 0), amount)
+            if self.op_should_be_aborted(op_type, app_request, new_amount):
+                return False, [], None
+            app_request["amount"] = new_amount
+
         # Propagate application request to containers (if they exist)
         containers_copy = deepcopy(containers)  # Make a copy to avoid modifying original containers here
         container_reqs, scaled_amount = self.propagate_application_request(application, containers_copy, app_request)

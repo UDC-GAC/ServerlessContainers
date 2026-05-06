@@ -113,6 +113,17 @@ class BaseScaler(ABC):
             self.log_warning("Structure '{0}' scaling could not be fully planned ({1} out of {2}) and request is part "
                              "of a pair-swapping operation, aborting".format(request["structure"], scaled_amount, request["amount"]))
             return True
+
+        if 0 > request["amount"] > scaled_amount:
+            self.log_warning("Structure '{0}' inconsistent scaling, scaling down more than suggested (amount was {1} and"
+                             " scaled amount is {2}, aborting".format(request["structure"], request["amount"], scaled_amount))
+            return True
+
+        if 0 < request["amount"] < scaled_amount:
+            self.log_warning("Structure '{0}' inconsistent scaling, scaling up more than suggested (amount was {1} and"
+                             " scaled amount is {2}, aborting".format(request["structure"], request["amount"], scaled_amount))
+            return True
+
         return False
 
     def update_request_amount(self, request, scaled_amount):
