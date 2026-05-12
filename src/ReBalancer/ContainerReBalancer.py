@@ -178,7 +178,7 @@ class ContainerRebalancer(BaseRebalancer):
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
                             if container['app']['state'] == 'writing':
-                                container["resources"]["disk_read"]["weight"] * adjusted_writing_ratio
+                                container["resources"]["disk_read"]["weight"] *= adjusted_writing_ratio
                                 weight_dual_write_sum += container["resources"]["disk_read"]["weight"]
                             weight_sum      += container["resources"]["disk_read"]["weight"]
                             weight_read_sum += container["resources"]["disk_read"]["weight"]
@@ -189,7 +189,7 @@ class ContainerRebalancer(BaseRebalancer):
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
                             if container['app']['state'] == 'reading':
-                                container["resources"]["disk_write"]["weight"] * adjusted_reading_ratio
+                                container["resources"]["disk_write"]["weight"] *= adjusted_reading_ratio
                                 weight_dual_read_sum += container["resources"]["disk_write"]["weight"]
                             weight_sum       += container["resources"]["disk_write"]["weight"]
                             weight_write_sum += container["resources"]["disk_write"]["weight"]
