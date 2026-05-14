@@ -244,7 +244,8 @@ class Scaler(Service):
             structure_name = request["structure"]  # The structure name (string), acting as an id
             action = request["action"]  # The action name (string)
             field = request["field"]  # Structure field that will be modified (i.e., "current" or "max")
-            action_field = "{0}_{1}".format(action, field)  # Used as a unique identifier
+            pair_structure = request.get("pair_structure", "system")  # Pair structure
+            action_field = "{0}_{1}_{2}".format(action, field, pair_structure)  # Used as a unique identifier
             stored_request = structure_requests_dict.get(structure_name, {}).get(action_field,  None)
             if stored_request:
                 # A previous request was found for this structure, remove old one and leave the newer one
@@ -265,7 +266,7 @@ class Scaler(Service):
 
                 duplicated_counter += 1
             else:
-                structure_requests_dict[structure_name] = {action_field: request}
+                structure_requests_dict.setdefault(structure_name, {})[action_field] = request
 
         self.couchdb_handler.delete_requests(purged_requests)
 
