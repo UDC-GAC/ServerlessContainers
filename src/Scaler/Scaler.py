@@ -61,7 +61,7 @@ class Scaler(Service):
 
         self.polling_frequency, self.request_timeout, self.check_core_map, self.active, self.debug = None, None, None, None, None
 
-        self.execution_context, self.data_context, self.original_data = None, None, None
+        self.data_context, self.planning_data, self.execution_data = None, None, None
         self.container_scaler, self.application_scaler, self.user_scaler = None, None, None
         self.data_loader, self.last_request_retrieval = None, None
 
@@ -106,7 +106,7 @@ class Scaler(Service):
         self.log_info("." * 80)
 
     def _reset_env(self):
-        self.execution_context, self.data_context, self.original_data = None, None, None
+        self.data_context, self.planning_data, self.execution_data = None, None, None
         self.container_scaler, self.application_scaler, self.user_scaler = None, None, None
         self.invalid_containers = set()
 
@@ -330,7 +330,7 @@ class Scaler(Service):
                         kwargs = {"host_changes": host_changes, "host_lock": host_locks.setdefault(req.host, Lock())}
 
                     fn = getattr(req, method)
-                    futures.append((executor.submit(fn, self.original_data, **kwargs), req))
+                    futures.append((executor.submit(fn, self.execution_data, **kwargs), req))
 
             failed = []
             for future, req in futures:
@@ -364,14 +364,43 @@ class Scaler(Service):
         for thread in threads:
             thread.join()
 
+    def _compute_differences(self, original, updated):
+        diff = {}
+        for key, new_val in updated.items():
+            if isinstance(new_val, dict) and key in original and isinstance(original[key], dict):
+                sub_differences = self._compute_differences(original[key], new_val)
+                if sub_differences:
+                    diff[key] = sub_differences
+            else:
+                if key in original:
+                    # Numbers -> Save difference between new and old values
+                    if isinstance(new_val, (int, float)) and isinstance(original[key], (int, float)):
+                        num_diff = new_val - original[key]
+                        if num_diff != 0:
+                            diff[key] = num_diff
+                    # Lists -> Save full list
+                    elif new_val != original[key]:
+                        # TODO: Support list operations in CouchDB (not needed for host but useful for other structures)
+                        diff[key] = new_val
+                else:
+                    # New key
+                    diff[key] = new_val
+        return diff
+
     def _persist_new_host_information(self, host_changes):
-        def persist_thread(_host, _changes, _handler, _debug):
-            utils.update_structure(_host, _handler, _debug, partial=True, changes=_changes)
+        def persist_thread(_original_host, _updated_host, _handler, _debug):
+            try:
+                _changes = self._compute_differences(_original_host, _updated_host)
+                _handler.safe_update_structure(_original_host["_id"], _changes)
+            except Exception as e:
+                self.log_error("Unexpected error updating host {0}: {1}".format(_original_host["name"], str(e)))
+
         threads = []
-        for hostname in self.original_data.hosts:
+        for hostname in self.data_context.hosts:
             if hostname in host_changes:
-                host = self.original_data.hosts[hostname]
-                t = Thread(target=persist_thread, args=(host, host_changes[hostname], self.couchdb_handler, False))
+                original_host = self.data_context.hosts[hostname]
+                updated_host = host_changes[hostname]
+                t = Thread(target=persist_thread, args=(original_host, updated_host, self.couchdb_handler, False))
                 t.start()
                 threads.append(t)
             else:
@@ -434,13 +463,14 @@ class Scaler(Service):
         # Remove requests that involve structures that are not available
         valid_requests = self._validate_requests(new_requests)
 
-        # Create a copy of data context for execution phase
-        self.original_data = deepcopy(self.data_context)
+        # Create copies of data context for planning and execution phases
+        self.planning_data = deepcopy(self.data_context)
+        self.execution_data = deepcopy(self.data_context)
 
         # Initialise scalers with data context
-        self.container_scaler = ContainerScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
-        self.application_scaler = ApplicationScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
-        self.user_scaler = UserScaler(self.couchdb_handler, self.rescaler_session, self.data_context, self.debug)
+        self.container_scaler = ContainerScaler(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
+        self.application_scaler = ApplicationScaler(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
+        self.user_scaler = UserScaler(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
 
         # 1) PLANNING PHASE
         self._print_header("PHASE 1: PLANNING")

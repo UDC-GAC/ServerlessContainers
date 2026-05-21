@@ -188,6 +188,30 @@ class CouchDBServer:
 
         return output_dict
 
+    def __apply_changes(self, _doc, _changes):
+        for key, value in _changes.items():
+            if isinstance(value, dict):
+                _doc[key] = self.__apply_changes(_doc.get(key, {}), value)
+            else:
+                if key in _doc:
+                    if isinstance(value, list):
+                        # TODO: Support list appends and list removes
+                        if isinstance(_doc[key], list):
+                            for item in value:
+                                if item not in _doc[key]:
+                                    _doc[key].append(item)
+                        else:
+                            raise ValueError("Tried to apply changes using a list value {0} over a non-list value {1} (key = {2})".format(value, _doc[key], key))
+                    else:
+                        _doc[key] += value
+                else:
+                    if isinstance(value, list):
+                        _doc[key] = list(value)
+                    else:
+                        _doc[key] = value
+        return _doc
+
+
     def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
         r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
         if r.status_code != 200 and r.status_code != 201:
@@ -246,9 +270,32 @@ class CouchDBServer:
                 r.raise_for_status()
         return False
 
-    def __safe_update_doc(self, database, doc):
-        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
-        if r.status_code != 200 and r.status_code != 201:
+    def __safe_update_doc(self, database, doc_id, changes, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
+        # If the document does not exist, it cannot be updated
+        matches = self.__find_documents_by_matches(database, {"_id": doc_id})
+        if not matches:
+            return False
+
+        # Get current version of the document and apply changes
+        current_doc = matches[0]
+        updated_doc = self.__apply_changes(current_doc, changes)
+
+        # Save updated document in database
+        r = self.session.post(self.server + "/" + database, data=json.dumps(updated_doc), headers=self.post_doc_headers)
+        if r.status_code in (200, 201):
+            return True
+
+        # If there is some conflict retry until max tries are reached
+        if r.status_code == 409:
+            if previous_tries < max_tries:
+                time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
+                return self.__resilient_update_doc(database, doc_id, changes, previous_tries + 1, max_tries=max_tries)
+            else:
+                r.raise_for_status()
+        elif r.status_code == 404:
+            time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
+            return self.__resilient_update_doc(database, doc_id, changes, previous_tries + 1, max_tries=max_tries)
+        else:
             r.raise_for_status()
         return False
 
@@ -322,8 +369,8 @@ class CouchDBServer:
     def partial_update_structure(self, structure, changes, max_tries=10):
         return self.__resilient_partial_update_doc(self.__structures_db_name, structure, changes, max_tries=max_tries)
 
-    def safe_update_structure(self, structure, changes, max_tries=10):
-        return self.__safe_update_doc(self.__structures_db_name, structure)
+    def safe_update_structure(self, structure_id, changes, max_tries=10):
+        return self.__safe_update_doc(self.__structures_db_name, structure_id, changes, max_tries=max_tries)
 
     # EVENTS #
     def add_event(self, event):
@@ -420,8 +467,8 @@ class CouchDBServer:
     def partial_update_user(self, user, changes, max_tries=10):
         return self.__resilient_partial_update_doc(self.__users_db_name, user, changes, max_tries=max_tries)
 
-    def safe_update_user(self, user, changes, max_tries=10):
-        return self.__safe_update_doc(self.__users_db_name, user)
+    def safe_update_user(self, user_id, changes, max_tries=10):
+        return self.__safe_update_doc(self.__users_db_name, user_id, changes, max_tries=max_tries)
 
     def delete_user(self, user):
         self.__resilient_delete_doc(self.__users_db_name, user)
