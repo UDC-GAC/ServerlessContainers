@@ -30,7 +30,7 @@ from src.ReBalancer.BaseRebalancer import BaseRebalancer
 
 class ContainerRebalancer(BaseRebalancer):
 
-    STATIC_ATTRS = {"couchdb_handler", "opentsdb_handler"}
+    STATIC_ATTRS = {"couchdb_handler", "opentsdb_handler", "rebalance_tracker", "resources_tracker"}
     REBALANCING_LEVEL = "container"
 
     def __init__(self, opentsdb_handler, couchdb_handler):

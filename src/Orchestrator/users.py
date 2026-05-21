@@ -107,6 +107,9 @@ def subscribe_app_to_user(user_name, app_name):
         if app_name in u["clusters"]:
             return abort(400, {"message": "Application '{0}' already subscribed to user '{1}'".format(app_name, u["name"])})
 
+    app["user"] = user_name
+    get_db().partial_update_structure(app, {"user": user_name})
+
     user["clusters"].append(app_name)
     get_db().partial_update_user(user, {"clusters": user["clusters"]})
 
@@ -116,6 +119,11 @@ def subscribe_app_to_user(user_name, app_name):
 @users_routes.route("/user/<user_name>", methods=['DELETE'])
 def desubscribe_user(user_name):
     user = retrieve_user(user_name)
+
+    for app_name in user.get("clusters", []):
+        app = retrieve_structure(app_name)
+        app["user"] = None
+        get_db().partial_update_structure(app, {"user": None})
 
     # Delete the document for this user
     get_db().delete_user(user)
@@ -132,6 +140,9 @@ def desubscribe_app_from_user(user_name, app_name):
     if app_name not in user["clusters"]:
         return abort(400, {"message": "Application '{0}' missing in user '{1}'".format(app_name, user_name)})
     else:
+        app["user"] = None
+        get_db().partial_update_structure(app, {"user": None})
+
         user["clusters"].remove(app_name)
         get_db().partial_update_user(user, {"clusters": user["clusters"]})
     return jsonify(201)
