@@ -460,6 +460,16 @@ def set_container_physical_resources(rescaler_session, container, resources, deb
         log_error(str(json.dumps(r.json())), debug)
         r.raise_for_status()
 
+def get_tcp_container_connections(rescaler_session, host, debug):
+    rescaler_ip = host["host_rescaler_ip"]
+    rescaler_port = host["host_rescaler_port"]
+    r = rescaler_session.get("http://{0}:{1}/container/tcp/".format(rescaler_ip, rescaler_port), headers={'Accept': 'application/json'})
+    if r.status_code == 200:
+        return dict(r.json())
+    else:
+        log_error("Error retrieving TCP info from {0}".format(rescaler_ip), debug)
+        log_error(str(json.dumps(r.json())), debug)
+        r.raise_for_status()
 
 ######################################################################################################
 # BDWATCHDOG

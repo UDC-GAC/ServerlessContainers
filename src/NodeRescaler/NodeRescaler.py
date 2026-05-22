@@ -229,6 +229,10 @@ def set_container_resources(container_name):
     else:
         abort(400)
 
+@node_rescaler.route("/container/tcp/", methods=['GET'])
+@initialize_ContainerEngine
+def get_container_tcp_connections():
+    return jsonify(node_resource_manager.get_node_tcp_connections())
 
 @node_rescaler.route("/container/<container_name>", methods=['GET'])
 @initialize_ContainerEngine

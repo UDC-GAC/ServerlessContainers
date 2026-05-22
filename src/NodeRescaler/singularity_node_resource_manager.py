@@ -32,6 +32,9 @@ import subprocess
 import json
 import re
 
+import glob
+from datetime import datetime, timedelta
+
 ## CGROUPS V1
 # Getters
 from src.NodeRescaler.node_resource_manager import get_node_cpus
@@ -286,3 +289,80 @@ class SingularityContainerManager:
         for c in containers:
             containers_dict[c['instance']] = self.get_node_resources(c, needed_resources)
         return containers_dict
+
+    def get_node_tcp_connections(self):
+
+        window_delay = 15
+
+        # 1: get container - PID mapping
+        containers = self.__get_singularity_instances()
+        container_ip_mapped = {d["ip"]: d["instance"] for d in containers}
+
+        # 2: get TCP lines
+        tcp_logs_folder = os.environ["TCP_TRACKER_LOG_PATH"]
+        list_of_files = glob.glob(f'{tcp_logs_folder}/*.log')
+        latest_file = max(list_of_files, key=os.path.getctime)
+
+        lines = self.__get_last_log_lines(latest_file, window_delay)
+
+        # 3: match lines with container info
+        result = {}
+        for line in lines:
+            parts = line.split(" ")
+            source_address = parts[-3] ## get indexes backwards to avoid problems when the process name (2nd column) has spaces in between
+            dest_address = parts[-2]
+            port = parts[-1]
+            if int(port) == 9866 and source_address in container_ip_mapped and dest_address in container_ip_mapped:
+                source_container = container_ip_mapped[source_address]
+                dest_container = container_ip_mapped[dest_address]
+                if source_container not in result:
+                    result[source_container] = []
+                if dest_container not in result[source_container]:
+                    result[source_container].append(dest_container)
+
+        return result
+
+    def __get_last_log_lines(self, file_path, window_timelapse):
+        """
+        Returns a list of lines whose relative timestamp (in seconds)
+        is within the last <window_timelapse> seconds relative to the system clock.
+        """
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        if not lines:
+            return []
+
+        # 1) Extract the start date from the first line
+        # Format: "Starting log at DD-MM-YY HH:MM:SS"
+        m = re.match(r"Starting TCPConnect at (\d{2}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", lines[0].strip())
+        if not m:
+            raise ValueError(f"The first line is not formatted as expected: {lines[0].strip()}.")
+
+        initial_date = datetime.strptime(m.group(1), "%d-%m-%y %H:%M:%S")
+        initial_date = initial_date + timedelta(seconds=5) ## add the 5 seconds waited before running first curl
+
+        # 2) Current system time
+        current_date = datetime.now()
+        t_ini = current_date - timedelta(seconds=window_timelapse)
+
+        result = []
+        # 3) Process lines with relative timestamps in seconds
+        for line in lines[1:]:
+            line = line.strip()
+            line = re.sub(' +', ' ', line) ## remove intermediate extra whitespaces
+            if not line:
+                continue
+
+            # Extract the timestamp corresponding to the start of the line (e.g., "12.345")
+            m_ts = re.match(r"([0-9]+(?:\.[0-9]+)?)", line)
+            if not m_ts:
+                continue
+
+            relative_seconds = float(m_ts.group(1))
+            line_timestamp = initial_date + timedelta(seconds=relative_seconds)
+
+            if t_ini <= line_timestamp <= current_date:
+                result.append(line)
+
+        return result

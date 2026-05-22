@@ -23,6 +23,7 @@
 # You should have received a copy of the GNU General Public License
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 from copy import deepcopy
+import requests
 
 import src.MyUtils.MyUtils as utils
 from src.ReBalancer.BaseRebalancer import BaseRebalancer
@@ -30,12 +31,13 @@ from src.ReBalancer.BaseRebalancer import BaseRebalancer
 
 class ContainerRebalancer(BaseRebalancer):
 
-    STATIC_ATTRS = {"couchdb_handler", "opentsdb_handler"}
+    STATIC_ATTRS = {"couchdb_handler", "opentsdb_handler", "rescaler_session"}
     REBALANCING_LEVEL = "container"
 
     def __init__(self, opentsdb_handler, couchdb_handler):
         super().__init__(couchdb_handler)
         self.opentsdb_handler = opentsdb_handler
+        self.rescaler_session = requests.Session()
 
     @staticmethod
     def select_donated_field(resource):
@@ -149,7 +151,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if amount_to_scale != 0:
                         self.add_scaling_request(container["container_info"], resource, "current", amount_to_scale, requests)
 
-        def get_new_allocations_by_disk(containers, requests, disk_name):
+        def get_new_allocations_by_disk(containers, requests, disk_name, tcp_connections=None, datanode_name=None):
             total_allocated_bw = 0
             weight_sum = 0
             weight_read_sum = 0
@@ -177,7 +179,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if read_usage_threshold:
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
-                            if container['app']['state'] == 'writing':
+                            if container['app']['state'] == 'writing' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
                                 container["resources"]["disk_read"]["weight"] *= adjusted_writing_ratio
                                 weight_dual_write_sum += container["resources"]["disk_read"]["weight"]
                             weight_sum      += container["resources"]["disk_read"]["weight"]
@@ -188,7 +190,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if write_usage_threshold:
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
-                            if container['app']['state'] == 'reading':
+                            if container['app']['state'] == 'reading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
                                 container["resources"]["disk_write"]["weight"] *= adjusted_reading_ratio
                                 weight_dual_read_sum += container["resources"]["disk_write"]["weight"]
                             weight_sum       += container["resources"]["disk_write"]["weight"]
@@ -310,6 +312,10 @@ class ContainerRebalancer(BaseRebalancer):
                             container['app'] = app
                             break
 
+                ## Get TCP connections
+                tcp_connections = utils.get_tcp_container_connections(self.rescaler_session, host, self.debug)
+                datanode_name = "datanode-{0}".format(host['name'])
+
                 if len(host["resources"]["disks"]) > 1:
                     ## if host has more than one disk the balancing needs to be performed on each disk
                     for disk in host["resources"]["disks"]:
@@ -317,11 +323,11 @@ class ContainerRebalancer(BaseRebalancer):
                         for container in containers:
                             if "disk" in container["resources"] and container["resources"]["disk"]["name"] == disk: disk_containers.append(container)
 
-                        get_new_allocations_by_disk(disk_containers, requests, disk)
+                        get_new_allocations_by_disk(disk_containers, requests, disk, tcp_connections, datanode_name)
                 else:
                     ## There is only one disk in the host
                     disk_name = next(iter(host["resources"]["disks"]))
-                    get_new_allocations_by_disk(containers, requests, disk_name)
+                    get_new_allocations_by_disk(containers, requests, disk_name, tcp_connections, datanode_name)
 
             elif (resource == "disk_read" or resource == "disk_write") and "disks" in host["resources"] and len(host["resources"]["disks"]) > 1:
                 ## if host has more than one disk the balancing needs to be performed on each disk
