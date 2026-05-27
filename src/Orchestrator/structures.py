@@ -85,7 +85,8 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
         return abort(400, {"message": "Invalid parameter state"})
 
     try:
-        value = int(request.json["value"])
+        if parameter == "weight": value = float(request.json["value"])
+        else: value = int(request.json["value"])
         if value < 0:
             return abort(400)
     except KeyError:
