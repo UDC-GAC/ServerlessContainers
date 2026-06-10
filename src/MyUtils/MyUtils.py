@@ -317,37 +317,39 @@ def put_request_to_orchestrator(url, error_message, headers, data):
 ######################################################################################################
 # PROPAGATION/REBALANCING LOGIC
 ######################################################################################################
-def get_best_fit_container(scalable_containers, resource, amount, field):
+def get_best_fit_container(scalable_containers, resource, amount, field, prev_scalings=None):
     best_fit_container, normal_containers, below_min_containers = {}, [], []
+    prev_scalings = {} if prev_scalings is None else prev_scalings
     for container in scalable_containers:
-        if container["resources"][resource][field] < container["resources"][resource]["min"]:
+        if container["resources"][resource][field] + prev_scalings.get(container["name"], 0) < container["resources"][resource]["min"]:
             below_min_containers.append(container)
         else:
             normal_containers.append(container)
-    sorted_containers = sorted(below_min_containers, key=lambda c: c["resources"][resource]["max"] / c["resources"][resource]["min"])
-    sorted_containers += sorted(normal_containers, key=lambda c: c["resources"][resource][field] - c["resources"][resource]["usage"])
+    sorted_containers = sorted(below_min_containers, key=lambda c: (c["resources"][resource][field] + prev_scalings.get(c["name"], 0)) / c["resources"][resource]["min"])
+    sorted_containers += sorted(normal_containers, key=lambda c: c["resources"][resource][field] + prev_scalings.get(c["name"], 0) - c["resources"][resource]["usage"])
     if sorted_containers:
         best_fit_container = sorted_containers[0] if amount > 0 else sorted_containers[-1]
 
     return best_fit_container
 
 
-def get_best_fit_app(scalable_apps, resource, amount):
+def get_best_fit_app(scalable_apps, resource, amount, prev_scalings=None):
     stopped_apps, below_min_apps, running_apps = [], [], []
+    prev_scalings = {} if prev_scalings is None else prev_scalings
     for app in scalable_apps:
         if "usage" not in app["resources"][resource]:
             continue
         if app["resources"][resource].get("current", 0) == 0 and not app.get("running", False):
             stopped_apps.append(app)
         else:
-            if app["resources"][resource]["max"] < app["resources"][resource]["min"]:
+            if app["resources"][resource]["max"] + prev_scalings.get(app["name"], 0) < app["resources"][resource]["min"]:
                 below_min_apps.append(app)
             else:
                 running_apps.append(app)
     # When scaling down, stopped apps are preferred, when scaling up, apps below min are prioritised and then running apps are preferred
-    sorted_apps = sorted(below_min_apps, key=lambda a: a["resources"][resource]["max"] / a["resources"][resource]["min"])
-    sorted_apps += sorted(running_apps, key=lambda a: a["resources"][resource]["max"] - a["resources"][resource]["usage"])
-    sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"])
+    sorted_apps = sorted(below_min_apps, key=lambda a: (a["resources"][resource]["max"] + prev_scalings.get(app["name"], 0)) / a["resources"][resource]["min"])
+    sorted_apps += sorted(running_apps, key=lambda a: a["resources"][resource]["max"] + prev_scalings.get(app["name"], 0) - a["resources"][resource]["usage"])
+    sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"] + prev_scalings.get(app["name"], 0))
 
     return sorted_apps[0] if amount > 0 else sorted_apps[-1]
 
@@ -381,7 +383,7 @@ def query_node_rescaler(rescaler_session, address, params, debug):
         else:
             r.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        log_error("Error trying to get containers info {0} {1}".format(str(e), traceback.format_exc()), debug)
+        log_error("Error trying to get containers info: {0}".format(str(e)), debug)
         return None
 
 
@@ -556,11 +558,18 @@ def split_amount_in_slices(total_amount, slice_amount):
 
 
 def split_amount_in_num_slices(total_amount, number_of_slices):
-    slice_amount = int(total_amount // number_of_slices)
-    last_slice_amount = total_amount % number_of_slices
-    if slice_amount == 0:
-        return [last_slice_amount]
-    return [slice_amount + last_slice_amount] + [slice_amount] * (number_of_slices - 1)
+    if number_of_slices <= 0:
+        raise ValueError("Number of slices cannot be equal or lower than zero: {0}".format(number_of_slices))
+    direction = -1 if total_amount < 0 else 1
+    abs_amount = abs(total_amount)
+    if abs_amount < number_of_slices:
+        return [direction for _ in range(abs_amount)]
+
+    slices = [0] * number_of_slices
+    for i in range(abs_amount):
+        slices[i % number_of_slices] += direction
+
+    return slices
 
 
 def get_cpu_list(cpu_num_string):

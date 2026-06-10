@@ -1,12 +1,11 @@
 from abc import ABC, abstractmethod
-from copy import deepcopy
 
 import src.MyUtils.MyUtils as utils
 from src.Scaler.ScalerUtils import ResourceOperation
 
 
-class BaseScaler(ABC):
-    """Common interface for all scalers (container, application, user)"""
+class BasePlanner(ABC):
+    """Common interface for all planners (container, application, user)"""
 
     SCALING_SPLIT_AMOUNT = 5
     PARENT_LEVEL = None
@@ -30,7 +29,7 @@ class BaseScaler(ABC):
     # --------- Functions to be overwritten by specific scalers ---------
 
     @abstractmethod
-    def plan_operation(self, data_context, operation, swap_part=None):
+    def plan_operation(self, operation, swap_part=None):
         """ Plans the full execution of a single operation, generating the needed requests to carry it out"""
         pass
 
@@ -92,23 +91,30 @@ class BaseScaler(ABC):
     @staticmethod
     def distribute_splits(childs, splits, resource, field, priority, selector):
         success, scaled_amount, generated_requests = True, 0, {}
+        prev_scalings = {}
         while success and len(splits) > 0:
             amount = splits.pop(0)
-            success, best_child, generated_request = selector(childs, amount, resource, field, priority)
+            success, best_child, generated_request = selector(childs, amount, resource, field, priority, prev_scalings)
             if success:
                 child_name = best_child["name"]
 
                 # Save generated request for the best fit child
                 generated_requests.setdefault(child_name, []).append(generated_request)
 
+                # Register scaling for next iterations
+                prev_scalings.setdefault(best_child["name"], 0)
+                prev_scalings[best_child["name"]] += amount
+
                 # Update the child's resources for next iteration
-                best_child["resources"][resource][field] += amount
-                childs[child_name] = best_child
                 scaled_amount += amount
 
         return generated_requests, scaled_amount
 
     def op_should_be_aborted(self, op_type, request, scaled_amount):
+        if scaled_amount == 0:
+            self.log_warning("Structure '{0}' scaling was {1} and has become zero, aborting operation".format(request["structure"], request["amount"]))
+            return True
+
         if scaled_amount != request["amount"] and op_type == "SWAP":
             self.log_warning("Structure '{0}' scaling could not be fully planned ({1} out of {2}) and request is part "
                              "of a pair-swapping operation, aborting".format(request["structure"], scaled_amount, request["amount"]))
@@ -159,43 +165,66 @@ class BaseScaler(ABC):
 
         return operations
 
+    def apply_changes(self, generated_requests):
+        for r in generated_requests:
+            data_type = "{0}s".format(r.get_type())
+            structure = self.data_context.get(data_type, {}).get(r.get("structure_name"))
+            field, amount, resource = r.get("field"), r.get("amount"), r.get("_request", {}).get("resource")
+
+            # Update structure resources
+            structure["resources"][resource][field] += amount
+
+            # Containers must also update host free resources and container physical resources
+            if data_type == "containers":
+                host = self.data_context.hosts.get(structure["host"], None)
+                cont_resources = self.data_context.get("container_resources").get(r.get("structure_name"))
+                resource_limit = r.translate(resource)
+                scaled_current_amount = amount
+
+                # Update host resources
+                if resource in {"disk_read", "disk_write"}:
+                    disk_op = resource.split("_")[-1]
+                    bound_disk = structure["resources"].get("disk", {}).get("name")
+                    host["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] -= scaled_current_amount
+                else:
+                    if field == "max":
+                        scaled_current_amount = structure["resources"][resource]["max"] - structure["resources"][resource]["current"]
+                    host["resources"][resource]["free"] -= scaled_current_amount
+
+                # Update container physical resources
+                cont_resources["resources"][resource][resource_limit] += scaled_current_amount
+
     def plan_operations_execution(self, operations):
         """ For each operation, plans the execution of the generated requests and checks if they can be fully performed.
             If not, the operation is discarded"""
         valid_operations = []
-        # Create a copy of data context to persist only successful operations
-        data_context_copy = deepcopy(self.data_context)
         for op in operations:
             success, donor_success, receiver_success = False, False, False
             generated_requests, donor_requests, receiver_requests = [], [], []
             data_to_update = {}
 
             if op.op_type == "SWAP":
-                donor_success, donor_requests, data_to_update = self.plan_operation(data_context_copy, op, "donor")
+                donor_success, donor_requests = self.plan_operation(op, "donor")
                 if donor_success:
-                    receiver_success, receiver_requests, receiver_data = self.plan_operation(data_context_copy, op, "receiver")
-                    if receiver_success:
-                        data_to_update.update(receiver_data)
+                    receiver_success, receiver_requests = self.plan_operation(op, "receiver")
                 success = donor_success and receiver_success
                 generated_requests = donor_requests + receiver_requests
 
             if op.op_type == "SCALE_UP":
-                success, generated_requests, data_to_update = self.plan_operation(data_context_copy, op)
+                success, generated_requests = self.plan_operation(op)
 
             if op.op_type == "SCALE_DOWN":
-                success, generated_requests, data_to_update = self.plan_operation(data_context_copy, op)
+                success, generated_requests = self.plan_operation(op)
 
             if success and generated_requests:
                 # Add generated requests to operations
                 op.add_requests(generated_requests)
                 # Update data context as operation was successful
-                for data_type in data_to_update:
-                    self.data_context.get(data_type, {}).update(data_to_update[data_type])
+                self.apply_changes(generated_requests)
                 # Save operation as valid
                 valid_operations.append(op)
             else:
-                # Revert changes in data context copy as operation was aborted
-                data_context_copy = deepcopy(self.data_context)
+                # Don't apply changes in data context as operation was aborted
                 self.log_warning("Some error found while planning operation (aborted): {0}".format(op))
 
         return valid_operations

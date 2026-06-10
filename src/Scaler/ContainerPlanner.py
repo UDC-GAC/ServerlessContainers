@@ -1,13 +1,13 @@
 import src.MyUtils.MyUtils as utils
-from src.Scaler.BaseScaler import BaseScaler
+from src.Scaler.BasePlanner import BasePlanner
 from src.Scaler.ScalerUtils import ContainerRequest
 
 
-class ContainerScaler(BaseScaler):
+class ContainerPlanner(BasePlanner):
     PARENT_LEVEL = "application"
     CURRENT_LEVEL = "container"
 
-    def check_host_has_enough_free_resources(self, host_name, needed_amount, resource, container):
+    def check_host_has_enough_free_resources(self, host_name, host_tracker, needed_amount, resource, container):
         # Check host info is available
         host_info = self.data_context.hosts.get(host_name, None)
         if host_info is None:
@@ -18,9 +18,9 @@ class ContainerScaler(BaseScaler):
         bound_disk = container["resources"].get("disk", {}).get("name")
         if resource in {"disk_read", "disk_write"}:
             disk_op = resource.split("_")[-1]
-            host_free = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)]
+            host_free = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] - host_tracker.get(host_name, 0)
         else:
-            host_free = host_info["resources"][resource]["free"]
+            host_free = host_info["resources"][resource]["free"] - host_tracker.get(host_name, 0)
 
         # If no free resources, scaling cannot be performed
         if host_free == 0:
@@ -40,6 +40,7 @@ class ContainerScaler(BaseScaler):
             consumed_read = max_read - host_info["resources"]["disks"][bound_disk]["free_read"]
             consumed_write = max_write - host_info["resources"]["disks"][bound_disk]["free_write"]
             current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
+            # TODO: A disk tracker should be added to support user/app disk operations
             if current_disk_free < needed_amount:
                 missing_shares = needed_amount - current_disk_free
                 self.log_warning("Beware, there is not enough free total bandwidth for container {0} for resource {1} in"
@@ -49,17 +50,16 @@ class ContainerScaler(BaseScaler):
         # Host has enough free resources, scaling can be fully performed
         return True, 0
 
-    def check_container_request(self, container, container_resources, request):
+    def check_container_request(self, container, container_resources, request, host_tracker, op_type, swap_part):
         translation_dict = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk_read": "disk_read_limit",
                             "disk_write": "disk_write_limit", "energy": "energy_limit"}
         resource = request["resource"]
         _min = container["resources"][resource]["min"]
         _max = container["resources"][resource]["max"]
         amount_for_current = request["amount"]
-
         _current = int(container_resources["resources"][resource].get(translation_dict[resource]))
         if _current is None:
-            self.log_warning("Resource '{0}' limit for container '{1}' not found in NodeRescaler info".format(resource, container["name"]))
+            self.log_warning("Physical {0} limit for container '{1}' not found in NodeRescaler info".format(resource, container["name"]))
             return False, 0
 
         # MAX SCALING: Check max is above min
@@ -72,7 +72,6 @@ class ContainerScaler(BaseScaler):
                 else:
                     scaled_max_amount = - min(abs(request["amount"]), _max - _min) # Ensure "max" doesn't go below "min"
             _max += scaled_max_amount
-            container["resources"][resource]["max"] = _max
             amount_for_current = _max - _current  # If max was previously scaled, current will be adjusted to max
 
         # CURRENT SCALING: Check current is above min
@@ -96,26 +95,27 @@ class ContainerScaler(BaseScaler):
                     self.log_warning("Trimming {0} value, new current {1} would be higher than max {2}".format(resource, new_value, _max))
                 amount_for_current = _max - _current
 
-        # Check if host has enough free resources for the new current value
+        # The receiver of a pair-swapping operation can assume resources are available (donor left free resources)
         scaled_current_amount = amount_for_current
-        if amount_for_current > 0:
-            success, missing_shares = self.check_host_has_enough_free_resources(container["host"], amount_for_current, resource, container)
+        if amount_for_current > 0 and not (op_type == "SWAP" and swap_part == "receiver"):
+            # Check if host has enough free resources for the new current value
+            success, missing_shares = self.check_host_has_enough_free_resources(container["host"], host_tracker, amount_for_current, resource, container)
             scaled_current_amount = amount_for_current - missing_shares
-        container_resources["resources"][resource][translation_dict[resource]] += scaled_current_amount
+
+        host_tracker[container["host"]] = host_tracker.get(container["host"], 0) + scaled_current_amount
 
         if request["field"] == "max":
-            final_current = container_resources["resources"][resource][translation_dict[resource]]
+            final_current = _current + scaled_current_amount
             # If "current" scaling comes from a "max" scaling, and "current" could not be adjusted to "max" (due to free
             # host resources limitations), update "max" to the final current level -> should only happen in scale-ups
-            if final_current != container["resources"][resource]["max"]:
-                scaled_max_amount -= container["resources"][resource]["max"] - final_current
-                container["resources"][resource]["max"] = final_current
+            if final_current != _max:
+                scaled_max_amount -= _max - final_current
 
             return scaled_max_amount
         else:
             return scaled_current_amount
 
-    def plan_operation(self, data_context, operation, swap_part=None):
+    def plan_operation(self, operation, host_tracker=None, swap_part=None):
         final_requests, data_to_update = [], {"containers": {}, "container_resources": {}}
 
         # Get info from operation
@@ -124,22 +124,21 @@ class ContainerScaler(BaseScaler):
         field, priority = operation.field, operation.priority
 
         # Get structures from data context
-        container = data_context.containers[structure_name]
-        container_resources = data_context.container_resources[structure_name]
+        container = self.data_context.containers[structure_name]
+        container_resources = self.data_context.container_resources[structure_name]
 
         # Generate container request
         container_request = utils.generate_request(container, amount, resource, priority, field)
 
         # Check container request can be fully performed
-        scaled_amount = self.check_container_request(container, container_resources, container_request)
+        host_tracker = {} if host_tracker is None else host_tracker
+        scaled_amount = self.check_container_request(container, container_resources, container_request, host_tracker, op_type, swap_part)
         if self.op_should_be_aborted(op_type, container_request, scaled_amount):
-            return False, [], None
+            return False, []
         self.update_request_amount(container_request, scaled_amount)
 
         # Create final container request and set data that has been updated
         if container_request["amount"] != 0:
             final_requests = [ContainerRequest(container_request, self.couchdb_handler, self.rescaler_session, self.debug)]
-            data_to_update["containers"][structure_name] = container
-            data_to_update["container_resources"][structure_name] = container_resources
 
-        return True, final_requests, data_to_update
+        return True, final_requests
