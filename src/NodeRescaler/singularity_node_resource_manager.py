@@ -277,7 +277,9 @@ class SingularityContainerManager:
 
     def get_node_resources_by_name(self, container_name, needed_resources=None):
         container = self.__get_singularity_instance_by_name(container_name)
-        return self.get_node_resources(container, needed_resources)
+        if container:
+            return self.get_node_resources(container, needed_resources)
+        return None
 
     def get_all_nodes(self, needed_resources=None):
         containers = self.__get_singularity_instances()
