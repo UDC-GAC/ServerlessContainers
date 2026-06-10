@@ -24,7 +24,6 @@
 # along with ServerlessContainers. If not, see <http://www.gnu.org/licenses/>.
 
 import requests
-from requests.exceptions import HTTPError
 from flask import Blueprint
 from flask import abort
 from flask import jsonify
@@ -354,10 +353,6 @@ def disable_scaler(scaler_service):
     scaler_service["config"]["ACTIVE"] = False
     get_db().partial_update_service(scaler_service, {"config": {"ACTIVE": False}})
 
-    # Wait a little bit, half the polling time of the Scaler
-    polling_freq = scaler_service["config"].get("POLLING_FREQUENCY", SCALER_CONFIG_DEFAULTS["POLLING_FREQUENCY"])
-    time.sleep(int(polling_freq))
-
 
 def restore_scaler_state(scaler_service, previous_state):
     scaler_service["config"]["ACTIVE"] = previous_state
@@ -393,10 +388,12 @@ def desubscribe_container_from_app(structure_name, app_name):
     else:
         app["containers"].remove(cont_name)
         get_db().partial_update_structure(app, {"containers": app["containers"]})
+
     return jsonify(201)
 
 
 def free_container_cores(cont_name, host):
+    changes = {"core_usage_mapping": {}, "free": {}}
     core_map = host["resources"]["cpu"]["core_usage_mapping"]
     freed_shares = 0
     for core in core_map:
@@ -405,91 +402,109 @@ def free_container_cores(cont_name, host):
             freed_shares += core_shares
             core_map[core][cont_name] = 0
             core_map[core]["free"] += core_shares
+            changes["core_usage_mapping"][core] = {cont_name: -core_shares, "free": core_shares}
+
     host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] += freed_shares
+    if freed_shares == 0:
+        return {}
 
-    return {"core_usage_mapping": host["resources"]["cpu"]["core_usage_mapping"], "free": host["resources"]["cpu"]["free"]}
+    changes["free"] = freed_shares
+
+    return changes
 
 
-def free_container_disks(container, host):
+def free_container_disks(container, container_phy_resources, host):
     disk_name = container["resources"]["disk"]["name"]
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
     else:
         try:
-            if "disk_read" not in container["resources"] or "disk_write" not in container["resources"]:
+            if "disk_read" not in container_phy_resources or "disk_write" not in container_phy_resources:
                 return abort(400, {"message": "Missing disk read or write bandwidth in container {0}".format(container)})
 
-            current_disk_read_bw = container["resources"]["disk_read"]["current"]
-            current_disk_write_bw = container["resources"]["disk_write"]["current"]
+            #current_disk_read_bw = container["resources"]["disk_read"]["current"]
+            #current_disk_write_bw = container["resources"]["disk_write"]["current"]
+            current_disk_read_bw = int(container_phy_resources["disk_read"]["disk_read_limit"])
+            current_disk_write_bw = int(container_phy_resources["disk_write"]["disk_write_limit"])
 
             host["resources"]["disks"][disk_name]["free_read"] += current_disk_read_bw
             host["resources"]["disks"][disk_name]["free_write"] += current_disk_write_bw
             host["resources"]["disks"][disk_name]["load"] -= 1
-            return {disk_name: {
-                "free_read": host["resources"]["disks"][disk_name]["free_read"],
-                "free_write": host["resources"]["disks"][disk_name]["free_write"],
-                "load": host["resources"]["disks"][disk_name]["load"]
-            }}
+
+            return {disk_name: {"free_read": current_disk_read_bw, "free_write": current_disk_write_bw, "load": -1}}
         except KeyError:
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
 
-def free_container_resources(container, host):
+def free_container_resources(container, container_phy_resources, host):
     cont_name = container["name"]
     changes = {"resources": {}}
     for resource in container["resources"]:
         if resource == 'cpu':
-            changes["resources"]["cpu"] = free_container_cores(cont_name, host)
+            cpu_changes = free_container_cores(cont_name, host)
+            if cpu_changes:
+                changes["resources"]["cpu"] = cpu_changes
         elif resource in ['disk_read', 'disk_write']:
             continue
         elif resource == 'disk':
-            changes["resources"]["disks"] = free_container_disks(container, host)
+            disk_changes = free_container_disks(container, container_phy_resources, host)
+            if disk_changes:
+                changes["resources"]["disks"] = disk_changes
         else:
-            host["resources"][resource]["free"] += container["resources"][resource]["current"]
-            changes["resources"][resource] = {"free": host["resources"][resource]["free"]}
+            host["resources"][resource]["free"] += int(container_phy_resources[resource]["{0}_limit".format(resource)])
+            changes["resources"][resource] = {"free": int(container_phy_resources[resource]["{0}_limit".format(resource)])}
     return changes
+
 
 @structure_routes.route("/structure/container/<structure_name>", methods=['DELETE'])
 def desubscribe_container(structure_name):
-    container = retrieve_structure(structure_name)
-    cont_name = container["name"]
+    # Disable the Scaler to ensure container limits are not modified, also involving host modifications
+    # Example:
+    # 1 -> Orchestrator reads container memory limit is 1024 MB
+    # 2 -> Scaler reduces container memory by 512 MB and increases host free memory by 512 MB
+    # 3 -> Orchestrator removes and container and increases host free memory by 1024 MB (it should be increased by 512 MB only)
+    # To avoid this, Scaler is disabled and Orchestrator waits scaler_polling_freq to ensure current iteration is finished
 
-    # Look for any application that hosts this container, and remove it from the list
-    apps = get_db().get_structures(subtype="application")
-    for app in apps:
-        if cont_name in app["containers"]:
-            desubscribe_container_from_app(structure_name, app["name"])
-
-    # Disable the Scaler as we will modify the core mapping of a host
+    # Disable Scaler
     scaler_service = get_db().get_service("scaler")
     previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
     if previous_state:
         disable_scaler(scaler_service)
+    disabled_start = time.time()
 
-    success, tries, max_tries = False, 0, 10
-    error = None
-    while not success and tries < max_tries:
-        try:
-            # Free host resources used by this container
-            host = get_db().get_structure(container["host"])
-            changes = free_container_resources(container, host)
-            get_db().safe_update_structure(host, changes)
-            success = True
-        except HTTPError as e:
-            tries += 1
-            error = str(e)
-            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
-            time.sleep(BACK_OFF_TIME_MS / 1000)
-        except Exception as e:
-            tries = max_tries
-            error = str(e)
-            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
-            break
+    # Look for any application that hosts this container, and remove it from the list
+    apps = get_db().get_structures(subtype="application")
+    for app in apps:
+        if structure_name in app["containers"]:
+            desubscribe_container_from_app(structure_name, app["name"])
 
-    if tries >= max_tries:
+    # Container info can be read while Scaler has not finished, because resource info is now got from NodeRescaler
+    container = retrieve_structure(structure_name)
+    container["resources"].keys()
+    node_scaler_session = requests.Session()
+
+    # Wait until Scaler have finished current iteration
+    if previous_state:
+        polling_freq = scaler_service["config"].get("POLLING_FREQUENCY", SCALER_CONFIG_DEFAULTS["POLLING_FREQUENCY"])
+        already_disabled = disabled_start - time.time()
+        time.sleep(max(int(polling_freq- already_disabled), 0))
+
+    try:
+        # Get container real limits
+        container_phy_resources = utils.get_single_container_info_from_rescaler(container["host_rescaler_ip"],
+                                                                                container["host_rescaler_port"],
+                                                                                structure_name,
+                                                                                container["resources"].keys(),
+                                                                                node_scaler_session, True)
+        # Get host
+        host = get_db().get_structure(container["host"])
+        changes = free_container_resources(container, container_phy_resources, host)
+        get_db().safe_update_structure(host["_id"], changes)
+
+    except Exception as e:
         restore_scaler_state(scaler_service, previous_state)
-        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], str(e))})
 
     # Delete the document for this container
     get_db().delete_structure(container)
@@ -505,89 +520,89 @@ def desubscribe_container(structure_name):
 
 
 def map_container_to_host_cores(cont_name, host, needed_shares):
+    def _add_core(_core, _shares):
+        # Save changed amount in core usage mapping
+        if _core not in cpu_changes["core_usage_mapping"]:
+            cpu_changes["core_usage_mapping"][_core] = {"free": 0, cont_name: 0}
+        cpu_changes["core_usage_mapping"][_core]["free"] -= _shares
+        cpu_changes["core_usage_mapping"][_core][cont_name] += _shares
+
+        # Update host local copy
+        core_map[_core]["free"] -= _shares
+        if cont_name not in core_map[_core]:
+            core_map[_core][cont_name] = 0
+        core_map[_core][cont_name] += _shares
+
+        if _core not in used_cores:
+            used_cores.append(_core)
+
     core_map = host["resources"]["cpu"]["core_usage_mapping"]
     host_max_cores = int(host["resources"]["cpu"]["max"] / 100)
     host_cpu_list = [str(i) for i in range(host_max_cores)]
 
     pending_shares = needed_shares
-    used_cores = list()
+    used_cores = []
+    cpu_changes = {"core_usage_mapping": {}, "free": 0}
 
     # Try to satisfy the request by looking and adding a single core
     for core in host_cpu_list:
         if core_map[core]["free"] >= pending_shares:
-            core_map[core]["free"] -= pending_shares
-            core_map[core][cont_name] = pending_shares
+            _add_core(core, pending_shares)
             pending_shares = 0
-            used_cores.append(core)
             break
 
-    # Finally, if unsuccessful, add as many cores as necessary, starting with the
-    # ones with the largest free shares to avoid too much spread
+    # If unsuccessful, add as many cores as necessary, starting with the ones with the largest free shares to avoid too much spread
     if pending_shares > 0:
-        l = list()
-        for core in host_cpu_list:
-            l.append((core, core_map[core]["free"]))
+        l = [(core, core_map[core]["free"]) for core in host_cpu_list]
         l.sort(key=lambda tup: tup[1], reverse=True)  # Sort by free shares
         less_used_cores = [i[0] for i in l]
 
         for core in less_used_cores:
-            # If this core has free shares
-            if core_map[core]["free"] > 0 and pending_shares > 0:
-                if cont_name not in core_map[core]:
-                    core_map[core][cont_name] = 0
-
-                # If it has more free shares than needed, assign them and finish
-                if core_map[core]["free"] >= pending_shares:
-                    core_map[core]["free"] -= pending_shares
-                    core_map[core][cont_name] += pending_shares
-                    pending_shares = 0
-                    used_cores.append(core)
-                    break
-                else:
-                    # Otherwise, assign as many as possible and continue
-                    core_map[core][cont_name] += core_map[core]["free"]
-                    pending_shares -= core_map[core]["free"]
-                    core_map[core]["free"] = 0
-                    used_cores.append(core)
+            if pending_shares <= 0:
+                break
+            if core_map[core]["free"] > 0:
+                alloc_shares = min(core_map[core]["free"], pending_shares)
+                _add_core(core, alloc_shares)
+                pending_shares -= alloc_shares
 
     if pending_shares > 0:
         return abort(400, {"message": "Container host does not have enough free CPU shares as requested"})
 
-    host["resources"]["cpu"]["core_usage_mapping"] = core_map
     host["resources"]["cpu"]["free"] -= needed_shares
+    cpu_changes["free"] -= needed_shares
 
-    return used_cores, {"core_usage_mapping": core_map, "free": host["resources"]["cpu"]["free"]}
+    return used_cores, cpu_changes
+
 
 def map_container_to_host_disks(resource_dict, container, host):
     disk_name = container["resources"]["disk"]["name"]
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
-    else:
-        try:
-            free_disk_read_bw = host["resources"]["disks"][disk_name]["free_read"]
-            free_disk_write_bw = host["resources"]["disks"][disk_name]["free_write"]
-        except KeyError:
-            return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
-        needed_disk_read_bw = container["resources"]["disk_read"]["current"]
-        needed_disk_write_bw = container["resources"]["disk_write"]["current"]
+    try:
+        free_disk_read_bw = host["resources"]["disks"][disk_name]["free_read"]
+        free_disk_write_bw = host["resources"]["disks"][disk_name]["free_write"]
+    except KeyError:
+        return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
-        consumed_disk_read_bw = host["resources"]["disks"][disk_name]["max_read"] - free_disk_read_bw
-        consumed_disk_write_bw = host["resources"]["disks"][disk_name]["max_write"] - free_disk_write_bw
-        total_free = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"]) - consumed_disk_read_bw - consumed_disk_write_bw
+    needed_disk_read_bw = container["resources"]["disk_read"]["current"]
+    needed_disk_write_bw = container["resources"]["disk_write"]["current"]
 
-        if needed_disk_read_bw > free_disk_read_bw or needed_disk_write_bw > free_disk_write_bw or needed_disk_read_bw + needed_disk_write_bw > total_free:
-            return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
+    consumed_disk_read_bw = host["resources"]["disks"][disk_name]["max_read"] - free_disk_read_bw
+    consumed_disk_write_bw = host["resources"]["disks"][disk_name]["max_write"] - free_disk_write_bw
+    total_free = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"]) - consumed_disk_read_bw - consumed_disk_write_bw
 
-        host["resources"]["disks"][disk_name]["free_read"] -= needed_disk_read_bw
-        host["resources"]["disks"][disk_name]["free_write"] -= needed_disk_write_bw
-        host["resources"]["disks"][disk_name]["load"] += 1
+    if needed_disk_read_bw > free_disk_read_bw or needed_disk_write_bw > free_disk_write_bw or needed_disk_read_bw + needed_disk_write_bw > total_free:
+        return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
 
-        return needed_disk_read_bw, needed_disk_write_bw, {
-            disk_name: {"free_read": host["resources"]["disks"][disk_name]["free_read"],
-                        "free_write": host["resources"]["disks"][disk_name]["free_write"],
-                        "load": host["resources"]["disks"][disk_name]["load"]}
-        }
+    host["resources"]["disks"][disk_name]["free_read"] -= needed_disk_read_bw
+    host["resources"]["disks"][disk_name]["free_write"] -= needed_disk_write_bw
+    host["resources"]["disks"][disk_name]["load"] += 1
+
+    disk_changes = {disk_name: {"free_read": -needed_disk_read_bw, "free_write": -needed_disk_write_bw, "load": 1}}
+
+    return needed_disk_read_bw, needed_disk_write_bw, disk_changes
+
 
 def map_container_to_host_resources(container, host):
     cont_name = container["name"]
@@ -598,21 +613,25 @@ def map_container_to_host_resources(container, host):
             continue
         resource_dict[resource] = {}
         if resource == 'disk':
-            read_limit, write_limit, changes["resources"]["disks"] = map_container_to_host_disks(resource_dict, container, host)
+            read_limit, write_limit, disk_changes = map_container_to_host_disks(resource_dict, container, host)
             resource_dict["disk_read"] = {"disk_read_limit": read_limit}
             resource_dict["disk_write"] = {"disk_write_limit": write_limit}
+            if disk_changes:
+                changes["resources"]["disks"] = disk_changes
         else:
             needed_amount = container["resources"][resource]["current"]
             if host["resources"][resource]["free"] < needed_amount:
                 return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
             if resource == 'cpu':
+                used_cores, cpu_changes = map_container_to_host_cores(cont_name, host, needed_amount)
                 resource_dict[resource]["cpu_allowance_limit"] = needed_amount
-                used_cores, changes["resources"]["cpu"] = map_container_to_host_cores(cont_name, host, needed_amount)
                 resource_dict[resource]["cpu_num"] = ",".join(used_cores)
+                if cpu_changes:
+                    changes["resources"]["cpu"] = cpu_changes
             else:
                 host["resources"][resource]["free"] -= needed_amount
-                changes["resources"][resource] = {"free": host["resources"][resource]["free"]}
-                resource_dict[resource][f"{resource}_limit"] = needed_amount
+                changes["resources"][resource] = {"free": -needed_amount}
+                resource_dict[resource]["{0}_limit".format(resource)] = needed_amount
 
     return resource_dict, changes
 
@@ -694,51 +713,28 @@ def subscribe_container(structure_name):
     limits["type"] = 'limit'
     limits["name"] = container["name"]
 
-    # Disable the Scaler as we will modify the core mapping of a host
-    # TODO: Maybe Scaler could be active as host is updated with safe operations
-    scaler_service = get_db().get_service("scaler")
-    previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
-    if previous_state:
-        disable_scaler(scaler_service)
-
     # Get the host info
-    success, tries, max_tries = False, 0, 10
-    error = None
-    while not success and tries < max_tries:
+    try:
+        host = get_db().get_structure(container["host"])
+        resource_dict, changes = map_container_to_host_resources(container, host)
+
+        # Set container physical resources through NodeRescaler
+        utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
+        get_db().add_structure(container)
+        get_db().safe_update_structure(host["_id"], changes)
+
+        # Check if limits already exist
         try:
-            host = get_db().get_structure(container["host"])
-            resource_dict, changes = map_container_to_host_resources(container, host)
-            utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
+            existing_limit = get_db().get_limits(container)
+            existing_limit['resources'] = limits['resources']
+            get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
+        except ValueError:
+            # Limits do not exist yet
+            get_db().add_limit(limits)
 
-            get_db().add_structure(container)
-            get_db().safe_update_structure(host, changes)
-
-            # Check if limits already exist
-            try:
-                existing_limit = get_db().get_limits(container)
-                existing_limit['resources'] = limits['resources']
-                get_db().partial_update_limit(existing_limit, {"resources": limits['resources']})
-            except ValueError:
-                # Limits do not exist yet
-                get_db().add_limit(limits)
-
-            success = True
-        except HTTPError as e:
-            tries += 1
-            error = str(e)
-            print("ERROR: It may be a conflict updating {0} (tries={1}): {2}".format(container["host"], tries, error))
-            time.sleep(BACK_OFF_TIME_MS / 1000)
-        except Exception as e:
-            tries = max_tries
-            error = str(e)
-            print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], error))
-            break
-
-    # Restore the previous state of the Scaler service
-    restore_scaler_state(scaler_service, previous_state)
-
-    if tries >= max_tries:
-        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], error)})
+    except Exception as e:
+        print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], str(e)))
+        return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], str(e))})
 
     return jsonify(201)
 

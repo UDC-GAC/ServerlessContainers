@@ -399,14 +399,17 @@ def get_containers_info_from_rescaler(container_host_ip, container_host_port, ne
 
 def fill_container_dict(hosts_targets, needed_resources, rescaler_session, debug):
     def _req(_ip, _port, _resources, _info, _valid, _session, _debug):
-        if len(_valid) == 1:
-            cont_name = next(iter(_valid))
-            host_containers = {cont_name: get_single_container_info_from_rescaler(_ip, _port, next(iter(_valid)), _resources, _session, _debug)}
-        else:
-            host_containers = get_containers_info_from_rescaler(_ip, _port, _resources, _session, _debug)
-        for cont_name in host_containers:
-            if cont_name in _valid:
-                _info[cont_name] = host_containers[cont_name]
+        try:
+            if len(_valid) == 1:
+                cont_name = next(iter(_valid))
+                host_containers = {cont_name: get_single_container_info_from_rescaler(_ip, _port, next(iter(_valid)), _resources, _session, _debug)}
+            else:
+                host_containers = get_containers_info_from_rescaler(_ip, _port, _resources, _session, _debug)
+            for cont_name in host_containers:
+                if cont_name in _valid:
+                    _info[cont_name] = host_containers[cont_name]
+        except Exception as e:
+            log_error("Error getting container physical resources from host '{0}': {1}".format(_ip, str(e)), _debug)
 
     threads, container_info = [], {}
     for (host_ip, host_port), valid_containers in hosts_targets.items():

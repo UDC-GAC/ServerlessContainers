@@ -123,6 +123,7 @@ class Service:
         # Configure service logging
         handler = RotatingFileHandler(filename=self.service_name + ".log", maxBytes=self.MAX_LOG_SIZE, backupCount=self.BACKUP_COUNT)
         logging.basicConfig(level=logging.INFO, format=utils.LOGGING_FORMAT, datefmt=utils.LOGGING_DATEFMT, handlers=[handler])
+        logging.Formatter.converter = time.gmtime
 
         self.on_start()
 

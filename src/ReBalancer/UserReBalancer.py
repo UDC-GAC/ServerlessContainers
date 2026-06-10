@@ -55,13 +55,19 @@ class UserRebalancer(BaseRebalancer):
     def is_receiver(self, data):
         return (data["max"] - data["usage"]) < (self.diff_percentage * data["max"])
 
-    def rebalance_users(self, users):
+    def rebalance_users(self, users, applications):
         utils.log_info("------------------------ USER BALANCING -----------------------", self.debug)
         user_requests, final_user_requests = {}, {}
 
         # Filter only users that have at least one application running
         if self.only_running:
-            users = [user for user in users if any(app.get("running", False) for app in user.get("clusters", []))]
+            active_users = []
+            for user in users:
+                user_apps = [app for app in applications if app["name"] in user.get("clusters", [])]
+                if any(app.get("running", False) for app in user_apps):
+                    active_users.append(user)
+            utils.log_info("Found {0} active users out of {1}".format(len(active_users), len(users)), self.debug)
+            users = active_users
 
         if not users:
             utils.log_warning("No {0} users to rebalance".format("running" if self.only_running else "registered"), self.debug)

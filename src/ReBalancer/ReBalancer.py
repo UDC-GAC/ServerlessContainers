@@ -47,6 +47,7 @@ CONFIG_DEFAULT_VALUES = {
     "CONTAINERS_SCOPE": "application",
     "BALANCING_POLICY": "rules",
     "BALANCING_METHOD": "pair_swapping",
+    "COMPENSATE": False,
     "ONLY_RUNNING": False,
     "DEBUG": True,
     "ACTIVE": True
@@ -63,7 +64,7 @@ class ReBalancer(Service):
         self.application_rebalancer = ApplicationRebalancer(self.couchdb_handler)
         self.user_rebalancer = UserRebalancer(self.couchdb_handler)
         self.window_timelapse, self.window_delay, self.diff_percentage, self.stolen_percentage = None, None, None, None
-        self.resources_balanced, self.structures_balanced, self.containers_scope = None, None, None
+        self.resources_balanced, self.structures_balanced, self.containers_scope, self.compensate = None, None, None, None
         self.balancing_policy, self.balancing_method, self.only_running, self.debug = None, None, None, None
 
     def on_config_updated(self, service_config):
@@ -85,11 +86,8 @@ class ReBalancer(Service):
 
     def get_structures(self):
         users, applications, containers = [], [], []
-        if "user" in self.structures_balanced:
+        if "user" in self.structures_balanced or "application" in self.structures_balanced:
             users = utils.get_structures(self.couchdb_handler, self.debug, "user")
-        if "application" in self.structures_balanced:
-            if not users:
-                users = utils.get_structures(self.couchdb_handler, self.debug, "user")
             applications = utils.get_structures(self.couchdb_handler, self.debug, "application")
         if "container" in self.structures_balanced:
             if not applications:
@@ -102,7 +100,7 @@ class ReBalancer(Service):
         users, applications, containers = self.get_structures()
         user_requests, app_requests = {}, {}
         if "user" in self.structures_balanced:
-            user_requests = self.user_rebalancer.rebalance_users(users)
+            user_requests = self.user_rebalancer.rebalance_users(users, applications)
 
         if "application" in self.structures_balanced:
             app_requests = self.application_rebalancer.rebalance_applications(users, user_requests, applications)

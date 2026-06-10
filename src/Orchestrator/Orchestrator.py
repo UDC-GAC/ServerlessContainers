@@ -33,6 +33,8 @@ from src.Orchestrator.rules import rules_routes
 from src.Orchestrator.services import service_routes
 from src.Orchestrator.structures import structure_routes
 from src.Orchestrator.users import users_routes
+from datetime import datetime, timezone
+from werkzeug.serving import WSGIRequestHandler
 
 app = Flask(__name__)
 
@@ -41,6 +43,10 @@ app.register_blueprint(service_routes)
 app.register_blueprint(structure_routes)
 app.register_blueprint(users_routes)
 
+
+class UTCRequestHandler(WSGIRequestHandler):
+    def log_date_time_string(self):
+        return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S%z")
 
 @app.route("/heartbeat", methods=['GET'])
 def heartbeat():
@@ -56,4 +62,4 @@ if __name__ == "__main__":
     if args.database_url_string:
         COUCHDB_URL = args.database_url_string
 
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, request_handler=UTCRequestHandler)
