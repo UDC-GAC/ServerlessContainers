@@ -594,3 +594,74 @@ def run_in_threads(structures, worker_fn, *worker_args):
 
     for process in threads:
         process.join()
+
+
+def generate_core_dist(topology, dist_name):
+    core_dist = []
+    supported_distributions = {"Group_P&L", "Group_1P_2L", "Group_PP_LL", "Spread_P&L", "Spread_PP_LL"}
+    if dist_name not in supported_distributions:
+        raise ValueError("Invalid core distribution: {0}. Supported: {1}.".format(dist_name, supported_distributions))
+
+    # Pairs of physical and logical cores, one socket at a time
+    if dist_name == "Group_P&L":
+        for sk_id in topology:
+            for core_id in topology[sk_id]:
+                core_dist.extend(topology[sk_id][core_id])
+
+    # First physical cores, then logical cores, one socket at a time
+    if dist_name == "Group_1P_2L":
+        for sk_id in topology:
+            phy_c, log_c = [], []
+            for core_id in topology[sk_id]:
+                phy_c.append(topology[sk_id][core_id][0])
+                log_c.extend(topology[sk_id][core_id][1:])
+            core_dist.extend(phy_c)
+            core_dist.extend(log_c)
+
+    # First physical cores, from both sockets, then logical cores
+    if dist_name == "Group_PP_LL":
+        phy_c, log_c = [], []
+        for sk_id in topology:
+            for core_id in topology[sk_id]:
+                phy_c.append(topology[sk_id][core_id][0])
+                log_c.extend(topology[sk_id][core_id][1:])
+        core_dist.extend(phy_c)
+        core_dist.extend(log_c)
+
+    # Pairs of physical and logical cores, alternating between sockets
+    if dist_name == "Spread_P&L":
+        other_sk = sorted(topology, key=lambda sk: len(topology[sk]))
+        sk_id = other_sk.pop()
+        for core_id in topology[sk_id]:
+            core_dist.extend(topology[sk_id][core_id])
+            for sk2_id in other_sk:
+                core_dist.extend(topology[sk2_id].get(core_id, []))
+
+    # First physical cores, then logical cores, alternating between sockets
+    if dist_name == "Spread_PP_LL":
+        other_sk = sorted(topology, key=lambda sk: len(topology[sk]))
+        sk_id = other_sk.pop()
+        phy_c, log_c = [], []
+        for core_id in topology[sk_id]:
+            phy_c.append(topology[sk_id][core_id][0])
+            log_c.extend(topology[sk_id][core_id][1:])
+            for sk2_id in other_sk:
+                phy_c.extend(topology[sk2_id].get(core_id, [])[0:1])
+                log_c.extend(topology[sk2_id][core_id][1:])
+        core_dist.extend(phy_c)
+        core_dist.extend(log_c)
+
+    return [str(c) for c in core_dist]
+
+
+def get_cpu_topology(node_scaler_session, container):
+    rescaler_ip = container["host_rescaler_ip"]
+    rescaler_port = container["host_rescaler_port"]
+    r = node_scaler_session.get("http://{0}:{1}/host/cpu_topology".format(rescaler_ip, rescaler_port),
+                                headers={'Accept': 'application/json'})
+    if r.status_code == 200:
+        return dict(r.json())
+
+    print("Error getting CPU topology from host in IP {0}".format(rescaler_ip))
+    r.raise_for_status()
+

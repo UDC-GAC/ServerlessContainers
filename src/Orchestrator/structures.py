@@ -28,6 +28,7 @@ from flask import Blueprint
 from flask import abort
 from flask import jsonify
 from flask import request
+from datetime import datetime, timezone
 import time
 
 import src.MyUtils.MyUtils as utils
@@ -39,6 +40,10 @@ structure_routes = Blueprint('structures', __name__)
 CONTAINER_KEYS = ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]
 HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]
 APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script", "app_jar"]
+
+
+def print_with_date(msg):
+    print("[{0}] {1}".format(datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S%z'), msg), flush=True)
 
 
 @structure_routes.route("/structure/", methods=['GET'])
@@ -500,11 +505,17 @@ def desubscribe_container(structure_name):
         return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], str(e))})
 
     # Delete the document for this container
-    get_db().delete_structure(container)
+    try:
+        get_db().delete_structure(container)
+    except Exception as e:
+        print_with_date("Unexpected error removing container {0} from StateDatabase".format(structure_name, str(e)))
 
     # Delete the limits for this container
-    limits = get_db().get_limits(container)
-    get_db().delete_limit(limits)
+    try:
+        limits = get_db().get_limits(container)
+        get_db().delete_limit(limits)
+    except ValueError:
+        print_with_date("Container {0} has no limits, ignoring limits delete".format(structure_name))
 
     # Restore the previous state of the Scaler service
     restore_scaler_state(scaler_service, previous_state)
@@ -512,7 +523,7 @@ def desubscribe_container(structure_name):
     return jsonify(201)
 
 
-def map_container_to_host_cores(cont_name, host, needed_shares):
+def map_container_to_host_cores(cont_name, host, needed_shares, core_distribution):
     def _add_core(_core, _shares):
         # Save changed amount in core usage mapping
         if _core not in cpu_changes["core_usage_mapping"]:
@@ -536,27 +547,26 @@ def map_container_to_host_cores(cont_name, host, needed_shares):
     pending_shares = needed_shares
     used_cores = []
     cpu_changes = {"core_usage_mapping": {}, "free": 0}
+    completely_free_cores = [c for c in core_distribution if core_map[c]["free"] == 100]
 
-    # Try to satisfy the request by looking and adding a single core
-    for core in host_cpu_list:
-        if core_map[core]["free"] >= pending_shares:
-            _add_core(core, pending_shares)
-            pending_shares = 0
+    # Try getting completely free cores first
+    for core in completely_free_cores:
+        if pending_shares <= 0:
             break
+        alloc_shares = min(core_map[core]["free"], pending_shares)
+        _add_core(core, alloc_shares)
+        pending_shares -= alloc_shares
 
-    # If unsuccessful, add as many cores as necessary, starting with the ones with the largest free shares to avoid too much spread
+    # If not enough, use other cores, starting with the ones with the largest free shares to avoid too much spread
     if pending_shares > 0:
-        l = [(core, core_map[core]["free"]) for core in host_cpu_list]
-        l.sort(key=lambda tup: tup[1], reverse=True)  # Sort by free shares
-        less_used_cores = [i[0] for i in l]
-
+        less_used_cores = [c for c in core_distribution if core_map[c]["free"] > 0]
+        less_used_cores.sort(key=lambda c: core_map[c]["free"], reverse=True)  # Sort by free shares
         for core in less_used_cores:
             if pending_shares <= 0:
                 break
-            if core_map[core]["free"] > 0:
-                alloc_shares = min(core_map[core]["free"], pending_shares)
-                _add_core(core, alloc_shares)
-                pending_shares -= alloc_shares
+            alloc_shares = min(core_map[core]["free"], pending_shares)
+            _add_core(core, alloc_shares)
+            pending_shares -= alloc_shares
 
     if pending_shares > 0:
         return abort(400, {"message": "Container host does not have enough free CPU shares as requested"})
@@ -596,8 +606,7 @@ def map_container_to_host_disks(resource_dict, container, host):
 
     return needed_disk_read_bw, needed_disk_write_bw, disk_changes
 
-
-def map_container_to_host_resources(container, host):
+def map_container_to_host_resources(container, host, cpu_topology):
     cont_name = container["name"]
     resource_dict = {}
     changes = {"resources": {}}
@@ -616,7 +625,8 @@ def map_container_to_host_resources(container, host):
             if host["resources"][resource]["free"] < needed_amount:
                 return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
             if resource == 'cpu':
-                used_cores, cpu_changes = map_container_to_host_cores(cont_name, host, needed_amount)
+                core_distribution = utils.generate_core_dist(cpu_topology, "Group_PP_LL")
+                used_cores, cpu_changes = map_container_to_host_cores(cont_name, host, needed_amount, core_distribution)
                 resource_dict[resource]["cpu_allowance_limit"] = needed_amount
                 resource_dict[resource]["cpu_num"] = ",".join(used_cores)
                 if cpu_changes:
@@ -709,7 +719,8 @@ def subscribe_container(structure_name):
     # Get the host info
     try:
         host = get_db().get_structure(container["host"])
-        resource_dict, changes = map_container_to_host_resources(container, host)
+        cpu_topology = utils.get_cpu_topology(node_scaler_session, container)
+        resource_dict, changes = map_container_to_host_resources(container, host, cpu_topology)
 
         # Set container physical resources through NodeRescaler
         utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
@@ -726,7 +737,7 @@ def subscribe_container(structure_name):
             get_db().add_limit(limits)
 
     except Exception as e:
-        print("Unexpected error updating {0}, aborting operation: {1}".format(container["host"], str(e)))
+        print_with_date("Unexpected error during {0} subscription, aborting operation: {1}".format(structure_name, str(e)))
         return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], str(e))})
 
     return jsonify(201)
