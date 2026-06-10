@@ -284,7 +284,10 @@ class BaseRebalancer(ABC):
                                   "(donated field = {1})".format(structure["name"], d_field), self.debug)
                 continue
 
-            # Divide the total amount to donate in slices of 25 units
+            if stolen_amount == 0:
+                continue
+
+            # Divide the total amount in as many slices as available receivers
             key = self.get_donor_slice_key(structure, resource)
             for slice_amount in utils.split_amount_in_num_slices(int(stolen_amount), len(receivers)):
                 donor_slices.setdefault(key, []).append((structure, slice_amount))
@@ -411,10 +414,10 @@ class BaseRebalancer(ABC):
             # Compute amount that can be stolen from donors and split in slices
             donor_slices = self.get_donor_slices(donors, receivers, resource, d_field)
 
-            while donor_slices:
-                # Print current donor slices
-                self.print_donor_slices(donor_slices)
+            # Print current donor slices
+            self.print_donor_slices(donor_slices)
 
+            while donor_slices:
                 # If no receivers left, stop redistribution process
                 if not receivers:
                     break
