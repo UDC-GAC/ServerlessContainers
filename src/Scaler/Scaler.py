@@ -35,9 +35,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.opentsdb as bdwatchdog
-from src.Scaler.ContainerScaler import ContainerScaler
-from src.Scaler.ApplicationScaler import ApplicationScaler
-from src.Scaler.UserScaler import UserScaler
+from src.Scaler.ContainerPlanner import ContainerPlanner
+from src.Scaler.ApplicationPlanner import ApplicationPlanner
+from src.Scaler.UserPlanner import UserPlanner
 from src.Scaler.DataLoader import DataLoader
 from src.MyUtils.ConfigValidator import ConfigValidator
 from src.Service.Service import Service
@@ -62,7 +62,7 @@ class Scaler(Service):
         self.polling_frequency, self.request_timeout, self.check_core_map, self.active, self.debug = None, None, None, None, None
 
         self.data_context, self.planning_data, self.execution_data = None, None, None
-        self.container_scaler, self.application_scaler, self.user_scaler = None, None, None
+        self.container_planner, self.application_planner, self.user_planner = None, None, None
         self.data_loader, self.last_request_retrieval = None, None
 
     @staticmethod
@@ -107,7 +107,7 @@ class Scaler(Service):
 
     def _reset_env(self):
         self.data_context, self.planning_data, self.execution_data = None, None, None
-        self.container_scaler, self.application_scaler, self.user_scaler = None, None, None
+        self.container_planner, self.application_planner, self.user_planner = None, None, None
         self.invalid_containers = set()
 
     # ----------------------------------- Core map checkers -----------------------------------
@@ -416,19 +416,19 @@ class Scaler(Service):
         # 1) Plan user requests execution and generate user operations
         if user_reqs:
             self.log_info("--- Processing {0} user requests ---".format(len(user_reqs)))
-            user_operations = self.user_scaler.plan(user_reqs)
+            user_operations = self.user_planner.plan(user_reqs)
             self.log_info("--- Generated {0} user operations ---".format(len(user_operations)))
 
         # 2) Plan application requests execution and generate application operations
         if app_reqs:
             self.log_info("--- Processing {0} application requests ---".format(len(app_reqs)))
-            app_operations = self.application_scaler.plan(app_reqs)
+            app_operations = self.application_planner.plan(app_reqs)
             self.log_info("--- Generated {0} application operations ---".format(len(app_operations)))
 
         # 3) Plan container requests execution and generate container operations
         if cont_reqs:
             self.log_info("--- Processing {0} container requests ---".format(len(cont_reqs)))
-            cont_operations = self.container_scaler.plan(cont_reqs)
+            cont_operations = self.container_planner.plan(cont_reqs)
             self.log_info("--- Generated {0} container operations ---".format(len(cont_operations)))
 
         t1 = time.time()
@@ -468,9 +468,9 @@ class Scaler(Service):
         self.execution_data = deepcopy(self.data_context)
 
         # Initialise scalers with data context
-        self.container_scaler = ContainerScaler(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
-        self.application_scaler = ApplicationScaler(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
-        self.user_scaler = UserScaler(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
+        self.container_planner = ContainerPlanner(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
+        self.application_planner = ApplicationPlanner(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
+        self.user_planner = UserPlanner(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
 
         # 1) PLANNING PHASE
         self._print_header("PHASE 1: PLANNING")
