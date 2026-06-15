@@ -34,7 +34,7 @@ class BaseRebalancer(ABC):
 
     STATIC_ATTRS = {"couchdb_handler", "rebalance_tracker", "resources_tracker"}
     MANDATORY_FIELDS = {"max", "current", "usage", "min"}
-    BALANCEABLE_RESOURCES = {"cpu", "disk", "energy"}
+    BALANCEABLE_RESOURCES = {"cpu", "energy"}
     REBALANCING_LEVEL = "base"
     PARENT_SPLIT_AMOUNT = 5  # TODO: Geneneralise split amount for Scaler and Rebalancer
 

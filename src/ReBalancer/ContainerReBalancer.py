@@ -100,10 +100,9 @@ class ContainerRebalancer(BaseRebalancer):
     # HOSTS BY WEIGHT
     def rebalance_host_containers_by_weight(self, containers, host, applications):
 
-        balanceable_resources = {"cpu": {"diff_percentage": self.diff_percentage},
-                                 "disk": {"diff_percentage": self.diff_percentage},
-                                 "disk_read": {"diff_percentage": self.diff_percentage},
-                                 "disk_write": {"diff_percentage": self.diff_percentage}}
+        resource_threshold_map = {}
+        for resource in self.BALANCEABLE_RESOURCES:
+            resource_threshold_map[resource] = 1 - self.diff_percentage ## All resources currently use the same value, but it could easily be changed to a different one
 
         def get_new_allocations(resource, containers, requests):
             ## Get total allocation and weight
@@ -112,8 +111,8 @@ class ContainerRebalancer(BaseRebalancer):
             participants = []
             for container in containers:
                 if resource in container["resources"]:
-                    usage_threshold = container["resources"][resource]["current"] - container["resources"][resource]["usage"] < balanceable_resources[resource]["diff_percentage"] * container["resources"][resource]["current"]
-                    if "weight" in container["resources"][resource] and usage_threshold:
+                    is_consuming = container["resources"][resource]["current"] / container["resources"][resource]["usage"] < resource_threshold_map[resource]
+                    if "weight" in container["resources"][resource] and is_consuming:
                         participants.append({"container_info": container})
                         total_allocation_amount += container["resources"][resource]["current"]
                         weight_sum += container["resources"][resource]["weight"]
@@ -173,10 +172,10 @@ class ContainerRebalancer(BaseRebalancer):
 
             for container in containers:
                 if all("weight" in container.get("resources", {}).get(res, {}) for res in ["disk_read", "disk_write"]):
-                    read_usage_threshold = container["resources"]["disk_read"]["current"] - container["resources"]["disk_read"]["usage"] < balanceable_resources["disk_read"]["diff_percentage"] * container["resources"]["disk_read"]["current"]
-                    write_usage_threshold = container["resources"]["disk_write"]["current"] - container["resources"]["disk_write"]["usage"] < balanceable_resources["disk_write"]["diff_percentage"] * container["resources"]["disk_write"]["current"]
+                    is_consuming_read = container["resources"]["disk_read"]["usage"]  / container["resources"]["disk_read"]["current"]  < resource_threshold_map["disk_read"]
+                    is_consuming_write = container["resources"]["disk_write"]["usage"] / container["resources"]["disk_write"]["current"] < resource_threshold_map["disk_write"]
 
-                    if read_usage_threshold:
+                    if is_consuming_read:
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
                             if container['app']['state'] == 'writing' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
@@ -187,7 +186,7 @@ class ContainerRebalancer(BaseRebalancer):
 
                         participants["disk_read"].append({"container_info": container})
 
-                    if write_usage_threshold:
+                    if is_consuming_write:
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
                             if container['app']['state'] == 'reading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
@@ -292,8 +291,8 @@ class ContainerRebalancer(BaseRebalancer):
 
         for resource in self.resources_balanced:
 
-            if resource not in balanceable_resources:
-                utils.log_warning("'{0}' not yet supported in host pair-swapping balancing, only '{1}' available at the moment".format(resource, list(balanceable_resources.keys())), self.debug)
+            if resource not in self.BALANCEABLE_RESOURCES:
+                utils.log_warning("'{0}' not yet supported in host weight-based balancing, only '{1}' available at the moment".format(resource, list(self.BALANCEABLE_RESOURCES)), self.debug)
                 continue
 
             utils.log_info("Rebalancing resource '{0}' for host {1} by weights".format(resource, host["name"]), self.debug)
@@ -350,11 +349,17 @@ class ContainerRebalancer(BaseRebalancer):
             utils.log_warning("No registered containers were found", self.debug)
             return
 
-        ## Workaround to manage disk_read and disk_write at the same time if both are requested
-        if "disk_read" in self.resources_balanced and "disk_write" in self.resources_balanced:
-            self.resources_balanced.remove("disk_read")
-            self.resources_balanced.remove("disk_write")
-            self.resources_balanced.append("disk")
+        ## Specific setup for host-scope weight-based container balancing
+        if self.containers_scope == "host" and self.balancing_method == "weights":
+            self.BALANCEABLE_RESOURCES.add("disk") ## The 'disk' resource is not an actual resource for containers; rather, it exists to balance 'disk_read/write' in a single operation
+            self.BALANCEABLE_RESOURCES.add("disk_read")
+            self.BALANCEABLE_RESOURCES.add("disk_write")
+
+            ## Workaround to manage disk_read and disk_write at the same time if both are requested
+            if "disk_read" in self.resources_balanced and "disk_write" in self.resources_balanced:
+                self.resources_balanced.remove("disk_read")
+                self.resources_balanced.remove("disk_write")
+                self.resources_balanced.append("disk")
 
         # APPLICATION SCOPE: Balancing the resources between containers of the same application
         if self.containers_scope == "application":
@@ -386,7 +391,7 @@ class ContainerRebalancer(BaseRebalancer):
                 elif self.balancing_method == "weights":
                     utils.log_warning("Weights balancing method not yet supported in applications", self.debug)
                 else:
-                    utils.log_warning("Unknown balancing method, currently supported methods: 'pair_swapping' and 'weights'", self.debug)
+                    utils.log_warning("Unknown balancing method, currently supported methods: 'pair_swapping'", self.debug)
 
         # HOST SCOPE: Balancing the resources between containers on the same host
         if self.containers_scope == "host":
