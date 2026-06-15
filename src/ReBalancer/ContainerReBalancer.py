@@ -178,7 +178,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if is_consuming_read:
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
-                            if container['app']['state'] == 'writing' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
+                            if container['app']['state'] == 'hdfs_downloading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
                                 container["resources"]["disk_read"]["weight"] *= adjusted_writing_ratio
                                 weight_dual_write_sum += container["resources"]["disk_read"]["weight"]
                             weight_sum      += container["resources"]["disk_read"]["weight"]
@@ -189,7 +189,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if is_consuming_write:
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
-                            if container['app']['state'] == 'reading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
+                            if container['app']['state'] == 'hdfs_uploading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
                                 container["resources"]["disk_write"]["weight"] *= adjusted_reading_ratio
                                 weight_dual_read_sum += container["resources"]["disk_write"]["weight"]
                             weight_sum       += container["resources"]["disk_write"]["weight"]
@@ -198,10 +198,10 @@ class ContainerRebalancer(BaseRebalancer):
                         participants["disk_write"].append({"container_info": container})
 
             ## Global HDFS app weights:
-            # If there are apps reading from global, that translates into heavy read load in global HDFS and heavy write load in such apps
-            # If there are apps writing to global, that translates into heavy write load in global HDFS and heavy read load in such apps
+            # If there are apps downloading from global, that translates into heavy read load in global HDFS and heavy write load in such apps
+            # If there are apps uploading to global, that translates into heavy write load in global HDFS and heavy read load in such apps
             # Global I/O bandwidth must be distributed properly to apps to satisfy their request.
-            # e.g., app1 and app2 are reading from global. app1 write w=1 and app2 write w=3 --> global needs read w=4 to proportionally distribute bandwidth to both apps
+            # e.g., app1 and app2 are downloading from global. app1 write w=1 and app2 write w=3 --> global needs read w=4 to proportionally distribute bandwidth to both apps
             # to cover the case when there are other apps sharing the HDFS disks but not transfering data from/to global, the weights of the hdfs apps are reduced to half to accomodate the global weight
             for container in participants["disk_read"]:
                 if container['container_info']['app']['name'] == global_hdfs_app_name:

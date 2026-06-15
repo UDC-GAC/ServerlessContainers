@@ -40,7 +40,7 @@ structure_routes = Blueprint('structures', __name__)
 CONTAINER_KEYS = ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]
 HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]
 APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script", "app_jar"]
-
+STRUCTURE_STATES = ["running", "stopped", "hdfs_downloading", "hdfs_uploading"] ## They are currently used only for apps
 
 def print_with_date(msg):
     print("[{0}] {1}".format(datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S%z'), msg), flush=True)
@@ -164,10 +164,13 @@ def set_structure_to_running(structure_name):
 def set_structure_to_stop(structure_name):
     return set_structure_boolean_parameter(structure_name, "running", False)
 
-@structure_routes.route("/structure/<structure_name>/state", methods=['POST'])
-def set_structure_state(structure_name):
-    data = request.json
-    return set_structure_parameter(structure_name, "state", data['state'])
+@structure_routes.route("/structure/<structure_name>/state/<structure_state>", methods=['PUT'])
+def set_structure_state(structure_name, structure_state):
+    structure_state = structure_state.lower()
+    if structure_state not in STRUCTURE_STATES:
+        return abort(400, {"message": f"Invalid {structure_state} state for structure {structure_name}; only {STRUCTURE_STATES} are allowed"})
+
+    return set_structure_parameter(structure_name, "state", structure_state)
 
 @structure_routes.route("/structure/<structure_name>/guard", methods=['PUT'])
 def set_structure_to_guarded(structure_name):
