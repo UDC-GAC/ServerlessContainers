@@ -66,7 +66,7 @@ class ApplicationPlanner(ContainerPlanner):
 
         return container_requests, scaled_amount
 
-    def plan_operation(self, operation, host_tracker=None, swap_part=None):
+    def plan_operation(self, operation, host_tracker, swap_part=None):
         final_requests = []
 
         # Get info from operation
@@ -100,7 +100,6 @@ class ApplicationPlanner(ContainerPlanner):
 
         # Check generated container requests can be fully performed
         flattened_container_reqs = self.flatten_requests_by_structure(container_reqs)
-        host_tracker = {} if host_tracker is None else host_tracker
         for cont_name, cont_req in flattened_container_reqs.items():
             container_amount = cont_req["amount"]
             bogus_op = self._create_bogus_operation(op_type, "container", cont_name, cont_req, resource, field, container_amount, priority)

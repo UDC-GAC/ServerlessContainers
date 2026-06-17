@@ -61,7 +61,7 @@ class UserPlanner(ApplicationPlanner):
 
         return app_requests, scaled_amount
 
-    def plan_operation(self, operation, host_tracker=None, swap_part=None):
+    def plan_operation(self, operation, host_tracker, swap_part=None):
         final_requests = []
         # Get info from operation
         op_type, resource = operation.op_type, operation.resource
@@ -106,7 +106,6 @@ class UserPlanner(ApplicationPlanner):
 
         # Check generated application requests can be fully performed
         flattened_app_reqs = self.flatten_requests_by_structure(app_reqs)
-        host_tracker = {} if host_tracker is None else host_tracker
         for app_name, app_req in flattened_app_reqs.items():
             app_amount = app_req["amount"]
             bogus_op = self._create_bogus_operation(op_type, "application", app_name, app_req, resource, field, app_amount, priority)

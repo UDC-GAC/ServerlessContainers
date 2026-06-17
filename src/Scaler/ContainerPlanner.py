@@ -115,7 +115,7 @@ class ContainerPlanner(BasePlanner):
         else:
             return scaled_current_amount
 
-    def plan_operation(self, operation, host_tracker=None, swap_part=None):
+    def plan_operation(self, operation, host_tracker, swap_part=None):
         final_requests, data_to_update = [], {"containers": {}, "container_resources": {}}
 
         # Get info from operation
@@ -131,7 +131,6 @@ class ContainerPlanner(BasePlanner):
         container_request = utils.generate_request(container, amount, resource, priority, field)
 
         # Check container request can be fully performed
-        host_tracker = {} if host_tracker is None else host_tracker
         scaled_amount = self.check_container_request(container, container_resources, container_request, host_tracker, op_type, swap_part)
         if self.op_should_be_aborted(op_type, container_request, scaled_amount):
             return False, []

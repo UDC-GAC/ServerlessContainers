@@ -29,7 +29,7 @@ class BasePlanner(ABC):
     # --------- Functions to be overwritten by specific scalers ---------
 
     @abstractmethod
-    def plan_operation(self, operation, swap_part=None):
+    def plan_operation(self, operation, host_tracker, swap_part=None):
         """ Plans the full execution of a single operation, generating the needed requests to carry it out"""
         pass
 
@@ -201,20 +201,19 @@ class BasePlanner(ABC):
         for op in operations:
             success, donor_success, receiver_success = False, False, False
             generated_requests, donor_requests, receiver_requests = [], [], []
-            data_to_update = {}
 
             if op.op_type == "SWAP":
-                donor_success, donor_requests = self.plan_operation(op, "donor")
+                donor_success, donor_requests = self.plan_operation(op, {}, swap_part="donor")
                 if donor_success:
-                    receiver_success, receiver_requests = self.plan_operation(op, "receiver")
+                    receiver_success, receiver_requests = self.plan_operation(op, {}, swap_part="receiver")
                 success = donor_success and receiver_success
                 generated_requests = donor_requests + receiver_requests
 
             if op.op_type == "SCALE_UP":
-                success, generated_requests = self.plan_operation(op)
+                success, generated_requests = self.plan_operation(op, {})
 
             if op.op_type == "SCALE_DOWN":
-                success, generated_requests = self.plan_operation(op)
+                success, generated_requests = self.plan_operation(op, {})
 
             if success and generated_requests:
                 # Add generated requests to operations
