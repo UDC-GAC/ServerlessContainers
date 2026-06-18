@@ -31,10 +31,13 @@ import json
 import yaml
 import os
 
+
 class CouchDBServer:
-    post_doc_headers = {'content-type': 'application/json'}
-    __COUCHDB_URL = "couchdb"
-    __COUCHDB_PORT = 5984
+    __POST_DOC_HEADERS = {'content-type': 'application/json'}
+    __DEFAULT_COUCHDB_URL = "couchdb"
+    __DEFAULT_COUCHDB_PORT = 5984
+    __MAX_UPDATE_TRIES = 10
+    __DATABASE_TIMEOUT = 10
     __structures_db_name = "structures"
     __services_db_name = "services"
     __limits_db_name = "limits"
@@ -42,30 +45,25 @@ class CouchDBServer:
     __events_db_name = "events"
     __requests_db_name = "requests"
     __users_db_name = "users"
-    __MAX_UPDATE_TRIES = 10
-    __DATABASE_TIMEOUT = 10
 
-    def __init__(self, couchdb_url=None, couchdbdb_port=None):
-
+    def __init__(self, couchdb_url=None, couchdb_port=None):
         serverless_path = os.environ['SERVERLESS_PATH']
         config_file = serverless_path + "/services_config.yml"
         with open(config_file, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
 
         if not couchdb_url:
-            #couchdb_url = self.__COUCHDB_URL
-            couchdb_url = config['COUCHDB_URL']
-        if not couchdbdb_port:
-            #couchdbdb_port = self.__COUCHDB_PORT
-            couchdbdb_port = config['COUCHDB_PORT']
+            couchdb_url = config.get('COUCHDB_URL', self.__DEFAULT_COUCHDB_URL)
+        if not couchdb_port:
+            couchdb_port = config.get('COUCHDB_PORT', self.__DEFAULT_COUCHDB_PORT)
         else:
             try:
-                couchdbdb_port = int(couchdbdb_port)
+                couchdb_port = int(couchdb_port)
             except ValueError:
-                couchdbdb_port = self.__COUCHDB_PORT
+                couchdb_port = self.__DEFAULT_COUCHDB_PORT
 
         # TODO admin username and password are hard-coded
-        self.server = "http://admin:admin@{0}:{1}".format(couchdb_url, str(couchdbdb_port))
+        self.server = "http://admin:admin@{0}:{1}".format(couchdb_url, str(couchdb_port))
         self.session = requests.Session()
 
     def close_connection(self):
@@ -108,26 +106,75 @@ class CouchDBServer:
             return True
 
     def compact_database(self, database):
-        r = self.session.post(self.server + "/" + database + "/_compact", headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database + "/_compact", headers=self.__POST_DOC_HEADERS)
         if r.status_code != 202:
             r.raise_for_status()
         else:
             return json.loads(r.text)["ok"]
 
-    def __get_all_database_docs(self, database):
-        # TODO Implement pagination
-        docs = list()
-        r = self.session.get(self.server + "/" + database + "/_all_docs?include_docs=true",
-                             timeout=self.__DATABASE_TIMEOUT)
-        if r.status_code != 200:
-            r.raise_for_status()
-        else:
-            rows = json.loads(r.text)["rows"]
-            for row in rows:
-                docs.append(row["doc"])
-            return docs
-
     # PRIVATE CRUD METHODS #
+
+    def __get_all_database_docs(self, database, page_size=500):
+        all_docs = []
+        params = {"include_docs": "true", "limit": page_size + 1}
+        while True:
+            # https://docs.couchdb.org/en/stable/ddocs/views/pagination.html
+            r = self.session.get(self.server + "/" + database + "/_all_docs", params=params, timeout=self.__DATABASE_TIMEOUT)
+            if r.status_code != 200:
+                r.raise_for_status()
+
+            rows = r.json().get("rows", [])
+            if not rows:
+                break
+
+            # If the number of retrieved rows is lower than page size, this is the last page
+            if len(rows) <= page_size:
+                for row in rows:
+                    all_docs.append(row["doc"])
+                break
+
+            # Save all the rows except the last one (it is used as the start key of the next page)
+            for row in rows[:-1]:
+                all_docs.append(row["doc"])
+            params["startkey"] = json.dumps(rows[-1]["id"])
+
+        return all_docs
+
+    def __find_documents_by_matches(self, database, selectors, page_size=500):
+        query = {"selector": {}, "limit": page_size}
+        for key in selectors:
+            query["selector"][key] = selectors[key]
+
+        all_docs = []
+        while True:
+            # https://docs.couchdb.org/en/stable/api/database/find.html
+            req_docs = self.session.post(self.server + "/" + database + "/_find", data=json.dumps(query), headers={'Content-Type': 'application/json'})
+            if req_docs.status_code != 200:
+                if req_docs.status_code == 404:
+                    raise ValueError("Database '{0}' does not exist".format(database))
+                req_docs.raise_for_status()
+
+            res_json = req_docs.json()
+            docs = res_json.get("docs", [])
+            all_docs.extend(docs)
+            bookmark = res_json.get("bookmark")  # CouchDB bookmark tells the last position of this page
+
+            # If the number of docs is lower than the page size OR the bookmark has not been changed, this is the last page
+            if not docs or len(docs) < page_size or query.get("bookmark") == bookmark:
+                break
+
+            # Set the bookmark in query to ask for the next page
+            query["bookmark"] = bookmark
+
+        return all_docs
+
+    def __find_document_by_name(self, database, doc_name):
+        docs = self.__find_documents_by_matches(database, {"name": doc_name})
+        if not docs:
+            raise ValueError("Document with name {0} not found in database {1}".format(doc_name, database))
+        else:
+            # Return the first one as it should only be one
+            return dict(docs[0])
 
     # def __delete_doc(self, database, docid, rev):
     #     r = self.session.delete("{0}/{1}/{2}?rev={3}".format(self.server, database, str(docid), str(rev)))
@@ -137,7 +184,7 @@ class CouchDBServer:
     #         return True
 
     def __add_doc(self, database, doc):
-        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.__POST_DOC_HEADERS)
         if r.status_code != 200:
             r.raise_for_status()
         else:
@@ -146,7 +193,7 @@ class CouchDBServer:
     def __add_bulk_docs(self, database, docs):
         docs_data = {"docs": docs}
         r = self.session.post(self.server + "/" + database + "/_bulk_docs", data=json.dumps(docs_data),
-                              headers=self.post_doc_headers)
+                              headers=self.__POST_DOC_HEADERS)
         if r.status_code != 201:
             r.raise_for_status()
         else:
@@ -211,9 +258,8 @@ class CouchDBServer:
                         _doc[key] = value
         return _doc
 
-
     def __resilient_update_doc(self, database, doc, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
-        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.__POST_DOC_HEADERS)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
@@ -243,7 +289,7 @@ class CouchDBServer:
     def __resilient_partial_update_doc(self, database, doc, changes, previous_tries=0, time_backoff_milliseconds=100, max_tries=20):
         if not changes:
             return False
-        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.__POST_DOC_HEADERS)
         if r.status_code != 200 and r.status_code != 201:
             if r.status_code == 409:
                 # Conflict error, document may have been updated (e.g., heartbeat of services),
@@ -281,7 +327,7 @@ class CouchDBServer:
         updated_doc = self.__apply_changes(current_doc, changes)
 
         # Save updated document in database
-        r = self.session.post(self.server + "/" + database, data=json.dumps(updated_doc), headers=self.post_doc_headers)
+        r = self.session.post(self.server + "/" + database, data=json.dumps(updated_doc), headers=self.__POST_DOC_HEADERS)
         if r.status_code in (200, 201):
             return True
 
@@ -304,7 +350,7 @@ class CouchDBServer:
     #     time_backoff_milliseconds = 100
     #     tries = 0
     #     while tries < max_tries:
-    #         r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.post_doc_headers)
+    #         r = self.session.post(self.server + "/" + database, data=json.dumps(doc), headers=self.__POST_DOC_HEADERS)
     #         if r.status_code == 200 and r.status_code == 201:
     #             return True
     #         elif r.status_code == 409:
@@ -322,30 +368,6 @@ class CouchDBServer:
     #         else:
     #             r.raise_for_status()
     #     return False
-
-    def __find_documents_by_matches(self, database, selectors):
-        # TODO Implement pagination
-        query = {"selector": {}, "limit": 50}
-
-        for key in selectors:
-            query["selector"][key] = selectors[key]
-
-        req_docs = self.session.post(self.server + "/" + database + "/_find", data=json.dumps(query),
-                                     headers={'Content-Type': 'application/json'})
-        if req_docs.status_code != 200:
-            if req_docs.status_code == 404:
-                raise ValueError("Database '{0}' does not exist".format(database))
-            req_docs.raise_for_status()
-        else:
-            return req_docs.json()["docs"]
-
-    def __find_document_by_name(self, database, doc_name):
-        docs = self.__find_documents_by_matches(database, {"name": doc_name})
-        if not docs:
-            raise ValueError("Document with name {0} not found in database {1}".format(doc_name, database))
-        else:
-            # Return the first one as it should only be one
-            return dict(docs[0])
 
     # STRUCTURES #
     def add_structure(self, structure):
@@ -432,11 +454,11 @@ class CouchDBServer:
     def add_requests(self, reqs):
         self.__add_bulk_docs(self.__requests_db_name, reqs)
 
-    def delete_request(self, request):
-        self.__resilient_delete_doc(self.__requests_db_name, request)
+    def delete_request(self, req):
+        self.__resilient_delete_doc(self.__requests_db_name, req)
 
-    def delete_requests(self, requests):
-        self.__delete_bulk_docs(self.__requests_db_name, requests)
+    def delete_requests(self, reqs):
+        self.__delete_bulk_docs(self.__requests_db_name, reqs)
 
     # RULES #
     def add_rule(self, rule):
