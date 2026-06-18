@@ -339,7 +339,7 @@ def get_best_fit_app(scalable_apps, resource, amount, prev_scalings=None):
     for app in scalable_apps:
         if "usage" not in app["resources"][resource]:
             continue
-        if app["resources"][resource].get("current", 0) == 0 and not app.get("running", False):
+        if app["resources"][resource].get("current", 0) == 0 and not app.get("state", "") == "running":
             stopped_apps.append(app)
         else:
             if app["resources"][resource]["max"] + prev_scalings.get(app["name"], 0) < app["resources"][resource]["min"]:

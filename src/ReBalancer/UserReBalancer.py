@@ -64,7 +64,7 @@ class UserRebalancer(BaseRebalancer):
             active_users = []
             for user in users:
                 user_apps = [app for app in applications if app["name"] in user.get("clusters", [])]
-                if any(app.get("running", False) for app in user_apps):
+                if any(app.get("state", "") == "running" for app in user_apps):
                     active_users.append(user)
             utils.log_info("Found {0} active users out of {1}".format(len(active_users), len(users)), self.debug)
             users = active_users

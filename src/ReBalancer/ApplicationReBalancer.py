@@ -86,7 +86,7 @@ class ApplicationRebalancer(BaseRebalancer):
 
         applications = self.filter_rebalanceable_apps(applications)
         if self.only_running:
-            applications = [app for app in applications if app.get("running", False)]
+            applications = [app for app in applications if app.get("state", "") == "running"]
 
         if not applications:
             utils.log_warning("No {0} applications to rebalance".format("running" if self.only_running else "registered"), self.debug)

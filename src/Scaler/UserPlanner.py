@@ -15,12 +15,12 @@ class UserPlanner(ApplicationPlanner):
         # Look for applications that can be rescaled
         for app_name, app in user_apps.items():
             # Inconsistent state for app, it can't be scaled
-            if bool(app.get("containers", [])) ^ app.get("running", False):
+            if bool(app.get("containers", [])) ^ app.get("state", "") == "running":
                 continue
 
             # Rescale down: if app is running, "max" can't be scaled below "min"
             if amount < 0:
-                lower_limit = app["resources"][resource].get("min", 0) if app.get("running", False) else 0
+                lower_limit = app["resources"][resource].get("min", 0) if app.get("state", "") == "running" else 0
                 if app["resources"][resource]["max"] + amount + prev_scalings.get(app["name"], 0) >= lower_limit:
                     scalable_apps.append(app)
             # Rescale up: always
@@ -79,7 +79,7 @@ class UserPlanner(ApplicationPlanner):
         num_apps, num_active_apps = 0, 0
         for app_name in user.get("clusters", []):
             num_apps +=1
-            if applications.get(app_name).get("running", False):
+            if applications.get(app_name).get("state", "") == "running":
                 num_active_apps += 1
 
         # Check user can be scaled respecting QoS contraints

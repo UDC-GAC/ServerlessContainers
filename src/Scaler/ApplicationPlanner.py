@@ -84,7 +84,7 @@ class ApplicationPlanner(ContainerPlanner):
         num_containers = len(application.get("containers", []))
         # Check application can be scaled respecting QoS contraints
         if amount < 0:
-            lower_limit = application["resources"][resource].get("min", 0) if application.get("running", False) else 0
+            lower_limit = application["resources"][resource].get("min", 0) if application.get("state", "") == "running" else 0
             new_amount = max(min(lower_limit - application["resources"][resource][field], 0), amount)
             if self.op_should_be_aborted(op_type, app_request, new_amount):
                 return False, []

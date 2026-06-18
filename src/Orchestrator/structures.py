@@ -149,20 +149,13 @@ def set_structure_parameter(structure_name, parameter, value):
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)
 
+
 def set_structure_boolean_parameter(structure_name, parameter, state):
     if state not in [True, False]:
         return abort(400, {"message": "Invalid {0} state".format(parameter)})
 
     return set_structure_parameter(structure_name, parameter, state)
 
-
-@structure_routes.route("/structure/<structure_name>/run", methods=['PUT'])
-def set_structure_to_running(structure_name):
-    return set_structure_boolean_parameter(structure_name, "running", True)
-
-@structure_routes.route("/structure/<structure_name>/stop", methods=['PUT'])
-def set_structure_to_stop(structure_name):
-    return set_structure_boolean_parameter(structure_name, "running", False)
 
 @structure_routes.route("/structure/<structure_name>/state/<structure_state>", methods=['PUT'])
 def set_structure_state(structure_name, structure_state):
@@ -171,6 +164,7 @@ def set_structure_state(structure_name, structure_state):
         return abort(400, {"message": f"Invalid {structure_state} state for structure {structure_name}; only {STRUCTURE_STATES} are allowed"})
 
     return set_structure_parameter(structure_name, "state", structure_state)
+
 
 @structure_routes.route("/structure/<structure_name>/guard", methods=['PUT'])
 def set_structure_to_guarded(structure_name):
@@ -838,7 +832,6 @@ def subscribe_app(structure_name):
         get_resource_keys_from_requested_structure(req_app, app, resource, ["max", "min", "guard"], ["weight"])
 
     app["containers"] = []
-    app["running"] = req_app.get("running", False)
     app["state"] = req_app.get("state", "stopped")
 
     # Check that all the needed data for resources is present on the requested container LIMITS

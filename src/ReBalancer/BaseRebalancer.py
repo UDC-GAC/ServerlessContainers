@@ -125,7 +125,7 @@ class BaseRebalancer(ABC):
 
     def app_state_is_valid(self, app):
         # Check applications are consistent before performing a rebalance
-        if app.get("running", False):
+        if app.get("state", "") == "running":
             # If app has been recently started, containers may not yet be subscribed
             if len(app["containers"]) == 0:
                 return False
@@ -162,7 +162,7 @@ class BaseRebalancer(ABC):
             if request["amount"] < 0:
                 scalable_childs = []
                 for s in childs:
-                    lower_limit = 0 if self.REBALANCING_LEVEL == "application" and not s.get("running", False) else s["resources"][resource]["min"]
+                    lower_limit = 0 if self.REBALANCING_LEVEL == "application" and not s.get("state", "") == "running" else s["resources"][resource]["min"]
                     if s["resources"][resource]["max"] + request["amount"] >= lower_limit:
                         scalable_childs.append(s)
             else:
@@ -269,7 +269,7 @@ class BaseRebalancer(ABC):
             if d_field == "max":
                 lower_limit = data["min"] if data["usage"] > 0 else 0 # Running structures doesn't donate below min (QoS constraint)
                 if structure["subtype"] == "application":
-                    lower_limit = data["min"] if structure.get("running", False) else 0 # Additional protection for apps
+                    lower_limit = data["min"] if structure.get("state", "") == "running" else 0  # Additional protection for apps
                 stolen_amount = max(self.stolen_percentage * (data["max"] - max(lower_limit, data["usage"])), 0)
                 # Avoid leaving residual budget, especially when structure is not running
                 if stolen_amount < 1 <= (data["max"] - lower_limit):
