@@ -499,10 +499,14 @@ def desubscribe_container(structure_name):
                                                                                 structure_name,
                                                                                 container["resources"].keys(),
                                                                                 node_scaler_session, True)
-        # Get host
-        host = get_db().get_structure(container["host"])
-        changes = free_container_resources(container, container_phy_resources, host)
-        get_db().safe_update_structure(host["_id"], changes)
+        if container_phy_resources is not None:
+            # Get host
+            host = get_db().get_structure(container["host"])
+            changes = free_container_resources(container, container_phy_resources, host)
+            get_db().safe_update_structure(host["_id"], changes)
+        else:
+            ## Show error but continue anyways
+            print_with_date("Warning, resources for container {0} where not found, it was probably already deleted".format(structure_name))
 
     except Exception as e:
         restore_scaler_state(scaler_service, previous_state)
