@@ -151,6 +151,8 @@ class ContainerRebalancer(BaseRebalancer):
                         self.add_scaling_request(container["container_info"], resource, "current", amount_to_scale, requests)
 
         def get_new_allocations_by_disk(containers, requests, disk_name, tcp_connections=None, datanode_name=None):
+            global_hdfs_enabled = tcp_connections is not None and datanode_name is not None
+
             total_allocated_bw = 0
             weight_sum = 0
             weight_read_sum = 0
@@ -164,7 +166,7 @@ class ContainerRebalancer(BaseRebalancer):
             adjusted_reading_ratio = 1
             adjusted_writing_ratio = 1
             for container in containers:
-                if container['app']['name'] == global_hdfs_app_name:
+                if global_hdfs_enabled and container['app']['name'] == global_hdfs_app_name:
                     ## We divide by 2 since transfers between global and local through the same disk will require both read and write bandwidth in different ends of the transaction
                     adjusted_reading_ratio  = container["resources"]["disk_read"]["weight"] / 2
                     adjusted_writing_ratio = container["resources"]["disk_write"]["weight"] / 2
@@ -178,7 +180,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if is_consuming_read:
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
-                            if container['app']['state'] == 'hdfs_downloading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
+                            if global_hdfs_enabled and container['app']['state'] == 'hdfs_downloading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
                                 container["resources"]["disk_read"]["weight"] *= adjusted_writing_ratio
                                 weight_dual_write_sum += container["resources"]["disk_read"]["weight"]
                             weight_sum      += container["resources"]["disk_read"]["weight"]
@@ -189,7 +191,7 @@ class ContainerRebalancer(BaseRebalancer):
                     if is_consuming_write:
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
                         if container['app']['name'] != global_hdfs_app_name:
-                            if container['app']['state'] == 'hdfs_uploading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
+                            if global_hdfs_enabled and container['app']['state'] == 'hdfs_uploading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
                                 container["resources"]["disk_write"]["weight"] *= adjusted_reading_ratio
                                 weight_dual_read_sum += container["resources"]["disk_write"]["weight"]
                             weight_sum       += container["resources"]["disk_write"]["weight"]
@@ -204,7 +206,7 @@ class ContainerRebalancer(BaseRebalancer):
             # e.g., app1 and app2 are downloading from global. app1 write w=1 and app2 write w=3 --> global needs read w=4 to proportionally distribute bandwidth to both apps
             # to cover the case when there are other apps sharing the HDFS disks but not transfering data from/to global, the weights of the hdfs apps are reduced to half to accomodate the global weight
             for container in participants["disk_read"]:
-                if container['container_info']['app']['name'] == global_hdfs_app_name:
+                if global_hdfs_enabled and container['container_info']['app']['name'] == global_hdfs_app_name:
                     if weight_dual_read_sum > 0:
                         container['container_info']['resources']["disk_read"]['weight'] = weight_dual_read_sum
                     weight_sum      += container['container_info']["resources"]["disk_read"]["weight"]
@@ -213,7 +215,7 @@ class ContainerRebalancer(BaseRebalancer):
                     break ## we only deploy one datanode on each host
 
             for container in participants["disk_write"]:
-                if container['container_info']['app']['name'] == global_hdfs_app_name:
+                if global_hdfs_enabled and container['container_info']['app']['name'] == global_hdfs_app_name:
                     if weight_dual_write_sum > 0:
                         container['container_info']['resources']["disk_write"]['weight'] = weight_dual_write_sum
                     weight_sum       += container['container_info']["resources"]["disk_write"]["weight"]
@@ -289,6 +291,10 @@ class ContainerRebalancer(BaseRebalancer):
                         if amount_to_scale != 0:
                             self.add_scaling_request(container["container_info"], resource, "current", amount_to_scale, requests)
 
+        global_hdfs_enabled = False
+        for container in containers:
+            if "datanode" in container["name"]: global_hdfs_enabled = True
+
         for resource in self.resources_balanced:
 
             if resource not in self.BALANCEABLE_RESOURCES:
@@ -312,8 +318,12 @@ class ContainerRebalancer(BaseRebalancer):
                             break
 
                 ## Get TCP connections
-                tcp_connections = utils.get_tcp_container_connections(self.rescaler_session, host, self.debug)
-                datanode_name = "datanode-{0}".format(host['name'])
+                if global_hdfs_enabled:
+                    tcp_connections = utils.get_tcp_container_connections(self.rescaler_session, host, self.debug)
+                    datanode_name = "datanode-{0}".format(host['name'])
+                else:
+                    tcp_connections = None
+                    datanode_name = None
 
                 if len(host["resources"]["disks"]) > 1:
                     ## if host has more than one disk the balancing needs to be performed on each disk
