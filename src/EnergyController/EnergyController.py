@@ -145,6 +145,16 @@ class EnergyController(Service):
         # TODO: Retrieve this value automatically depending on the CPU
         power_model = "polyreg_Group_PP_LL" if P_budget_host > 74 else "polyreg_Single_Core"
 
+        # TODO: Distribute proportionally across scale downs and scale ups:
+        #   1. Compute CPU scaling for total scale-up or scale-down
+        #   2. Distribute scaling action between the containers scaling in that direction, proportionally to their power scaling
+        #   3. When scaling up, assume the scale downs were already performed
+        #       The P_budget_host will be P_usage_host - P_scale_downs + P_scale_ups
+        #       The U_scaling_host will be result["value"] - (U_user_host - U_scale_downs)
+        #       Maybe compute the CPU scalings just once outside the loop, instead of repeating the same for every container
+        #   In the past we saw this approach has a problem, sum of scalings does not correspond with net scale, but I think this
+        #   happened because I didn't consider the scale downs were already performed when computing the scale ups, or vice versa.
+
         # Get model estimation
         U_scaling_cap = 0
         try:
