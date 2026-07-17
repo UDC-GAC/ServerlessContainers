@@ -36,7 +36,6 @@ class BaseRebalancer(ABC):
     MANDATORY_FIELDS = {"max", "current", "usage", "min"}
     BALANCEABLE_RESOURCES = {"cpu", "energy"}
     REBALANCING_LEVEL = "base"
-    PARENT_SPLIT_AMOUNT = 5  # TODO: Geneneralise split amount for Scaler and Rebalancer
 
     def __init__(self, couchdb_handler):
         self.couchdb_handler = couchdb_handler
@@ -74,11 +73,6 @@ class BaseRebalancer(ABC):
     @staticmethod
     @abstractmethod
     def get_donor_slice_key(structure, resource):
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def get_best_fit_child(scalable_structures, resource, amount):
         pass
 
     @abstractmethod
@@ -137,47 +131,13 @@ class BaseRebalancer(ABC):
                     return False
         return True
 
-    def simulate_scaler_request_processing(self, parent_name, childs, parent_request):
-        resource = parent_request["resource"]
-        total_amount = parent_request["amount"]
-
-        if parent_request["field"] != "max":
-            utils.log_warning("Parent request processing can only manage requests to scale 'max' limits, skipping "
-                              "request for structure '{0}'".format(parent_name), self.debug)
-            return
-
-        # Create smaller requests of 'split_amount' size for childs
-        split_amount = -self.PARENT_SPLIT_AMOUNT if total_amount < 0 else self.PARENT_SPLIT_AMOUNT
-        base_request = dict(parent_request)
-        child_requests = []
-        for slice_amount in utils.split_amount_in_slices(total_amount, split_amount):
-            base_request["amount"] = slice_amount
-            child_requests.append(dict(base_request))
-
-        success, scaled_amount = True, 0
-        while success and len(child_requests) > 0:
-            success = False
-            request = child_requests.pop(0)
-            # Look for childs that can be rescaled
-            if request["amount"] < 0:
-                scalable_childs = []
-                for s in childs:
-                    lower_limit = 0 if self.REBALANCING_LEVEL == "application" and not s.get("state", "") == "running" else s["resources"][resource]["min"]
-                    if s["resources"][resource]["max"] + request["amount"] >= lower_limit:
-                        scalable_childs.append(s)
-            else:
-                scalable_childs = childs
-
-            if not scalable_childs:
-                continue
-
-            # Look for the best fit child to rescale
-            best_fit_child = self.get_best_fit_child(scalable_childs, resource, request["amount"])
-
-            # Update the child's resources as if the request was already processed
-            best_fit_child["resources"][resource]["max"] += request["amount"]
-            scaled_amount += request["amount"]
-            success = True
+    @staticmethod
+    def simulate_scaler_request_processing(parent, childs, parent_request, propagate):
+        app_requests, scaled_amount = propagate(parent, childs, parent_request)
+        for r in app_requests:
+            structure = childs.get(r["structure"])
+            field, amount, resource = r.get("field"), r.get("amount"), r.get("_request", {}).get("resource")
+            structure["resources"][resource][field] += amount
 
     def manage_swap(self, donor, receiver, resource, d_field, amount_to_scale, requests):
         if amount_to_scale == 0:
@@ -289,8 +249,9 @@ class BaseRebalancer(ABC):
 
             # Divide the total amount in as many slices as available receivers
             key = self.get_donor_slice_key(structure, resource)
-            for slice_amount in utils.split_amount_in_num_slices(int(stolen_amount), len(receivers)):
-                donor_slices.setdefault(key, []).append((structure, slice_amount))
+            slice_amount = 1 if resource == "energy" else 5
+            for split in utils.split_amount_in_slices(int(stolen_amount), slice_amount):
+                donor_slices.setdefault(key, []).append((structure, split))
 
         # Sort donor slices and remove slices that cannot be given to any receiver
         for key in list(donor_slices.keys()):
@@ -427,7 +388,6 @@ class BaseRebalancer(ABC):
 
                 # The loop iterates over a copy so that the list of receivers can be modified inside the loop
                 for receiver in list(receivers):
-                    receiver_name = receiver["name"]
                     receiver_data = self.resources_tracker.get_structure_resource(receiver["_id"], resource)
                     key = self.get_donor_slice_key(receiver, resource)
 

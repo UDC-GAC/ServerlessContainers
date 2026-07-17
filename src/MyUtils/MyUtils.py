@@ -317,41 +317,138 @@ def put_request_to_orchestrator(url, error_message, headers, data):
 ######################################################################################################
 # PROPAGATION/REBALANCING LOGIC
 ######################################################################################################
-def get_best_fit_container(scalable_containers, resource, amount, field, prev_scalings=None):
-    best_fit_container, normal_containers, below_min_containers = {}, [], []
-    prev_scalings = {} if prev_scalings is None else prev_scalings
-    for container in scalable_containers:
-        if container["resources"][resource][field] + prev_scalings.get(container["name"], 0) < container["resources"][resource]["min"]:
-            below_min_containers.append(container)
+def assign_splits(total_amount, candidates, resource, priority, field, priority_getter):
+    requests = {}
+    scaled_amount = 0
+
+    # Assign each split to the most appropriate container
+    split_amount = 1 if resource == "energy" else 5
+    for split in split_amount_in_slices(total_amount, split_amount):
+        # If no valid containers available, stop distribution
+        if not candidates:
+            break
+        if total_amount > 0:
+            best = min(candidates, key=priority_getter)
         else:
-            normal_containers.append(container)
-    sorted_containers = sorted(below_min_containers, key=lambda c: (c["resources"][resource][field] + prev_scalings.get(c["name"], 0)) / c["resources"][resource]["min"])
-    sorted_containers += sorted(normal_containers, key=lambda c: c["resources"][resource][field] + prev_scalings.get(c["name"], 0) - c["resources"][resource]["usage"])
-    if sorted_containers:
-        best_fit_container = sorted_containers[0] if amount > 0 else sorted_containers[-1]
+            best = max(candidates, key=priority_getter)
 
-    return best_fit_container
+        # Save scaled amount for next iterations
+        best["alloc"] += split
+        scaled_amount += split
+        if total_amount < 0 and best["base_limit"] + best["alloc"] == best["lower_limit"]:
+            candidates.remove(best)
+
+        req = generate_request(best["structure"], split, resource, priority, field)
+        requests.setdefault(best["name"], []).append(req)
+
+    return requests, scaled_amount
 
 
-def get_best_fit_app(scalable_apps, resource, amount, prev_scalings=None):
-    stopped_apps, below_min_apps, running_apps = [], [], []
-    prev_scalings = {} if prev_scalings is None else prev_scalings
-    for app in scalable_apps:
-        if "usage" not in app["resources"][resource]:
+def propagate_application_request(app, containers, app_request):
+    amount, resource, field, priority = app_request["amount"], app_request["resource"], app_request["field"], app_request["priority"]
+    app_containers = {name: containers[name] for name in app.get("containers", []) if name in containers}
+    # num_containers = len(app_containers.keys())
+    if not app_containers:
+        return {}, amount
+
+    # Check application limit is consistent with aggregated container limits
+    agg_value = sum(c.get("resources", {}).get(resource, {}).get(field, 0) for c in app_containers.values())
+    app_value = app.get("resources", {}).get(resource, {}).get(field, 0)
+    if agg_value != app_value:
+        new_amount = amount + (app_value - agg_value)
+        app_name = app.get("name", "Unknown")
+        log_warning(f"Application '{app_name}' containers have an aggregated {resource} {field} = {agg_value}, "
+                    f"which differs from application value {app_value}.", True)
+        log_warning(f"Amount for containers belonging to application '{app_name}' should be changed from "
+                    f"{amount} to {new_amount}.", True)
+
+    # Pre-select candidates
+    candidates = []
+    is_scale_up = (amount > 0)
+    for name, cont in app_containers.items():
+        res_data = cont.get("resources", {}).get(resource, {})
+        if "usage" not in res_data:
             continue
-        if app["resources"][resource].get("current", 0) == 0 and not app.get("state", "") == "running":
-            stopped_apps.append(app)
-        else:
-            if app["resources"][resource]["max"] + prev_scalings.get(app["name"], 0) < app["resources"][resource]["min"]:
-                below_min_apps.append(app)
-            else:
-                running_apps.append(app)
-    # When scaling down, stopped apps are preferred, when scaling up, apps below min are prioritised and then running apps are preferred
-    sorted_apps = sorted(below_min_apps, key=lambda a: (a["resources"][resource]["max"] + prev_scalings.get(app["name"], 0)) / a["resources"][resource]["min"])
-    sorted_apps += sorted(running_apps, key=lambda a: a["resources"][resource]["max"] + prev_scalings.get(app["name"], 0) - a["resources"][resource]["usage"])
-    sorted_apps += sorted(stopped_apps, key=lambda a: a["resources"][resource]["max"] + prev_scalings.get(app["name"], 0))
 
-    return sorted_apps[0] if amount > 0 else sorted_apps[-1]
+        lower_limit = max(res_data.get("min", 0), 1)
+        if not is_scale_up and res_data.get(field, 0) <= lower_limit:
+            continue
+
+        candidates.append({
+            "name": name,
+            "structure": cont,
+            "base_limit": res_data.get(field, 0),
+            "usage": res_data.get("usage", 0),
+            "lower_limit": lower_limit,
+            "alloc": 0
+        })
+
+    def get_priority(c):
+        current_val = c["base_limit"] + c["alloc"]
+        # Containers below min are prioritised over normal container in scale ups
+        if current_val < c["lower_limit"]:
+            ratio = current_val / c["lower_limit"] if c["lower_limit"] else float('inf')
+            return 1, ratio
+        if current_val < c["usage"]:
+            return 2, current_val - c["lower_limit"]
+        return 3, current_val - c["usage"]
+
+    container_requests, scaled_amount = assign_splits(amount, candidates, resource, priority, field, get_priority)
+    return container_requests, scaled_amount
+
+
+def propagate_user_request(user, applications, user_request):
+    amount, resource, field, priority = user_request["amount"], user_request["resource"], user_request["field"], user_request["priority"]
+    user_apps = {app_name: applications.get(app_name) for app_name in user.get("clusters", [])}
+    # num_apps = len(user_apps.keys())
+    if not user_apps:
+        return {}, amount
+
+    # Check user limit is consistent with aggregated application limits
+    agg_value = sum(app["resources"][resource][field] for app in user_apps.values())
+    user_value = user.get("resources", {}).get(resource, {}).get(field, 0)
+    if agg_value != user_value:
+        new_amount = amount + (user_value - agg_value)
+        log_warning("User '{0}' applications have an aggregated {1} {2} = {3}, which differs from user value {4}."
+                    .format(user["name"], resource, field, agg_value, user_value), True)
+        log_warning("Amount for applications belonging to user '{0}' should be changed from {1} to {2}"
+                    .format(user["name"], amount, new_amount), True)
+
+    # Pre-select candidates
+    is_scale_up = (amount > 0)
+    candidates = []
+    for name, app in user_apps.items():
+        is_running = (app.get("state", "") == "running")
+        res_data = app.get("resources", {}).get(resource, {})
+        if bool(app.get("containers", [])) ^ is_running:
+            continue
+
+        lower_limit = max(res_data.get("min", 0), 1) if is_running else 0
+        if not is_scale_up and res_data.get(field, 0) <= lower_limit:
+            continue
+        candidates.append({
+            "name": name,
+            "structure": app,
+            "base_limit": res_data.get(field, 0),
+            "usage": res_data.get("usage", 0),
+            "is_stopped": (res_data.get("current", 0) == 0 and not is_running),
+            "lower_limit": lower_limit,
+            "alloc": 0
+        })
+
+    def get_priority(a):
+        current_val = a["base_limit"] + a["alloc"]
+        if a["is_stopped"]:
+            return 4, current_val
+        if current_val < a["lower_limit"]:
+            ratio = current_val / a["lower_limit"] if a["lower_limit"] else float('inf')
+            return 1, ratio
+        if current_val < a["usage"]:
+            return 2, current_val - a["lower_limit"]
+        return 3, current_val - a["usage"]
+
+    app_requests, scaled_amount = assign_splits(amount, candidates, resource, priority, field, get_priority)
+    return app_requests, scaled_amount
 
 
 ######################################################################################################

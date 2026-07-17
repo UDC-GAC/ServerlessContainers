@@ -9,58 +9,6 @@ class UserPlanner(ApplicationPlanner):
     PARENT_LEVEL = "host"
     CURRENT_LEVEL = "user"
 
-    @staticmethod
-    def get_scalable_app(user_apps, amount, resource, field, priority, prev_scalings):
-        scalable_apps = list()
-        # Look for applications that can be rescaled
-        for app_name, app in user_apps.items():
-            # Inconsistent state for app, it can't be scaled
-            if bool(app.get("containers", [])) ^ app.get("state", "") == "running":
-                continue
-
-            # Rescale down: if app is running, "max" can't be scaled below "min"
-            if amount < 0:
-                lower_limit = app["resources"][resource].get("min", 0) if app.get("state", "") == "running" else 0
-                if app["resources"][resource]["max"] + amount + prev_scalings.get(app["name"], 0) >= lower_limit:
-                    scalable_apps.append(app)
-            # Rescale up: always
-            elif amount > 0:
-                scalable_apps.append(app)
-
-        if not scalable_apps:
-            return False, {}, None
-
-        # Look for the best fit application for this resource and generate a rescaling request for it
-        best_fit_app = utils.get_best_fit_app(scalable_apps, resource, amount, prev_scalings)
-        success = best_fit_app is not None
-
-        return success, best_fit_app, utils.generate_request(best_fit_app, amount, resource, priority, field)
-
-    def propagate_user_request(self, user, user_request, applications, num_apps):
-        amount, resource, field, priority = user_request["amount"], user_request["resource"], user_request["field"], user_request["priority"]
-        user_apps = {app_name: applications.get(app_name) for app_name in user.get("clusters", [])}
-        app_requests = {}
-        if user_apps:
-            # Check user limit is consistent with aggregated application limits
-            apps_agg_value = sum(app["resources"][resource][field] for app in user_apps.values())
-            if apps_agg_value != user["resources"][resource][field]:
-                # TODO: Fix applications scaled amount, while user amount remains the same
-                new_amount = amount + (user["resources"][resource][field] - apps_agg_value)
-                self.log_warning("User '{0}' applications have an aggregated {1} {2} = {3}, which differs from user "
-                                 "value {4}.").format(user["name"], resource, field, apps_agg_value, user["resources"][resource][field])
-                self.log_warning("Amount for applications belonging to user '{0}' should be changed from "
-                                 "{1} to {2}".format(user["name"], amount, new_amount))
-
-            # Partition total amount into small splits to distribute among applications
-            app_splits = utils.split_amount_in_num_slices(amount, num_apps)
-
-            # Try to distribute splits among applications
-            app_requests, scaled_amount = self.distribute_splits(user_apps, app_splits, resource, field, priority, self.get_scalable_app)
-        else:
-            scaled_amount = amount
-
-        return app_requests, scaled_amount
-
     def plan_operation(self, operation, host_tracker, swap_part=None):
         final_requests = []
         # Get info from operation
@@ -97,7 +45,7 @@ class UserPlanner(ApplicationPlanner):
                 return False, []
 
         # Propagate user request to applications (if they exist)
-        app_reqs, scaled_amount = self.propagate_user_request(user, user_request, applications, num_apps)
+        app_reqs, scaled_amount = utils.propagate_user_request(user, applications, user_request)
         if self.op_should_be_aborted(op_type, user_request, scaled_amount):
             return False, []
 

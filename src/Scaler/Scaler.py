@@ -317,7 +317,6 @@ class Scaler(Service):
 
         return valid_requests
 
-
     def _process_requests(self, _requests, method, op, host_changes=None, host_locks=None, max_tries=1):
         removed, failed, tries = False, [], 0
         while _requests and tries < max_tries:

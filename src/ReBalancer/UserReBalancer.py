@@ -45,10 +45,6 @@ class UserRebalancer(BaseRebalancer):
         # Users can donate to and receive from any other user
         return "all"
 
-    @staticmethod
-    def get_best_fit_child(scalable_users, resource, amount):
-        raise NotImplementedError("Users do not have a parent structure (maybe hosts in the future)")
-
     def is_donor(self, data):
         return (data["max"] - data["usage"]) > (self.diff_percentage * data["max"])
 

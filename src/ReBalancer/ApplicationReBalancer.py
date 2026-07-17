@@ -43,10 +43,6 @@ class ApplicationRebalancer(BaseRebalancer):
         # Applications can donate to and receive from any other application
         return "all"
 
-    @staticmethod
-    def get_best_fit_child(scalable_apps, resource, amount):
-        return utils.get_best_fit_app(scalable_apps, resource, amount)
-
     def is_donor(self, data):
         return (data["max"] - data["usage"]) > (self.diff_percentage * data["max"])
 
@@ -54,11 +50,11 @@ class ApplicationRebalancer(BaseRebalancer):
         return (data["max"] - data["usage"]) < (self.diff_percentage * data["max"])
 
     def process_user_requests(self, users, user_requests, applications):
+        apps_dict = {app["name"]: app for app in applications}
         for user in users:
             user_request = user_requests.get(user["name"], {})
-            user_apps = [app for app in applications if app["name"] in user.get("clusters", [])]
-            if user_request and user_apps:
-                self.simulate_scaler_request_processing(user["name"], user_apps, user_request)
+            if user_request:
+                self.simulate_scaler_request_processing(user, apps_dict, user_request, utils.propagate_user_request)
 
     def filter_rebalanceable_apps(self, applications):
         rebalanceable_apps = []

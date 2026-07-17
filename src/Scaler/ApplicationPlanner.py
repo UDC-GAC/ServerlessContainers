@@ -9,63 +9,6 @@ class ApplicationPlanner(ContainerPlanner):
     PARENT_LEVEL = "user"
     CURRENT_LEVEL = "application"
 
-    def get_scalable_container(self, app_containers, amount, resource, field, priority, prev_scalings):
-        scalable_containers = []
-        # Look for applications that can be rescaled
-        for container_name, container in app_containers.items():
-            max_value = container["resources"][resource]["max"] + prev_scalings.get(container_name, 0)
-            min_value = container["resources"][resource]["min"]
-
-            if container_name not in self.data_context.container_usages:
-                self.log_warning("Usage information for container {0} could not be retrieved, "
-                                 "skipping container in app splits distribution".format(container_name))
-                continue
-
-            if "usage" not in container["resources"][resource]:
-                raise ValueError("Usage information is not available for container '{0}' during app request propagation".format(container_name))
-
-            # Rescale down: "max" can't be scaled below "min"
-            if amount < 0 and max_value + amount >= min_value:
-                scalable_containers.append(container)
-            # Rescale up
-            elif amount > 0:
-                # TODO: Think if we should check the host free resources for a "max" scaling
-                scalable_containers.append(container)
-
-        if not scalable_containers:
-            return False, {}, None
-
-        # Look for the best fit container for this resource and generate a rescaling request for it
-        best_fit_container = utils.get_best_fit_container(scalable_containers, resource, amount, field)
-        success = best_fit_container is not None
-
-        return success, best_fit_container, utils.generate_request(best_fit_container, amount, resource, priority, field)
-
-    def propagate_application_request(self, app, containers, app_request, num_containers):
-        amount, resource, field, priority = app_request["amount"], app_request["resource"], app_request["field"], app_request["priority"]
-        app_containers = {cont_name: containers.get(cont_name) for cont_name in app.get("containers", [])}
-        container_requests = {}
-        if app_containers:
-            # Check application limit is consistent with aggregated container limits
-            containers_agg_value = sum(cont["resources"][resource][field] for cont in app_containers.values())
-            if containers_agg_value != app["resources"][resource][field]:
-                # TODO: Fix containers scaled amount, while application amount remains the same
-                new_amount = amount + (app["resources"][resource][field] - containers_agg_value)
-                self.log_warning("Application '{0}' containers have an aggregated {1} {2} = {3}, which differs from "
-                                 "application value {4}.").format(app["name"], resource, field, containers_agg_value, app["resources"][resource][field])
-                self.log_warning("Amount for containers belonging to application '{0}' should be changed from "
-                                 "{1} to {2} ".format(app["name"], amount, new_amount))
-
-            # Partition total amount into small splits
-            container_splits = utils.split_amount_in_num_slices(amount, num_containers)
-
-            # Try to distribute splits among containers
-            container_requests, scaled_amount = self.distribute_splits(app_containers, container_splits, resource, field, priority, self.get_scalable_container)
-        else:
-            scaled_amount = amount
-
-        return container_requests, scaled_amount
-
     def plan_operation(self, operation, host_tracker, swap_part=None):
         final_requests = []
 
@@ -91,7 +34,7 @@ class ApplicationPlanner(ContainerPlanner):
             app_request["amount"] = new_amount
 
         # Propagate application request to containers (if they exist)
-        container_reqs, scaled_amount = self.propagate_application_request(application, containers, app_request, num_containers)
+        container_reqs, scaled_amount = utils.propagate_application_request(application, containers, app_request)
         if self.op_should_be_aborted(op_type, app_request, scaled_amount):
             return False, []
 

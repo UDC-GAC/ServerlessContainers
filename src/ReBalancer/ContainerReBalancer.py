@@ -48,10 +48,6 @@ class ContainerRebalancer(BaseRebalancer):
         # Containers can only donate to and receive from other containers on the same host (and same disk if needed)
         return structure["host"] + ("_{0}".format(structure["resources"]["disk"]["name"]) if resource == "disk" else "")
 
-    @staticmethod
-    def get_best_fit_child(scalable_containers, resource, amount):
-        return utils.get_best_fit_container(scalable_containers, resource, amount, "max")
-
     def is_donor(self, data):
         # If current its near its maximum it is a donor -> (max - current) < diff_percentage * max
         return (data["max"] - data["current"]) < (self.diff_percentage * data["max"])
@@ -60,11 +56,12 @@ class ContainerRebalancer(BaseRebalancer):
         # If usage its near its current it is a receiver -> (current - usage) < diff_percentage * current
         return (data["current"] - data["usage"]) < (self.diff_percentage * data["current"])
 
-    def process_app_requests(self, app_containers_dict, app_requests):
-        for app_name, app_containers in app_containers_dict.items():
-            app_request = app_requests.get(app_name, {})
-            if app_request and app_containers:
-                self.simulate_scaler_request_processing(app_name, app_containers, app_request)
+    def process_app_requests(self, apps, app_containers_dict, app_requests):
+        for app in apps:
+            app_request = app_requests.get(app["name"], {})
+            containers = {cont["name"]: cont for cont in app_containers_dict.get(app["name"], {})}
+            if app_request:
+                self.simulate_scaler_request_processing(app, containers, app_request, utils.propagate_application_request)
 
     def filter_rebalanceable_apps(self, applications):
         rebalanceable_apps = []
@@ -291,10 +288,7 @@ class ContainerRebalancer(BaseRebalancer):
                         if amount_to_scale != 0:
                             self.add_scaling_request(container["container_info"], resource, "current", amount_to_scale, requests)
 
-        global_hdfs_enabled = False
-        for container in containers:
-            if "datanode" in container["name"]: global_hdfs_enabled = True
-
+        global_hdfs_enabled = any("datanode" in container["name"] for container in containers)
         for resource in self.resources_balanced:
 
             if resource not in self.BALANCEABLE_RESOURCES:
@@ -388,7 +382,7 @@ class ContainerRebalancer(BaseRebalancer):
                 app_containers[app_name] = self.fill_containers_with_usage_info(app_containers[app_name])
 
             # First check if there are application requests to be processed
-            self.process_app_requests(app_containers, app_requests)
+            self.process_app_requests(rebalanceable_apps, app_containers, app_requests)
 
             # Rebalance applications
             for app in rebalanceable_apps:
