@@ -301,18 +301,21 @@ class BaseRebalancer(ABC):
         sorted_receivers = sorted(receivers, key=lambda r: self.rebalance_tracker.get_net_balance(r["_id"], resource), reverse=True)
 
         # Check which structures have a debt and are forced to donate
-        forced_donors = []
+        forced_donors = {}
         for structure in valid_structures:
             # If structure has pending debts it must donate
             if self.rebalance_tracker.get_net_balance(structure["_id"], resource) < 0:
                 lower_limit = 0 if structure["resources"][resource]["usage"] == 0 and d_field == "max" else structure["resources"][resource]["min"]
                 # Check if the structure can donate respecting QoS contraints
                 if structure["resources"][resource][d_field] > lower_limit:
-                    forced_donors.append(structure)
+                    d_key = self.get_donor_slice_key(structure, resource)
+                    forced_donors.setdefault(d_key, []).append(structure)
 
         # Those that are still receivers and have a credit can receive from those that have a debt
         for receiver in sorted_receivers:
             receiver_balance = self.rebalance_tracker.get_net_balance(receiver["_id"], resource)
+            receiver_key = self.get_donor_slice_key(receiver, resource)
+
             # Add the while to iterate until receiver is fully balanced, current approach only associates best
             # receiver with best donor and pass. I believe this is better because the receiver will take some time
             # to reuse the amount of resources taken back from debt
@@ -320,25 +323,33 @@ class BaseRebalancer(ABC):
             if not forced_donors:
                 break
 
-            # Take the donor with the highest debt
-            forced_donors = sorted(forced_donors, key=lambda d: self.rebalance_tracker.get_net_balance(d["_id"], resource))
-            best_donor = forced_donors[0]
+            # Get forced donors in the same domain (host/disk)
+            compatible_donors = forced_donors.get(receiver_key, [])
+            if not compatible_donors:
+                continue # There are no forced donors in the same domain, skip to the next receiver
 
-            # If donor with the highest debt does not have any debt, we have finished
+            # Take the compatible donor with the highest debt
+            compatible_donors = sorted(compatible_donors, key=lambda d: self.rebalance_tracker.get_net_balance(d["_id"], resource))
+            best_donor = compatible_donors[0]
+
+            # If donor with the highest debt does not have any debt, we have finished with this group
             donor_balance = self.rebalance_tracker.get_net_balance(best_donor["_id"], resource)
             needed_amount = min(-donor_balance, receiver_balance)
+
             if needed_amount <= 0:
                 utils.log_info("Either donor {0} has a positive balance ({1}) or receiver {2} has a negative one ({3})"
                                .format(best_donor["name"], donor_balance, receiver["name"], receiver_balance), self.debug)
-                break
+                continue
 
             lower_limit = 0 if best_donor["resources"][resource]["usage"] == 0 and d_field == "max" else best_donor["resources"][resource]["min"]
             max_donation = self.resources_tracker.get_structure_resource(best_donor["_id"], resource).get(d_field) - lower_limit
             stolen_amount = min(needed_amount, max_donation)
 
-            # If the donor give all the amount it can, it is removed from the donors list
+            # If the donor give all the amount it can, it is removed from the global donors list
             if stolen_amount == max_donation:
-                forced_donors.remove(best_donor)
+                compatible_donors.remove(best_donor)
+                if not compatible_donors:
+                    del forced_donors[receiver_key]
 
             # Manage necessary scalings to rebalance resource between donor and receiver
             self.manage_swap(best_donor, receiver, resource, d_field, stolen_amount, requests)
@@ -356,6 +367,7 @@ class BaseRebalancer(ABC):
     def pair_swapping(self, structures, requests):
         self.resources_tracker = ResourcesTracker(self.MANDATORY_FIELDS)
         valid_structures = self.resources_tracker.record_structures(structures, self.get_needed_resources())
+        name_to_structure = {s["name"]: s for s in valid_structures}
         for resource in self.resources_balanced:
             if resource not in self.BALANCEABLE_RESOURCES:
                 utils.log_warning("'{0}' not yet supported in pair-swapping balancing, only '{1}' available at the "
@@ -378,6 +390,7 @@ class BaseRebalancer(ABC):
             # Print current donor slices
             self.print_donor_slices(donor_slices)
 
+            raw_requests = {}
             while donor_slices:
                 # If no receivers left, stop redistribution process
                 if not receivers:
@@ -414,12 +427,73 @@ class BaseRebalancer(ABC):
                     if not donor_slices[key]:
                         del donor_slices[key]
 
-                    # Manage necessary scalings to rebalance resource between donor and receiver
-                    self.manage_swap(donor, receiver, resource, d_field, amount_to_scale, requests)
-
-                    utils.log_info("Resource {0} swap between {1} (donor) and {2} (receiver) with amount {3}".format(
-                        resource, donor["name"], receiver["name"], amount_to_scale), self.debug)
+                    self.manage_swap(donor, receiver, resource, d_field, amount_to_scale, raw_requests)
 
             if self.compensate:
-                self.perform_compensation(valid_structures, receivers, resource, d_field, requests)
+                self.perform_compensation(valid_structures, receivers, resource, d_field, raw_requests)
 
+            # Minimise the number of swaps between structures to generate the final requests
+            # e.g. raw requests: (6 swaps)
+            #      donor1 gives: 1W to receiver1, 2W to receiver2, 3W to receiver3
+            #      donor2 dives: 1W to receiver1, 2W to receiver2, 3W to receiver3
+            #  optimised requests: (3 swaps)
+            #      donor 1 gives: 2W to receiver1, 4W to receiver2
+            #      donor 2 gives: 6W to receiver3
+            if raw_requests:
+                nets_by_key = {}
+                raw_length, final_length = 0, 0
+                # Group net balances by key (e.g., inside host0, cont1 receives 5W from different donors and cont2 donates 5W to different receivers)
+                for (receiver_name, donor_name), req_list in raw_requests.items():
+                    if donor_name is None:
+                        continue
+                    raw_length += len(req_list)
+                    total_amount = sum(r["amount"] for r in req_list)
+                    if total_amount <= 0:
+                        continue
+
+                    donor_obj = name_to_structure[donor_name]
+                    receiver_obj = name_to_structure[receiver_name]
+                    key = self.get_donor_slice_key(receiver_obj, resource)
+
+                    nets_by_key.setdefault(key, {"donors": {}, "receivers": {}})
+
+                    # Sum the donated amount for this donor in this domain (host/disk)
+                    donor_entry = nets_by_key[key]["donors"].setdefault(donor_name, [donor_obj, 0])
+                    donor_entry[1] += total_amount
+
+                    # Sum the received amount for this receiver in this domain
+                    receiver_entry = nets_by_key[key]["receivers"].setdefault(receiver_name, [receiver_obj, 0])
+                    receiver_entry[1] += total_amount
+
+                # Inside each domain, match donors and receivers by highest amount
+                for key, nets in nets_by_key.items():
+                    donors_list = [entry for entry in nets["donors"].values() if entry[1] > 0]
+                    receivers_list = [entry for entry in nets["receivers"].values() if entry[1] > 0]
+                    while donors_list and receivers_list:
+                        donors_list.sort(key=lambda x: x[1], reverse=True)
+                        receivers_list.sort(key=lambda x: x[1], reverse=True)
+
+                        best_donor_entry = donors_list[0] # Donor with the highest amount
+                        best_receiver_entry = receivers_list[0] # Receiver with the highest amount
+
+                        donor_obj, d_amt = best_donor_entry
+                        receiver_obj, r_amt = best_receiver_entry
+
+                        swap_amount = min(d_amt, r_amt)
+                        if swap_amount > 0:
+                            # Add final request
+                            self.add_scaling_request(receiver_obj, resource, d_field, swap_amount, requests, donor_obj)
+                            final_length += 1
+                            utils.log_info("Resource {0} swap between {1} (donor) and {2} (receiver) with amount {3}".format(
+                                resource, donor_obj["name"], receiver_obj["name"], swap_amount), self.debug)
+
+                        # Update remaining balances
+                        best_donor_entry[1] -= swap_amount
+                        best_receiver_entry[1] -= swap_amount
+                        if best_donor_entry[1] <= 0:
+                            donors_list.pop(0)
+                        if best_receiver_entry[1] <= 0:
+                            receivers_list.pop(0)
+
+                utils.log_info("The number of swaps has been optimised from {0} raw requests to {1} final requests"
+                               .format(raw_length, final_length), self.debug)
