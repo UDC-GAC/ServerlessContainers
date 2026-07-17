@@ -233,8 +233,6 @@ class BaseRebalancer(ABC):
                 lower_limit = data["min"] if data["usage"] > 0 else 0 # Running structures doesn't donate below min (QoS constraint)
                 stolen_percentage = self.stolen_percentage
                 if structure["subtype"] == "application":
-                    lower_limit = data["min"] if structure.get("state", "") == "running" else 0  # Additional protection for apps
-                stolen_amount = max(self.stolen_percentage * (data["max"] - max(lower_limit, data["usage"])), 0)
                     if structure.get("state", "") == "stopped":
                         lower_limit, stolen_percentage = 0, 1.0  # Stopped applications can donate their full resources
                 stolen_amount = max(stolen_percentage * (data["max"] - max(lower_limit, data["usage"])), 0)
