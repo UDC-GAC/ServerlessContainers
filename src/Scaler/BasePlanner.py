@@ -194,6 +194,29 @@ class BasePlanner(ABC):
                 # Update container physical resources
                 cont_resources["resources"][resource][resource_limit] += scaled_current_amount
 
+    def check_operation_consistency(self, operation):
+        resource, request, op_type = operation.resource, operation.original_request, operation.op_type
+        if resource == "cpu" and "power_budget" in request and op_type != "SWAP":
+            # Try getting request structure from data context
+            structure_type_str = str(request["structure_type"]) + "s"
+            structure_name = operation.receiver if op_type == "SCALE_UP" else operation.donor
+            structure = self.data_context.get(structure_type_str, {}).get(structure_name)
+            if structure is None:
+                raise ValueError("Structure {0} (type={1}) not found checking operation consistency: {2}"
+                                 .format(structure_name, structure_type_str, operation))
+
+            current_pb = structure["resources"]["energy"]["current"]
+            request_pb = request["power_budget"]
+            # If request scales CPU up, but power budget has been decreased since generation, cancel operation
+            if op_type == "SCALE_UP" and request_pb > current_pb:
+                return False, "Aborting CPU scale-up because power budget has been decreased since the request was generated"
+
+            # If request scales CPU down, but power budget has been increased since generation, cancel operation
+            if op_type == "SCALE_DOWN" and request_pb < current_pb:
+                return False, "Aborting CPU scale-down because power budget has been increased since the request was generated"
+
+        return True, ""
+
     def plan_operations_execution(self, operations):
         """ For each operation, plans the execution of the generated requests and checks if they can be fully performed.
             If not, the operation is discarded"""
@@ -201,6 +224,11 @@ class BasePlanner(ABC):
         for op in operations:
             success, donor_success, receiver_success = False, False, False
             generated_requests, donor_requests, receiver_requests = [], [], []
+
+            consistent, msg = self.check_operation_consistency(op)
+            if not consistent:
+                self.log_warning(msg)
+                continue
 
             if op.op_type == "SWAP":
                 donor_success, donor_requests = self.plan_operation(op, {}, swap_part="donor")
