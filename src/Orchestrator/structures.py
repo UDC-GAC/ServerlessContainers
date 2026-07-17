@@ -39,7 +39,7 @@ structure_routes = Blueprint('structures', __name__)
 
 CONTAINER_KEYS = ["name", "host_rescaler_ip", "host_rescaler_port", "host", "guard", "subtype"]
 HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"]
-APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script", "app_jar"]
+APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script"]
 STRUCTURE_STATES = ["running", "stopped", "hdfs_downloading", "hdfs_uploading"] ## They are currently used only for apps
 
 def print_with_date(msg):
