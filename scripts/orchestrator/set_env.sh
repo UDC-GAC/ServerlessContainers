@@ -3,10 +3,10 @@
 scriptDir=$(dirname -- "$(readlink -f -- "$BASH_SOURCE")")
 SERVICES_CONFIG_FILE=$scriptDir"/../../services_config.yml"
 
-orchestrator_url=`yq '.ORCHESTRATOR_URL' < $SERVICES_CONFIG_FILE`
-orchestrator_port=`yq '.ORCHESTRATOR_PORT' < $SERVICES_CONFIG_FILE`
-couchdb_url=`yq '.COUCHDB_URL' < $SERVICES_CONFIG_FILE`
-couchdb_port=`yq '.COUCHDB_PORT' < $SERVICES_CONFIG_FILE`
+orchestrator_url=`yq -r '.ORCHESTRATOR_URL' < $SERVICES_CONFIG_FILE`
+orchestrator_port=`yq -r '.ORCHESTRATOR_PORT' < $SERVICES_CONFIG_FILE`
+couchdb_url=`yq -r '.COUCHDB_URL' < $SERVICES_CONFIG_FILE`
+couchdb_port=`yq -r '.COUCHDB_PORT' < $SERVICES_CONFIG_FILE`
 
 if [ -z "${ORCHESTRATOR_URL}" ]
 then

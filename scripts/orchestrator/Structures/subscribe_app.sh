@@ -26,7 +26,6 @@ curl -X PUT -H "Content-Type: application/json" http://${ORCHESTRATOR_REST_URL}/
     "output_dir": "",
     "start_script": "",
     "stop_script": "",
-    "app_jar": "",
     "framework": ""
   },
   "limits":
