@@ -125,6 +125,9 @@ class BaseRebalancer(ABC):
                 return False
 
             for resource in self.resources_balanced:
+                # Energy can be initialised to zero
+                if resource == "energy":
+                    continue
                 # The "current" limit can only be zero if the application has been started recently
                 # and StructureSnapshoter has not yet added its actual "current" value
                 if app.get("resources", {}).get(resource, {}).get("current", 0) < app.get("resources", {}).get(resource, {}).get("min", 0):
@@ -228,9 +231,13 @@ class BaseRebalancer(ABC):
             # Give stolen percentage of the gap between max and current usage
             if d_field == "max":
                 lower_limit = data["min"] if data["usage"] > 0 else 0 # Running structures doesn't donate below min (QoS constraint)
+                stolen_percentage = self.stolen_percentage
                 if structure["subtype"] == "application":
                     lower_limit = data["min"] if structure.get("state", "") == "running" else 0  # Additional protection for apps
                 stolen_amount = max(self.stolen_percentage * (data["max"] - max(lower_limit, data["usage"])), 0)
+                    if structure.get("state", "") == "stopped":
+                        lower_limit, stolen_percentage = 0, 1.0  # Stopped applications can donate their full resources
+                stolen_amount = max(stolen_percentage * (data["max"] - max(lower_limit, data["usage"])), 0)
                 # Avoid leaving residual budget, especially when structure is not running
                 if stolen_amount < 1 <= (data["max"] - lower_limit):
                     stolen_amount = 1
