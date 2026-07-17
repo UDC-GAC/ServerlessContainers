@@ -62,7 +62,7 @@ class EnergyController(Service):
             self.host_cpu_info[host]["total"]["allocation"], # U_alloc
             self.host_cpu_info[host]["total"]["usages"][utils.res_to_metric("user")], # U_user
             self.host_cpu_info[host]["total"]["usages"][utils.res_to_metric("kernel")], # U_system
-            self.host_cpu_info[host]["total"]["usages"]["rapl"], # P_usage
+            self.host_cpu_info[host]["total"]["usages"]["global"], # P_usage
             self.host_cpu_info[host]["total"]["scaling"] # P_scaling
         )
 
@@ -143,7 +143,7 @@ class EnergyController(Service):
 
         # 74 is the point where single core model and general model cross their predictions
         # TODO: Retrieve this value automatically depending on the CPU
-        power_model = "polyreg_General" if P_budget_host > 74 else "polyreg_Single_Core"
+        power_model = "polyreg_Group_PP_LL" if P_budget_host > 74 else "polyreg_Single_Core"
 
         # Get model estimation
         U_scaling_cap = 0
@@ -203,6 +203,7 @@ class EnergyController(Service):
 
             if amount != 0:
                 request = utils.generate_request(structure, amount, "cpu")
+                request["power_budget"] = structure["resources"]["energy"]["current"]
                 self.couchdb_handler.add_request(request)
                 self.alloc_cache.add(structure["_id"], structure["resources"]["cpu"]["current"] + amount)
 
@@ -217,7 +218,11 @@ class EnergyController(Service):
     def compute_power_scaling(self, structure, limits, usages):
         structure_id = structure["_id"]
         U_usage, P_usage = usages[utils.res_to_metric("cpu")], usages[utils.res_to_metric("energy")]
-        P_budget = max(structure["resources"]["energy"]["current"], 1e-30)
+        P_budget = structure["resources"]["energy"]["current"]
+        if P_budget == 0:
+            utils.log_warning(f"@{structure['name']} Ignored because power budget is zero", self.debug)
+            return 0
+
         P_scaling = P_budget - P_usage
         abs_ppe = abs(P_scaling / P_budget)
         direction, opposite = ("up", "down") if P_scaling > 0 else ("down", "up")
@@ -332,8 +337,17 @@ class EnergyController(Service):
             # Get host power consumption from RAPL
             if not self.host_cpu_info[host]["total"]["usages"].get("rapl", None):
                 rapl_report = utils.get_structure_usages(["energy"], {"name": f"{host}-rapl", "subtype": "container"}, self.window_timelapse, self.window_delay, self.opentsdb_handler, self.debug)
+                sensor_report = utils.get_structure_usages(["energy"], {"name": f"{host}-sensor", "subtype": "container"}, self.window_timelapse, self.window_delay, self.opentsdb_handler, self.debug)
+                rapl_value = rapl_report[utils.res_to_metric("energy")]
+                sensor_value = sensor_report[utils.res_to_metric("energy")]
+                global_value = rapl_value - sensor_value
+                utils.log_info(f"Global consumption = {rapl_value} (RAPL) - {sensor_value} (sensor) = {global_value} W", self.debug)
                 with self.host_cpu_info_lock:
-                    self.host_cpu_info[host]["total"]["usages"]["rapl"] = rapl_report[utils.res_to_metric("energy")]
+                    self.host_cpu_info[host]["total"]["usages"]["rapl"] = rapl_value
+                    # Ignore sensor power to avoid side effects. Example:
+                    # - Host consumes 70W apps + 20W sensor and P_scaling = 20W -> Compute CPU for 110W
+                    # Apps scale up CPU, thus they absorb 20W from sensor, increasing their power a total of 40W instead of the initial 20W
+                    self.host_cpu_info[host]["total"]["usages"]["global"] = global_value
 
         except Exception as e:
             utils.log_error(f"@{name} Error collecting info: {e}", self.debug)
