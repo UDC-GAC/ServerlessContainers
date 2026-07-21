@@ -506,7 +506,7 @@ def desubscribe_container(structure_name):
             get_db().safe_update_structure(host["_id"], changes)
         else:
             ## Show error but continue anyways
-            print_with_date("Warning, resources for container {0} where not found, it was probably already deleted".format(structure_name))
+            print_with_date("Warning, resources for container {0} were not found, it was probably already deleted".format(structure_name))
 
     except Exception as e:
         restore_scaler_state(scaler_service, previous_state)
