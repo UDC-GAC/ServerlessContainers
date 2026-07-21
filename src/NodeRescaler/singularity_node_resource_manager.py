@@ -31,7 +31,7 @@ import urllib3
 import subprocess
 import json
 import re
-
+import fnmatch
 import glob
 from datetime import datetime, timedelta
 
@@ -73,6 +73,11 @@ DICT_NET_LABEL = "net"
 # TODO: get container mount point from vars file
 CONTAINER_MOUNT_POINT = "/opt/bind"
 
+INVALID_DISK_TYPES = [
+    "tmpfs", "nfs", "nfs4", "cifs", "smbfs", "glusterfs", "ceph", "cephfs",
+    "gfs2", "lustre", "gpfs", "ocfs2", "afs", "sshfs",
+]
+
 # At the moment, apptainer instances with cgroups V1 can only be started with root/sudo
 # TODO properly support Net for cgroups v1 and add support for cgroups v2
 
@@ -85,7 +90,7 @@ class SingularityContainerManager:
         self.cgroups_version = cgroups_version
         self.energy_vcgroup_dir = energy_vcgroup_dir
 
-    def __get_singularity_instances(self):
+    def __get_singularity_instances(self, containers_to_ignore=[]):
         if self.cgroups_version == "v1":
             process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
@@ -93,9 +98,14 @@ class SingularityContainerManager:
             process = subprocess.Popen(["sudo", self.singularity_command_alias, "instance", "list", "-j"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
-        parsed = json.loads(stdout)
+        instances = json.loads(stdout)['instances']
 
-        return parsed['instances']
+        filtered_instances = [
+            item for item in instances
+            if not any(fnmatch.fnmatch(item['instance'], pattern) for pattern in containers_to_ignore)
+        ]
+
+        return filtered_instances
 
     def __get_singularity_instance_by_name(self, instance_name):
         if self.cgroups_version == "v1":
@@ -113,6 +123,29 @@ class SingularityContainerManager:
         except IndexError:
             # If node not found, pass
             return {}
+
+    def __get_disk_device(self, instance_name):
+        device, mount_point, fstype = None, None, None
+        command = 'sudo {0} exec instance://{1} bash -c "findmnt -nrT {2}"'.format(self.singularity_command_alias, instance_name, CONTAINER_MOUNT_POINT)
+
+        try:
+            output = subprocess.run(command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout.split()
+            source = output[1]
+            fstype = output[2]
+
+            if fstype not in INVALID_DISK_TYPES:
+                device = source.split("[")[0]
+                mount_point = re.findall(r'\[([^]]*)\]', source)[0]
+
+        except (subprocess.TimeoutExpired, PermissionError):
+            #print("Timeout")
+            pass
+        except IndexError:
+            # If there are not subscribed containers that don't have a mount point on /opt/bind
+            # Subprocess will return an empty string and output[1] will raise an IndexError
+            print("Container {0} not subscribed".format(instance_name))
+
+        return device, mount_point, fstype
 
     def set_node_resources(self, node_name, resources):
         if resources is None:
@@ -145,28 +178,28 @@ class SingularityContainerManager:
                 if DICT_DISK_READ_LABEL in resources or DICT_DISK_WRITE_LABEL in resources:
 
                     # TODO: maybe pass disk path as parameter from an HTTP request instead of getting it here
-                    command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], CONTAINER_MOUNT_POINT)
-                    output, error = subprocess.Popen(command, universal_newlines=True, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
-                    source = output.split()[5]
-                    if ":" in source:
-                        ## Device mounted on NFS
-                        device = source.split(":")[0]
+                    device, _, fstype = self.__get_disk_device(container['instance'])
+                    if not device:
+                        if DICT_DISK_READ_LABEL in resources:
+                            disk_read_success = False
+                            node_dict[DICT_DISK_READ_LABEL] = {"error": "Requested device is not valid, fstype={0}".format(fstype)}
+                        if DICT_DISK_WRITE_LABEL in resources:
+                            disk_write_success = False
+                            node_dict[DICT_DISK_WRITE_LABEL] = {"error": "Requested device is not valid, fstype={0}".format(fstype)}
                     else:
-                        device = source.split("[")[0]
+                        if DICT_DISK_READ_LABEL in resources:
+                            if self.cgroups_version == "v1":
+                                disk_read_success, disk_read_resource = set_node_disk(node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
+                            else:
+                                disk_read_success, disk_read_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
+                            node_dict[DICT_DISK_READ_LABEL] = disk_read_resource
 
-                    if DICT_DISK_READ_LABEL in resources:
-                        if self.cgroups_version == "v1":
-                            disk_read_success, disk_read_resource = set_node_disk(node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
-                        else:
-                            disk_read_success, disk_read_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_READ_LABEL], device, self.container_engine)
-                        node_dict[DICT_DISK_READ_LABEL] = disk_read_resource
-
-                    if DICT_DISK_WRITE_LABEL in resources:
-                        if self.cgroups_version == "v1":
-                            disk_write_success, disk_write_resource = set_node_disk(node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
-                        else:
-                            disk_write_success, disk_write_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
-                        node_dict[DICT_DISK_WRITE_LABEL] = disk_write_resource
+                        if DICT_DISK_WRITE_LABEL in resources:
+                            if self.cgroups_version == "v1":
+                                disk_write_success, disk_write_resource = set_node_disk(node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
+                            else:
+                                disk_write_success, disk_write_resource = set_node_disk_cgroupsv2(self.userid, node_pid, resources[DICT_DISK_WRITE_LABEL], device, self.container_engine)
+                            node_dict[DICT_DISK_WRITE_LABEL] = disk_write_resource
 
                     # disks_changed = list()
                     # for disk in resources[DICT_DISK_LABEL]:
@@ -223,42 +256,25 @@ class SingularityContainerManager:
 
             # Disk
             if needed_resources.get("disk", False) or needed_resources.get("disk_read", False) or needed_resources.get("disk_write", False):
-                command = 'sudo {0} exec instance://{1} bash -c "findmnt -T {2}"'.format(self.singularity_command_alias, container['instance'], CONTAINER_MOUNT_POINT)
-                try:
-                    output = subprocess.run(command, universal_newlines=True, shell=True, capture_output=True, timeout=3).stdout
-                    source = output.split()[5]
-                    if ":" in source:
-                        ## Device mounted on NFS
-                        #device, mount_point = source.split(":")
-                        ## Cant' access disk information of a remote disk
-                        disk_resources = None
+                device, mount_point, _ = self.__get_disk_device(container['instance'])
+                if not device or not mount_point:
+                    disk_resources = None
+                else:
+                    if self.cgroups_version == "v1":
+                        disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
+                        # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
                     else:
-                        device = source.split("[")[0]
-                        mount_point= re.findall(r'\[([^]]*)\]', source)[0]
-                        if self.cgroups_version == "v1":
-                            disk_success, disk_resources = get_node_disks(node_pid, device, mount_point, self.container_engine)
-                            # disk_success, disk_resources = self.get_node_disks(container)  # LXD Dependent
-                        else:
-                            disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
+                        disk_success, disk_resources = cgroups_get_node_disks_cgroupsv2(self.userid, node_pid, device, mount_point, self.container_engine)
 
-                    if type(disk_resources) == list and len(disk_resources) > 0:
-                        node_dict[DICT_DISK_READ_LABEL] = disk_resources[0][DICT_DISK_READ_LABEL]
-                        node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[0][DICT_DISK_WRITE_LABEL]
-                    elif disk_resources:
-                        node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
-                        node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
-                    else:
-                        node_dict[DICT_DISK_READ_LABEL] = {}
-                        node_dict[DICT_DISK_WRITE_LABEL] = {}
-
-                except (subprocess.TimeoutExpired, PermissionError):
-                    #print("Timeout")
-                    pass
-                except IndexError:
-                    # If there are not subscribed containers that don't have a mount point on /opt/bind
-                    # Subprocess will return an empty string and output.split()[5] will raise an IndexError
-                    print("Container {0} not subscribed".format(container['instance']))
-
+                if type(disk_resources) == list and len(disk_resources) > 0:
+                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[0][DICT_DISK_READ_LABEL]
+                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[0][DICT_DISK_WRITE_LABEL]
+                elif disk_resources:
+                    node_dict[DICT_DISK_READ_LABEL] = disk_resources[DICT_DISK_READ_LABEL]
+                    node_dict[DICT_DISK_WRITE_LABEL] = disk_resources[DICT_DISK_WRITE_LABEL]
+                else:
+                    node_dict[DICT_DISK_READ_LABEL] = {}
+                    node_dict[DICT_DISK_WRITE_LABEL] = {}
                 # TODO support multiple disks
                 #
             if needed_resources.get("energy", False):
@@ -285,19 +301,19 @@ class SingularityContainerManager:
             return self.get_node_resources(container, needed_resources)
         return None
 
-    def get_all_nodes(self, needed_resources=None):
-        containers = self.__get_singularity_instances()
+    def get_all_nodes(self, needed_resources=None, containers_to_ignore=[]):
+        containers = self.__get_singularity_instances(containers_to_ignore)
         containers_dict = dict()
         for c in containers:
             containers_dict[c['instance']] = self.get_node_resources(c, needed_resources)
         return containers_dict
 
-    def get_node_tcp_connections(self):
+    def get_node_tcp_connections(self, containers_to_ignore=[]):
 
         window_delay = 15
 
         # 1: get container - PID mapping
-        containers = self.__get_singularity_instances()
+        containers = self.__get_singularity_instances(containers_to_ignore)
         container_ip_mapped = {d["ip"]: d["instance"] for d in containers}
 
         # 2: get TCP lines

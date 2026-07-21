@@ -40,6 +40,9 @@ import yaml
 import os
 import psutil
 
+## Auxiliar deployed containers that should be ignored by the Node Rescaler
+IGNORED_CONTAINERS = ["dns-cont", "couchdb_cont", "hdfs-frontend", "cache-manager-*", "tcp-tracker-*"]
+
 node_resource_manager = None
 
 node_rescaler = Flask(__name__)
