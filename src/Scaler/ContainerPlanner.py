@@ -97,7 +97,7 @@ class ContainerPlanner(BasePlanner):
 
         # The receiver of a pair-swapping operation can assume resources are available (donor left free resources)
         scaled_current_amount = amount_for_current
-        if amount_for_current > 0 and not (op_type == "SWAP" and swap_part == "receiver"):
+        if amount_for_current > 0:
             # Check if host has enough free resources for the new current value
             success, missing_shares = self.check_host_has_enough_free_resources(container["host"], host_tracker, amount_for_current, resource, container)
             scaled_current_amount = amount_for_current - missing_shares

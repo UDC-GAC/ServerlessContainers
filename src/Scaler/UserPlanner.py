@@ -32,7 +32,7 @@ class UserPlanner(ApplicationPlanner):
 
         # Check user can be scaled respecting QoS contraints
         if amount < 0:
-            lower_limit = 0 if num_active_apps <= 0 else user["resources"][resource]["min"]
+            lower_limit = 0 if num_active_apps <= 0 else max(user["resources"][resource]["min"], 1)
             new_amount = max(min(lower_limit - user["resources"][resource][field], 0), amount)
             if self.op_should_be_aborted(op_type, user_request, new_amount):
                 return False, []

@@ -323,7 +323,9 @@ def assign_splits(total_amount, candidates, resource, priority, field, priority_
 
     # Assign each split to the most appropriate container
     split_amount = 1 if resource == "energy" else 5
-    for split in split_amount_in_slices(total_amount, split_amount):
+    direction = -1 if total_amount < 0 else 1
+    for split in split_amount_in_slices(abs(total_amount), split_amount):
+        real_split = split * direction
         # If no valid containers available, stop distribution
         if not candidates:
             break
@@ -331,14 +333,13 @@ def assign_splits(total_amount, candidates, resource, priority, field, priority_
             best = min(candidates, key=priority_getter)
         else:
             best = max(candidates, key=priority_getter)
-
         # Save scaled amount for next iterations
-        best["alloc"] += split
-        scaled_amount += split
+        best["alloc"] += real_split
+        scaled_amount += real_split
         if total_amount < 0 and best["base_limit"] + best["alloc"] == best["lower_limit"]:
             candidates.remove(best)
 
-        req = generate_request(best["structure"], split, resource, priority, field)
+        req = generate_request(best["structure"], real_split, resource, priority, field)
         requests.setdefault(best["name"], []).append(req)
 
     return requests, scaled_amount
