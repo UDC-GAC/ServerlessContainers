@@ -188,7 +188,7 @@ class BasePlanner(ABC):
                     host["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] -= scaled_current_amount
                 else:
                     if field == "max":
-                        scaled_current_amount = structure["resources"][resource]["max"] - structure["resources"][resource]["current"]
+                        scaled_current_amount = structure["resources"][resource]["max"] - cont_resources["resources"][resource][resource_limit]
                     host["resources"][resource]["free"] -= scaled_current_amount
 
                 # Update container physical resources
