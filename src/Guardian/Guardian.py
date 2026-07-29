@@ -805,7 +805,8 @@ class Guardian:
                     if usage_resource == "disk_read": ratio_label = "read_ratio"
                     else: ratio_label = "write_ratio"
 
-                    ratio = host["resources"]["disks"][resources["disk"]["name"]][ratio_label]
+                    disk_name = resources["disk"]["name"]
+                    ratio = host["resources"]["disks"][disk_name][ratio_label]
                     blocksize = int(resources[usage_resource]["blocksize"])
 
                     if blocksize > 0 and blocksize < 64:
@@ -816,12 +817,20 @@ class Guardian:
         events = []
         for rule in rules:
 
-            ## enforce fairness by avoiding scaling down of random I/O
+            ## Enforce fairness by avoiding scaling down of random I/O
             if rule["name"] in ["disk_read_dropped_lower", "disk_write_dropped_lower"]:
                 res = rule["resource"] ## disk_read or disk_write
                 blocksize = int(resources[res]["blocksize"])
-                if blocksize > 0 and blocksize < 64:
-                    continue ## skip to next rule
+                disk_name = resources["disk"]["name"]
+
+                # Get ReBalancer service status
+                rebalancer_service = utils.get_service(self.couchdb_handler, "rebalancer")
+                is_rebalancer_active = rebalancer_service["config"].get("ACTIVE", False)
+
+                if blocksize > 0 and blocksize < 64 and host["resources"]["disks"][disk_name]["load"] > 1 and is_rebalancer_active:
+                    # Skip rule for random I/O workloads if there are more structures using the same disk, and rebalancer is enabled
+                    # Bandwidth scaling will be managed by the rebalancer in such case
+                    continue
 
             try:
                 # Check that the rule is active, the resource to watch is guarded and that the rule is activated
