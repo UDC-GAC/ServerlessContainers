@@ -113,6 +113,7 @@ class ReFeeder(Service):
         if "application" in self.structures_refeeded:
             applications = utils.get_structures(self.couchdb_handler, self.debug, "application")
             if applications:
+                utils.configure_session_pool(self.opentsdb_handler.session, len(applications))
                 utils.run_in_threads(applications, self.generate_application_metrics)
         utils.log_info("It took {0} seconds to refeed applications".format(str("%.2f" % (time.time() - ts))), self.debug)
 
@@ -126,6 +127,9 @@ class ReFeeder(Service):
         utils.log_info("It took {0} seconds to refeed users".format(str("%.2f" % (time.time() - ts))), self.debug)
 
         ts = time.time()
+        num_structures = len(self.app_tracker) + len(self.user_tracker)
+        if num_structures > 0:
+            utils.configure_session_pool(self.couchdb_handler.session, num_structures)
         utils.run_in_threads(self.app_tracker + self.user_tracker, self.persist_usages)
         self.app_tracker.clear()
         self.user_tracker.clear()

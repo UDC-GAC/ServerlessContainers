@@ -176,6 +176,8 @@ class StructuresSnapshoter(Service):
 
         # Persist structures and users in database
         ts = time.time()
+        num_structures = len(self.structure_tracker) + len(self.user_tracker)
+        utils.configure_session_pool(self.couchdb_handler.session, num_structures)
         utils.run_in_threads(self.structure_tracker + self.user_tracker, self.persist_current)
         # Clear the trackers after persisting
         self.structure_tracker.clear()

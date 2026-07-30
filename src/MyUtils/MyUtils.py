@@ -773,3 +773,20 @@ def get_cpu_topology(node_scaler_session, container):
     print("Error getting CPU topology from host in IP {0}".format(rescaler_ip))
     r.raise_for_status()
 
+
+def configure_session_pool(session, num_connections):
+    """Configure a requests.Session connection pool sized for the expected concurrency.
+
+    Mounts an HTTPAdapter on the session with pool_connections and pool_maxsize
+    set to at least num_connections (with a floor of 10). Call this after knowing
+    how many concurrent HTTP requests the session may need to handle.
+
+    See:
+     - https://requests.readthedocs.io/en/latest/api/#requests.adapters.HTTPAdapter
+     - https://stackoverflow.com/questions/18466079/change-the-connection-pool-size-for-pythons-requests-module-when-in-threading
+    """
+    min_pool = max(num_connections, 10)
+    adapter = requests.adapters.HTTPAdapter(pool_connections=min_pool, pool_maxsize=min_pool)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+

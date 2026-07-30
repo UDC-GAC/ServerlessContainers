@@ -521,6 +521,11 @@ class Scaler(Service):
             t1_data = time.time()
             self._print_time("Data loaded", t0_data, t1_data)
 
+            # Size connection pools for expected concurrency based on loaded structures
+            num_structures = sum(len(self.data_context.get(s_type, {})) for s_type in ["containers", "applications", "users"])
+            utils.configure_session_pool(self.rescaler_session, num_structures)
+            utils.configure_session_pool(self.couchdb_handler.session, num_structures)
+
             if self.check_core_map:
                 t0_core_map = time.time()
                 self._print_header("CHECKING CORE MAP")
