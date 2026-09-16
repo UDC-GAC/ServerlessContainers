@@ -67,4 +67,4 @@ class ResourceCache:
         return self._cache.get(structure_id, default)
 
     def is_new(self, structure_id, pb):
-        return structure_id not in self._cache
+        return self._cache.get(structure_id, -1) != pb
