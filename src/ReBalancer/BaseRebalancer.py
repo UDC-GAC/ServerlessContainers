@@ -136,11 +136,14 @@ class BaseRebalancer(ABC):
 
     @staticmethod
     def simulate_scaler_request_processing(parent, childs, parent_request, propagate):
-        app_requests, scaled_amount = propagate(parent, childs, parent_request)
-        for r in app_requests:
-            structure = childs.get(r["structure"])
-            field, amount, resource = r.get("field"), r.get("amount"), r.get("_request", {}).get("resource")
-            structure["resources"][resource][field] += amount
+        child_requests, scaled_amount = propagate(parent, childs, parent_request)
+        for name, r_list in child_requests.items():
+            structure = childs.get(name)
+            for r in r_list:
+                field, amount, resource = r.get("field"), r.get("amount"), r.get("resource")
+                if resource is None or field is None or amount is None:
+                    raise ValueError(f"Trying to propagate parent {parent['name']} request to {len(childs)} childs. Resulting requests: {child_requests}")
+                structure["resources"][resource][field] += amount
 
     def manage_swap(self, donor, receiver, resource, d_field, amount_to_scale, requests):
         if amount_to_scale == 0:
@@ -235,6 +238,8 @@ class BaseRebalancer(ABC):
                 if structure["subtype"] == "application":
                     if structure.get("state", "") == "stopped":
                         lower_limit, stolen_percentage = 0, 1.0  # Stopped applications can donate their full resources
+                    else:
+                        lower_limit = max(data["min"], 1)  # Additional protection for running apps
                 stolen_amount = max(stolen_percentage * (data["max"] - max(lower_limit, data["usage"])), 0)
                 # Avoid leaving residual budget, especially when structure is not running
                 if stolen_amount < 1 <= (data["max"] - lower_limit):

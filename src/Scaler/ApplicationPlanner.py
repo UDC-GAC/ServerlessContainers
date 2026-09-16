@@ -34,7 +34,7 @@ class ApplicationPlanner(ContainerPlanner):
             app_request["amount"] = new_amount
 
         # Propagate application request to containers (if they exist)
-        container_reqs, scaled_amount = utils.propagate_application_request(application, containers, app_request)
+        container_reqs, scaled_amount = utils.propagate_application_request(application, containers, app_request, self.data_context.hosts, host_tracker)
         if self.op_should_be_aborted(op_type, app_request, scaled_amount):
             return False, []
 

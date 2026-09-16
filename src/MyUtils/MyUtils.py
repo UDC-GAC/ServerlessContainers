@@ -345,7 +345,7 @@ def assign_splits(total_amount, candidates, resource, priority, field, priority_
     return requests, scaled_amount
 
 
-def propagate_application_request(app, containers, app_request):
+def propagate_application_request(app, containers, app_request, hosts=None, host_tracker=None):
     amount, resource, field, priority = app_request["amount"], app_request["resource"], app_request["field"], app_request["priority"]
     app_containers = {name: containers[name] for name in app.get("containers", []) if name in containers}
     # num_containers = len(app_containers.keys())
@@ -374,6 +374,18 @@ def propagate_application_request(app, containers, app_request):
         lower_limit = max(res_data.get("min", 0), 1)
         if not is_scale_up and res_data.get(field, 0) <= lower_limit:
             continue
+
+        # For energy scale-ups, skip containers whose host currently has no free energy left
+        # Anyway, it will be discarded in the ContainerPlanner host check, but this allows considering
+        # other containers at this stage
+        # TODO: Check if this can be generalised to other resources
+        if is_scale_up and resource == "energy" and hosts is not None:
+            host = hosts.get(cont.get("host"), {})
+            host_free = host.get("resources", {}).get("energy", {}).get("free", 0)
+            if host_tracker:
+                host_free -= host_tracker.get(cont.get("host"), 0)
+            if host_free <= 0:
+                continue
 
         candidates.append({
             "name": name,
