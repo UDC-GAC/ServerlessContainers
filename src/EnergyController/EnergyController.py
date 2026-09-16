@@ -17,7 +17,7 @@ from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
                          "ALLOWED_ERROR": 0.05, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
-                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "DEBUG": True, "ACTIVE": True}
+                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "DEFAULT_EVENTS": 4, "DEBUG": True, "ACTIVE": True}
 
 
 class EnergyController(Service):
@@ -31,7 +31,7 @@ class EnergyController(Service):
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
         self.polling_frequency, self.event_timeout, self.window_timelapse, self.window_delay = None, None, None, None
         self.allowed_error, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
-        self.events_system, self.debug, self.active = None, None, None
+        self.events_system, self.default_events, self.debug, self.active = None, None, None, None
         self.events_cache = cache_utils.EventsCache()
         self.pb_cache = cache_utils.ResourceCache()
         self.alloc_cache = cache_utils.ResourceCache()
@@ -261,7 +261,7 @@ class EnergyController(Service):
         self.events_cache.add_event(structure_id, direction)
 
         # Static events threshold -> Threshold is the same regardless of the error
-        required_events = 4
+        required_events = self.default_events
         if self.events_system == "dynamic":
             # Dynamic events threshold -> Higher error requires fewer consecutive events to trigger scaling
             N_min, N_max, alpha = 1, 4, 1
