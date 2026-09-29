@@ -34,6 +34,7 @@ import time
 import src.MyUtils.MyUtils as utils
 from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
 from src.Scaler.Scaler import CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
+from src.Guardian.Guardian import Guardian # to use the following static methods: get_margin_from_boundary, get_amount_from_fit_to_usage, adjust_amount
 
 structure_routes = Blueprint('structures', __name__)
 
@@ -584,8 +585,37 @@ def map_container_to_host_cores(cont_name, host, needed_shares, core_distributio
 
     return used_cores, cpu_changes
 
+def get_needed_amount(container, resource, limits, host_free):
 
-def map_container_to_host_disks(resource_dict, container, host):
+    needed_amount = container["resources"][resource]["current"]
+
+    # If current is a positive amount, return it
+    # Else try to fit the minimum limit + boundaries (or just the min otherwise)
+    if needed_amount == -1:
+        ## Try to initially allocate fitting to zero usage
+        resource_margin = Guardian.get_margin_from_boundary(
+            limits[resource]['boundary'], 
+            limits[resource]['boundary_type'], 
+            container['resources'][resource], 
+            resource
+        )
+        amount = Guardian.get_amount_from_fit_to_usage(container['resources'][resource]['min'], resource_margin, 0)
+        adjusted_amount = Guardian.adjust_amount(
+            amount, 
+            container['resources'][resource], 
+            {
+                'upper': container['resources'][resource]['min'] - resource_margin, 
+                'lower': container['resources'][resource]['min'] - int(2*resource_margin)
+            }
+        )
+        needed_amount = container['resources'][resource]['min'] + adjusted_amount
+        if host_free < needed_amount:
+            ## Try to allocate minimum then
+            needed_amount = container['resources'][resource]['min']
+
+    return needed_amount
+
+def map_container_to_host_disks(resource_dict, container, host, limits):
     disk_name = container["resources"]["disk"]["name"]
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
@@ -596,12 +626,20 @@ def map_container_to_host_disks(resource_dict, container, host):
     except KeyError:
         return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
-    needed_disk_read_bw = container["resources"]["disk_read"]["current"]
-    needed_disk_write_bw = container["resources"]["disk_write"]["current"]
-
     consumed_disk_read_bw = host["resources"]["disks"][disk_name]["max_read"] - free_disk_read_bw
     consumed_disk_write_bw = host["resources"]["disks"][disk_name]["max_write"] - free_disk_write_bw
     total_free = max(host["resources"]["disks"][disk_name]["max_read"], host["resources"]["disks"][disk_name]["max_write"]) - consumed_disk_read_bw - consumed_disk_write_bw
+
+    needed_disk_read_bw = get_needed_amount(container, "disk_read", limits, free_disk_read_bw)
+    needed_disk_write_bw = get_needed_amount(container, "disk_write", limits, free_disk_write_bw)
+    adjusted_read = container["resources"]["disk_read"]["current"] == -1
+    adjusted_write = container["resources"]["disk_write"]["current"] == -1
+
+    # Re-adjust resources if the sum exceeds the total free
+    if adjusted_read and needed_disk_read_bw + needed_disk_write_bw > total_free:
+        needed_disk_read_bw = container["resources"]["disk_read"]["min"]
+    if adjusted_write and needed_disk_read_bw + needed_disk_write_bw > total_free:
+        needed_disk_write_bw = container["resources"]["disk_write"]["min"]
 
     if needed_disk_read_bw > free_disk_read_bw or needed_disk_write_bw > free_disk_write_bw or needed_disk_read_bw + needed_disk_write_bw > total_free:
         return abort(400, {"message": "Container host does not have enough free bandwidth requested on disk {0}".format(disk_name)})
@@ -614,7 +652,7 @@ def map_container_to_host_disks(resource_dict, container, host):
 
     return needed_disk_read_bw, needed_disk_write_bw, disk_changes
 
-def map_container_to_host_resources(container, host, cpu_topology):
+def map_container_to_host_resources(container, host, cpu_topology, limits):
     cont_name = container["name"]
     resource_dict = {}
     changes = {"resources": {}}
@@ -623,13 +661,13 @@ def map_container_to_host_resources(container, host, cpu_topology):
             continue
         resource_dict[resource] = {}
         if resource == 'disk':
-            read_limit, write_limit, disk_changes = map_container_to_host_disks(resource_dict, container, host)
+            read_limit, write_limit, disk_changes = map_container_to_host_disks(resource_dict, container, host, limits)
             resource_dict["disk_read"] = {"disk_read_limit": read_limit}
             resource_dict["disk_write"] = {"disk_write_limit": write_limit}
             if disk_changes:
                 changes["resources"]["disks"] = disk_changes
         else:
-            needed_amount = container["resources"][resource]["current"]
+            needed_amount = get_needed_amount(container, resource, limits, host["resources"][resource]["free"])
             if host["resources"][resource]["free"] < needed_amount:
                 return abort(400, {"message": "Host does not have enough free {0}".format(resource)})
             if resource == 'cpu':
@@ -728,7 +766,7 @@ def subscribe_container(structure_name):
     try:
         host = get_db().get_structure(container["host"])
         cpu_topology = utils.get_cpu_topology(node_scaler_session, container)
-        resource_dict, changes = map_container_to_host_resources(container, host, cpu_topology)
+        resource_dict, changes = map_container_to_host_resources(container, host, cpu_topology, limits['resources'])
 
         # Set container physical resources through NodeRescaler
         utils.set_container_physical_resources(node_scaler_session, container, resource_dict, True)
