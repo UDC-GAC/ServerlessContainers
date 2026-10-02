@@ -501,6 +501,324 @@ EnergyRescaleDown = dict(
     active=True
 )
 
+## Idle resources
+cpu_idle = dict(
+    _id='cpu_idle',
+    type='rule',
+    resource="cpu",
+    name='cpu_idle',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "cpu.structure.cpu.usage"},
+                0]},
+            {"<": [
+                {"var": "cpu.structure.cpu.usage"},
+                {"*": [{"var": "cpu.structure.cpu.min"}, 0.2]}]},
+            {"<=": [
+                {"var": "cpu.limits.cpu.lower"},
+                {"var": "cpu.structure.cpu.min"}]},
+            {"!": [{"var": "cpu.structure.cpu.lent"}]}]}),
+    generates="events",
+    action={"events": {"idle": 1}},
+    active=True
+)
+
+# Disabled by default: idle containers rarely release memory and lent memory can't be reclaimed as quickly as CPU
+mem_idle = dict(
+    _id='mem_idle',
+    type='rule',
+    resource="mem",
+    name='mem_idle',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "mem.structure.mem.usage"},
+                0]},
+            {"<": [
+                {"var": "mem.structure.mem.usage"},
+                {"*": [{"var": "mem.structure.mem.min"}, 0.2]}]},
+            {"<=": [
+                {"var": "mem.limits.mem.lower"},
+                {"var": "mem.structure.mem.min"}]},
+            {"!": [{"var": "mem.structure.mem.lent"}]}]}),
+    generates="events",
+    action={"events": {"idle": 1}},
+    active=False
+)
+
+disk_read_idle = dict(
+    _id='disk_read_idle',
+    type='rule',
+    resource="disk_read",
+    name='disk_read_idle',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "disk_read.structure.disk_read.usage"},
+                0]},
+            {"<": [
+                {"var": "disk_read.structure.disk_read.usage"},
+                {"*": [{"var": "disk_read.structure.disk_read.min"}, 0.2]}]},
+            {"<=": [
+                {"var": "disk_read.limits.disk_read.lower"},
+                {"var": "disk_read.structure.disk_read.min"}]},
+            {"!": [{"var": "disk_read.structure.disk_read.lent"}]}]}),
+    generates="events",
+    action={"events": {"idle": 1}},
+    active=True
+)
+
+disk_write_idle = dict(
+    _id='disk_write_idle',
+    type='rule',
+    resource="disk_write",
+    name='disk_write_idle',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "disk_write.structure.disk_write.usage"},
+                0]},
+            {"<": [
+                {"var": "disk_write.structure.disk_write.usage"},
+                {"*": [{"var": "disk_write.structure.disk_write.min"}, 0.2]}]},
+            {"<=": [
+                {"var": "disk_write.limits.disk_write.lower"},
+                {"var": "disk_write.structure.disk_write.min"}]},
+            {"!": [{"var": "disk_write.structure.disk_write.lent"}]}]}),
+    generates="events",
+    action={"events": {"idle": 1}},
+    active=True
+)
+
+cpu_reclaim = dict(
+    _id='cpu_reclaim',
+    type='rule',
+    resource="cpu",
+    name='cpu_reclaim',
+    rule=dict(
+        {"and": [
+            {"!!": [{"var": "cpu.structure.cpu.lent"}]},
+            {">=": [
+                {"var": "cpu.structure.cpu.usage"},
+                {"*": [{"var": "cpu.structure.cpu.min"}, 0.5]}]}]}),
+    generates="events",
+    action={"events": {"reclaim": 1}},
+    active=True
+)
+
+mem_reclaim = dict(
+    _id='mem_reclaim',
+    type='rule',
+    resource="mem",
+    name='mem_reclaim',
+    rule=dict(
+        {"and": [
+            {"!!": [{"var": "mem.structure.mem.lent"}]},
+            {">=": [
+                {"var": "mem.structure.mem.usage"},
+                {"*": [{"var": "mem.structure.mem.min"}, 0.5]}]}]}),
+    generates="events",
+    action={"events": {"reclaim": 1}},
+    active=False
+)
+
+disk_read_reclaim = dict(
+    _id='disk_read_reclaim',
+    type='rule',
+    resource="disk_read",
+    name='disk_read_reclaim',
+    rule=dict(
+        {"and": [
+            {"!!": [{"var": "disk_read.structure.disk_read.lent"}]},
+            {">=": [
+                {"var": "disk_read.structure.disk_read.usage"},
+                {"*": [{"var": "disk_read.structure.disk_read.min"}, 0.5]}]}]}),
+    generates="events",
+    action={"events": {"reclaim": 1}},
+    active=True
+)
+
+disk_write_reclaim = dict(
+    _id='disk_write_reclaim',
+    type='rule',
+    resource="disk_write",
+    name='disk_write_reclaim',
+    rule=dict(
+        {"and": [
+            {"!!": [{"var": "disk_write.structure.disk_write.lent"}]},
+            {">=": [
+                {"var": "disk_write.structure.disk_write.usage"},
+                {"*": [{"var": "disk_write.structure.disk_write.min"}, 0.5]}]}]}),
+    generates="events",
+    action={"events": {"reclaim": 1}},
+    active=True
+)
+
+CpuLend = dict(
+    _id='CpuLend',
+    type='rule',
+    resource="cpu",
+    name='CpuLend',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.idle"},
+                6]},
+            {"<=": [
+                {"var": "events.scale.up"},
+                0]}
+        ]}),
+    events_to_remove=6,
+    generates="requests",
+    action={"requests": ["CpuLend"]},
+    rescale_policy="lend_current",
+    rescale_type="lend",
+    active=True
+)
+
+MemLend = dict(
+    _id='MemLend',
+    type='rule',
+    resource="mem",
+    name='MemLend',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.idle"},
+                3]},
+            {"<=": [
+                {"var": "events.scale.up"},
+                0]}
+        ]}),
+    events_to_remove=3,
+    generates="requests",
+    action={"requests": ["MemLend"]},
+    rescale_policy="lend_current",
+    rescale_type="lend",
+    active=False
+)
+
+Disk_readLend = dict(
+    _id='Disk_readLend',
+    type='rule',
+    resource="disk_read",
+    name='Disk_readLend',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.idle"},
+                3]},
+            {"<=": [
+                {"var": "events.scale.up"},
+                0]}
+        ]}),
+    events_to_remove=3,
+    generates="requests",
+    action={"requests": ["Disk_readLend"]},
+    rescale_policy="lend_current",
+    rescale_type="lend",
+    active=True
+)
+
+Disk_writeLend = dict(
+    _id='Disk_writeLend',
+    type='rule',
+    resource="disk_write",
+    name='Disk_writeLend',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.idle"},
+                3]},
+            {"<=": [
+                {"var": "events.scale.up"},
+                0]}
+        ]}),
+    events_to_remove=3,
+    generates="requests",
+    action={"requests": ["Disk_writeLend"]},
+    rescale_policy="lend_current",
+    rescale_type="lend",
+    active=True
+)
+
+CpuReclaim = dict(
+    _id='CpuReclaim',
+    type='rule',
+    resource="cpu",
+    name='CpuReclaim',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.reclaim"},
+                1]}
+        ]}),
+    events_to_remove=1,
+    generates="requests",
+    action={"requests": ["CpuReclaim"]},
+    rescale_policy="reclaim_lent",
+    rescale_type="reclaim",
+    active=True
+)
+
+MemReclaim = dict(
+    _id='MemReclaim',
+    type='rule',
+    resource="mem",
+    name='MemReclaim',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.reclaim"},
+                2]}
+        ]}),
+    events_to_remove=2,
+    generates="requests",
+    action={"requests": ["MemReclaim"]},
+    rescale_policy="reclaim_lent",
+    rescale_type="reclaim",
+    active=False
+)
+
+Disk_readReclaim = dict(
+    _id='Disk_readReclaim',
+    type='rule',
+    resource="disk_read",
+    name='Disk_readReclaim',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.reclaim"},
+                2]}
+        ]}),
+    events_to_remove=2,
+    generates="requests",
+    action={"requests": ["Disk_readReclaim"]},
+    rescale_policy="reclaim_lent",
+    rescale_type="reclaim",
+    active=True
+)
+
+Disk_writeReclaim = dict(
+    _id='Disk_writeReclaim',
+    type='rule',
+    resource="disk_write",
+    name='Disk_writeReclaim',
+    rule=dict(
+        {"and": [
+            {">=": [
+                {"var": "events.reclaim"},
+                2]}
+        ]}),
+    events_to_remove=2,
+    generates="requests",
+    action={"requests": ["Disk_writeReclaim"]},
+    rescale_policy="reclaim_lent",
+    rescale_type="reclaim",
+    active=True
+)
+
 if __name__ == "__main__":
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
@@ -542,3 +860,22 @@ if __name__ == "__main__":
         handler.add_rule(EnergyRescaleUp)
         handler.add_rule(EnergyRescaleDown)
 
+        # Idle
+        handler.add_rule(cpu_idle)
+        handler.add_rule(mem_idle)
+        handler.add_rule(disk_read_idle)
+        handler.add_rule(disk_write_idle)
+        handler.add_rule(CpuLend)
+        handler.add_rule(MemLend)
+        handler.add_rule(Disk_readLend)
+        handler.add_rule(Disk_writeLend)
+
+        # Reclaim
+        handler.add_rule(cpu_reclaim)
+        handler.add_rule(mem_reclaim)
+        handler.add_rule(disk_read_reclaim)
+        handler.add_rule(disk_write_reclaim)
+        handler.add_rule(CpuReclaim)
+        handler.add_rule(MemReclaim)
+        handler.add_rule(Disk_readReclaim)
+        handler.add_rule(Disk_writeReclaim)

@@ -30,8 +30,10 @@ from flask import jsonify
 from flask import request
 from datetime import datetime, timezone
 import time
+from copy import deepcopy
 
 import src.MyUtils.MyUtils as utils
+import src.Scaler.LendingUtils as lending
 from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
 from src.Scaler.Scaler import CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 from src.Guardian.Guardian import Guardian # to use the following static methods: get_margin_from_boundary, get_amount_from_fit_to_usage, adjust_amount
@@ -417,7 +419,8 @@ def free_container_cores(cont_name, host):
     return changes
 
 
-def free_container_disks(container, container_phy_resources, host):
+def free_container_disks(container, container_phy_resources, host, not_freed=None):
+    not_freed = not_freed or {}
     disk_name = container["resources"]["disk"]["name"]
     if "disks" not in host["resources"]:
         return abort(400, {"message": "Host does not have disks"})
@@ -428,8 +431,10 @@ def free_container_disks(container, container_phy_resources, host):
 
             #current_disk_read_bw = container["resources"]["disk_read"]["current"]
             #current_disk_write_bw = container["resources"]["disk_write"]["current"]
-            current_disk_read_bw = int(container_phy_resources["disk_read"]["disk_read_limit"])
-            current_disk_write_bw = int(container_phy_resources["disk_write"]["disk_write_limit"])
+
+            # Borrowed bandwidth and lent bandwidth now owned by other containers are not returned to 'free'
+            current_disk_read_bw = int(container_phy_resources["disk_read"]["disk_read_limit"]) - not_freed.get("disk_read", 0)
+            current_disk_write_bw = int(container_phy_resources["disk_write"]["disk_write_limit"]) - not_freed.get("disk_write", 0)
 
             host["resources"]["disks"][disk_name]["free_read"] += current_disk_read_bw
             host["resources"]["disks"][disk_name]["free_write"] += current_disk_write_bw
@@ -440,7 +445,23 @@ def free_container_disks(container, container_phy_resources, host):
             return abort(400, {"message": "Host does not have requested disk {0}".format(disk_name)})
 
 
-def free_container_resources(container, container_phy_resources, host):
+def settle_container_lending(container, host):
+    """Settle the resources lent and borrowed by a container before unsubscribing it, returning, for each resource,
+    the amount of its allocation that must not be returned to the host 'free' pool"""
+    not_freed = {}
+    bound_disk = container["resources"].get("disk", {}).get("name")
+    for resource in lending.LENDABLE_RESOURCES:
+        if resource not in container["resources"]:
+            continue
+        try:
+            not_freed[resource] = lending.settle_unsubscribed_container(host, resource, container["name"], bound_disk)
+        except KeyError:
+            # Host has no info for this resource (e.g., container has no bound disk)
+            continue
+    return not_freed
+
+def free_container_resources(container, container_phy_resources, host, not_freed=None):
+    not_freed = not_freed or {}
     cont_name = container["name"]
     changes = {"resources": {}}
     for resource in container["resources"]:
@@ -451,12 +472,14 @@ def free_container_resources(container, container_phy_resources, host):
         elif resource in ['disk_read', 'disk_write']:
             continue
         elif resource == 'disk':
-            disk_changes = free_container_disks(container, container_phy_resources, host)
+            disk_changes = free_container_disks(container, container_phy_resources, host, not_freed)
             if disk_changes:
                 changes["resources"]["disks"] = disk_changes
         else:
-            host["resources"][resource]["free"] += int(container_phy_resources[resource]["{0}_limit".format(resource)])
-            changes["resources"][resource] = {"free": int(container_phy_resources[resource]["{0}_limit".format(resource)])}
+            # Borrowed resources and lent resources now owned by other containers are not returned to 'free'
+            freed_amount = int(container_phy_resources[resource]["{0}_limit".format(resource)]) - not_freed.get(resource, 0)
+            host["resources"][resource]["free"] += freed_amount
+            changes["resources"][resource] = {"free": freed_amount}
     return changes
 
 
@@ -503,7 +526,14 @@ def desubscribe_container(structure_name):
         if container_phy_resources is not None:
             # Get host
             host = get_db().get_structure(container["host"])
-            changes = free_container_resources(container, container_phy_resources, host)
+            original_host = deepcopy(host)
+
+            # Settle resources lent and borrowed by the container before freeing the rest of its resources
+            not_freed = settle_container_lending(container, host)
+            free_container_resources(container, container_phy_resources, host, not_freed)
+
+            # Persist host changes as differences, as other services may be updating the host concurrently
+            changes = utils.compute_differences(original_host, host)
             get_db().safe_update_structure(host["_id"], changes)
         else:
             ## Show error but continue anyways

@@ -35,6 +35,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import src.MyUtils.MyUtils as utils
 import src.StateDatabase.opentsdb as bdwatchdog
+import src.Scaler.LendingUtils as lending
 from src.Scaler.ContainerPlanner import ContainerPlanner
 from src.Scaler.ApplicationPlanner import ApplicationPlanner
 from src.Scaler.UserPlanner import UserPlanner
@@ -42,6 +43,9 @@ from src.Scaler.DataLoader import DataLoader
 from src.MyUtils.ConfigValidator import ConfigValidator
 from src.Service.Service import Service
 from src.Scaler.ScalerUtils import ContainerRequest
+
+# Structure field targeted by lend requests (i.e., requests to lend the allocation of idle structures)
+LEND_FIELD = "lent"
 
 TRANSLATION_DICT = {"cpu": "cpu_allowance_limit", "mem": "mem_limit", "disk_read": "disk_read_limit",
                     "disk_write": "disk_write_limit", "energy": "energy_limit"}
@@ -71,6 +75,13 @@ class Scaler(Service):
         app_reqs = [r for r in _requests if r["structure_type"] == "application"]
         cont_reqs = [r for r in _requests if r["structure_type"] == "container"]
         return user_reqs, app_reqs, cont_reqs
+
+    @staticmethod
+    def _split_lend_requests(_requests):
+        lend_reqs = [r for r in _requests if r["field"] == LEND_FIELD and r["amount"] > 0]
+        reclaim_reqs = [r for r in _requests if r["field"] == LEND_FIELD and r["amount"] < 0]
+        rescale_reqs = [r for r in _requests if r["field"] != LEND_FIELD]
+        return lend_reqs, reclaim_reqs, rescale_reqs
 
     @staticmethod
     def _get_resource_phy_limit(physical_resources, resource):
@@ -185,6 +196,14 @@ class Scaler(Service):
                 continue
             if usages.get(cont_name, 0) != 0:
                 accounted_shares += usages[cont_name]
+                accounted_cores.append(core)
+
+        # Shares borrowed from idle containers are also part of the container allocation
+        for core, shares in lending.get_borrowed(host_info, "cpu", cont_name).items():
+            if int(core) >= host_max_cores:
+                continue
+            accounted_shares += shares
+            if core not in accounted_cores:
                 accounted_cores.append(core)
 
         # If container core mapping is not valid try to fix it
@@ -363,33 +382,10 @@ class Scaler(Service):
         for thread in threads:
             thread.join()
 
-    def _compute_differences(self, original, updated):
-        diff = {}
-        for key, new_val in updated.items():
-            if isinstance(new_val, dict) and key in original and isinstance(original[key], dict):
-                sub_differences = self._compute_differences(original[key], new_val)
-                if sub_differences:
-                    diff[key] = sub_differences
-            else:
-                if key in original:
-                    # Numbers -> Save difference between new and old values
-                    if isinstance(new_val, (int, float)) and isinstance(original[key], (int, float)):
-                        num_diff = new_val - original[key]
-                        if num_diff != 0:
-                            diff[key] = num_diff
-                    # Lists -> Save full list
-                    elif new_val != original[key]:
-                        # TODO: Support list operations in CouchDB (not needed for host but useful for other structures)
-                        diff[key] = new_val
-                else:
-                    # New key
-                    diff[key] = new_val
-        return diff
-
     def _persist_new_host_information(self, host_changes):
         def persist_thread(_original_host, _updated_host, _handler, _debug):
             try:
-                _changes = self._compute_differences(_original_host, _updated_host)
+                _changes = utils.compute_differences(_original_host, _updated_host)
                 _handler.safe_update_structure(_original_host["_id"], _changes)
             except Exception as e:
                 self.log_error("Unexpected error updating host {0}: {1}".format(_original_host["name"], str(e)))
@@ -407,6 +403,169 @@ class Scaler(Service):
 
         for t in threads:
             t.join()
+
+    def _get_lenders_to_reclaim(self, reclaim_reqs, rescale_reqs):
+        """Get the (container, resource) pairs whose lent resources must be reclaimed"""
+        lenders = set()
+        for req in reclaim_reqs:
+            if req["structure_type"] != "container":
+                self.log_warning("Reclaim request for {0} '{1}' is not supported, only containers can lend resources, skipping it"
+                                 .format(req["structure_type"], req["structure"]))
+                continue
+            lenders.add((req["structure"], req["resource"]))
+
+        # Lending containers that are going to be rescaled are not idle anymore, so their resources are also reclaimed
+        for req in rescale_reqs:
+            if req["structure_type"] != "container":
+                continue
+            container = self.execution_data.containers.get(req["structure"], {})
+            if container.get("resources", {}).get(req["resource"], {}).get(LEND_FIELD, 0) > 0:
+                lenders.add((req["structure"], req["resource"]))
+
+        return lenders
+
+    def reclaiming_phase(self, lenders_to_reclaim, host_changes):
+        """Reclaim the resources lent by containers that are not idle anymore. Borrowers give back the borrowed resources
+        and compensation scale-up requests are generated so that they can try to recover them from other pools"""
+        t0 = time.time()
+        reclaimed, compensations = set(), []
+
+        for lender_name, resource in sorted(lenders_to_reclaim):
+            lender = self.execution_data.containers.get(lender_name)
+            if lender is None or lender["resources"].get(resource, {}).get(LEND_FIELD, 0) <= 0:
+                self.log_warning("Container '{0}' is not lending {1}, nothing to reclaim".format(lender_name, resource))
+                continue
+
+            host_name = lender["host"]
+            host_info = self.execution_data.hosts.get(host_name)
+            if host_info is None:
+                self.log_warning("Host '{0}' of container '{1}' not found, skipping reclaim".format(host_name, lender_name))
+                continue
+            bound_disk = lender["resources"].get("disk", {}).get("name")
+
+            # 1) Borrowers give back the resources borrowed from the lender
+            all_given_back = True
+            for borrower_name, amount in lending.get_borrowers(host_info, resource, lender_name, bound_disk).items():
+                borrower = self.execution_data.containers.get(borrower_name)
+                if borrower is None:
+                    # Borrower doesn't exist anymore, just give back the resources in the lent pool
+                    self.log_warning("Borrower '{0}' of {1} lent by '{2}' not found, releasing its borrowed resources"
+                                     .format(borrower_name, resource, lender_name))
+                    lending.release(host_info, resource, borrower_name, amount, [], bound_disk, lenders=[lender_name])
+                    continue
+
+                request = utils.generate_request(borrower, -amount, resource)
+                request["reclaim_from"] = lender_name
+                container_request = ContainerRequest(request, self.couchdb_handler, self.rescaler_session, self.debug)
+                if not container_request.execute(self.execution_data, host_changes=host_changes, host_lock=Lock()):
+                    self.log_error("Container '{0}' couldn't give back {1} {2} borrowed from '{3}'"
+                                   .format(borrower_name, amount, resource, lender_name))
+                    all_given_back = False
+                    continue
+
+                # The borrower will try to recover the reclaimed resources from other pools, after any other scale-up
+                compensations.append(utils.generate_request(borrower, amount, resource, priority=-1))
+
+            lending.record_changes(host_changes, host_name, host_info, resource, bound_disk)
+            if not all_given_back:
+                self.log_warning("{0} lent by container '{1}' couldn't be fully reclaimed, it will be retried".format(resource, lender_name))
+                continue
+
+            # 2) End the lending, the lender keeps its allocation as it never lost it
+            lent = lender["resources"][resource][LEND_FIELD]
+            lending.cancel_lend(host_info, resource, lender_name, bound_disk)
+            lending.record_changes(host_changes, host_name, host_info, resource, bound_disk)
+            try:
+                # Lent amount is persisted as a difference, so it is reset by subtracting it
+                self.couchdb_handler.safe_update_structure(lender["_id"], {"resources": {resource: {LEND_FIELD: -lent}}})
+            except Exception as e:
+                self.log_error("Couldn't reset lent {0} in container '{1}': {2}".format(resource, lender_name, str(e)))
+            lender["resources"][resource][LEND_FIELD] = 0
+            reclaimed.add((lender_name, resource))
+
+            self.log_info("Container '{0}' has reclaimed its lent {1} ({2}) in host '{3}'".format(lender_name, resource, lent, host_name))
+
+        t1 = time.time()
+        self._print_time("Reclaiming phase completed", t0, t1)
+
+        return reclaimed, compensations
+
+    def lending_phase(self, lend_reqs, rescale_reqs, reclaimed, host_changes):
+        t0 = time.time()
+
+        # Structures with pending rescalings for a resource are not idle anymore
+        rescaled = {(r["structure"], r["resource"]) for r in rescale_reqs}
+
+        for req in lend_reqs:
+            structure_name, resource = req["structure"], req["resource"]
+
+            # Only containers hold physical resources that can be lent
+            if req["structure_type"] != "container":
+                self.log_warning("Lend request for {0} '{1}' is not supported, only containers can lend resources, skipping it"
+                                 .format(req["structure_type"], structure_name))
+                continue
+
+            if resource not in lending.LENDABLE_RESOURCES:
+                self.log_warning("Resource '{0}' can't be lent, skipping lend request for container '{1}'".format(resource, structure_name))
+                continue
+
+            if (structure_name, resource) in rescaled:
+                self.log_warning("Container '{0}' has pending rescaling requests for resource '{1}', discarding lend request"
+                                 .format(structure_name, resource))
+                continue
+
+            if (structure_name, resource) in reclaimed:
+                self.log_warning("Container '{0}' has reclaimed its lent {1} in this epoch, discarding lend request".format(structure_name, resource))
+                continue
+
+            container = self.execution_data.containers[structure_name]
+            if container["resources"][resource].get(LEND_FIELD, 0) > 0:
+                self.log_warning("Resource '{0}' of container '{1}' is already lent, skipping lend request".format(resource, structure_name))
+                continue
+
+            try:
+                current = self._get_resource_phy_limit(self.execution_data.container_resources[structure_name]["resources"], resource)
+            except (KeyError, ValueError) as e:
+                self.log_warning("Couldn't get current {0} limit for container '{1}', skipping lend request: {2}".format(resource, structure_name, str(e)))
+                continue
+
+            # The container may have been rescaled since the request was generated
+            if current != req["amount"]:
+                self.log_warning("Container '{0}' current {1} limit ({2}) differs from lend request amount ({3}), discarding outdated request"
+                                 .format(structure_name, resource, current, req["amount"]))
+                continue
+
+            host_name = container["host"]
+            host_info = self.execution_data.hosts.get(host_name)
+            if host_info is None:
+                self.log_warning("Host '{0}' of container '{1}' not found, skipping lend request".format(host_name, structure_name))
+                continue
+
+            bound_disk = container["resources"].get("disk", {}).get("name")
+            try:
+                lending.lend(host_info, resource, structure_name, current, bound_disk)
+            except (KeyError, ValueError) as e:
+                self.log_warning("Container '{0}' can't lend {1}: {2}".format(structure_name, resource, str(e)))
+                continue
+
+            # Mark the resource as lent in the container, so that the Guardian doesn't generate more lend requests
+            try:
+                if not self.couchdb_handler.safe_update_structure(container["_id"], {"resources": {resource: {LEND_FIELD: current}}}):
+                    raise ValueError("container document not found")
+            except Exception as e:
+                self.log_error("Couldn't mark {0} as lent in container '{1}', cancelling lending: {2}".format(resource, structure_name, str(e)))
+                lending.cancel_lend(host_info, resource, structure_name, bound_disk)
+                continue
+
+            container["resources"][resource][LEND_FIELD] = current
+            lending.record_changes(host_changes, host_name, host_info, resource, bound_disk)
+
+            pool, lent_key, _ = lending.get_pool(host_info, resource, bound_disk)
+            self.log_info("Container '{0}' lends {1} {2} in host '{3}' (available lent {2} in host: {4})"
+                          .format(structure_name, current, resource, host_name, pool[lent_key]))
+
+        t1 = time.time()
+        self._print_time("Lending phase completed", t0, t1)
 
     def planning_phase(self, user_reqs, app_reqs, cont_reqs):
         user_operations, app_operations, cont_operations = [], [], []
@@ -435,8 +594,8 @@ class Scaler(Service):
 
         return user_operations, app_operations, cont_operations
 
-    def execution_phase(self, user_operations, app_operations, cont_operations):
-        host_changes, host_locks = {}, {}
+    def execution_phase(self, user_operations, app_operations, cont_operations, host_changes):
+        host_locks = {}
         t0 = time.time()
 
         # Operation requests are executed as they were planned: User -> Application -> Container
@@ -462,9 +621,33 @@ class Scaler(Service):
         # Remove requests that involve structures that are not available
         valid_requests = self._validate_requests(new_requests)
 
-        # Create copies of data context for planning and execution phases
-        self.planning_data = deepcopy(self.data_context)
+        # Lend and reclaim requests don't rescale structures, so they are processed apart from rescaling requests
+        lend_reqs, reclaim_reqs, rescale_reqs = self._split_lend_requests(valid_requests)
+
+        # Create a copy of data context for execution phase, lend and reclaim requests are directly applied over it
         self.execution_data = deepcopy(self.data_context)
+        host_changes = {}
+
+        # 0a) RECLAIMING PHASE
+        # Processed before any other operation so that lenders recover their resources before being scaled
+        reclaimed = set()
+        lenders_to_reclaim = self._get_lenders_to_reclaim(reclaim_reqs, rescale_reqs)
+        if lenders_to_reclaim:
+            self._print_header("PHASE 0a: RECLAIMING")
+            self.log_info("--- Reclaiming resources lent by {0} containers ---".format(len(lenders_to_reclaim)))
+            reclaimed, compensations = self.reclaiming_phase(lenders_to_reclaim, host_changes)
+            # Borrowers compensation is planned along with the rest of rescaling requests
+            rescale_reqs.extend(compensations)
+
+        # 0b) LENDING PHASE
+        # Processed before planning so that lent resources can be used by the scalings of this epoch
+        if lend_reqs:
+            self._print_header("PHASE 0b: LENDING")
+            self.log_info("--- Processing {0} lend requests ---".format(len(lend_reqs)))
+            self.lending_phase(lend_reqs, rescale_reqs, reclaimed, host_changes)
+
+        # Create a copy of data context for planning phase, including the resources lent and reclaimed in this epoch
+        self.planning_data = deepcopy(self.execution_data)
 
         # Initialise scalers with data context
         self.container_planner = ContainerPlanner(self.couchdb_handler, self.rescaler_session, self.planning_data, self.debug)
@@ -474,14 +657,14 @@ class Scaler(Service):
         # 1) PLANNING PHASE
         self._print_header("PHASE 1: PLANNING")
         # Split requests by structure type (user, application, container)
-        user_reqs, app_reqs, cont_reqs = self._split_requests_by_type(valid_requests)
+        user_reqs, app_reqs, cont_reqs = self._split_requests_by_type(rescale_reqs)
         # Create atomic operations based on current requests
         user_operations, app_operations, cont_operations = self.planning_phase(user_reqs, app_reqs, cont_reqs)
 
         # 2) EXECUTION PHASE
         self._print_header("PHASE 2: EXECUTION")
         # Execute atomic operations and rollback if some request fails
-        self.execution_phase(user_operations, app_operations, cont_operations)
+        self.execution_phase(user_operations, app_operations, cont_operations, host_changes)
         # Remove requests from database
         self._remove_requests(valid_requests)
 

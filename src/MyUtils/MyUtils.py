@@ -280,20 +280,24 @@ def generate_request(structure, amount, resource_label, priority=0, field="curre
 
 # --------------------------------------         Events         --------------------------------------
 def generate_event_name(event, resource):
-    if "scale" not in event:
-        raise ValueError("Missing 'scale' key")
+    up = event.get("scale", {}).get("up", 0)
+    down = event.get("scale", {}).get("down", 0)
+    idle = event.get("idle", 0)
+    reclaim = event.get("reclaim", 0)
 
-    up = event["scale"].get("up", 0)
-    down = event["scale"].get("down", 0)
-    if up <= 0 and down <= 0:
-        raise ValueError("Must have an 'up' or 'down' count with positive values")
+    if up > 0 or down > 0:
+        if up > 0 and down > 0:
+            # Hysteresis
+            return resource.title() + ("Bottleneck" if up > down else "Underuse")
+        return resource.title() + ("Bottleneck" if up > 0 else "Underuse")
 
-    if up > 0 and down > 0:
-        # Hysteresis
-        return resource.title() + ("Bottleneck" if up > down else "Underuse")
+    if idle > 0:
+        return resource.title() + "Idle"
 
-    return resource.title() + ("Bottleneck" if up > 0 else "Underuse")
+    if reclaim > 0:
+        return resource.title() + "Reclaim"
 
+    raise ValueError("Must have an 'up', 'down' or 'idle' count with positive values")
 
 ######################################################################################################
 # ORCHESTRATOR
@@ -462,6 +466,36 @@ def propagate_user_request(user, applications, user_request):
 
     app_requests, scaled_amount = assign_splits(amount, candidates, resource, priority, field, get_priority)
     return app_requests, scaled_amount
+
+
+######################################################################################################
+# SCALING
+######################################################################################################
+
+def compute_differences(original, updated):
+    """Compute the changes between two versions of a structure in the format expected by safe updates (i.e., numbers
+    as differences, lists as full lists and new keys as full values)"""
+    diff = {}
+    for key, new_val in updated.items():
+        if isinstance(new_val, dict) and key in original and isinstance(original[key], dict):
+            sub_differences = compute_differences(original[key], new_val)
+            if sub_differences:
+                diff[key] = sub_differences
+        else:
+            if key in original:
+                # Numbers -> Save difference between new and old values
+                if isinstance(new_val, (int, float)) and isinstance(original[key], (int, float)):
+                    num_diff = new_val - original[key]
+                    if num_diff != 0:
+                        diff[key] = num_diff
+                # Lists -> Save full list
+                elif new_val != original[key]:
+                    # TODO: Support list operations in CouchDB (not needed for host but useful for other structures)
+                    diff[key] = new_val
+            else:
+                # New key
+                diff[key] = new_val
+    return diff
 
 
 ######################################################################################################

@@ -45,6 +45,9 @@ MODELS_STRUCTURE = "host"
 CONFIG_DEFAULT_VALUES = {"WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 10, "EVENT_TIMEOUT": 40, "DEBUG": True,
                          "STRUCTURE_GUARDED": "container", "GUARDABLE_RESOURCES": ["cpu"], "ACTIVE": True}
 
+# Event types consumed by the rules that change the lent allocation of a structure (lend and reclaim rules)
+LENDING_EVENT_TYPES = {"lend": "idle", "reclaim": "reclaim"}
+
 NOT_AVAILABLE_STRING = "n/a"
 
 
@@ -199,29 +202,59 @@ class Guardian(Service):
                 valid.append(event)
         return valid, invalid
 
+    def sort_idle_events(self, structure_events, triggered_events, usages):
+        """Idle events are only valid if they are consecutive. If a resource with available usage data has not
+        triggered an idle event in the current window, all of its previous idle events are invalidated.
+
+        Args:
+            structure_events (list): A list of the (non-expired) events of a specific structure
+            triggered_events (list): A list of the events triggered in the current window for that structure
+            usages (dict): A dictionary with the usages of the resources in the current window
+
+        Returns:
+            (tuple[list,list]) A tuple of lists of events, first the valid and then the invalid.
+        """
+        still_idle = {e["resource"] for e in triggered_events if e["action"]["events"].get("idle", 0) > 0}
+        valid, invalid = list(), list()
+        for event in structure_events:
+            resource = event["resource"]
+            usage = usages.get(utils.res_to_metric(resource), self.NO_METRIC_DATA_DEFAULT_VALUE)
+            if event["action"]["events"].get("idle", 0) > 0 and usage != self.NO_METRIC_DATA_DEFAULT_VALUE and resource not in still_idle:
+                invalid.append(event)
+            else:
+                valid.append(event)
+        return valid, invalid
+
     @staticmethod
     def reduce_structure_events(structure_events):
         """Reduces a list of events that have been generated for a single Structure into one single event. Considering
-        that each event is a dictionary with an integer value for either a 'down' or 'up' event, all of the dictionaries
-        can be reduced to one that can have two values for either 'up' and 'down' events, considering that the Structure
-        resource may have a high hysteresis.
+        that each event is a dictionary with an integer value for either a 'down' or 'up' scaling event, or an 'idle'
+        event, all of the dictionaries can be reduced to one that holds the added up counts of each type, considering
+        that the Structure resource may have a high hysteresis.
 
         Args:
             structure_events (list): A list of events for a single Structure
 
         Returns:
-            (dict) A dictionary with the added up events in a signle dictionary
+            (dict) A dictionary with the added up events in a single dictionary
 
         """
-        events_reduced = {"action": {}}
+        events_reduced = {}
         for event in structure_events:
             resource = event["resource"]
-            if resource not in events_reduced["action"]:
-                events_reduced["action"][resource] = {"events": {"scale": {"down": 0, "up": 0}}}
-            for key in event["action"]["events"]["scale"].keys():
-                value = event["action"]["events"]["scale"][key]
-                events_reduced["action"][resource]["events"]["scale"][key] += value
-        return events_reduced["action"]
+
+            if resource not in events_reduced:
+                # Always initialise all counters so that rules can safely reference any of them (e.g., events.idle)
+                events_reduced[resource] = {"events": {"scale": {"down": 0, "up": 0}, "idle": 0, "reclaim": 0}}
+            reduced = events_reduced[resource]["events"]
+            event_counts = event["action"]["events"]
+            for key, value in event_counts.get("scale", {}).items():
+                reduced["scale"][key] += value
+            for key in LENDING_EVENT_TYPES.values():
+                reduced[key] += event_counts.get(key, 0)
+
+        return events_reduced
+
 
     def get_resource_summary(self, resource_label, resources_dict, limits_dict, usages_dict, disable_color=False):
         """Produces a string to summarize the current state of a resource with all of its information and
@@ -435,6 +468,40 @@ class Guardian(Service):
             timestamp=int(time.time()))
         return event
 
+    def generate_lend_request(self, structure, rule, resource_label):
+        if rule["rescale_policy"] != "lend_current":
+            utils.log_warning("Invalid rescale policy '{0}' for lend rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+            return None
+
+        if structure["resources"][resource_label].get("lent", 0) > 0:
+            utils.log_warning("Resource '{0}' of structure '{1}' is already lent, skipping lend request".format(
+                resource_label, structure["name"]), self.debug)
+            return None
+
+        # The whole current allocation is kept by the container, but it can also be used by other containers
+        amount = int(structure["resources"][resource_label]["current"])
+        request = utils.generate_request(structure, amount, resource_label, field="lent")
+        # Action is derived from the amount sign in generate_request, override it as this is not a rescaling
+        request["action"] = resource_label.title() + "Lend"
+        return request
+
+    def generate_reclaim_request(self, structure, rule, resource_label):
+        if rule["rescale_policy"] != "reclaim_lent":
+            utils.log_warning("Invalid rescale policy '{0}' for reclaim rule {1}, skipping it".format(rule["rescale_policy"], rule["name"]), self.debug)
+            return None
+
+        lent = structure["resources"][resource_label].get("lent", 0)
+        if lent <= 0:
+            utils.log_warning("Resource '{0}' of structure '{1}' is not lent, skipping reclaim request".format(
+                resource_label, structure["name"]), self.debug)
+            return None
+
+        # Reclaiming resets the lent amount, so the amount is the opposite of the lent one
+        request = utils.generate_request(structure, -lent, resource_label, field="lent")
+        # Action is derived from the amount sign in generate_request, override it as this is not a rescaling
+        request["action"] = resource_label.title() + "Reclaim"
+        return request
+
     def match_rules_and_events(self, structure, rules, events, limits, usages):
         generated_requests = list()
         events_to_remove = dict()
@@ -475,8 +542,22 @@ class Guardian(Service):
                                   .format(structure["name"], resource_label), self.debug)
                 continue
 
-            if rule["rescale_type"] not in ["up", "down"]:
+            if rule["rescale_type"] not in ["up", "down"] + list(LENDING_EVENT_TYPES):
                 utils.log_warning("Invalid rescale type '{0} for Rule {1}, skipping it".format(rule["rescale_type"], rule["name"]), self.debug)
+                continue
+
+            # Lend and reclaim requests don't rescale the structure, they change the state of its lent allocation
+            if rule["rescale_type"] in LENDING_EVENT_TYPES:
+                if rule["rescale_type"] == "lend":
+                    request = self.generate_lend_request(structure, rule, resource_label)
+                else:
+                    request = self.generate_reclaim_request(structure, rule, resource_label)
+                if request:
+                    generated_requests.append(request)
+
+                # Remove the events that triggered the request
+                event_name = utils.generate_event_name({LENDING_EVENT_TYPES[rule["rescale_type"]]: 1}, resource_label)
+                events_to_remove[event_name] = events_to_remove.get(event_name, 0) + rule["events_to_remove"]
                 continue
 
             # Get the amount to be applied from the policy set
@@ -520,7 +601,7 @@ class Guardian(Service):
                 generated_requests.append(request)
 
             # Remove the events that triggered the request
-            event_name = utils.generate_event_name(events[resource_label]["events"], resource_label)
+            event_name = utils.generate_event_name({"scale": events[resource_label]["events"]["scale"]}, resource_label)
             if event_name not in events_to_remove:
                 events_to_remove[event_name] = 0
             events_to_remove[event_name] += rule["events_to_remove"]
@@ -564,6 +645,10 @@ class Guardian(Service):
 
         # Filter the events according to timestamp
         filtered_events, old_events = self.sort_events(all_events, self.event_timeout)
+
+        # Idle events must be consecutive, discard the pending idle events of resources that are no longer idle
+        filtered_events, broken_idle_events = self.sort_idle_events(filtered_events, triggered_events, usages)
+        old_events.extend(broken_idle_events)
 
         if old_events:
             # Remote database operation

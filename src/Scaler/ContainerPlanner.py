@@ -1,4 +1,5 @@
 import src.MyUtils.MyUtils as utils
+import src.Scaler.LendingUtils as lending
 from src.Scaler.BasePlanner import BasePlanner
 from src.Scaler.ScalerUtils import ContainerRequest
 
@@ -16,11 +17,13 @@ class ContainerPlanner(BasePlanner):
 
         # Get free resources in host
         bound_disk = container["resources"].get("disk", {}).get("name")
+        # Resources lent by idle containers can also be used (as a last resort)
+        lent_available = lending.get_available(host_info, resource, container["name"], bound_disk)
         if resource in {"disk_read", "disk_write"}:
             disk_op = resource.split("_")[-1]
-            host_free = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] - host_tracker.get(host_name, 0)
+            host_free = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] - host_tracker.get(host_name, 0) + lent_available
         else:
-            host_free = host_info["resources"][resource]["free"] - host_tracker.get(host_name, 0)
+            host_free = host_info["resources"][resource]["free"] - host_tracker.get(host_name, 0) + lent_available
 
         # If no free resources, scaling cannot be performed
         if host_free == 0:
@@ -39,7 +42,7 @@ class ContainerPlanner(BasePlanner):
             max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
             consumed_read = max_read - host_info["resources"]["disks"][bound_disk]["free_read"]
             consumed_write = max_write - host_info["resources"]["disks"][bound_disk]["free_write"]
-            current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
+            current_disk_free = max(max_read, max_write) - consumed_read - consumed_write + lent_available
             # TODO: A disk tracker should be added to support user/app disk operations
             if current_disk_free < needed_amount:
                 missing_shares = needed_amount - current_disk_free

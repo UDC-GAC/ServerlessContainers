@@ -3,7 +3,7 @@ from requests import HTTPError
 from threading import Thread
 
 import src.MyUtils.MyUtils as utils
-
+import src.Scaler.LendingUtils as lending
 
 class ResourceOperation:
 
@@ -347,6 +347,13 @@ class ContainerRequest(StructureRequest):
 
         with self.host_lock:
             host_info = data_context.hosts.get(host)
+
+            # Revert the resources borrowed from (or given back to) the lent pool
+            if self.host_journal.get("lent_journal"):
+                bound_disk = self.host_journal.get("bound_disk")
+                lending.revert(host_info, resource, self.host_journal["lent_journal"], bound_disk)
+                lending.record_changes(self.host_changes, host, host_info, resource, bound_disk)
+
             if resource in {"cpu", "mem", "energy"}:
                 host_info["resources"][resource]["free"] -= self.host_journal.get("delta", 0)
                 self.host_changes.setdefault(host, {}).setdefault("resources", {}).setdefault(resource, {})["free"] = host_info["resources"][resource]["free"]
@@ -385,8 +392,11 @@ class ContainerRequest(StructureRequest):
         # Using lock to read and update host free resources
         with self.host_lock:
             # Get host info from data context
-            core_map_journal = {}
+            core_map_journal, lent_journal = {}, []
+            borrowed, released = 0, 0
+            self.host_journal["lent_journal"] = lent_journal
             host_info = data_context.hosts.get(request["host"])
+
             core_usage_map = host_info["resources"][resource]["core_usage_mapping"]
             host_max_cores = int(host_info["resources"]["cpu"]["max"] / 100)
             for core in range(host_max_cores):
@@ -408,6 +418,15 @@ class ContainerRequest(StructureRequest):
                 remaining_cores = [c for c in core_distribution if c not in used_cores and core_usage_map[c]["free"] < 100]
                 needed_shares, assigned = self._scale_cpu(core_usage_map, core_map_journal, remaining_cores, used_cores, container_name, needed_shares)
 
+                # 4) Borrow shares lent by idle containers as a last resort, preferring the already used cores
+                if needed_shares > 0:
+                    preferred_cores = [c for c in core_distribution if c in used_cores] + [c for c in core_distribution if c not in used_cores]
+                    borrowed, borrowed_cores = lending.borrow(host_info, resource, container_name, needed_shares, lent_journal, preferred_slots=preferred_cores)
+                    needed_shares -= borrowed
+                    for core in borrowed_cores:
+                        if core not in used_cores:
+                            used_cores.append(core)
+
                 if needed_shares > 0:
                     self.log_warning("Container {0} couldn't get as much CPU shares as intended ({1}), instead it got {2}"
                                      .format(container_name, amount, amount - needed_shares))
@@ -417,24 +436,39 @@ class ContainerRequest(StructureRequest):
             elif amount < 0:
                 shares_to_free = abs(amount)
 
+                # 1) Give back first the shares borrowed from idle containers (only from a specific lender when reclaiming)
+                lenders = [request["reclaim_from"]] if request.get("reclaim_from") else None
+                released = lending.release(host_info, resource, container_name, shares_to_free, lent_journal, lenders=lenders)
+                shares_to_free -= released
+
                 # Sort cores by reverse core distribution order
                 rev_core_distribution = list(reversed(core_distribution))
                 used_cores_sorted = [c for c in rev_core_distribution if c in used_cores]
 
-                # 1) Free cores starting with the least used ones and following reverse core distribution order
+                # 2) Free cores starting with the least used ones and following reverse core distribution order
                 least_used_cores = sorted(used_cores_sorted, key=lambda c: core_usage_map[c][container_name])
                 shares_to_free, freed = self._scale_cpu(core_usage_map, core_map_journal, least_used_cores, used_cores, container_name, shares_to_free, scale_up=False)
 
                 if shares_to_free > 0:
                     raise ValueError("Error in setting cpu, couldn't free the resources properly")
 
+                # Remove the cores where the container has neither own nor borrowed shares anymore
+                borrowed_cores = lending.get_borrowed(host_info, resource, container_name)
+                for core in list(used_cores):
+                    if core_usage_map.get(core, {}).get(container_name, 0) == 0 and core not in borrowed_cores:
+                        used_cores.remove(core)
+
             # No error thrown, so persist the new mapping to the cache
+            # Only the shares that have not been borrowed/released are taken from/given back to the 'free' pool
+            free_shares = amount - borrowed + released
             self.host_journal["core_map_journal"] = core_map_journal
-            self.host_journal["delta"] = -amount
+            self.host_journal["delta"] = -free_shares
             host_info["resources"]["cpu"]["core_usage_mapping"] = core_usage_map
-            host_info["resources"]["cpu"]["free"] -= amount
+            host_info["resources"]["cpu"]["free"] -= free_shares
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("cpu", {})["core_usage_mapping"] = core_usage_map
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("cpu", {})["free"] = host_info["resources"]["cpu"]["free"]
+            if lent_journal:
+                lending.record_changes(self.host_changes, request["host"], host_info, resource)
 
         # Return the dictionary to set new resources through NodeRescaler
         return {"cpu": {"cpu_num": ",".join(used_cores), "cpu_allowance_limit": int(current_cpu_limit + amount)}}
@@ -444,14 +478,28 @@ class ContainerRequest(StructureRequest):
         current_mem_limit = self._get_resource_phy_limit(data_context, container_name, resource)
 
         with self.host_lock:
+            lent_journal, borrowed, released = [], 0, 0
+            self.host_journal["lent_journal"] = lent_journal
             host_info = data_context.hosts.get(request["host"])
             host_mem_free = host_info["resources"]["mem"]["free"]
-            amount = min(amount, host_mem_free)
 
-            # No error thrown, so persist the new mapping to the cache
-            self.host_journal["delta"] = -amount
-            host_info["resources"]["mem"]["free"] -= amount
+            if amount > 0:
+                # Take first from 'free' and borrow the rest from the memory lent by idle containers (last resort)
+                from_free = max(min(amount, host_mem_free), 0)
+                borrowed, _ = lending.borrow(host_info, resource, container_name, amount - from_free, lent_journal)
+                amount = from_free + borrowed
+            elif amount < 0:
+                # Give back first the shares borrowed from idle containers (only from a specific lender when reclaiming)
+                lenders = [request["reclaim_from"]] if request.get("reclaim_from") else None
+                released = lending.release(host_info, resource, container_name, abs(amount), lent_journal, lenders=lenders)
+
+            # Only the memory that has not been borrowed/released is taken from/given back to the 'free' pool
+            free_amount = amount - borrowed + released
+            self.host_journal["delta"] = -free_amount
+            host_info["resources"]["mem"]["free"] -= free_amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("mem", {})["free"] = host_info["resources"]["mem"]["free"]
+            if lent_journal:
+                lending.record_changes(self.host_changes, request["host"], host_info, resource)
 
         # Return the dictionary to set new resources through NodeRescaler
         return {"mem": {"mem_limit": str(int(amount + current_mem_limit))}}
@@ -462,12 +510,14 @@ class ContainerRequest(StructureRequest):
         bound_disk = data_context.containers.get(container_name)["resources"].get("disk", {}).get("name")
 
         with self.host_lock:
+            lent_journal, borrowed, released = [], 0, 0
+            self.host_journal["lent_journal"] = lent_journal
+            self.host_journal["bound_disk"] = bound_disk
+
             # Get host info from data context
             host_info = data_context.hosts.get(request["host"])
             current_read_free = host_info["resources"]["disks"][bound_disk]["free_read"]
             current_write_free = host_info["resources"]["disks"][bound_disk]["free_write"]
-
-            amount = min(amount, current_read_free)  # Available read bandwidth
 
             max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
             max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
@@ -475,13 +525,23 @@ class ContainerRequest(StructureRequest):
             consumed_write = max_write - current_write_free
             current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
 
-            amount = min(amount, current_disk_free)  # Total available bandwidth
+            if amount > 0:
+                # Take first from available read and total bandwidth, borrow the rest from the bandwidth lent by idle containers (last resort)
+                from_free = max(min(amount, current_read_free, current_disk_free), 0)
+                borrowed, _ = lending.borrow(host_info, resource, container_name, amount - from_free, lent_journal, bound_disk)
+                amount = from_free + borrowed
+            elif amount < 0:
+                # Give back first the shares borrowed from idle containers (only from a specific lender when reclaiming)
+                lenders = [request["reclaim_from"]] if request.get("reclaim_from") else None
+                released = lending.release(host_info, resource, container_name, abs(amount), lent_journal, bound_disk, lenders=lenders)
 
-            # No error thrown, so persist the new mapping to the cache
-            self.host_journal["delta"] = -amount
-            self.host_journal["bound_disk"] = bound_disk
-            host_info["resources"]["disks"][bound_disk]["free_read"] -= amount
+            # Only the bandwidth that has not been borrowed/released is taken from/given back to the 'free' pool
+            free_amount = amount - borrowed + released
+            self.host_journal["delta"] = -free_amount
+            host_info["resources"]["disks"][bound_disk]["free_read"] -= free_amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_read"] = host_info["resources"]["disks"][bound_disk]["free_read"]
+            if lent_journal:
+                lending.record_changes(self.host_changes, request["host"], host_info, resource, bound_disk)
 
         # Return the dictionary to set the resources
         return {"disk_read": {"disk_read_limit": str(int(amount + current_read_limit))}}
@@ -492,12 +552,14 @@ class ContainerRequest(StructureRequest):
         bound_disk = data_context.containers.get(container_name)["resources"].get("disk", {}).get("name")
 
         with self.host_lock:
+            lent_journal, borrowed, released = [], 0, 0
+            self.host_journal["lent_journal"] = lent_journal
+            self.host_journal["bound_disk"] = bound_disk
+
             # Get host info from data context
             host_info = data_context.hosts.get(request["host"])
             current_read_free = host_info["resources"]["disks"][bound_disk]["free_read"]
             current_write_free = host_info["resources"]["disks"][bound_disk]["free_write"]
-
-            amount = min(amount, current_write_free)  # Available write bandwidth
 
             max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
             max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
@@ -505,16 +567,26 @@ class ContainerRequest(StructureRequest):
             consumed_write = max_write - current_write_free
             current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
 
-            amount = min(amount, current_disk_free)  # Total available bandwidth
+            if amount > 0:
+                # Take first from available write and total bandwidth, borrow the rest from the bandwidth lent by idle containers (last resort)
+                from_free = max(min(amount, current_write_free, current_disk_free), 0)
+                borrowed, _ = lending.borrow(host_info, resource, container_name, amount - from_free, lent_journal, bound_disk)
+                amount = from_free + borrowed
+            elif amount < 0:
+                # Give back first the shares borrowed from idle containers (only from a specific lender when reclaiming)
+                lenders = [request["reclaim_from"]] if request.get("reclaim_from") else None
+                released = lending.release(host_info, resource, container_name, abs(amount), lent_journal, bound_disk, lenders=lenders)
 
-            # No error thrown, so persist the new mapping to the cache
-            self.host_journal["delta"] = -amount
-            self.host_journal["bound_disk"] = bound_disk
-            host_info["resources"]["disks"][bound_disk]["free_write"] -= amount
+            # Only the bandwidth that has not been borrowed/released is taken from/given back to the 'free' pool
+            free_amount = amount - borrowed + released
+            self.host_journal["delta"] = -free_amount
+            host_info["resources"]["disks"][bound_disk]["free_write"] -= free_amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_write"] = host_info["resources"]["disks"][bound_disk]["free_write"]
+            if lent_journal:
+                lending.record_changes(self.host_changes, request["host"], host_info, resource, bound_disk)
 
         # Return the dictionary to set the resources
-        return {"disk_read": {"disk_write_limit": str(int(amount + current_write_limit))}}
+        return {"disk_write": {"disk_write_limit": str(int(amount + current_write_limit))}}
 
     def apply_energy_request(self, request, amount, data_context):
         container_name, resource = request["structure"], request["resource"]

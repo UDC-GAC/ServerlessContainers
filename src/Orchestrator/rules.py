@@ -164,7 +164,7 @@ def change_event_up_amount(rule_name):
         return abort(400, {"message": "Invalid amount"})
 
     rule = retrieve_rule(rule_name)
-    if rule["rescale_type"] not in ["down", "up"]:
+    if rule["rescale_type"] not in ["down", "up"]: # TODO: allow rescale type to be 'lend' and 'reclaim', so rules can be changed via API
         return abort(400, {"message": "Can't apply this change to this rule"})
 
     put_done = False
