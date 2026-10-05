@@ -35,9 +35,28 @@ rules_routes = Blueprint('rules', __name__)
 
 SUPPORTED_POLICIES = {
     "up": ["amount", "proportional", "modelling", "fixed-ratio"],
-    "down": ["amount", "proportional", "modelling", "fixed-ratio", "fit_to_usage"]
+    "down": ["amount", "proportional", "modelling", "fixed-ratio", "fit_to_usage"],
+    "lend": ["lend_current"], 
+    "reclaim": ["reclaim_lent"],
 }
 
+# Event counters that can be required by rules generating requests
+EVENT_TYPE_VARS = {
+    "up": "events.scale.up",
+    "down": "events.scale.down",
+    "idle": "events.idle",
+    "reclaim": "events.reclaim"
+}
+
+
+def find_event_condition(rule, event_var):
+    """Get the position and operator of the rule condition that checks a given event counter"""
+    for i, part in enumerate(rule["rule"].get("and", [])):
+        # Get the first and only value from the dictionary, e.g., {"<=": [{"var": "events.scale.up"}, 1]}
+        operator, expr = next(iter(part.items()))
+        if isinstance(expr, list) and expr and isinstance(expr[0], dict) and expr[0].get("var") == event_var:
+            return i, operator
+    return None, None
 
 def retrieve_rule(rule_name):
     try:
@@ -158,45 +177,36 @@ def change_event_up_amount(rule_name):
             return abort(400, {"message": "Invalid amount, only 0 or greater are valid"})
 
         event_type = request.json["event_type"]
-        if event_type not in ["down", "up"]:
-            return abort(400, {"message": "Invalid type of event, only 'up' or 'down' accepted"})
+        if event_type not in EVENT_TYPE_VARS:
+            return abort(400, {"message": "Invalid type of event, only {0} accepted".format(list(EVENT_TYPE_VARS))})
     except KeyError:
         return abort(400, {"message": "Invalid amount"})
 
     rule = retrieve_rule(rule_name)
-    if rule["rescale_type"] not in ["down", "up"]: # TODO: allow rescale type to be 'lend' and 'reclaim', so rules can be changed via API
+    if rule.get("generates") != "requests":
         return abort(400, {"message": "Can't apply this change to this rule"})
+
+    entry, operator = find_event_condition(rule, EVENT_TYPE_VARS[event_type])
+    if entry is None:
+        return abort(400, {"message": "Rule {0} doesn't depend on '{1}' events".format(rule_name, event_type)})
+
+    # Only the condition that triggers the rule (minimum number of events) sets the events consumed by the rule,
+    # the rest of conditions (e.g., maximum number of opposite events) don't consume events
+    is_trigger = operator == ">="
 
     put_done = False
     tries = 0
     while not put_done:
         tries += 1
-        correct_key = None
-        list_rules_entry = 0
-        for part in rule["rule"]["and"]:
-            # Get the first and only value from the dictionary
-            operator, expr = next(iter(part.items()))  # e.g., {"<=": [{"var": "events.scale.up"}, 1]}
-            rule_var = expr[0]["var"]
-
-            if event_type == "up" and rule_var == "events.scale.up":
-                rule["rule"]["and"][list_rules_entry][operator][1] = new_amount
-                rule["events_to_remove"] = new_amount
-                correct_key = operator
-                break
-
-            if event_type == "down" and rule_var == "events.scale.down":
-                rule["rule"]["and"][list_rules_entry][operator][1] = new_amount
-                rule["events_to_remove"] = new_amount
-                correct_key = operator
-                break
-            list_rules_entry += 1
-
+        rule["rule"]["and"][entry][operator][1] = new_amount
+        if is_trigger:
+            rule["events_to_remove"] = new_amount
         get_db().update_rule(rule)
 
         time.sleep(BACK_OFF_TIME_MS / 1000)
 
         rule = retrieve_rule(rule_name)
-        put_done = rule["rule"]["and"][list_rules_entry][correct_key][1] == new_amount
+        put_done = rule["rule"]["and"][entry][operator][1] == new_amount
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
     return jsonify(201)

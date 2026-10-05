@@ -5,8 +5,8 @@ source "${scriptDir}/../set_env.sh"
 if [ -z "$2" ]
 then
       echo "3 arguments are needed"
-      echo "1 -> rule name (e.g., CpuRescaleDown)"
-      echo "2 -> event type ['up' or 'down']"
+      echo "1 -> rule name (e.g., CpuRescaleDown, CpuLend, CpuReclaim)"
+      echo "2 -> event type ['up', 'down', 'idle' or 'reclaim']"
       echo "3 -> new events amount (e.g., 2)"
       exit 1
 fi
