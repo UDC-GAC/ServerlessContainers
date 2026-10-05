@@ -664,12 +664,12 @@ CpuLend = dict(
         {"and": [
             {">=": [
                 {"var": "events.idle"},
-                6]},
+                3]},
             {"<=": [
                 {"var": "events.scale.up"},
                 0]}
         ]}),
-    events_to_remove=6,
+    events_to_remove=3,
     generates="requests",
     action={"requests": ["CpuLend"]},
     rescale_policy="lend_current",
@@ -771,9 +771,9 @@ MemReclaim = dict(
         {"and": [
             {">=": [
                 {"var": "events.reclaim"},
-                2]}
+                1]}
         ]}),
-    events_to_remove=2,
+    events_to_remove=1,
     generates="requests",
     action={"requests": ["MemReclaim"]},
     rescale_policy="reclaim_lent",
@@ -790,9 +790,9 @@ Disk_readReclaim = dict(
         {"and": [
             {">=": [
                 {"var": "events.reclaim"},
-                2]}
+                1]}
         ]}),
-    events_to_remove=2,
+    events_to_remove=1,
     generates="requests",
     action={"requests": ["Disk_readReclaim"]},
     rescale_policy="reclaim_lent",
@@ -809,9 +809,9 @@ Disk_writeReclaim = dict(
         {"and": [
             {">=": [
                 {"var": "events.reclaim"},
-                2]}
+                1]}
         ]}),
-    events_to_remove=2,
+    events_to_remove=1,
     generates="requests",
     action={"requests": ["Disk_writeReclaim"]},
     rescale_policy="reclaim_lent",
