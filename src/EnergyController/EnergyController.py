@@ -17,8 +17,13 @@ from src.Service.Service import Service
 
 CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 5, "EVENT_TIMEOUT": 20, "WINDOW_TIMELAPSE": 10, "WINDOW_DELAY": 0,
                          "ALLOWED_ERROR": 0.05, "STRUCTURE_GUARDED": "container", "CONTROL_POLICY": "ppe-proportional",
-                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "DEFAULT_EVENTS": 4, "DEBUG": True, "ACTIVE": True}
+                         "POWER_MODEL": "polyreg_General", "EVENTS_SYSTEM": "dynamic", "REACTION_TIME": 20,
+                         "EV_RATIO": 5, "IDLE_POWER": 40, "DEBUG": True, "ACTIVE": True}
 
+# Fallback capping method when a power model is not used
+POLICY_CAPPING_METHOD = {"ev": "ev", "tdp": "tdp", "ppe-proportional": "ppe", "model-boosted": "ppe", "model-only": None}
+# Control policies that apply the power model to each new budget
+MODEL_POLICIES = {"model-boosted", "model-only"}
 
 class EnergyController(Service):
 
@@ -31,7 +36,9 @@ class EnergyController(Service):
         self.host_cpu_info, self.host_cpu_info_lock = {}, Lock()
         self.polling_frequency, self.event_timeout, self.window_timelapse, self.window_delay = None, None, None, None
         self.allowed_error, self.structure_guarded, self.control_policy, self.power_model = None, None, None, None
-        self.events_system, self.default_events, self.debug, self.active = None, None, None, None
+        self.events_system, self.reaction_time, self.debug, self.active = None, None, None, None
+        self.ev_ratio, self.idle_power = None, None
+        self.host_max_values = {}
         self.events_cache = cache_utils.EventsCache()
         self.pb_cache = cache_utils.ResourceCache()
         self.alloc_cache = cache_utils.ResourceCache()
@@ -195,6 +202,34 @@ class EnergyController(Service):
 
         return int(U_scaling)
 
+    def get_host_max_values(self, host):
+        # Host maximum CPU shares and power (the host energy 'max' is the TDP of its CPUs)
+        if host not in self.host_max_values:
+            host_structure = utils.get_structures(self.couchdb_handler, self.debug, "host", structure_name=host)
+            self.host_max_values[host] = (host_structure["resources"]["cpu"]["max"], host_structure["resources"]["energy"]["max"])
+        return self.host_max_values[host]
+
+    def get_tdp_ratio(self, structure):
+        # k = (U_max - U_idle) / (P_tdp - P_idle), with U_idle = 0 and U_max being the host maximum CPU shares
+        U_max_host, P_tdp_host = self.get_host_max_values(structure["host"])
+        if P_tdp_host <= self.idle_power:
+            raise ValueError("Host TDP ({0} W) must be higher than idle power ({1} W)".format(P_tdp_host, self.idle_power))
+        return U_max_host / (P_tdp_host - self.idle_power)
+
+    def get_amount_from_ratio(self, structure, ratio):
+        name = structure["name"]
+
+        # Unpack structure info
+        U_max, U_min, U_alloc, P_budget, U_usage, P_usage, P_scaling = self._unpack_structure(structure)
+
+        # U_alloc = U_alloc + k * (P_budget - P_usage)
+        U_scaling = ratio * P_scaling
+        U_scaling_cap = max(min(U_scaling, U_max - U_alloc), - (U_alloc - U_min))
+        utils.log_info(f"@{name} CPU-power ratio k = {ratio:.2f} shares/W", self.debug)
+        self.print_scaling_info(name, P_usage, P_budget, U_alloc, U_alloc + U_scaling_cap)
+
+        return int(U_scaling_cap)
+
     def structure_power_cap(self, structure, capping_method):
         try:
             # Check the necessary info for this structure is available
@@ -210,6 +245,10 @@ class EnergyController(Service):
                 amount = self.get_amount_from_power_model(structure)
             if capping_method == "ppe":
                 amount = self.get_amount_from_ppe(structure)
+            if capping_method == "ev":
+                amount = self.get_amount_from_ratio(structure, self.ev_ratio)
+            if capping_method == "tdp":
+                amount = self.get_amount_from_ratio(structure, self.get_tdp_ratio(structure))
 
             if amount != 0:
                 request = utils.generate_request(structure, amount, "cpu")
@@ -261,10 +300,12 @@ class EnergyController(Service):
         self.events_cache.add_event(structure_id, direction)
 
         # Static events threshold -> Threshold is the same regardless of the error
-        required_events = self.default_events
+        # N_max keeps the reaction time: maximum time a power error must persist before scaling (e.g., 20 s -> 4 events at 5 s)
+        N_max = max(1, int(self.reaction_time / self.polling_frequency + 1e-6))
+        required_events = N_max
         if self.events_system == "dynamic":
             # Dynamic events threshold -> Higher error requires fewer consecutive events to trigger scaling
-            N_min, N_max, alpha = 1, 4, 1
+            N_min, alpha = 1, 1
             required_events = N_max * (self.allowed_error / abs_ppe) ** alpha
             required_events = max(min(math.ceil(required_events), N_max), N_min)
 
@@ -272,7 +313,7 @@ class EnergyController(Service):
         dir_events = self.events_cache.get_events(structure_id, direction)
         op_events = self.events_cache.get_events(structure_id, opposite)
         self.print_events_info(structure, direction, dir_events, op_events, required_events)
-        if dir_events >= required_events and op_events == 0:
+        if dir_events >= required_events:
             self.events_cache.clear_events(structure_id)
             return P_scaling
 
@@ -364,9 +405,10 @@ class EnergyController(Service):
 
     def collect_info(self, guarded_structures, supported_structures):
         self.host_cpu_info.clear()
-        if self.control_policy == "model-boosted":
+        if self.control_policy in MODEL_POLICIES:
             modelling_candidates = [s for s in guarded_structures if self.pb_cache.is_new(s["_id"], s["resources"]["energy"]["current"])]
-            ppe_candidates = [s for s in guarded_structures if s not in modelling_candidates]
+            # model-only does not correct the budgets already modelled (open loop)
+            ppe_candidates = [s for s in guarded_structures if s not in modelling_candidates] if POLICY_CAPPING_METHOD[self.control_policy] else []
 
             # Host global values including all containers running on each host are needed if modelling will be used
             if modelling_candidates:
@@ -377,7 +419,7 @@ class EnergyController(Service):
             capping_groups = zip(["modelling", "ppe"], [modelling_candidates, ppe_candidates])
         else:
             self.run_in_threads("collect_info", guarded_structures, self.collect_structure_info, [])
-            capping_groups = zip(["ppe"], [guarded_structures])
+            capping_groups = zip([POLICY_CAPPING_METHOD[self.control_policy]], [guarded_structures])
 
         return capping_groups
 
@@ -418,8 +460,20 @@ class EnergyController(Service):
         return self.validate(structures, validation_steps)
 
     def invalid_conf(self, service_config):
-        if self.control_policy not in ["ppe-proportional", "model-boosted"]:
+        if self.control_policy not in POLICY_CAPPING_METHOD:
             return True, "Control policy '{0}' is invalid".format(self.control_policy)
+
+        if self.reaction_time is None or self.reaction_time <= 0:
+            return True, "REACTION_TIME must be positive, got '{0}'".format(self.reaction_time)
+
+        if self.event_timeout < self.reaction_time:
+            return True, "EVENT_TIMEOUT ({0}) must be at least REACTION_TIME ({1})".format(self.event_timeout, self.reaction_time)
+
+        if self.control_policy == "ev" and (self.ev_ratio is None or self.ev_ratio <= 0):
+            return True, "EV ratio must be positive, got '{0}'".format(self.ev_ratio)
+
+        if self.control_policy == "tdp" and (self.idle_power is None or self.idle_power < 0):
+            return True, "Control policy is TDP, it needs a valid idle power value ({0})".format(self.idle_power)
 
         return self.config_validator.invalid_conf(service_config)
 
