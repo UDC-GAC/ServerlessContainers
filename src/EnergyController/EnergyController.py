@@ -42,6 +42,7 @@ class EnergyController(Service):
         self.events_cache = cache_utils.EventsCache()
         self.pb_cache = cache_utils.ResourceCache()
         self.alloc_cache = cache_utils.ResourceCache()
+        self.budget_cache = cache_utils.ResourceCache()
 
     def get_resource_usage(self, resource, structure):
         name, host = structure["name"], structure["host"]
@@ -264,8 +265,22 @@ class EnergyController(Service):
         down_events = dir_events if direction == "down" else op_events
         utils.log_info(f"@{structure['name']} EVENTS: DOWN {down_events} | UP {up_events} | REQUIRED {required_events} ({direction})", self.debug)
 
+    def reset_events_if_budget_changed(self, structure):
+        # Events accumulated with a previous power budget do not apply to the new one. Only changes of 'max' (the
+        # budget set by users or applications) reset them: 'current' also changes when the ReBalancer moves energy
+        structure_id, P_max = structure["_id"], structure["resources"]["energy"]["max"]
+        previous = self.budget_cache.get(structure_id)
+        self.budget_cache.add(structure_id, P_max)
+        if previous is not None and previous != P_max:
+            up, down = self.events_cache.get_events(structure_id, "up"), self.events_cache.get_events(structure_id, "down")
+            self.events_cache.clear_events(structure_id)
+            if up or down:
+                utils.log_info(f"@{structure['name']} EVENTS reset: power budget {previous} -> {P_max} W "
+                               f"(discarded DOWN {down} | UP {up})", self.debug)
+
     def compute_power_scaling(self, structure, limits, usages):
         structure_id = structure["_id"]
+        self.reset_events_if_budget_changed(structure)
         U_usage, P_usage = usages[utils.res_to_metric("cpu")], usages[utils.res_to_metric("energy")]
         P_budget = structure["resources"]["energy"]["current"]
         if P_budget == 0:
@@ -275,6 +290,10 @@ class EnergyController(Service):
         P_scaling = P_budget - P_usage
         abs_ppe = abs(P_scaling / P_budget)
         direction, opposite = ("up", "down") if P_scaling > 0 else ("down", "up")
+
+        if self.pb_cache.is_new(structure_id, P_budget) and self.control_policy in MODEL_POLICIES:
+            utils.log_warning(f"Model is activated and budget is new (high reliability): {structure['name']} will be scaled regardless of the generated events", self.debug)
+            return P_scaling
 
         # If power is already near the power budget the structure doesn't need to scale power
         if self.power_is_near_pb(structure, P_usage):
