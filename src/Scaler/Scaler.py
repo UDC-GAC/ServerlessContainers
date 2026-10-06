@@ -445,26 +445,30 @@ class Scaler(Service):
 
             # 1) Borrowers give back the resources borrowed from the lender
             all_given_back = True
-            for borrower_name, amount in lending.get_borrowers(host_info, resource, lender_name, bound_disk).items():
+            for borrower_key, amount in lending.get_borrowers(host_info, resource, lender_name, bound_disk).items():
+                # Idle disk bandwidth can be used to scale up the opposite operation (e.g., disk_read lent used for disk_write)
+                borrower_name, borrowed_resource = lending.parse_borrower_key(borrower_key, resource)
                 borrower = self.execution_data.containers.get(borrower_name)
                 if borrower is None:
                     # Borrower doesn't exist anymore, just give back the resources in the lent pool
                     self.log_warning("Borrower '{0}' of {1} lent by '{2}' not found, releasing its borrowed resources"
                                      .format(borrower_name, resource, lender_name))
-                    lending.release(host_info, resource, borrower_name, amount, [], bound_disk, lenders=[lender_name])
+                    lending.release(host_info, resource, borrower_key, amount, [], bound_disk, lenders=[lender_name])
                     continue
 
-                request = utils.generate_request(borrower, -amount, resource)
+                request = utils.generate_request(borrower, -amount, borrowed_resource)
                 request["reclaim_from"] = lender_name
+                request["reclaim_resource"] = resource
+
                 container_request = ContainerRequest(request, self.couchdb_handler, self.rescaler_session, self.debug)
                 if not container_request.execute(self.execution_data, host_changes=host_changes, host_lock=Lock()):
                     self.log_error("Container '{0}' couldn't give back {1} {2} borrowed from '{3}'"
-                                   .format(borrower_name, amount, resource, lender_name))
+                                   .format(borrower_name, amount, borrowed_resource, lender_name))
                     all_given_back = False
                     continue
 
                 # The borrower will try to recover the reclaimed resources from other pools, after any other scale-up
-                compensations.append(utils.generate_request(borrower, amount, resource, priority=-1))
+                compensations.append(utils.generate_request(borrower, amount, borrowed_resource, priority=-1))
 
             lending.record_changes(host_changes, host_name, host_info, resource, bound_disk)
             if not all_given_back:

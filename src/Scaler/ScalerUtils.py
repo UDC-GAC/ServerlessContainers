@@ -21,7 +21,7 @@ class ResourceOperation:
         self._executed_requests = {"container": [], "application": [], "user": []}
 
     def __repr__(self):
-        unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "energy": "W"}
+        unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "disk_read": "Mbit", "disk_write": "Mbit", "energy": "W"}
         return "{0} OPERATION: @{1} @{2} @{3} {4} {5} -> @{6}".format(self.scope.upper(), self.op_type,
                                                                       self.resource, self.amount, unit[self.resource],
                                                                       self.donor, self.receiver)
@@ -111,7 +111,7 @@ class StructureRequest:
         self.applied = False
 
     def __repr__(self):
-        unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "energy": "W"}
+        unit = {"cpu": "shares", "mem": "B", "disk": "Mbit", "disk_read": "Mbit", "disk_write": "Mbit", "energy": "W"}
         return "{0} REQUEST: @{1} @{2} {3} @{4}".format(
             self.TYPE.upper(), self._request["resource"], self.amount, unit[self._request["resource"]], self.structure_name)
 
@@ -222,7 +222,7 @@ class ContainerRequest(StructureRequest):
         self.host = request["host"]
         self.apply_request_by_resource = {
             "cpu": self.apply_cpu_request, "mem": self.apply_mem_request,
-            "disk_read": self.apply_disk_read_request, "disk_write": self.apply_disk_write_request,
+            "disk_read": self.apply_disk_request, "disk_write": self.apply_disk_request,
             "energy": self.apply_energy_request, "net": self.apply_net_request
         }
         self.host_changes, self.host_journal, self.host_lock = None, None, None
@@ -353,6 +353,13 @@ class ContainerRequest(StructureRequest):
                 bound_disk = self.host_journal.get("bound_disk")
                 lending.revert(host_info, resource, self.host_journal["lent_journal"], bound_disk)
                 lending.record_changes(self.host_changes, host, host_info, resource, bound_disk)
+
+            # Revert the idle bandwidth of the opposite disk operation used (or given back)
+            if self.host_journal.get("cross_lent_journal"):
+                bound_disk = self.host_journal.get("bound_disk")
+                opposite_resource = lending.get_opposite_disk_resource(resource)
+                lending.revert(host_info, opposite_resource, self.host_journal["cross_lent_journal"], bound_disk)
+                lending.record_changes(self.host_changes, host, host_info, opposite_resource, bound_disk)
 
             if resource in {"cpu", "mem", "energy"}:
                 host_info["resources"][resource]["free"] -= self.host_journal.get("delta", 0)
@@ -504,89 +511,57 @@ class ContainerRequest(StructureRequest):
         # Return the dictionary to set new resources through NodeRescaler
         return {"mem": {"mem_limit": str(int(amount + current_mem_limit))}}
 
-    def apply_disk_read_request(self, request, amount, data_context):
+    def apply_disk_request(self, request, amount, data_context):
         container_name, resource = request["structure"], request["resource"]
-        current_read_limit = self._get_resource_phy_limit(data_context, container_name, resource)
+        opposite_resource = lending.get_opposite_disk_resource(resource)
+        free_key = "free_{0}".format(resource.split("_")[-1])
+        current_limit = self._get_resource_phy_limit(data_context, container_name, resource)
         bound_disk = data_context.containers.get(container_name)["resources"].get("disk", {}).get("name")
 
         with self.host_lock:
-            lent_journal, borrowed, released = [], 0, 0
+            lent_journal, cross_journal, borrowed, released = [], [], 0, 0
             self.host_journal["lent_journal"] = lent_journal
+            self.host_journal["cross_lent_journal"] = cross_journal
             self.host_journal["bound_disk"] = bound_disk
 
             # Get host info from data context
             host_info = data_context.hosts.get(request["host"])
-            current_read_free = host_info["resources"]["disks"][bound_disk]["free_read"]
-            current_write_free = host_info["resources"]["disks"][bound_disk]["free_write"]
-
-            max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
-            max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
-            consumed_read = max_read - current_read_free
-            consumed_write = max_write - current_write_free
-            current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
+            disk_info = host_info["resources"]["disks"][bound_disk]
 
             if amount > 0:
-                # Take first from available read and total bandwidth, borrow the rest from the bandwidth lent by idle containers (last resort)
-                from_free = max(min(amount, current_read_free, current_disk_free), 0)
+                # 1) Take first from the free bandwidth (limited by the free bandwidth of the operation and the total free bandwidth)
+                from_free = min(amount, lending.get_disk_capacity(host_info, resource, container_name, bound_disk)[0])
+                # 2) Borrow the bandwidth lent by idle containers for the same operation
                 borrowed, _ = lending.borrow(host_info, resource, container_name, amount - from_free, lent_journal, bound_disk)
-                amount = from_free + borrowed
+                # 3) Use the free bandwidth of the operation over the total bandwidth thanks to the idle bandwidth of the opposite operation (last resort)
+                cross_amount = min(amount - from_free - borrowed, max(disk_info[free_key] - from_free, 0))
+                cross_borrowed = lending.borrow_cross(host_info, resource, container_name, cross_amount, cross_journal, bound_disk)
+                amount = from_free + borrowed + cross_borrowed
             elif amount < 0:
-                # Give back first the shares borrowed from idle containers (only from a specific lender when reclaiming)
-                lenders = [request["reclaim_from"]] if request.get("reclaim_from") else None
-                released = lending.release(host_info, resource, container_name, abs(amount), lent_journal, bound_disk, lenders=lenders)
+                # When reclaiming, only the bandwidth borrowed from a specific lender and pool (same or opposite operation) is given back
+                reclaim_from, reclaim_resource = request.get("reclaim_from"), request.get("reclaim_resource", resource)
+                lenders = [reclaim_from] if reclaim_from else None
+                to_release = abs(amount)
 
-            # Only the bandwidth that has not been borrowed/released is taken from/given back to the 'free' pool
+                # Give back first the idle bandwidth of the opposite operation (last borrowed), then the bandwidth borrowed for the same operation
+                if not reclaim_from or reclaim_resource == opposite_resource:
+                    to_release -= lending.release_cross(host_info, resource, container_name, to_release, cross_journal, bound_disk, lenders)
+                if not reclaim_from or reclaim_resource == resource:
+                    released = lending.release(host_info, resource, container_name, to_release, lent_journal, bound_disk, lenders=lenders)
+
+            # Only bandwidth borrowed for the same operation doesn't come from (or return to) the 'free' pool, as the
+            # bandwidth used thanks to the idle opposite operation is also taken from the free bandwidth of the operation
             free_amount = amount - borrowed + released
             self.host_journal["delta"] = -free_amount
-            host_info["resources"]["disks"][bound_disk]["free_read"] -= free_amount
-            self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_read"] = host_info["resources"]["disks"][bound_disk]["free_read"]
+            disk_info[free_key] -= free_amount
+            self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})[free_key] = disk_info[free_key]
             if lent_journal:
                 lending.record_changes(self.host_changes, request["host"], host_info, resource, bound_disk)
+            if cross_journal:
+                lending.record_changes(self.host_changes, request["host"], host_info, opposite_resource, bound_disk)
 
         # Return the dictionary to set the resources
-        return {"disk_read": {"disk_read_limit": str(int(amount + current_read_limit))}}
-
-    def apply_disk_write_request(self, request, amount, data_context):
-        container_name, resource = request["structure"], request["resource"]
-        current_write_limit = self._get_resource_phy_limit(data_context, container_name, resource)
-        bound_disk = data_context.containers.get(container_name)["resources"].get("disk", {}).get("name")
-
-        with self.host_lock:
-            lent_journal, borrowed, released = [], 0, 0
-            self.host_journal["lent_journal"] = lent_journal
-            self.host_journal["bound_disk"] = bound_disk
-
-            # Get host info from data context
-            host_info = data_context.hosts.get(request["host"])
-            current_read_free = host_info["resources"]["disks"][bound_disk]["free_read"]
-            current_write_free = host_info["resources"]["disks"][bound_disk]["free_write"]
-
-            max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
-            max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
-            consumed_read = max_read - current_read_free
-            consumed_write = max_write - current_write_free
-            current_disk_free = max(max_read, max_write) - consumed_read - consumed_write
-
-            if amount > 0:
-                # Take first from available write and total bandwidth, borrow the rest from the bandwidth lent by idle containers (last resort)
-                from_free = max(min(amount, current_write_free, current_disk_free), 0)
-                borrowed, _ = lending.borrow(host_info, resource, container_name, amount - from_free, lent_journal, bound_disk)
-                amount = from_free + borrowed
-            elif amount < 0:
-                # Give back first the shares borrowed from idle containers (only from a specific lender when reclaiming)
-                lenders = [request["reclaim_from"]] if request.get("reclaim_from") else None
-                released = lending.release(host_info, resource, container_name, abs(amount), lent_journal, bound_disk, lenders=lenders)
-
-            # Only the bandwidth that has not been borrowed/released is taken from/given back to the 'free' pool
-            free_amount = amount - borrowed + released
-            self.host_journal["delta"] = -free_amount
-            host_info["resources"]["disks"][bound_disk]["free_write"] -= free_amount
-            self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})["free_write"] = host_info["resources"]["disks"][bound_disk]["free_write"]
-            if lent_journal:
-                lending.record_changes(self.host_changes, request["host"], host_info, resource, bound_disk)
-
-        # Return the dictionary to set the resources
-        return {"disk_write": {"disk_write_limit": str(int(amount + current_write_limit))}}
+        return {resource: {"{0}_limit".format(resource): str(int(amount + current_limit))}}
 
     def apply_energy_request(self, request, amount, data_context):
         container_name, resource = request["structure"], request["resource"]

@@ -1,5 +1,9 @@
 # Resources that can be lent by idle containers
 LENDABLE_RESOURCES = {"cpu", "mem", "disk_read", "disk_write"}
+DISK_RESOURCES = {"disk_read", "disk_write"}
+
+# Separator used in the borrower keys of containers using idle bandwidth of the opposite disk operation
+CROSS_KEY_SEPARATOR = "@"
 
 FREE_KEY = "free"
 LENT_KEY = "lent"
@@ -69,6 +73,53 @@ def get_borrowers(host_info, resource, lender, bound_disk=None):
                 borrowers[key] = borrowers.get(key, 0) + value
     return borrowers
 
+def get_opposite_disk_resource(resource):
+    return "disk_write" if resource == "disk_read" else "disk_read"
+
+
+def cross_borrower_key(borrower, resource):
+    """Key that identifies, in the lent pool of the opposite disk operation, a container that uses that idle bandwidth
+    to scale up 'resource' (e.g., 'cont1@disk_write' in the disk_read lent pool)"""
+    return "{0}{1}{2}".format(borrower, CROSS_KEY_SEPARATOR, resource)
+
+
+def parse_borrower_key(key, resource):
+    """Get the container and the resource it scales up from a borrower key found in the lent pool of 'resource'"""
+    if CROSS_KEY_SEPARATOR in key:
+        borrower, borrowed_resource = key.split(CROSS_KEY_SEPARATOR, 1)
+        return borrower, borrowed_resource
+    return key, resource
+
+
+def get_cross_borrowed(host_info, resource, borrower, bound_disk):
+    """Get the idle bandwidth of the opposite disk operation used by a container to scale up 'resource'"""
+    return get_borrowed(host_info, get_opposite_disk_resource(resource), cross_borrower_key(borrower, resource), bound_disk)
+
+
+def get_disk_capacity(host_info, resource, container_name, bound_disk):
+    """Get how much a container can scale up a disk resource, split by source:
+
+    * Free bandwidth, limited by the free bandwidth of the operation and the total free bandwidth of the disk
+    * Bandwidth lent by idle containers for the same operation
+    * Free bandwidth of the operation that can't be used due to the total bandwidth limit, as long as the bandwidth
+      of the opposite operation is idle (i.e., lent). The bandwidth lent by the container itself can also be used,
+      as it means that its opposite operation is idle
+
+    Returns:
+        (tuple[int,int,int]) Free bandwidth, bandwidth lent for the same operation and bandwidth of the operation that
+        can be used thanks to the idle bandwidth of the opposite operation
+    """
+    disk = host_info["resources"]["disks"][bound_disk]
+    op_free = disk["free_{0}".format(resource.split("_")[-1])]
+    consumed = (disk["max_read"] - disk["free_read"]) + (disk["max_write"] - disk["free_write"])
+    total_free = max(disk["max_read"], disk["max_write"]) - consumed
+
+    from_free = max(min(op_free, total_free), 0)
+    same_op = get_available(host_info, resource, container_name, bound_disk)
+    opposite_pool, opposite_lent_key, _ = get_pool(host_info, get_opposite_disk_resource(resource), bound_disk)
+    cross_op = max(min(op_free - from_free, opposite_pool.get(opposite_lent_key, 0)), 0)
+    return from_free, same_op, cross_op
+
 def lend(host_info, resource, lender, amount, bound_disk=None):
     """Add the current allocation of an idle container to the lent pool of its host. The container keeps its
     allocation, but other containers can borrow it when scaling up.
@@ -81,6 +132,10 @@ def lend(host_info, resource, lender, amount, bound_disk=None):
 
     if get_borrowed(host_info, resource, lender, bound_disk):
         raise ValueError("Container {0} is using borrowed {1}, it can't lend it".format(lender, resource))
+
+    if resource in DISK_RESOURCES and get_cross_borrowed(host_info, resource, lender, bound_disk):
+        raise ValueError("Container {0} is using idle {1} bandwidth for {2}, it can't lend it".format(
+            lender, get_opposite_disk_resource(resource), resource))
 
     if any(value for _, slot in _get_slots(resource, mapping.get(lender, {})) for value in slot.values()):
         raise ValueError("Container {0} is already lending {1}".format(lender, resource))
@@ -177,6 +232,24 @@ def release(host_info, resource, borrower, amount, journal, bound_disk=None, len
     pool[lent_key] = pool.get(lent_key, 0) + released
     return released
 
+def borrow_cross(host_info, resource, borrower, amount, journal, bound_disk):
+    """Use the idle bandwidth lent for the opposite disk operation to scale up a disk resource over the total bandwidth
+    of the disk. The amount must be already limited by the free bandwidth of the operation, as it is also taken from it
+
+    Returns:
+        (int) Borrowed amount
+    """
+    borrowed, _ = borrow(host_info, get_opposite_disk_resource(resource), cross_borrower_key(borrower, resource), amount, journal, bound_disk)
+    return borrowed
+
+
+def release_cross(host_info, resource, borrower, amount, journal, bound_disk, lenders=None):
+    """Give back up to 'amount' of the idle bandwidth of the opposite disk operation used to scale up a disk resource
+
+    Returns:
+        (int) Released amount
+    """
+    return release(host_info, get_opposite_disk_resource(resource), cross_borrower_key(borrower, resource), amount, journal, bound_disk, lenders)
 
 def revert(host_info, resource, journal, bound_disk=None):
     """Revert the movements registered in a journal by borrow/release"""
@@ -223,6 +296,13 @@ def settle_unsubscribed_container(host_info, resource, container_name, bound_dis
     if borrowed > 0:
         release(host_info, resource, container_name, borrowed, [], bound_disk)
 
+    # Idle bandwidth of the opposite operation is given back too, but the bandwidth scaled with it was taken from the
+    # 'free' pool of the operation, so it returns to it along with the rest of the container allocation
+    if resource in DISK_RESOURCES:
+        cross_borrowed = sum(get_cross_borrowed(host_info, resource, container_name, bound_disk).values())
+        if cross_borrowed > 0:
+            release_cross(host_info, resource, container_name, cross_borrowed, [], bound_disk)
+
     # 2) Settle the resources lent by the container
     transferred = 0
     for slot_id, slot in _get_slots(resource, pool.get(mapping_key, {}).get(container_name, {})):
@@ -232,6 +312,10 @@ def settle_unsubscribed_container(host_info, resource, container_name, bound_dis
             if key == FREE_KEY:
                 # Not borrowed resources are no longer lendable
                 pool[lent_key] = pool.get(lent_key, 0) - value
+            elif CROSS_KEY_SEPARATOR in key:
+                # Containers using this idle bandwidth for the opposite operation keep the bandwidth taken from its
+                # 'free' pool, as the bandwidth lent by the container is fully returned to the 'free' pool
+                pass
             else:
                 # Borrowed resources become owned by their borrowers
                 transferred += value

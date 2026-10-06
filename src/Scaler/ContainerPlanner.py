@@ -15,15 +15,13 @@ class ContainerPlanner(BasePlanner):
             self.log_warning("Host {0} not found in data context".format(host_name))
             return False, needed_amount
 
-        # Get free resources in host
+        # Get free resources in host, resources lent by idle containers can also be used (as a last resort)
         bound_disk = container["resources"].get("disk", {}).get("name")
-        # Resources lent by idle containers can also be used (as a last resort)
-        lent_available = lending.get_available(host_info, resource, container["name"], bound_disk)
         if resource in {"disk_read", "disk_write"}:
-            disk_op = resource.split("_")[-1]
-            host_free = host_info["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] - host_tracker.get(host_name, 0) + lent_available
+            # Disk capacity already considers the total free bandwidth and the idle bandwidth of the opposite operation
+            host_free = sum(lending.get_disk_capacity(host_info, resource, container["name"], bound_disk)) - host_tracker.get(host_name, 0)
         else:
-            host_free = host_info["resources"][resource]["free"] - host_tracker.get(host_name, 0) + lent_available
+            host_free = host_info["resources"][resource]["free"] - host_tracker.get(host_name, 0) + lending.get_available(host_info, resource, container["name"])
 
         # If no free resources, scaling cannot be performed
         if host_free == 0:
@@ -35,20 +33,6 @@ class ContainerPlanner(BasePlanner):
             self.log_warning("Not enough {0} free resources in host {1} for container {2}, available {3} needed {4}"
                              .format(resource, host_name, container["name"], host_free, needed_amount))
             return False, needed_amount - host_free
-
-        # If resource is disk, check total free bandwidth
-        if resource in {"disk_read", "disk_write"}:
-            max_read = host_info["resources"]["disks"][bound_disk]["max_read"]
-            max_write = host_info["resources"]["disks"][bound_disk]["max_write"]
-            consumed_read = max_read - host_info["resources"]["disks"][bound_disk]["free_read"]
-            consumed_write = max_write - host_info["resources"]["disks"][bound_disk]["free_write"]
-            current_disk_free = max(max_read, max_write) - consumed_read - consumed_write + lent_available
-            # TODO: A disk tracker should be added to support user/app disk operations
-            if current_disk_free < needed_amount:
-                missing_shares = needed_amount - current_disk_free
-                self.log_warning("Beware, there is not enough free total bandwidth for container {0} for resource {1} in"
-                                 " the host, there are {2},  missing {3}".format(container["name"], resource, current_disk_free, missing_shares))
-                return False, missing_shares
 
         # Host has enough free resources, scaling can be fully performed
         return True, 0
