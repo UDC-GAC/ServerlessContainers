@@ -77,6 +77,8 @@ METRICS=(
   user.energy.max
   user.cpu.current
   user.cpu.usage
+  # PROCESSES
+  proc.cpu.wait
 )
 
 ./build/tsdb mkmetric "${METRICS[@]}"
