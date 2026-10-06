@@ -10,12 +10,13 @@ class EventsCache:
         self._cache = LRUCache(maxsize=128)
         self._lock = Lock()
 
-    def add_event(self, structure_id, direction):
+    def add_event(self, structure_id, direction, count=1):
         now = time.time()
         with self._lock:
             entry = self._cache.setdefault(structure_id, {"events": deque(), "counts": {"up": 0, "down": 0}})
-            entry["events"].append((now, direction))
-            entry["counts"][direction] += 1
+            for _ in range(count):
+                entry["events"].append((now, direction))
+            entry["counts"][direction] += count
 
     def get_events(self, structure_id, direction):
         return self._cache.get(structure_id, {}).get("counts", {}).get(direction, 0)
