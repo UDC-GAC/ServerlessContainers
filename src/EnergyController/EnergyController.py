@@ -149,9 +149,10 @@ class EnergyController(Service):
         # Compute desired host power budget based on current scalings
         P_budget_host = P_usage_host + P_scaling_host
 
-        # 74 is the point where single core model and general model cross their predictions
-        # TODO: Retrieve this value automatically depending on the CPU
-        power_model = "polyreg_Group_PP_LL" if P_budget_host > 74 else "polyreg_Single_Core"
+        # Host model (with the prediction method of POWER_MODEL): the General model, or the Single_Core model while the
+        # host uses less than one CPU
+        method = self.power_model.split("_")[0]
+        power_model = f"{method}_Single_Core" if U_user_host + U_system_host < 100 else f"{method}_General"
 
         # TODO: Distribute proportionally across scale downs and scale ups:
         #   1. Compute CPU scaling for total scale-up or scale-down
