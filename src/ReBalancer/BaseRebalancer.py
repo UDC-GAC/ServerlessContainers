@@ -93,6 +93,11 @@ class BaseRebalancer(ABC):
         return True
 
     @staticmethod
+    def is_lending(structure, resource):
+        # Resources lent by idle containers are already shared through the Scaler oversubscription mechanism
+        return structure.get("resources", {}).get(resource, {}).get("lent", 0) > 0
+
+    @staticmethod
     def add_scaling_request(structure, resource, d_field, amount_to_scale, requests, pair_structure=None):
         request = utils.generate_request(structure, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1, field=d_field)
         if pair_structure:
@@ -313,6 +318,10 @@ class BaseRebalancer(ABC):
         # Check which structures have a debt and are forced to donate
         forced_donors = {}
         for structure in valid_structures:
+
+            if self.is_lending(structure, resource):
+                continue
+
             # If structure has pending debts it must donate
             if self.rebalance_tracker.get_net_balance(structure["_id"], resource) < 0:
                 lower_limit = 0 if structure["resources"][resource]["usage"] == 0 and d_field == "max" else structure["resources"][resource]["min"]
@@ -388,6 +397,11 @@ class BaseRebalancer(ABC):
             # Field to be donated: "max" or "current"
             d_field = self.select_donated_field(resource)
             donors, receivers = self.split_structures_by_role(valid_structures, resource, {"donor", "receiver"})
+
+            # Lent resources are already shared through oversubscription, so they are not rebalanced
+            donors = [s for s in donors if not self.is_lending(s, resource)]
+            receivers = [s for s in receivers if not self.is_lending(s, resource)]
+
             if not receivers:
                 utils.log_info("No structure to receive resource {0} shares".format(resource), self.debug)
                 continue

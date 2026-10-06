@@ -375,6 +375,10 @@ def propagate_application_request(app, containers, app_request, hosts=None, host
         if "usage" not in res_data:
             continue
 
+        # Containers lending this resource keep their allocation untouched until it is reclaimed
+        if res_data.get("lent", 0) > 0:
+            continue
+
         lower_limit = max(res_data.get("min", 0), 1)
         if not is_scale_up and res_data.get(field, 0) <= lower_limit:
             continue

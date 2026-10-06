@@ -107,8 +107,8 @@ class ContainerRebalancer(BaseRebalancer):
             weight_sum = 0
             participants = []
             for container in containers:
-                if resource in container["resources"]:
-                    is_consuming = container["resources"][resource]["current"] / container["resources"][resource]["usage"] < resource_threshold_map[resource]
+                if resource in container["resources"] and not self.is_lending(container, resource):
+                    is_consuming = container["resources"][resource]["usage"] / container["resources"][resource]["current"] > resource_threshold_map[resource]
                     if "weight" in container["resources"][resource] and is_consuming:
                         participants.append({"container_info": container})
                         total_allocation_amount += container["resources"][resource]["current"]
@@ -163,7 +163,7 @@ class ContainerRebalancer(BaseRebalancer):
             adjusted_reading_ratio = 1
             adjusted_writing_ratio = 1
             for container in containers:
-                if global_hdfs_enabled and container['app']['name'] == global_hdfs_app_name:
+                if global_hdfs_enabled and container.get('app', {}).get('name', '') == global_hdfs_app_name:
                     ## We divide by 2 since transfers between global and local through the same disk will require both read and write bandwidth in different ends of the transaction
                     adjusted_reading_ratio  = container["resources"]["disk_read"]["weight"] / 2
                     adjusted_writing_ratio = container["resources"]["disk_write"]["weight"] / 2
@@ -171,13 +171,29 @@ class ContainerRebalancer(BaseRebalancer):
 
             for container in containers:
                 if all("weight" in container.get("resources", {}).get(res, {}) for res in ["disk_read", "disk_write"]):
-                    is_consuming_read = container["resources"]["disk_read"]["usage"]  / container["resources"]["disk_read"]["current"]  < resource_threshold_map["disk_read"]
-                    is_consuming_write = container["resources"]["disk_write"]["usage"] / container["resources"]["disk_write"]["current"] < resource_threshold_map["disk_write"]
+                    is_consuming_read = (
+                        not self.is_lending(container, "disk_read") 
+                        and container["resources"]["disk_read"]["usage"] / container["resources"]["disk_read"]["current"] > resource_threshold_map["disk_read"]
+                    )
+                    is_consuming_write = (
+                        not self.is_lending(container, "disk_write") 
+                        and container["resources"]["disk_write"]["usage"] / container["resources"]["disk_write"]["current"] > resource_threshold_map["disk_write"]
+                    )
 
                     if is_consuming_read:
                         total_allocated_bw += container["resources"]["disk_read"]["current"]
-                        if container['app']['name'] != global_hdfs_app_name:
-                            if global_hdfs_enabled and container['app']['state'] == 'hdfs_downloading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
+                        if container.get('app', {}).get('name', '') != global_hdfs_app_name:
+                            if (
+                                global_hdfs_enabled and container.get('app', {}).get('state', '') == 'hdfs_downloading' 
+                                and ((
+                                        container['name'] in tcp_connections 
+                                        and datanode_name in tcp_connections[container['name']]
+                                    ) 
+                                    or (
+                                        datanode_name in tcp_connections 
+                                        and container['name'] in tcp_connections[datanode_name]
+                                    ))
+                            ):
                                 container["resources"]["disk_read"]["weight"] *= adjusted_writing_ratio
                                 weight_dual_write_sum += container["resources"]["disk_read"]["weight"]
                             weight_sum      += container["resources"]["disk_read"]["weight"]
@@ -187,8 +203,18 @@ class ContainerRebalancer(BaseRebalancer):
 
                     if is_consuming_write:
                         total_allocated_bw += container["resources"]["disk_write"]["current"]
-                        if container['app']['name'] != global_hdfs_app_name:
-                            if global_hdfs_enabled and container['app']['state'] == 'hdfs_uploading' and ((container['name'] in tcp_connections and datanode_name in tcp_connections[container['name']]) or (datanode_name in tcp_connections and container['name'] in tcp_connections[datanode_name])):
+                        if container.get('app', {}).get('name', '') != global_hdfs_app_name:
+                            if (
+                                global_hdfs_enabled and container.get('app', {}).get('state', '') == 'hdfs_uploading' 
+                                and ((
+                                        container['name'] in tcp_connections 
+                                        and datanode_name in tcp_connections[container['name']]
+                                    ) 
+                                    or (
+                                        datanode_name in tcp_connections 
+                                        and container['name'] in tcp_connections[datanode_name]
+                                    ))
+                            ):
                                 container["resources"]["disk_write"]["weight"] *= adjusted_reading_ratio
                                 weight_dual_read_sum += container["resources"]["disk_write"]["weight"]
                             weight_sum       += container["resources"]["disk_write"]["weight"]
@@ -203,7 +229,7 @@ class ContainerRebalancer(BaseRebalancer):
             # e.g., app1 and app2 are downloading from global. app1 write w=1 and app2 write w=3 --> global needs read w=4 to proportionally distribute bandwidth to both apps
             # to cover the case when there are other apps sharing the HDFS disks but not transfering data from/to global, the weights of the hdfs apps are reduced to half to accomodate the global weight
             for container in participants["disk_read"]:
-                if global_hdfs_enabled and container['container_info']['app']['name'] == global_hdfs_app_name:
+                if global_hdfs_enabled and container['container_info'].get('app', {}).get('name', '') == global_hdfs_app_name:
                     if weight_dual_read_sum > 0:
                         container['container_info']['resources']["disk_read"]['weight'] = weight_dual_read_sum
                     weight_sum      += container['container_info']["resources"]["disk_read"]["weight"]
@@ -212,7 +238,7 @@ class ContainerRebalancer(BaseRebalancer):
                     break ## we only deploy one datanode on each host
 
             for container in participants["disk_write"]:
-                if global_hdfs_enabled and container['container_info']['app']['name'] == global_hdfs_app_name:
+                if global_hdfs_enabled and container['container_info'].get('app', {}).get('name', '') == global_hdfs_app_name:
                     if weight_dual_write_sum > 0:
                         container['container_info']['resources']["disk_write"]['weight'] = weight_dual_write_sum
                     weight_sum       += container['container_info']["resources"]["disk_write"]["weight"]
