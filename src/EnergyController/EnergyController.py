@@ -346,7 +346,9 @@ class EnergyController(Service):
             utils.log_warning(f"@{structure['name']} No usage data could be retrieved with a timelapse of {timelapse} seconds", self.debug)
         else:
             for metric, value in usages.items():
-                if value <= 0:
+                # The power of a container can be 0 W (e.g., the power meter gives no power to a container that uses
+                # little CPU): the mean of the window is 0 W only if it has been 0 W during the whole window
+                if value < 0 or (value == 0 and metric != utils.res_to_metric("energy")):
                     valid = False
                     utils.log_warning(f"@{structure['name']} Usage data for metric {metric} is below 0 ({value})", self.debug)
         return valid
