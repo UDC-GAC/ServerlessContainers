@@ -5,6 +5,7 @@ Same decision logic as the EnergyController (events, skip conditions and CPU-pow
 works on a HostView and returns the CPU scalings instead of writing requests to CouchDB.
 """
 import math
+import time
 
 from src.EnergyController.CacheUtils import EventsCache, ResourceCache
 from src.EnergyManager import topology
@@ -23,6 +24,80 @@ CPU_PRESSURE = "structure.cpu.pressure"
 ENERGY_USAGE = "structure.energy.usage"
 
 
+def resolve_cpu_target(first, predict, model_after):
+    """Power model of a decision on a host: the model of the core distribution that the host will have after the
+    scaling that the model itself predicts. 'first' is the model of the host now, predict(model) returns the host CPU
+    target (U) that meets the host budget with a model and model_after(U) the new model of the host after scaling to U.
+
+    Each model predicts its target and the model of the host after that target is taken, until it is the same model
+    (consistent: the model of the resulting distribution has predicted that target) or one already used comes back
+    (cycle: the target of each model lies in the distribution of the next one, so none is consistent and the target is
+    at the frontier between their distributions, see frontier). The prediction of a model only depends on the model
+    (the budget and the host load are fixed in the decision), so a model is never predicted twice: there are at most
+    as many predictions as models, i.e., at most (models - 1) changes of model.
+
+    If a prediction fails after the first one, the previous one is kept as fallback (the model of the host before it).
+    Returns (model, U, {model: U} in the order of the predictions, "consistent" | "frontier" | "fallback")."""
+    predictions = {}
+    model = first
+    while model not in predictions:
+        try:
+            U = predict(model)
+        except Exception:
+            if not predictions:
+                raise
+            previous = list(predictions)[-1]
+            return previous, predictions[previous], predictions, "fallback"
+        predictions[model] = U
+        next_model = model_after(U)
+        if next_model == model:
+            return model, U, predictions, "consistent"
+        model = next_model
+
+    # ------------------------------------------------------------
+    # Cycle: A -> B -> C -> D -> B
+    # Example:
+    # e.g., predictions = {A: 60, B: 50, C: 55, D: 52} and D predicts B, so model=B
+    # ------------------------------------------------------------
+    order = list(predictions)
+    # e.g. order = [A, B, C, D]
+    cycle = [predictions[m] for m in order[order.index(model):]]
+    # e.g., cycle = [50, 55, 52] (B, C, and D, respectively, A is not part of the cycle)
+
+    def within_budget(U):
+        # Which model/topology we would actually obtain if we applied CPU target U
+        after = model_after(U)
+        # U is considered safe if:
+        #   1. the resulting model is one of the models in the cycle
+        #   2. that resulting model itself predicts at least U.
+        # After applying U, does the resulting model still consider U to be small enough to satisfy the power budget?"
+        return after in predictions and U <= predictions[after]
+
+
+    # The minimum value of the cycle is guaranteed to be safe, because the other models only predicted higher U values
+    # e.g.,  U = 50 -> model_after(50) = C -> C predicts 55 -> 50 <= 55 -> safe
+    #
+    # The maximum value is necessarily unsafe, because the other models only predicted lower U values
+    # e.g., U = 55 -> model_after(55) = D -> D predicts 52 -> 55 > 52 -> unsafe
+    #
+    # The desired U is the largest value that results in a distribution whose power model
+    # predicts at least that value (within_budget).
+    U = frontier(min(cycle), max(cycle), within_budget)
+    return model_after(U), U, predictions, "frontier"
+
+
+def frontier(lo, hi, ok, tolerance=1):
+    """Largest value of [lo, hi] for which ok holds, given ok(lo), by bisection (ok holds up to a frontier): with
+    resolve_cpu_target, the largest host CPU target (within 1 share) that the model of its own distribution keeps within
+    the budget."""
+    if ok(hi):
+        return hi
+    while hi - lo > tolerance:
+        mid = (lo + hi) / 2
+        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
+    return lo
+
+
 class BuiltinController(Controller):
 
     # REACTION_TIME: maximum time (s) of data, since the last action, until scaling with the smallest errors
@@ -32,8 +107,9 @@ class BuiltinController(Controller):
     #   boundary: CPU usage is not below the CPU quota minus its boundary (as the EnergyController)
     #   pressure: CPU pressure (share of its CPU demand waiting for a CPU) is at least PRESSURE_THRESHOLD
     # POWER_MODEL_ROUTING: MB uses the host model of WattWizard (with the prediction method of POWER_MODEL) whose core
-    # distribution is closest to the CPUs allocated now in the host (topology.closest_distribution). Otherwise (or
-    # without topology or models), the General model, and the Single_Core model while the host uses less than one CPU
+    # distribution is closest to the CPUs that the host will have after the scaling (topology.closest_distribution).
+    # Otherwise (or without topology or models), the General model, and the Single_Core model while the host would use
+    # less than one CPU
     # MODEL_RELIABILITY: with 'high', MB applies a budget it has not modelled yet (a new container or a new budget)
     # with the power model in its first evaluation, without waiting for events; with 'low', as the other methods
     # (also model-only, which then keeps that CPU until the budget changes)
@@ -51,7 +127,10 @@ class BuiltinController(Controller):
         self._idle_power = None
         self._no_pressure_warned = set()
         self._host_models = None    # Host models of WattWizard (read once: they only change if the platform is restarted)
-        self.last_trace = {}  # Decision of each container in the current iteration (written to the EnergyManager trace)
+        # Host -> model predicted for the host after the scaling of this iteration, checked with the CPUs applied
+        self._model_checks = {}
+        # Decision of each container in the current iteration (written to the EnergyManager trace)
+        self.last_trace = {}
 
     def invalid_conf(self):
         if self.policy == "ev" and not self.cfg("EV_RATIO") > 0:
@@ -250,56 +329,135 @@ class BuiltinController(Controller):
                 return []
         return self._host_models
 
-    def select_power_model(self, view: HostView, U_usage_host):
-        """Host model for MB: the one whose core distribution is closest to the CPUs allocated in the host."""
+    def host_models(self):
+        """Host models of WattWizard with the prediction method of POWER_MODEL, by core distribution (e.g.,
+        polyreg_Group_P_and_L -> Group_P_and_L). With several methods (e.g., polyreg,sgdregressor), Group_PP_LL would
+        map to any of them."""
         method = self.cfg("POWER_MODEL").split("_")[0]
-        # Without routing (or a model of a known distribution): the General model, or the Single_Core model while the
-        # host uses less than one CPU (the same models for any CPU, whatever its topology)
-        default = f"{method}_Single_Core" if U_usage_host < 100 else f"{method}_General"
-        raw_topology = view.extra.get("cpu_topology")
-        if not self.cfg("POWER_MODEL_ROUTING") or not raw_topology:
-            return default
-        # Models of the same prediction method as POWER_MODEL, by distribution (e.g., polyreg_Group_P_and_L ->
-        # Group_P_and_L). With several methods (e.g., polyreg,sgdregressor), Group_PP_LL would map to any of them
-        models = {topology.normalize_distribution(m[len(method) + 1:]): m for m in self.available_host_models()
-                  if m.split("_")[0] == method and "iomix" not in m}
-        topo = topology.parse(raw_topology)
-        core_map = view.host.get("resources", {}).get("cpu", {}).get("core_usage_mapping", {})
-        cpus = [cpu for cpu, shares in core_map.items() if any(v > 0 for k, v in shares.items() if k != "free")]
-        distribution, distance, distances = topology.closest_distribution(topo, cpus, models)
-        if distribution is None:
-            self.ctx.log_warning(f"@{view.name} No WattWizard model with a known core distribution: using {default}")
-            return default
-        others = ", ".join(f"{d} {v}" for d, v in sorted(distances.items(), key=lambda i: i[1]) if d != distribution)
-        self.ctx.log_info(f"@{view.name} POWER MODEL {models[distribution]}: host CPUs {topo.describe(cpus)}, distance "
-                          f"{distance} to {distribution}" + (f" (others: {others})" if others else ""))
-        return models[distribution]
+        return {topology.normalize_distribution(m[len(method) + 1:]): m for m in self.available_host_models()
+                if m.split("_")[0] == method and "iomix" not in m}
 
-    def get_amount_from_power_model(self, c: ContainerView, P_scaling, host_totals, power_model):
-        self.pb_cache.add(c.structure["_id"], c.budget)
+    def model_router(self, view: HostView):
+        """Routing of the host models: route(host CPUs, host CPU usage) -> (model, description).
+        - With POWER_MODEL_ROUTING, the model of the core distribution closest to those CPUs (topology.closest_distribution).
+        - Without routing, the General model, or the Single_Core model depending on CPU usage.
+        Also returns the topology of the host, None if the CPUs do not matter."""
+        method = self.cfg("POWER_MODEL").split("_")[0]
+        raw_topology = view.extra.get("cpu_topology")
+        models = self.host_models() if self.cfg("POWER_MODEL_ROUTING") and raw_topology else {}
+        topo = topology.parse(raw_topology) if models else None
+
+        def route(cpus, U_usage_host):
+            default = f"{method}_Single_Core" if U_usage_host < 100 else f"{method}_General"
+            if topo is None:
+                return default, f"host CPU usage {U_usage_host:.1f}"
+            distribution, distance, distances = topology.closest_distribution(topo, cpus, models)
+            if distribution is None:
+                return default, f"host CPUs {topo.describe(cpus)}, no model of a known core distribution"
+            others = ", ".join(f"{d} {v}" for d, v in sorted(distances.items(), key=lambda i: i[1]) if d != distribution)
+            return models[distribution], (f"host CPUs {topo.describe(cpus)}, distance {distance} to {distribution}"
+                                          + (f" (others: {others})" if others else ""))
+
+        return route, topo
+
+    def select_power_model(self, view: HostView, P_budget_host, U_user_host, U_system_host, amounts_for, other_amounts):
+        """Host model and host CPU target meeting the host budget. The host CPU target is the one that meets the host budget
+        using the power model of the core distribution that results after scaling to this CPU target.
+        Returns (model, target, fields for the trace)."""
+
+        # Get routing function to select the model of the host after the scaling
+        route, topo = self.model_router(view)
+        core_map = view.host.get("resources", {}).get("cpu", {}).get("core_usage_mapping", {})
+        layout_params = None if self.cfg("CPU_LAYOUT") == "scaler" else dict(
+            min_socket_share=self.cfg("MIN_SOCKET_SHARE"), min_socket_cpus=self.cfg("MIN_SOCKET_CPUS"))
+        after, timing = {}, {"start": time.perf_counter(), "wattwizard": 0.0, "error": None}
+
+        def predict(model):
+            # Predict the host CPU target with time measurement
+            t0 = time.perf_counter()
+            try:
+                return self.ctx.wattwizard.get_usage_meeting_budget("host", model, P_budget_host, user_load=U_user_host,
+                                                                    system_load=U_system_host)["value"]
+            except Exception as e:
+                timing["error"] = e
+                raise
+            finally:
+                timing["wattwizard"] += time.perf_counter() - t0
+
+        def model_after(U):
+            # Simulate the core distribution of the host after applying the CPU scalings of the containers required to
+            # reach target U. The actuator will place them following CPU_LAYOUT (scale-downs first).
+            cpus = None
+            if topo is not None:
+                amounts = {name: a for name, a in {**other_amounts, **amounts_for(U)}.items() if a}
+                cpus = topology.host_cpus(topology.simulate_scalings(topo, core_map, amounts, layout_params))
+            after[U] = route(cpus, U + U_system_host)
+            return after[U][0]
+
+        # Get first power model, using the current core distribution (before scaling)
+        first, text = route(topology.host_cpus(core_map) if topo else None, U_user_host + U_system_host)
+        self.ctx.log_info(f"@{view.name} POWER MODEL {first}: {text}")
+
+        # Get the final power model and the host CPU target that meets the host budget, with the predictions of each model
+        model, U_target, predictions, result = resolve_cpu_target(first, predict, model_after)
+
+        for m, U in predictions.items():
+            self.ctx.log_info(f"@{view.name} POWER MODEL {m}: host CPU {U_user_host:.0f} -> {U:.0f} for "
+                              f"{P_budget_host:.1f} W | after the scaling: {after[U][1]} -> {after[U][0]}")
+        total_ms, wattwizard_ms = 1000 * (time.perf_counter() - timing["start"]), 1000 * timing["wattwizard"]
+        cost = f"{len(predictions)} prediction(s) in {total_ms:.1f} ms, WattWizard {wattwizard_ms:.1f} ms"
+        if result == "consistent":
+            self.ctx.log_info(f"@{view.name} POWER MODEL {model}: model of the host after the scaling ({cost})")
+        elif result == "frontier":
+            self.ctx.log_info(f"@{view.name} POWER MODEL {model}: the models alternate ({' -> '.join(predictions)}), "
+                              f"so the target is the frontier between their distributions: host CPU {U_target:.0f}, "
+                              f"the largest one within the budget for the model of its distribution, {after[U_target][1]}"
+                              f" ({cost})")
+        else:
+            self.ctx.log_warning(f"@{view.name} POWER MODEL {model}: the next prediction failed ({timing['error']}), so "
+                                 f"its prediction is kept ({cost})")
+        if topo is not None:
+            self._model_checks[view.name] = (route, model, U_target + U_system_host)
+        trace = dict(power_model=model, model_predictions=[[m, round(U, 1)] for m, U in predictions.items()],
+                     model_selection=result, model_target=round(U_target, 1), model_selection_ms=round(total_ms, 2),
+                     wattwizard_ms=round(wattwizard_ms, 2))
+        return model, U_target, trace
+
+    def get_amounts_from_power_model(self, view: HostView, scalings, host_totals, other_amounts):
+        """CPU scaling of the containers that use a power model to predict their initial CPU ({container: P_scaling}):
+        the host CPU target that meets the host budget, shared across containers in proportion to their power scalings."""
         U_user_host, U_system_host, P_usage_host, P_scaling_host = host_totals
+        containers = [view.containers[name] for name in scalings]
+        for c in containers:
+            self.pb_cache.add(c.structure["_id"], c.budget)
 
         # Compute desired host power budget based on current scalings
         P_budget_host = P_usage_host + P_scaling_host
-        self.trace_decision(c, power_model=power_model)
 
-        U_scaling_cap = 0
-        try:
-            result = self.ctx.wattwizard.get_usage_meeting_budget("host", power_model, P_budget_host, user_load=U_user_host, system_load=U_system_host)
-            U_scaling_host = result["value"] - U_user_host
-            U_scaling_cap = self.cap_scaling(c, U_scaling_host * (P_scaling / P_scaling_host))
+        def cpu_scalings(U_target):
+            # CPU scaling of each container for a host CPU target, within its CPU limits
+            return {c.name: self.cap_scaling(c, (U_target - U_user_host) * scalings[c.name] / P_scaling_host) for c in containers}
 
-            self.print_scaling_info("host", P_usage_host, P_budget_host, U_user_host, result['value'])
-            self.print_scaling_info(c.name, c.usages[ENERGY_USAGE], c.budget, c.cpu_alloc, c.cpu_alloc + U_scaling_cap)
-
+        def amounts_for(U_target):
             # If we want to scale up power, avoid scaling down CPU and vice versa
-            if P_scaling * U_scaling_cap < 0:
-                self.ctx.log_warning(f"@{c.name} MODEL CPU scaling ({U_scaling_cap}) is not coherent with power scaling ({P_scaling}). Setting amount to 0.")
-                U_scaling_cap = 0
-        except Exception as e:
-            self.ctx.log_error(f"@{c.name} Error trying to get estimated CPU from power models: {e}")
+            return {name: int(U) if U * scalings[name] > 0 else 0 for name, U in cpu_scalings(U_target).items()}
 
-        return int(U_scaling_cap)
+        try:
+            power_model, U_target, trace = self.select_power_model(view, P_budget_host, U_user_host, U_system_host,
+                                                                   amounts_for, other_amounts)
+        except Exception as e:
+            self.ctx.log_error(f"@{view.name} Error trying to get estimated CPU from power models: {e}")
+            return {}
+
+        self.print_scaling_info("host", P_usage_host, P_budget_host, U_user_host, U_target)
+        for c in containers:
+            U_scaling = cpu_scalings(U_target)[c.name]
+            self.trace_decision(c, **trace)
+            self.print_scaling_info(c.name, c.usages[ENERGY_USAGE], c.budget, c.cpu_alloc, c.cpu_alloc + U_scaling)
+            if U_scaling * scalings[c.name] < 0:
+                self.ctx.log_warning(f"@{c.name} MODEL CPU scaling ({U_scaling}) is not coherent with power scaling "
+                                     f"({scalings[c.name]}). Setting amount to 0.")
+        return amounts_for(U_target)
 
     def get_amount_from_ppe(self, c: ContainerView):
         U_max, U_min = c.structure["resources"]["cpu"]["max"], c.structure["resources"]["cpu"]["min"]
@@ -337,6 +495,7 @@ class BuiltinController(Controller):
 
     def control_host(self, view: HostView):
         self.events_cache.remove_old_events(self.cfg("EVENT_TIMEOUT"))
+        self._model_checks.pop(view.name, None)
 
         # 1) Power scaling needed by each guarded container (only with samples taken after its last action)
         scalings = {}
@@ -372,30 +531,50 @@ class BuiltinController(Controller):
             self.ctx.log_info(f"Global consumption = {view.power['rapl']} (RAPL) - {view.power['sensor']} (sensor) = {P_usage_host} W")
 
         # 3) CPU scaling for each container
-        amounts, power_model = {}, None
+        amounts, modelled, methods = {}, {}, {}
         for name, P_scaling in to_scale.items():
             c = view.containers[name]
-            method = BUILTIN_POLICIES[self.policy]
+            methods[name] = BUILTIN_POLICIES[self.policy]
+            # Containers that apply a power model are processed all together and separately
             if self.policy in MODEL_POLICIES and self.pb_cache.is_new(c.structure["_id"], c.budget):
-                method = "modelling"
+                methods[name] = "modelling"
+                modelled[name] = P_scaling
+                continue
             try:
-                if method == "modelling":
-                    power_model = power_model or self.select_power_model(view, U_user_host + U_system_host)
-                    amount = self.get_amount_from_power_model(c, P_scaling, (U_user_host, U_system_host, P_usage_host, P_scaling_host), power_model)
-                elif method == "ppe":
-                    amount = self.get_amount_from_ppe(c)
-                elif method == "ev":
-                    amount = self.get_amount_from_ratio(c, P_scaling, self.cfg("EV_RATIO"))
+                if methods[name] == "ppe":
+                    amounts[name] = self.get_amount_from_ppe(c)
+                elif methods[name] == "ev":
+                    amounts[name] = self.get_amount_from_ratio(c, P_scaling, self.cfg("EV_RATIO"))
                 else:
-                    amount = self.get_amount_from_ratio(c, P_scaling, self.get_tdp_ratio(view))
+                    amounts[name] = self.get_amount_from_ratio(c, P_scaling, self.get_tdp_ratio(view))
             except Exception as e:
                 self.ctx.log_error(f"@{name} Error computing CPU scaling: {e}")
-                amount = 0
-            if amount != 0:
-                amounts[name] = amount
-            else:
-                cpu = c.structure["resources"]["cpu"]
-                self.log_decision(c, "HOLD", f"{method} computed no CPU change (quota {c.cpu_alloc}, "
-                                             f"min {cpu['min']}, max {cpu['max']})")
+                amounts[name] = 0
 
-        return amounts
+        # Use the proper power model to get a host CPU prediction and distribute proportionally across container scalings
+        if modelled:
+            host_totals = (U_user_host, U_system_host, P_usage_host, P_scaling_host)
+            amounts.update(self.get_amounts_from_power_model(view, modelled, host_totals, amounts))
+
+        for name in to_scale:
+            if amounts.get(name, 0) == 0:
+                c, cpu = view.containers[name], view.containers[name].structure["resources"]["cpu"]
+                self.log_decision(c, "HOLD", f"{methods[name]} computed no CPU change (quota {c.cpu_alloc}, "
+                                             f"min {cpu['min']}, max {cpu['max']})")
+        return {name: amount for name, amount in amounts.items() if amount != 0}
+
+    def on_applied(self, view: HostView, applied):
+        # Check if the model selected to estimate CPU allocation matches the final core distribution after the actuator
+        # applied all the scalings
+        check = self._model_checks.pop(view.name, None)
+        if check is None or not any(applied.values()):
+            return
+        route, model, U_usage_host = check
+        core_map = view.host.get("resources", {}).get("cpu", {}).get("core_usage_mapping", {})
+        applied_model, text = route(topology.host_cpus(core_map), U_usage_host)
+        for c in view.containers.values():
+            if self.last_trace.get(c.name, {}).get("power_model") == model:
+                self.trace_decision(c, applied_power_model=applied_model)
+        if applied_model != model:
+            self.ctx.log_warning(f"@{view.name} POWER MODEL {model} was predicted for the host after the scaling, but "
+                                 f"with the CPUs applied it is {applied_model}: {text}")

@@ -13,8 +13,9 @@ a core is its physical core and the rest are its SMT siblings. It is read once p
 
 2) Power model routing (closest_distribution). The WattWizard models of the host are trained stressing its CPUs in
    the order of a core distribution (Group_PP_LL, Group_1P_2L, Spread_P_and_L... see the timestamps of WattWizard).
-   The model used is the one whose distribution, with as many CPUs as those allocated now in the host, has the most
-   similar shape: CPUs per socket and SMT siblings used (so the ids of the CPUs and sockets do not matter).
+   The model used is the one whose distribution, with as many CPUs as the host, has the most similar shape: CPUs per
+   socket and SMT siblings used (so the ids of the CPUs and sockets do not matter). The CPUs are those that the host
+   will have after the scaling, placed as the actuator will place them (simulate_scalings).
 """
 import math
 from threading import Lock
@@ -444,6 +445,39 @@ def layout_fragments(topo, cpus, min_socket_share=0.25, min_socket_cpus=2):
     return [s for s in used if len(used) > 1 and cores[s] < min_cpus]
 
 
+# ----------------------------------------------------------------- simulation of the scalings
+
+def host_cpus(core_map):
+    """CPUs of the host with shares of some container."""
+    return [cpu for cpu, shares in core_map.items() if any(v > 0 for k, v in shares.items() if k != "free")]
+
+
+def simulate_scalings(topo, core_map, amounts, layout_params=None):
+    """Core map of the host after changing the CPU shares of some containers ({container: shares}) as the actuator
+    does: scale-downs first (they free shares for the scale-ups), each container with plan_layout (CPU_LAYOUT =
+    topology, layout_params = {min_socket_share, min_socket_cpus}) or the Scaler order (CPU_LAYOUT = scaler, None).
+    The core map given is not changed."""
+    core_map = {cpu: dict(shares) for cpu, shares in core_map.items()}
+    for cpu in topo.socket_of:
+        core_map.setdefault(cpu, {"free": 100})
+    # The actuator runs the scale-downs, and then the scale-ups, in parallel: here, by name
+    for name, amount in sorted(amounts.items(), key=lambda item: (item[1] > 0, item[0])):
+        if amount == 0:
+            continue
+        current = {cpu: m[name] for cpu, m in core_map.items() if m.get(name, 0) > 0}
+        target = sum(current.values()) + amount
+        if layout_params is None:
+            layout = scaler_layout(topo, core_map, name, target)
+        else:
+            layout = plan_layout(topo, core_map, name, target, **layout_params)
+        # Shares move between the CPUs of the container and 'free' (other containers keep theirs)
+        for cpu in set(current) | set(layout):
+            delta = layout.get(cpu, 0) - current.get(cpu, 0)
+            core_map[cpu][name] = core_map[cpu].get(name, 0) + delta
+            core_map[cpu]["free"] = core_map[cpu].get("free", 0) - delta
+    return core_map
+
+
 # ----------------------------------------------------------------- explanation
 
 def _describe_counts(candidates):
@@ -478,7 +512,7 @@ def explain_layout(topo, core_map, name, target, min_socket_share=0.25, min_sock
     current = [cpu for cpu, m in core_map.items() if m.get(name, 0) > 0]
     n_cpus = math.ceil(target / 100)
     lines = ["{0}: {1} -> {2} CPUs (F = {3})".format(name, topo.describe(current), n_cpus,
-                                                    min_socket_size(n_cpus, min_socket_share, min_socket_cpus))]
+                                                     min_socket_size(n_cpus, min_socket_share, min_socket_cpus))]
     rules = {rule: (criterion, text) for rule, criterion, text in LAYOUT_RULES}
     for step in trace:
         rule = step[0]
