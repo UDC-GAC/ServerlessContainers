@@ -30,7 +30,7 @@ from flask import request
 import time
 
 import src.MyUtils.MyUtils as utils
-from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
+from src.Orchestrator.utils import BACK_OFF_TIME_MS, MAX_TRIES, get_db, notify_energy_manager, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
 
 users_routes = Blueprint('users', __name__)
 
@@ -187,5 +187,6 @@ def set_user_resource_parameter(user_name, resource, parameter):
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
 
+    notify_energy_manager()
     return jsonify(201)
 

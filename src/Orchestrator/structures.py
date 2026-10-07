@@ -29,10 +29,12 @@ from flask import abort
 from flask import jsonify
 from flask import request
 from datetime import datetime, timezone
+from functools import wraps
+from threading import Lock
 import time
 
 import src.MyUtils.MyUtils as utils
-from src.Orchestrator.utils import get_db, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
+from src.Orchestrator.utils import get_db, notify_energy_manager, energy_manager_scales, BACK_OFF_TIME_MS, MAX_TRIES, get_keys_from_requested_structure, get_resource_keys_from_requested_structure, check_resources_data_is_present, retrieve_structure
 from src.Scaler.Scaler import CONFIG_DEFAULT_VALUES as SCALER_CONFIG_DEFAULTS
 
 structure_routes = Blueprint('structures', __name__)
@@ -42,8 +44,25 @@ HOST_KEYS = ["name", "host", "subtype", "host_rescaler_ip", "host_rescaler_port"
 APP_KEYS = ["name", "guard", "subtype", "resources", "install_script", "install_files", "runtime_files", "output_dir", "start_script", "stop_script"]
 STRUCTURE_STATES = ["running", "stopped", "hdfs_downloading", "hdfs_uploading"] ## They are currently used only for apps
 
+# Requests that change host resources (subscribing or removing containers) pause the scaling services: they run one
+# at a time, so a request does not reactivate a service while another one is still changing a host
+# TODO: Apply this for scaler, only tested with EnergyManager currently
+HOST_CHANGES_LOCK = Lock()
+ENERGY_MANAGER_IDLE_TIMEOUT = 30
+
+
 def print_with_date(msg):
     print("[{0}] {1}".format(datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S%z'), msg), flush=True)
+
+
+def one_at_a_time(route):
+    @wraps(route)
+    def wrapper(*args, **kwargs):
+        if not energy_manager_scales():
+            return route(*args, **kwargs)
+        with HOST_CHANGES_LOCK:
+            return route(*args, **kwargs)
+    return wrapper
 
 
 @structure_routes.route("/structure/", methods=['GET'])
@@ -123,6 +142,7 @@ def set_structure_parameter_of_resource(structure_name, resource, parameter):
 
         if tries >= MAX_TRIES:
             return abort(400, {"message": "MAX_TRIES updating database document"})
+    notify_energy_manager()
     return jsonify(201)
 
 
@@ -164,6 +184,18 @@ def set_structure_state(structure_name, structure_state):
         return abort(400, {"message": f"Invalid {structure_state} state for structure {structure_name}; only {STRUCTURE_STATES} are allowed"})
 
     return set_structure_parameter(structure_name, "state", structure_state)
+
+
+@structure_routes.route("/structure/<structure_name>/app_started", methods=['PUT'])
+def set_container_app_started(structure_name):
+    if retrieve_structure(structure_name)["subtype"] != "container":
+        return abort(400, {"message": "Structure {0} is not a container".format(structure_name)})
+    if not energy_manager_scales():
+        return jsonify(201)
+    # Notify EnergyManager (it does not scale containers until they are started)
+    response = set_structure_parameter(structure_name, "app_started", time.time())
+    notify_energy_manager()
+    return response
 
 
 @structure_routes.route("/structure/<structure_name>/guard", methods=['PUT'])
@@ -307,6 +339,7 @@ def set_structure_resource_limit_boundary(structure_name, resource):
             if tries >= MAX_TRIES:
                 return abort(400, {"message": "MAX_TRIES updating database document"})
 
+    notify_energy_manager()
     return jsonify(201)
 
 
@@ -348,17 +381,35 @@ def set_structure_resource_limit_boundary_type(structure_name, resource):
             if tries >= MAX_TRIES:
                 return abort(400, {"message": "MAX_TRIES updating database document"})
 
+    notify_energy_manager()
     return jsonify(201)
 
 
-def disable_scaler(scaler_service):
-    scaler_service["config"]["ACTIVE"] = False
-    get_db().partial_update_service(scaler_service, {"config": {"ACTIVE": False}})
+def disable_service(service):
+    service["config"]["ACTIVE"] = False
+    get_db().partial_update_service(service, {"config": {"ACTIVE": False}})
 
 
-def restore_scaler_state(scaler_service, previous_state):
-    scaler_service["config"]["ACTIVE"] = previous_state
-    get_db().partial_update_service(scaler_service, {"config": {"ACTIVE": previous_state}})
+def restore_service_state(service, previous_state):
+    service["config"]["ACTIVE"] = previous_state
+    get_db().partial_update_service(service, {"config": {"ACTIVE": previous_state}})
+
+def wait_energy_manager_idle():
+    # Two new heartbeats ensure that any iteration that read ACTIVE=True has completed and persisted its changes to CouchDB
+    def heartbeat():
+        return get_db().get_service("energy_manager").get("heartbeat", 0)
+
+    last, new_beats, start = heartbeat(), 0, time.time()
+    if start - last > ENERGY_MANAGER_IDLE_TIMEOUT:
+        return True
+    while new_beats < 2:
+        if time.time() - start > ENERGY_MANAGER_IDLE_TIMEOUT:
+            return False
+        time.sleep(0.1)
+        beat = heartbeat()
+        if beat != last:
+            last, new_beats = beat, new_beats + 1
+    return True
 
 
 @structure_routes.route("/structure/container/<structure_name>/<app_name>", methods=['PUT'])
@@ -375,6 +426,7 @@ def subscribe_container_to_app(structure_name, app_name):
 
     app["containers"].append(cont_name)
     get_db().partial_update_structure(app, {"containers": app["containers"]})
+    notify_energy_manager()
 
     return jsonify(201)
 
@@ -390,6 +442,7 @@ def desubscribe_container_from_app(structure_name, app_name):
     else:
         app["containers"].remove(cont_name)
         get_db().partial_update_structure(app, {"containers": app["containers"]})
+        notify_energy_manager()
 
     return jsonify(201)
 
@@ -460,19 +513,24 @@ def free_container_resources(container, container_phy_resources, host):
 
 
 @structure_routes.route("/structure/container/<structure_name>", methods=['DELETE'])
+@one_at_a_time
 def desubscribe_container(structure_name):
-    # Disable the Scaler to ensure container limits are not modified, also involving host modifications
+    # Disable the scaling service to ensure container limits are not modified, also involving host modifications
     # Example:
     # 1 -> Orchestrator reads container memory limit is 1024 MB
     # 2 -> Scaler reduces container memory by 512 MB and increases host free memory by 512 MB
     # 3 -> Orchestrator removes and container and increases host free memory by 1024 MB (it should be increased by 512 MB only)
     # To avoid this, Scaler is disabled and Orchestrator waits scaler_polling_freq to ensure current iteration is finished
 
-    # Disable Scaler
-    scaler_service = get_db().get_service("scaler")
-    previous_state = scaler_service["config"].get("ACTIVE", SCALER_CONFIG_DEFAULTS["ACTIVE"])
+    # Disable the scaling service (Scaler or EnergyManager)
+    energy_manager_enabled = energy_manager_scales()
+    scaling_service = get_db().get_service("energy_manager") if energy_manager_enabled else get_db().get_service("scaler")
+    previous_state = scaling_service["config"].get("ACTIVE", False if energy_manager_enabled else SCALER_CONFIG_DEFAULTS["ACTIVE"])
     if previous_state:
-        disable_scaler(scaler_service)
+        disable_service(scaling_service)
+        if energy_manager_enabled and not wait_energy_manager_idle():
+            print_with_date("Warning, the EnergyManager did not finish its iteration in {0} seconds".format(ENERGY_MANAGER_IDLE_TIMEOUT))
+
     disabled_start = time.time()
 
     # Look for any application that hosts this container, and remove it from the list
@@ -486,11 +544,11 @@ def desubscribe_container(structure_name):
     container["resources"].keys()
     node_scaler_session = requests.Session()
 
-    # Wait until Scaler have finished current iteration
-    if previous_state:
-        polling_freq = scaler_service["config"].get("POLLING_FREQUENCY", SCALER_CONFIG_DEFAULTS["POLLING_FREQUENCY"])
+    # Wait until Scaler have finished current iteration (the EnergyManager has already been waited for through heartbeats)
+    if not energy_manager_enabled and previous_state:
+        polling_freq = scaling_service["config"].get("POLLING_FREQUENCY", SCALER_CONFIG_DEFAULTS["POLLING_FREQUENCY"])
         already_disabled = disabled_start - time.time()
-        time.sleep(max(int(polling_freq- already_disabled), 0))
+        time.sleep(max(int(polling_freq - already_disabled), 0))
 
     try:
         # Get container real limits
@@ -509,7 +567,7 @@ def desubscribe_container(structure_name):
             print_with_date("Warning, resources for container {0} were not found, it was probably already deleted".format(structure_name))
 
     except Exception as e:
-        restore_scaler_state(scaler_service, previous_state)
+        restore_service_state(scaling_service, previous_state)
         return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], str(e))})
 
     # Delete the document for this container
@@ -526,7 +584,9 @@ def desubscribe_container(structure_name):
         print_with_date("Container {0} has no limits, ignoring limits delete".format(structure_name))
 
     # Restore the previous state of the Scaler service
-    restore_scaler_state(scaler_service, previous_state)
+    restore_service_state(scaling_service, previous_state)
+    if energy_manager_enabled:
+        notify_energy_manager()
 
     return jsonify(201)
 
@@ -671,6 +731,7 @@ def check_structure_exists(structure_name, structure_type, searching_for_existen
 
 
 @structure_routes.route("/structure/container/<structure_name>", methods=['PUT'])
+@one_at_a_time
 def subscribe_container(structure_name):
     node_scaler_session = requests.Session()
     req_cont = request.json["container"]
@@ -724,7 +785,14 @@ def subscribe_container(structure_name):
     limits["type"] = 'limit'
     limits["name"] = container["name"]
 
-    # Get the host info
+    # Get the host info (the EnergyManager is paused: it keeps host core maps in memory and would not see these cores taken)
+    energy_manager_enabled = energy_manager_scales()
+    if energy_manager_enabled:
+        scaling_service = get_db().get_service("energy_manager")
+        previous_state = scaling_service["config"].get("ACTIVE", False)
+        disable_service(scaling_service)
+        if previous_state and not wait_energy_manager_idle():
+            print_with_date("Warning, the EnergyManager did not finish its iteration in {0} seconds".format(ENERGY_MANAGER_IDLE_TIMEOUT))
     try:
         host = get_db().get_structure(container["host"])
         cpu_topology = utils.get_cpu_topology(node_scaler_session, container)
@@ -747,7 +815,12 @@ def subscribe_container(structure_name):
     except Exception as e:
         print_with_date("Unexpected error during {0} subscription, aborting operation: {1}".format(structure_name, str(e)))
         return abort(400, {"message": "Error updating host {0}: {1}".format(container["host"], str(e))})
+    finally:
+        if energy_manager_enabled:
+            restore_service_state(scaling_service, previous_state)
 
+    if energy_manager_enabled:
+        notify_energy_manager()
     return jsonify(201)
 
 

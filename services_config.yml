@@ -5,6 +5,9 @@ SINGULARITY_COMMAND_ALIAS: "apptainer" # singularity or apptainer (only relevant
 ## Cgroups version: v1 (Lecacy or Hybrid mode) or v2 (Unified mode)
 CGROUPS_VERSION: "v1"
 
+# Service that scales the containers: 'scaler' or 'energy_manager' (special scaler for power capping)
+SCALING_SERVICE: "scaler"
+
 ## Orchestrator
 ORCHESTRATOR_URL: "orchestrator"
 ORCHESTRATOR_PORT: 5000

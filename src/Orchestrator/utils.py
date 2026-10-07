@@ -25,7 +25,10 @@
 
 from flask import abort
 from flask import g
+from datetime import datetime, timezone
 import os
+import time
+import yaml
 
 import src.StateDatabase.couchdb as couchdb
 
@@ -36,6 +39,10 @@ COUCHDB_URL = os.getenv('COUCHDB_URL')
 if not COUCHDB_URL:
     COUCHDB_URL = "couchdb"
 
+# Services that can scale the containers (SCALING_SERVICE in services_config.yml), the first one by default
+SCALING_SERVICES = ("scaler", "energy_manager")
+_scaling_service = {"mtime": None, "value": SCALING_SERVICES[0]}
+
 
 def get_db():
     global COUCHDB_URL
@@ -44,6 +51,40 @@ def get_db():
         #g.db_handler = couchDB.CouchDBServer(couchdb_url=COUCHDB_URL)
         g.db_handler = couchdb.CouchDBServer()
     return g.db_handler
+
+
+def get_scaling_service():
+    """Service that scales the containers: SCALING_SERVICE in services_config.yml, read again when the file changes."""
+    path = os.path.join(os.environ.get("SERVERLESS_PATH", "."), "services_config.yml")
+    try:
+        mtime = os.path.getmtime(path)
+        if mtime != _scaling_service["mtime"]:
+            with open(path, "r") as f:
+                value = (yaml.safe_load(f) or {}).get("SCALING_SERVICE", SCALING_SERVICES[0])
+            if value not in SCALING_SERVICES:
+                print("[{0}] Unknown SCALING_SERVICE '{1}' in {2} ({3}), using '{4}'".format(
+                    datetime.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S%z'), value, path,
+                    ", ".join(SCALING_SERVICES), SCALING_SERVICES[0]), flush=True)
+                value = SCALING_SERVICES[0]
+            _scaling_service.update(mtime=mtime, value=value)
+    except (OSError, yaml.YAMLError):
+        pass
+    return _scaling_service["value"]
+
+
+def energy_manager_scales():
+    return get_scaling_service() == "energy_manager"
+
+
+def notify_energy_manager():
+    """Ask the EnergyManager (if it exists) to reload its state from CouchDB in its next iteration (~1 s)."""
+    if not energy_manager_scales():
+        return
+    try:
+        service = get_db().get_service("energy_manager")
+        get_db().partial_update_service(service, {"config": {"STATE_UPDATE": int(time.time() * 1000)}})
+    except Exception:
+        pass
 
 
 def retrieve_structure(structure_name):
