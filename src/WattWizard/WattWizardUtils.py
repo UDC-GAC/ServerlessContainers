@@ -42,7 +42,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.is_static(structure, model_name, tries)
+                return self.is_static(structure, model_name, tries)
 
     def is_hw_aware(self, structure, model_name, tries=3):
         try:
@@ -56,7 +56,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.is_hw_aware(structure, model_name, tries)
+                return self.is_hw_aware(structure, model_name, tries)
 
     def predict_power(self, structure, model_name, tries=3, **kwargs):
         try:
@@ -97,7 +97,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_usage_meeting_budget(structure, model_name, power_budget, tries, **kwargs)
+                return self.get_usage_meeting_budget(structure, model_name, power_budget, tries, **kwargs)
 
     def get_adjusted_usage_meeting_budget(self, structure, model_name, real_power, power_budget, tries=3, **kwargs):
         try:
@@ -117,7 +117,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_usage_meeting_budget(structure, model_name, power_budget, tries, **kwargs)
+                return self.get_usage_meeting_budget(structure, model_name, power_budget, tries, **kwargs)
 
     def get_idle_consumption(self, structure, model_name, tries=3):
         try:
@@ -131,7 +131,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_idle_consumption(structure, model_name, tries)
+                return self.get_idle_consumption(structure, model_name, tries)
 
     def get_model_variables(self, structure, model_name, tries=3):
         try:
@@ -146,7 +146,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_model_variables(structure, model_name, tries)
+                return self.get_model_variables(structure, model_name, tries)
 
     def get_models(self, avoid_static=False, tries=3):
         try:
@@ -162,7 +162,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_models(avoid_static, tries)
+                return self.get_models(avoid_static, tries)
 
     def get_models_structure(self, structure, avoid_static=False, tries=3):
         try:
@@ -178,7 +178,7 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.get_models_structure(structure, avoid_static, tries)
+                return self.get_models_structure(structure, avoid_static, tries)
 
     def train_model(self, structure, model_name, user_usage, system_usage, power, tries=3):
         try:
@@ -194,4 +194,4 @@ class WattWizardUtils:
             if tries <= 0:
                 raise Exception(f"Failed to connect to WattWizard: {str(e)}") from e
             else:
-                self.train_model(structure, model_name, user_usage, system_usage, power, tries)
+                return self.train_model(structure, model_name, user_usage, system_usage, power, tries)
