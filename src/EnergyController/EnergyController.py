@@ -185,11 +185,13 @@ class EnergyController(Service):
                 except Exception as e:
                     utils.log_warning(f"@{host} POWER MODEL {other_model} failed ({e}): keeping the prediction of "
                                       f"{power_model}", self.debug)
-            utils.log_info(f"@{host} POWER MODEL {power_model}: host CPU {U_user_host} -> {U_target}", self.debug)
+            utils.log_info(f"@{host} POWER MODEL {power_model}: host CPU user {U_user_host} -> {U_target} (kernel "
+                           f"{U_system_host}), {name} usage {U_usage}", self.debug)
             U_scaling_host = U_target - U_user_host
 
-            # Compute proportional CPU scaling for structure
-            U_scaling = U_scaling_host * (P_scaling / P_scaling_host)
+            # Compute proportional CPU scaling for structure. The model works with CPU usage, so the structure gets its
+            # share of the change of host usage on top of its own usage (user + kernel), not of its allocation
+            U_scaling = U_usage + U_scaling_host * (P_scaling / P_scaling_host) - U_alloc
             U_scaling_cap = max(min(U_scaling, U_max - U_alloc), - (U_alloc - U_min))
 
             # Print scaling info

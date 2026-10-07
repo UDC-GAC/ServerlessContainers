@@ -311,8 +311,8 @@ class BuiltinController(Controller):
         return max(1, int((R - (M - 1) * T - L) / T + 1e-6))
 
     # ----------------------------------------------------------------- capping methods
-    def print_scaling_info(self, name, P_usage, P_budget, U_alloc, U_alloc_new):
-        self.ctx.log_info(f"@{name} POWER {P_usage} -> {P_budget} | CPU {U_alloc} -> {U_alloc_new}")
+    def print_scaling_info(self, name, P_usage, P_budget, U_alloc, U_alloc_new, detail=""):
+        self.ctx.log_info(f"@{name} POWER {P_usage} -> {P_budget} | CPU {U_alloc} -> {U_alloc_new}{detail}")
 
     @staticmethod
     def cap_scaling(c: ContainerView, U_scaling):
@@ -435,8 +435,11 @@ class BuiltinController(Controller):
         P_budget_host = P_usage_host + P_scaling_host
 
         def cpu_scalings(U_target):
-            # CPU scaling of each container for a host CPU target, within its CPU limits
-            return {c.name: self.cap_scaling(c, (U_target - U_user_host) * scalings[c.name] / P_scaling_host) for c in containers}
+            # CPU scaling of each container for a host CPU target, within its CPU limits. The model works with CPU usage,
+            # so each container gets its share of the change of host usage on top of its own usage (user + kernel), not
+            # of its allocation, which may be higher (e.g., while its application starts)
+            return {c.name: self.cap_scaling(c, c.usages[CPU_USAGE] + (U_target - U_user_host) * scalings[c.name] / P_scaling_host - c.cpu_alloc)
+                    for c in containers}
 
         def amounts_for(U_target):
             # If we want to scale up power, avoid scaling down CPU and vice versa
@@ -449,11 +452,14 @@ class BuiltinController(Controller):
             self.ctx.log_error(f"@{view.name} Error trying to get estimated CPU from power models: {e}")
             return {}
 
-        self.print_scaling_info("host", P_usage_host, P_budget_host, U_user_host, U_target)
+        # The model predicts the user CPU usage of the host (its kernel usage stays as it is)
+        self.ctx.log_info(f"@host POWER {P_usage_host} -> {P_budget_host} | CPU user {U_user_host} -> {U_target} "
+                          f"(kernel {U_system_host})")
         for c in containers:
             U_scaling = cpu_scalings(U_target)[c.name]
             self.trace_decision(c, **trace)
-            self.print_scaling_info(c.name, c.usages[ENERGY_USAGE], c.budget, c.cpu_alloc, c.cpu_alloc + U_scaling)
+            self.print_scaling_info(c.name, c.usages[ENERGY_USAGE], c.budget, c.cpu_alloc, c.cpu_alloc + U_scaling,
+                                    f" (usage {c.usages[CPU_USAGE]:.0f})")
             if U_scaling * scalings[c.name] < 0:
                 self.ctx.log_warning(f"@{c.name} MODEL CPU scaling ({U_scaling}) is not coherent with power scaling "
                                      f"({scalings[c.name]}). Setting amount to 0.")
