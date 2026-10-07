@@ -149,10 +149,12 @@ class EnergyController(Service):
         # Compute desired host power budget based on current scalings
         P_budget_host = P_usage_host + P_scaling_host
 
-        # Host model (with the prediction method of POWER_MODEL): the General model, or the Single_Core model while the
-        # host uses less than one CPU
+        # Host model (with the prediction method of POWER_MODEL) of the CPU usage that the host will have after the
+        # scaling: the General model, or the Single_Core model under one CPU. The model of the current usage predicts the
+        # target and, if it is on the other side of one CPU, the other model predicts it. If that one goes back to the
+        # first side, neither is consistent: the target is one CPU, the frontier between both (as the EnergyManager)
         method = self.power_model.split("_")[0]
-        power_model = f"{method}_Single_Core" if U_user_host + U_system_host < 100 else f"{method}_General"
+        model_of = lambda U_usage: f"{method}_Single_Core" if U_usage < 100 else f"{method}_General"
 
         # TODO: Distribute proportionally across scale downs and scale ups:
         #   1. Compute CPU scaling for total scale-up or scale-down
@@ -168,15 +170,30 @@ class EnergyController(Service):
         U_scaling_cap = 0
         try:
             # Use power model to get host CPU scaling required to comply with the new power budget
-            result = self.wattwizard_handler.get_usage_meeting_budget("host", power_model, P_budget_host, user_load=U_user_host, system_load=U_system_host)
-            U_scaling_host = result["value"] - U_user_host
+            predict = lambda model: self.wattwizard_handler.get_usage_meeting_budget(
+                "host", model, P_budget_host, user_load=U_user_host, system_load=U_system_host)["value"]
+            power_model = model_of(U_user_host + U_system_host)
+            U_target = predict(power_model)
+            other_model = model_of(U_target + U_system_host)
+            if other_model != power_model:
+                try:
+                    U_other = predict(other_model)
+                    if model_of(U_other + U_system_host) == other_model:
+                        power_model, U_target = other_model, U_other
+                    else:
+                        power_model, U_target = f"{method}_Single_Core", 100 - U_system_host
+                except Exception as e:
+                    utils.log_warning(f"@{host} POWER MODEL {other_model} failed ({e}): keeping the prediction of "
+                                      f"{power_model}", self.debug)
+            utils.log_info(f"@{host} POWER MODEL {power_model}: host CPU {U_user_host} -> {U_target}", self.debug)
+            U_scaling_host = U_target - U_user_host
 
             # Compute proportional CPU scaling for structure
             U_scaling = U_scaling_host * (P_scaling / P_scaling_host)
             U_scaling_cap = max(min(U_scaling, U_max - U_alloc), - (U_alloc - U_min))
 
             # Print scaling info
-            self.print_scaling_info(host, P_usage_host, P_budget_host, U_user_host, result['value'])
+            self.print_scaling_info(host, P_usage_host, P_budget_host, U_user_host, U_target)
             self.print_scaling_info(name, P_usage, P_budget, U_alloc, U_alloc + U_scaling_cap)
 
             # If we want to scale up power, avoid scaling down CPU and vice versa
