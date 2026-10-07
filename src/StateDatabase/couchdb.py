@@ -335,12 +335,12 @@ class CouchDBServer:
         if r.status_code == 409:
             if previous_tries < max_tries:
                 time.sleep((time_backoff_milliseconds + random.randint(1, 100)) / 1000)
-                return self.__resilient_update_doc(database, doc_id, changes, previous_tries + 1, max_tries=max_tries)
+                return self.__safe_update_doc(database, doc_id, changes, previous_tries + 1, max_tries=max_tries)
             else:
                 r.raise_for_status()
-        elif r.status_code == 404:
+        elif r.status_code == 404 and previous_tries < max_tries:
             time.sleep((time_backoff_milliseconds + random.randint(1, 200)) / 1000)
-            return self.__resilient_update_doc(database, doc_id, changes, previous_tries + 1, max_tries=max_tries)
+            return self.__safe_update_doc(database, doc_id, changes, previous_tries + 1, max_tries=max_tries)
         else:
             r.raise_for_status()
         return False
