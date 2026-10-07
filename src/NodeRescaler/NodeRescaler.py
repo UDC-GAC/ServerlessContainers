@@ -47,6 +47,10 @@ node_resource_manager = None
 
 node_rescaler = Flask(__name__)
 
+DRY_RUN = os.environ.get("NODE_RESCALER_DRY_RUN", "") == "1"
+if DRY_RUN:
+    print("NodeRescaler in dry run (NODE_RESCALER_DRY_RUN=1): requests are processed but cgroups are not changed", flush=True)
+
 def initialize_ContainerEngine(f):
     @wraps(f)
     def wrap(*args, **kwargs):
@@ -252,7 +256,7 @@ def get_container_resources_by_name(container_name):
 
 @node_rescaler.route("/heartbeat", methods=['GET'])
 def heartbeat():
-    return Response(json.dumps({"status": "alive"}), status=200, mimetype='application/json')
+    return Response(json.dumps({"status": "alive", "dry_run": DRY_RUN}), status=200, mimetype='application/json')
 
 
 if __name__ == "__main__":

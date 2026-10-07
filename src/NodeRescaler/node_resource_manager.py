@@ -28,6 +28,7 @@ import os
 import subprocess
 
 CGROUP_PATH = "/sys/fs/cgroup"
+DRY_RUN = os.environ.get("NODE_RESCALER_DRY_RUN", "") == "1"
 
 def get_cgroup_file_path(container_id, resource, cgroup_file, container_engine):
     if container_engine == "lxc":
@@ -58,9 +59,10 @@ def write_cgroup_file_value(file_path, value):
     # Write only 1 line for these files as they are 'virtual' files
     try:
         if os.path.isfile(file_path) and os.access(file_path, os.W_OK):
-            with open(file_path, 'w') as file_handler:
-                # with open(file_path, 'r+') as file_handler:
-                file_handler.write(str(value))
+            if not DRY_RUN:
+                with open(file_path, 'w') as file_handler:
+                    # with open(file_path, 'r+') as file_handler:
+                    file_handler.write(str(value))
             return {"success": True, "data": value}
         else:
             return {"success": False, "error": "Couldn't access file: {0}".format(file_path)}
