@@ -25,7 +25,6 @@ class TimeSeriesParallelCollector:
 
     def __init__(self, model_variables, influxdb_host, influxdb_bucket, influxdb_token, influxdb_org):
         self.max_cores = round(multiprocessing.cpu_count() * MAX_CPU_USAGE_RATIO)
-        self.power_variables = ["power_pkg0", "power_pkg1"]
         self._set_model_variables(model_variables)
         self.influxdb_info = {
             "host": influxdb_host,
@@ -155,16 +154,29 @@ class TimeSeriesParallelCollector:
             exit(1)
         return exp_data
 
+    # Get the available power variables (RAPL packages) within the period comprised by timestamps
+    def get_power_variables(self, timestamps):
+        start_str = min(ts[0] for ts in timestamps).strftime("%Y-%m-%dT%H:%M:%SZ")
+        stop_str = max(ts[1] for ts in timestamps).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with InfluxDBHandler(self.influxdb_info["host"], self.influxdb_info["bucket"],
+                             self.influxdb_info["token"], self.influxdb_info["org"]) as conn:
+            packages = conn.get_power_packages(start_str, stop_str)
+        if not packages:
+            log(f"There isn't any power data (RAPL packages) between {start_str} and {stop_str}", "ERR")
+            exit(1)
+        log(f"Power data found for {len(packages)} CPU socket(s) (RAPL packages {packages})")
+        return [f"power_pkg{package}" for package in packages]
+
     def _filter_timestamps_and_metrics(self, timestamps, mode):
         # only_idle: Include only time series corresponding to idle periods, don't include model variables as metrics
         if mode == "only_idle":
-            return [t for t in timestamps if t[3] == "IDLE"], self.power_variables
+            return [t for t in timestamps if t[3] == "IDLE"], []
         # no_idle: Include only time series corresponding to active periods, include all metrics
         if mode == "no_idle":
-            return [t for t in timestamps if t[3] != "IDLE"], self.model_variables + self.power_variables
+            return [t for t in timestamps if t[3] != "IDLE"], self.model_variables
         # all: Include all time series and all metrics
         if mode == "all":
-            return timestamps, self.model_variables + self.power_variables
+            return timestamps, self.model_variables
 
         raise ValueError(f"Unknown mode {mode} when trying to get time series in {self.__class__.__name__}")
 
@@ -188,6 +200,9 @@ class TimeSeriesParallelCollector:
             log(f"Timestamps not valid, they must have a minimum period length of {MIN_PERIOD_LENGTH} seconds. "
                 f"Try using --join-<train|test>-timestamps option.", "ERR")
             return None
+
+        # Power is always included as a metric, from the CPU sockets of the host
+        metrics = metrics + self.get_power_variables(filtered_timestamps)
 
         result_dfs = []
         workers = min(len(timestamps), self.max_cores)

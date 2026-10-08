@@ -1,3 +1,4 @@
+import re
 import warnings
 import requests
 from influxdb_client import InfluxDBClient
@@ -5,7 +6,7 @@ from influxdb_client.client.warnings import MissingPivotFunction
 from urllib3.exceptions import ReadTimeoutError
 
 from src.WattWizard.logs.logger import log
-from src.WattWizard.influxdb.influxdb_queries import INFLUXDB_QUERIES
+from src.WattWizard.influxdb.influxdb_queries import INFLUXDB_QUERIES, POWER_PACKAGES_QUERY
 
 warnings.simplefilter("ignore", MissingPivotFunction)
 
@@ -140,6 +141,19 @@ class InfluxDBCollector:
                     log(f"Bad df obtained between {start_date} and {stop_date}. No more tries", "ERR")
                     exit(1)
         return result
+
+    def get_power_packages(self, start_date, stop_date):
+        query = POWER_PACKAGES_QUERY.format(influxdb_bucket=self.influxdb_bucket, start_date=start_date, stop_date=stop_date)
+        try:
+            tables = self.client.query_api().query(query)
+        except Exception as e:
+            log(f"Unexpected error while getting the RAPL packages from InfluxDB (start_date = {start_date}, "
+                f"stop_date = {stop_date}).", "ERR")
+            log(f"{e}", "ERR")
+            exit(1)
+        fields = [record.get_value() for table in tables for record in table.records]
+        packages = [re.fullmatch(r"rapl:::PACKAGE_ENERGY:PACKAGE(\d+)\(W\)", field) for field in fields]
+        return sorted(int(package.group(1)) for package in packages if package)
 
 
 class InfluxDBHandler:

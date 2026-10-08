@@ -134,6 +134,17 @@ power_pkg1_query = '''
         |> filter(fn: (r) => r["_field"] == "rapl:::PACKAGE_ENERGY:PACKAGE1(W)")
         |> aggregateWindow(every: {influxdb_window}, fn: mean, createEmpty: false)'''
 
+# Query to check which RAPL packages (CPU sockets) have power data within a specific period
+POWER_PACKAGES_QUERY = '''
+    import "influxdata/influxdb/schema"
+
+    schema.fieldKeys(
+        bucket: "{influxdb_bucket}",
+        predicate: (r) => r["_measurement"] == "POWER_PACKAGE",
+        start: {start_date},
+        stop: {stop_date}
+    )'''
+
 INFLUXDB_QUERIES = {
     "load": load_query,
     "user_load": user_load_query,
