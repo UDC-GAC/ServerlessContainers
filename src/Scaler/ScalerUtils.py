@@ -519,7 +519,7 @@ class ContainerRequest(StructureRequest):
         bound_disk = data_context.containers.get(container_name)["resources"].get("disk", {}).get("name")
 
         with self.host_lock:
-            lent_journal, cross_journal, borrowed, released = [], [], 0, 0
+            lent_journal, cross_journal = [], []
             self.host_journal["lent_journal"] = lent_journal
             self.host_journal["cross_lent_journal"] = cross_journal
             self.host_journal["bound_disk"] = bound_disk
@@ -528,32 +528,10 @@ class ContainerRequest(StructureRequest):
             host_info = data_context.hosts.get(request["host"])
             disk_info = host_info["resources"]["disks"][bound_disk]
 
-            if amount > 0:
-                # 1) Take first from the free bandwidth (limited by the free bandwidth of the operation and the total free bandwidth)
-                from_free = min(amount, lending.get_disk_capacity(host_info, resource, container_name, bound_disk)[0])
-                # 2) Borrow the bandwidth lent by idle containers for the same operation
-                borrowed, _ = lending.borrow(host_info, resource, container_name, amount - from_free, lent_journal, bound_disk)
-                # 3) Use the free bandwidth of the operation over the total bandwidth thanks to the idle bandwidth of the opposite operation (last resort)
-                cross_amount = min(amount - from_free - borrowed, max(disk_info[free_key] - from_free, 0))
-                cross_borrowed = lending.borrow_cross(host_info, resource, container_name, cross_amount, cross_journal, bound_disk)
-                amount = from_free + borrowed + cross_borrowed
-            elif amount < 0:
-                # When reclaiming, only the bandwidth borrowed from a specific lender and pool (same or opposite operation) is given back
-                reclaim_from, reclaim_resource = request.get("reclaim_from"), request.get("reclaim_resource", resource)
-                lenders = [reclaim_from] if reclaim_from else None
-                to_release = abs(amount)
-
-                # Give back first the idle bandwidth of the opposite operation (last borrowed), then the bandwidth borrowed for the same operation
-                if not reclaim_from or reclaim_resource == opposite_resource:
-                    to_release -= lending.release_cross(host_info, resource, container_name, to_release, cross_journal, bound_disk, lenders)
-                if not reclaim_from or reclaim_resource == resource:
-                    released = lending.release(host_info, resource, container_name, to_release, lent_journal, bound_disk, lenders=lenders)
-
-            # Only bandwidth borrowed for the same operation doesn't come from (or return to) the 'free' pool, as the
-            # bandwidth used thanks to the idle opposite operation is also taken from the free bandwidth of the operation
-            free_amount = amount - borrowed + released
+            # Update free and lent bandwidth of the disk
+            amount, free_amount = lending.apply_disk_scaling(host_info, resource, container_name, amount, bound_disk, lent_journal, cross_journal,
+                                                             request.get("reclaim_from"), request.get("reclaim_resource"))
             self.host_journal["delta"] = -free_amount
-            disk_info[free_key] -= free_amount
             self.host_changes.setdefault(request["host"], {}).setdefault("resources", {}).setdefault("disks", {}).setdefault(bound_disk, {})[free_key] = disk_info[free_key]
             if lent_journal:
                 lending.record_changes(self.host_changes, request["host"], host_info, resource, bound_disk)

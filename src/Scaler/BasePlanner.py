@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 import src.MyUtils.MyUtils as utils
+import src.Scaler.LendingUtils as lending
 from src.Scaler.ScalerUtils import ResourceOperation
 
 
@@ -77,6 +78,10 @@ class BasePlanner(ABC):
     def _apply_execution_priority(items):
         def _priority(_i):
             amount, field = _i.get("amount"), _i.get("field")
+            # Operations store the absolute amount, so scale-down operations must be considered as negative amounts
+            if _i.get("op_type") == "SCALE_DOWN":
+                amount = -amount
+
             # 1) First, "current" is scaled down to free host resources and ensure "max" scale-downs are valid
             # 2) Then, "max" is scaled down
             if amount < 0:
@@ -183,9 +188,12 @@ class BasePlanner(ABC):
 
                 # Update host resources
                 if resource in {"disk_read", "disk_write"}:
-                    disk_op = resource.split("_")[-1]
+                    # Disk capacity depends on the free bandwidth of both operations and the lent bandwidth, so the
+                    # same accounting used when executing the request must be simulated (e.g., a scale-down gives back
+                    # borrowed bandwidth to the lent pools instead of the 'free' pool)
                     bound_disk = structure["resources"].get("disk", {}).get("name")
-                    host["resources"]["disks"][bound_disk]["free_{0}".format(disk_op)] -= scaled_current_amount
+                    lending.apply_disk_scaling(host, resource, r.get("structure_name"), scaled_current_amount, bound_disk, [], [],
+                                               r.request.get("reclaim_from"), r.request.get("reclaim_resource"))
                 else:
                     if field == "max":
                         scaled_current_amount = structure["resources"][resource]["max"] - cont_resources["resources"][resource][resource_limit]

@@ -251,6 +251,46 @@ def release_cross(host_info, resource, borrower, amount, journal, bound_disk, le
     """
     return release(host_info, get_opposite_disk_resource(resource), cross_borrower_key(borrower, resource), amount, journal, bound_disk, lenders)
 
+def apply_disk_scaling(host_info, resource, container_name, amount, bound_disk, lent_journal, cross_journal, reclaim_from=None, reclaim_resource=None):
+    """Update the free and lent bandwidth of a disk when a container scales a disk resource:
+
+    * Scale-ups take first the free bandwidth, then the bandwidth lent for the same operation and, lastly, the free
+      bandwidth of the operation over the total bandwidth thanks to the idle bandwidth of the opposite operation
+    * Scale-downs give back first the idle bandwidth of the opposite operation, then the bandwidth borrowed for the
+      same operation and, lastly, the own bandwidth. When reclaiming, only the bandwidth borrowed from a specific
+      lender and pool (same or opposite operation) is given back
+
+    It is used both when planning and when executing requests, so that both phases see the same disk state.
+
+    Returns:
+        (tuple[int,int]) Final scaled amount and amount taken from (positive) or given back to (negative) the 'free' pool
+    """
+    opposite_resource = get_opposite_disk_resource(resource)
+    disk_info = host_info["resources"]["disks"][bound_disk]
+    free_key = "free_{0}".format(resource.split("_")[-1])
+    borrowed, released = 0, 0
+
+    if amount > 0:
+        from_free = min(amount, get_disk_capacity(host_info, resource, container_name, bound_disk)[0])
+        borrowed, _ = borrow(host_info, resource, container_name, amount - from_free, lent_journal, bound_disk)
+        cross_amount = min(amount - from_free - borrowed, max(disk_info[free_key] - from_free, 0))
+        cross_borrowed = borrow_cross(host_info, resource, container_name, cross_amount, cross_journal, bound_disk)
+        amount = from_free + borrowed + cross_borrowed
+    elif amount < 0:
+        lenders = [reclaim_from] if reclaim_from else None
+        reclaim_resource = reclaim_resource or resource
+        to_release = abs(amount)
+        if not reclaim_from or reclaim_resource == opposite_resource:
+            to_release -= release_cross(host_info, resource, container_name, to_release, cross_journal, bound_disk, lenders)
+        if not reclaim_from or reclaim_resource == resource:
+            released = release(host_info, resource, container_name, to_release, lent_journal, bound_disk, lenders=lenders)
+
+    # Only bandwidth borrowed for the same operation doesn't come from (or return to) the 'free' pool, as the
+    # bandwidth used thanks to the idle opposite operation is also taken from the free bandwidth of the operation
+    free_amount = amount - borrowed + released
+    disk_info[free_key] -= free_amount
+    return amount, free_amount
+
 def revert(host_info, resource, journal, bound_disk=None):
     """Revert the movements registered in a journal by borrow/release"""
     pool, lent_key, mapping_key = get_pool(host_info, resource, bound_disk)
