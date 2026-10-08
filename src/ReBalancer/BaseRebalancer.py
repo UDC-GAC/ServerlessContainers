@@ -102,9 +102,10 @@ class BaseRebalancer(ABC):
         request = utils.generate_request(structure, int(amount_to_scale), resource, priority=2 if amount_to_scale > 0 else -1, field=d_field)
         if pair_structure:
             request["pair_structure"] = pair_structure["name"]
-            requests.setdefault((structure["name"], pair_structure["name"]), []).append(request)
+            requests.setdefault((structure["name"], pair_structure["name"], resource), []).append(request)
         else:
-            requests.setdefault((structure["name"], None), []).append(request)
+            requests.setdefault((structure["name"], None, resource), []).append(request)
+
 
     def print_donors_and_receivers(self, donors, receivers):
         utils.log_info("Nodes that will give: {0}".format(str([c["name"] for c in donors])), self.debug)
@@ -284,7 +285,7 @@ class BaseRebalancer(ABC):
         # For each structure, aggregate all its requests in a single request
         final_requests = []
         final_requests_by_name = {}
-        for (structure, pair_structure), req_list in requests.items():
+        for (structure, pair_structure, _), req_list in requests.items():
             # Copy the first request as the base request
             flat_request = dict(req_list[0])
             flat_request["amount"] = sum(r["amount"] for r in req_list)
@@ -467,7 +468,7 @@ class BaseRebalancer(ABC):
                 nets_by_key = {}
                 raw_length, final_length = 0, 0
                 # Group net balances by key (e.g., inside host0, cont1 receives 5W from different donors and cont2 donates 5W to different receivers)
-                for (receiver_name, donor_name), req_list in raw_requests.items():
+                for (receiver_name, donor_name, _), req_list in raw_requests.items():
                     if donor_name is None:
                         continue
                     raw_length += len(req_list)
