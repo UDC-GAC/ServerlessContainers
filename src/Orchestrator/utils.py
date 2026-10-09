@@ -82,7 +82,8 @@ def notify_energy_manager():
         return
     try:
         service = get_db().get_service("energy_manager")
-        get_db().partial_update_service(service, {"config": {"STATE_UPDATE": int(time.time() * 1000)}})
+        service["config"]["STATE_UPDATE"] = int(time.time() * 1000)
+        get_db().partial_update_service(service, {"config": {"STATE_UPDATE": service["config"]["STATE_UPDATE"]}})
     except Exception:
         pass
 
