@@ -397,7 +397,8 @@ def restore_service_state(service, previous_state):
 def wait_energy_manager_idle():
     # Two new heartbeats ensure that any iteration that read ACTIVE=True has completed and persisted its changes to CouchDB
     def heartbeat():
-        return get_db().get_service("energy_manager").get("heartbeat", 0)
+        beat = get_db().get_service("energy_manager").get("heartbeat", 0)
+        return beat if isinstance(beat, (int, float)) else 0
 
     last, new_beats, start = heartbeat(), 0, time.time()
     if start - last > ENERGY_MANAGER_IDLE_TIMEOUT:
@@ -791,9 +792,9 @@ def subscribe_container(structure_name):
         scaling_service = get_db().get_service("energy_manager")
         previous_state = scaling_service["config"].get("ACTIVE", False)
         disable_service(scaling_service)
-        if previous_state and not wait_energy_manager_idle():
-            print_with_date("Warning, the EnergyManager did not finish its iteration in {0} seconds".format(ENERGY_MANAGER_IDLE_TIMEOUT))
     try:
+        if energy_manager_enabled and previous_state and not wait_energy_manager_idle():
+            print_with_date("Warning, the EnergyManager did not finish its iteration in {0} seconds".format(ENERGY_MANAGER_IDLE_TIMEOUT))
         host = get_db().get_structure(container["host"])
         cpu_topology = utils.get_cpu_topology(node_scaler_session, container)
         resource_dict, changes = map_container_to_host_resources(container, host, cpu_topology)
