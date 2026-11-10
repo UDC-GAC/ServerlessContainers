@@ -1,26 +1,30 @@
 #!/usr/bin/python
-"""
+"""EnergyManager: power budgeting of containers in a single service.
 
+It merges, for energy only, what the ReBalancer, the EnergyController and the Scaler do through
+CouchDB requests. Every iteration:
 
-The EnergyManager merges the functionality of the ReBalancer, the EnergyController and the Scaler in a single service,
-in order to reduce synchronisation overheads and avoid conflicts between them. Every iteration:
-
-  1. State: Get structures and limits from CouchDB (every STATE_PERIOD seconds, or in the next iteration when the
-     Orchestrator changes STATE_UPDATE). Host physical limits and core maps are kept in memory, as this service is
-     their only writer while it is active. The Orchestrator pauses the EnergyManager to subscribe or remove containers.
-     Host info is resynchronised every RESYNC_PERIOD seconds, when containers change, on STATE_UPDATE or when the
-     service is activated again.
+  1. State: structures and budgets from CouchDB (every STATE_PERIOD seconds, or in the next iteration when the
+     Orchestrator changes STATE_UPDATE in this service config after changing budgets, limits or containers);
+     physical limits and host core maps are kept in memory (this service is their only writer while it is
+     active: the Orchestrator pauses it to subscribe or remove containers) and resynchronised every RESYNC_PERIOD
+     seconds, when containers change, on STATE_UPDATE or when the service is activated again.
   2. Telemetry: one OpenTSDB query for all containers and hosts every POLLING_FREQUENCY seconds, keeping only
-     the points not read before. A container is evaluated when a new energy point arrives, with the mean of its last
-     MIN_ENERGY_POINTS energy points and MIN_CPU_POINTS CPU points, all of them taken after its last action and after
-     the application is started. Both CPU and energy are expected with the same granularity. The CPU quota is the
-     CPU reference; CPU usage is only used for the triggering of scaling events.
+     the points not read before (averages of POLLING_FREQUENCY seconds, so that with POLLING_FREQUENCY = T the
+     platform works as with meters sampling every T seconds). A container is evaluated when a new energy point
+     arrives, with the mean of its last MIN_ENERGY_POINTS energy points and MIN_CPU_POINTS CPU points, all of them
+     taken after its last action and after its application started (both metrics are expected with the same
+     granularity, e.g., StableWatts and lite_feeder every second). The CPU quota is the CPU reference; CPU usage is
+     only used for the CPU boundary before scaling up.
   3. Budgets: the budget policy decides the budget of each container (default: "direct", budgets set on
      users/applications are propagated to their containers in the same iteration) and applies it.
-  4. Control: the controller (built-in policy or plugin) computes the CPU scaling of each container.
-  5. Actuation: CPU scalings are applied right away through the NodeRescaler. The CPUs of the container are chosen
-     taking into account the host topology (CPU_LAYOUT=topology) or as the Scaler does, following a predefined core
-     distribution (Group_PP_LL).
+  4. Control: the controller (built-in policy or plugin) computes the CPU scaling of each container. The built-in
+     policies measure the power of a container with the latest points (latest), with a moving average
+     of the points taken since its last action (ma), with  an exponentially weighted one (ewma), or with an EWMA
+     that keeps the points taken before its scalings, weighted by the magnitude of the scalings (ewma-k).
+  5. Actuation: CPU scalings are applied right away through the NodeRescaler, with the same container
+     logic as the Scaler (limits and host free shares). The CPUs of the container are chosen according to the
+     CPU_LAYOUT policy).
   6. Persistence: host core maps and structure fields are written to CouchDB in background, while the service
      sleeps (the iteration ends when they are written).
 
@@ -57,9 +61,18 @@ CONFIG_DEFAULT_VALUES = {"POLLING_FREQUENCY": 1, "POLL_OFFSET": 0.5, "MIN_ENERGY
                          "CPU_LAYOUT": "topology", "MIN_SOCKET_SHARE": 0.25, "MIN_SOCKET_CPUS": 2,
                          "ACTIVE": True}
 
-# A container is evaluated with points taken from APP_START_MARGIN seconds after its application starts: Containers
-# signal their start via the Orchestrator (start_wrapper.sh from ServerlessYARN)
+# A container is evaluated with points taken from APP_START_MARGIN s after its application starts: ServerlessYARN
+# (start_wrapper.sh) notifies it through the Orchestrator, which writes 'app_started' in the container document.
+# Before, the container is being created and set up, and its points are not its application
 APP_START_MARGIN = 3
+
+
+def remove_invalid_zeros(points):
+    """Power points (ts, W) without the isolated 0 W points: a 0 W point is only valid once the next one confirms it
+    (see usages_are_valid in controllers/builtin.py), the others are glitches of the power meter."""
+    return [p for i, p in enumerate(points)
+            if p[1] != 0 or (i > 0 and points[i - 1][1] == 0) or (i + 1 < len(points) and points[i + 1][1] == 0)]
+
 
 LEVELS = ("container", "application", "user")
 
@@ -91,6 +104,7 @@ class EnergyManager(Service):
         self.limits = {}
         self.seen = {level: {} for level in LEVELS}   # Last budget known to be in CouchDB for each structure
         self.last_action = {}              # Container -> timestamp of the last applied CPU scaling
+        self.scalings = {}                 # Container -> CPU scalings history (time, allocation before, after)
         self.container_ids = {}            # Container -> CouchDB _id (names are reused by new containers)
         self.last_eval_ts = {}             # Container -> timestamp of the last energy point used in a decision
         self.app_started = {}              # Container -> start of its application ('app_started'), once known
@@ -195,6 +209,7 @@ class EnergyManager(Service):
         self.app_started.pop(name, None)
         self.seen["container"].pop(name, None)
         self.last_action.pop(name, None)
+        self.scalings.pop(name, None)
         self.last_eval_ts.pop(name, None)
         self.telemetry.forget(name)
 
@@ -309,7 +324,8 @@ class EnergyManager(Service):
                 # of MIN_ENERGY_POINTS ending at each one, as if each sample had been evaluated when it arrived
                 post = self.telemetry.points_since(name, "structure.energy.usage", since)
                 n, last_eval = self.min_energy_points, self.last_eval_ts.get(name, -1)
-                new_samples = [sum(v for _, v in post[i - n + 1:i + 1]) / n for i in range(n - 1, len(post)) if post[i][0] > last_eval]
+                new = [i for i in range(n - 1, len(post)) if post[i][0] > last_eval]
+                new_samples = [sum(v for _, v in post[i - n + 1:i + 1]) / n for i in new]
                 energy_zeros = next((i for i, (_, v) in enumerate(reversed(post)) if v != 0), len(post))
                 cviews[name] = ContainerView(
                     name=name, structure=c, limits=self.limits.get(name, {}), guarded=self._is_guarded(c),
@@ -318,7 +334,10 @@ class EnergyManager(Service):
                     budget=float(self.applied_budget(name) or 0), usages=c_usages, ready=c_usages is not None,
                     last_action=last, window=window,
                     fresh=info["last_ts"] is not None and info["last_ts"] > self.last_eval_ts.get(name, -1),
-                    new_samples=new_samples, energy_ts=info["last_ts"],
+                    new_samples=new_samples, new_sample_ts=[post[i][0] for i in new], energy_ts=info["last_ts"],
+                    energy_post=remove_invalid_zeros(post),
+                    energy_history=remove_invalid_zeros(self.telemetry.points_since(name, "structure.energy.usage", self.ready_at(name))),
+                    scalings=list(self.scalings.get(name, ())),
                     energy_points=info["energy_points"], energy_zeros=energy_zeros, cpu_points=info["cpu_points"], cpu_ts=info["cpu_ts"],
                     ready_at=self.ready_at(name))
             power, _ = self.telemetry.host_power(hostname, max(host_last_action + self.meter_lag, host_ready), self.min_energy_points)
@@ -429,12 +448,18 @@ class EnergyManager(Service):
             self.register_decisions(views_to_control)
             t["control"] = time.time()
 
+            before = {name: int(self.ctx.container_resources[name]["resources"]["cpu"]["cpu_allowance_limit"])
+                      for name in amounts if name in self.ctx.container_resources}
             applied = self.actuator.apply_cpu(self.ctx, amounts) if amounts else {}
             t_applied = time.time()
             for name, amount in applied.items():
                 if amount != 0:
                     self.last_action[name] = t_applied
                     new_alloc = int(self.ctx.container_resources[name]["resources"]["cpu"]["cpu_allowance_limit"])
+                    # Scalings with points in memory (POWER_ERROR = ewma-k weights the points before each one)
+                    oldest = t_applied - self.telemetry.horizon
+                    self.scalings[name] = [s for s in self.scalings.get(name, []) if s[0] > oldest] + \
+                                          [(t_applied, before.get(name, new_alloc - amount), new_alloc)]
                     self.ctx.containers[name]["resources"]["cpu"]["current"] = new_alloc
                     changes = to_persist.get(name, (self.ctx.containers[name], {}))[1]
                     changes.setdefault("resources", {})["cpu"] = {"current": new_alloc}
@@ -448,9 +473,12 @@ class EnergyManager(Service):
 
             if views_to_control or applied_budgets:
                 self.log_info("Iteration: state {0:.2f}s | telemetry {1:.2f}s (query {2:.2f}s) | budgets {3:.2f}s | "
-                              "control {4:.2f}s | actuation {5:.2f}s".format(
-                                  t["state"] - t["start"], t["telemetry"] - t["state"], self.telemetry.query_time,
-                                  t["budgets"] - t["telemetry"], t["control"] - t["budgets"], t["actuation"] - t["control"]))
+                              "control {4:.2f}s | actuation {5:.2f}s".format(t["state"] - t["start"],
+                                                                             t["telemetry"] - t["state"],
+                                                                             self.telemetry.query_time,
+                                                                             t["budgets"] - t["telemetry"],
+                                                                             t["control"] - t["budgets"],
+                                                                             t["actuation"] - t["control"]))
                 self.write_trace(dict(
                     ts=t["start"], controller=self.controller, budget_policy=self.budget_policy,
                     timings={k: round(v - t["start"], 4) for k, v in t.items() if k != "start"},

@@ -110,13 +110,22 @@ class BuiltinController(Controller):
     # distribution is closest to the CPUs that the host will have after the scaling (topology.closest_distribution).
     # Otherwise (or without topology or models), the General model, and the Single_Core model while the host would use
     # less than one CPU
+    # POWER_ERROR: power of the container with which every policy (EV, TDP, PPE and the corrections of MB after its
+    # power model) checks the band, counts the events and sizes the scaling, from the points taken since its last action:
+    #   latest: the mean of the latest MIN_ENERGY_POINTS points
+    #   ma: the mean of the points of the last REACTION_TIME s
+    #   ewma: their exponentially weighted moving average with REACTION_TIME as time constant
+    #   ewma-k: EWMA that is not reset after each scaling action, with previous samples reweighted according to the
+    #   magnitude of the allocation change.
+    # EVENTS_SYSTEM: dynamic (N = N_max * ALLOWED_ERROR / relative error events in a row), static (N_max) or none (no
+    # events: every new sample out of the band scales)
     # MODEL_RELIABILITY: with 'high', MB applies a budget it has not modelled yet (a new container or a new budget)
     # with the power model in its first evaluation, without waiting for events; with 'low', as the other methods
     # (also model-only, which then keeps that CPU until the budget changes)
     CONFIG_DEFAULT_VALUES = {"ALLOWED_ERROR": 0.05, "EVENT_TIMEOUT": 30, "EVENTS_SYSTEM": "dynamic", "REACTION_TIME": 20,
                              "EV_RATIO": 5, "IDLE_POWER": 40, "POWER_MODEL": "polyreg_General",
                              "SCALE_UP_CHECK": "boundary", "PRESSURE_THRESHOLD": 0.05, "POWER_MODEL_ROUTING": True,
-                             "MODEL_RELIABILITY": "low"}
+                             "MODEL_RELIABILITY": "low", "POWER_ERROR": "latest"}
 
     def __init__(self, ctx, name):
         super().__init__(ctx, name)
@@ -137,10 +146,12 @@ class BuiltinController(Controller):
             return True, "EV ratio must be positive, got '{0}'".format(self.cfg("EV_RATIO"))
         if self.policy == "tdp" and (self.cfg("IDLE_POWER") is None or self.cfg("IDLE_POWER") < 0):
             return True, "Control policy is TDP, it needs a valid idle power value ({0})".format(self.cfg("IDLE_POWER"))
-        if self.cfg("EVENTS_SYSTEM") not in {"dynamic", "static"}:
+        if self.cfg("EVENTS_SYSTEM") not in {"dynamic", "static", "none"}:
             return True, "Events system '{0}' is invalid".format(self.cfg("EVENTS_SYSTEM"))
         if self.cfg("MODEL_RELIABILITY") not in {"low", "high"}:
             return True, "MODEL_RELIABILITY must be 'low' or 'high', got '{0}'".format(self.cfg("MODEL_RELIABILITY"))
+        if self.cfg("POWER_ERROR") not in {"latest", "ma", "ewma", "ewma-k"}:
+            return True, "POWER_ERROR must be 'latest', 'ma', 'ewma' or 'ewma-k', got '{0}'".format(self.cfg("POWER_ERROR"))
         if self.cfg("SCALE_UP_CHECK") not in {"boundary", "pressure"}:
             return True, "SCALE_UP_CHECK must be 'boundary' or 'pressure', got '{0}'".format(self.cfg("SCALE_UP_CHECK"))
         if not 0 <= self.cfg("PRESSURE_THRESHOLD") < 1:
@@ -238,8 +249,49 @@ class BuiltinController(Controller):
                 self.ctx.log_info(f"@{c.name} EVENTS reset: power budget {previous:.1f} -> {c.budget:.1f} W "
                                   f"(discarded DOWN {down} | UP {up})")
 
+    def power_estimate(self, points, ts, scalings=()):
+        """Power of a container at second ts (POWER_ERROR = ma, ewma or ewma-k) from its points (ts, W): the mean of the
+        ones of the last REACTION_TIME s (ma) or all of them weighted by exp(-age / REACTION_TIME) (ewma), with the points
+        taken since its last action. The weights are normalised, so right after an action the estimate is the mean of
+        the few new points and, once the points cover several REACTION_TIME, it is the exponentially weighted moving
+        average. ewma-k uses the points since its application started, and the weight of each one is also multiplied by
+        k = min(before, after) / max(before, after) for each scaling (time, allocation before, after) taken after it
+        (the point is not one of the ones that the scaling waits for, ts < time + METER_LAG). None without points."""
+        tau = self.cfg("REACTION_TIME")
+        if self.cfg("POWER_ERROR") == "ma":
+            values = [v for t, v in points if ts - tau < t <= ts]
+            return sum(values) / len(values) if values else None
+        lag = self.cfg("METER_LAG")
+
+        def kept(t):
+            k = 1.0
+            for when, before, after in scalings:
+                if t < when + lag and when <= ts:
+                    k *= min(before, after) / max(before, after) if max(before, after) > 0 else 1.0
+            return k
+
+        weights = [(math.exp(-(ts - t) / tau) * kept(t), v) for t, v in points if t <= ts]
+        total = sum(w for w, _ in weights)
+        return sum(w * v for w, v in weights) / total if total > 0 else None
+
+    def apply_power_error(self, c: ContainerView):
+        """The power of the container (and of each new sample, for the events) with POWER_ERROR = ma, ewma or ewma-k."""
+        if self.cfg("POWER_ERROR") == "latest" or not c.energy_post:
+            return
+        latest = c.usages[ENERGY_USAGE]
+        points = c.energy_history if self.cfg("POWER_ERROR") == "ewma-k" else c.energy_post
+        P = self.power_estimate(points, c.energy_post[-1][0], c.scalings)
+        samples = [self.power_estimate(points, ts, c.scalings) for ts in c.new_sample_ts]
+        c.new_samples = [P_sample for P_sample in samples if P_sample is not None]
+        c.usages = {**c.usages, ENERGY_USAGE: P}
+        self.trace_decision(c, power=round(P, 2), latest_power=round(latest, 2))
+
     def compute_power_scaling(self, c: ContainerView):
         self.reset_events_if_budget_changed(c)
+        # A budget that MB or model-only apply with the power model, which uses the latest points (as the host power)
+        modelling = self.policy in MODEL_POLICIES and self.pb_cache.is_new(c.structure["_id"], c.budget)
+        if not modelling:
+            self.apply_power_error(c)
         P_usage = c.usages[ENERGY_USAGE]
         if c.budget == 0:
             self.log_decision(c, "HOLD", "power budget is zero")
@@ -269,6 +321,10 @@ class BuiltinController(Controller):
         # Scaling up is only useful if the container is limited by its CPU quota
         if P_scaling > 0 and self.would_not_use_more_cpu(c):
             return 0
+
+        if self.cfg("EVENTS_SYSTEM") == "none":
+            self.log_decision(c, f"SCALE {direction}", "no events")
+            return P_scaling
 
         # One event per new sample showing the error in the same direction (several may arrive in the same query)
         new_events = max(1, self.count_new_events(c, P_scaling))

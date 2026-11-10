@@ -13,7 +13,7 @@ Built-in controllers live in builtin.py. External controllers are loaded by name
 """
 import importlib
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -30,14 +30,17 @@ class ContainerView:
     last_action: float              # Timestamp of the last CPU scaling applied to this container (0 if none)
     window: float                   # Seconds covered by the energy points used
     fresh: bool = False             # A new energy point has arrived since the last decision on this container
-    new_samples: List[float] = field(default_factory=list)  # Energy mean of each new sample since the last decision
-                                    # (window of MIN_ENERGY_POINTS ending at it, oldest first): one event each if it shows the error
+    new_samples: List[float] = field(default_factory=list)  # Energy mean of each new sample since the last decision (window of MIN_ENERGY_POINTS): one event per sample if they trigger scaling rules
+    new_sample_ts: List[int] = field(default_factory=list)  # Timestamp of each new sample (same order)
     energy_ts: Optional[int] = None # Timestamp of the last energy point in the usages
     energy_points: int = 0          # Energy points available after the last action (up to MIN_ENERGY_POINTS)
     energy_zeros: int = 0           # 0 W energy points in a row at the end of the ones taken after the last action
     cpu_points: int = 0             # CPU points available after the last action (up to MIN_CPU_POINTS)
     cpu_ts: Optional[int] = None    # Timestamp of the last CPU point used (None if there is none after the last action)
     ready_at: float = 0.0           # Only points taken from then on are used (its application has started), inf before
+    energy_post: List[Tuple[int, float]] = field(default_factory=list)  # Power points (ts, W) taken after the last action
+    energy_history: List[Tuple[int, float]] = field(default_factory=list)  # Power points (ts, W) since the container has started
+    scalings: List[Tuple[float, int, int]] = field(default_factory=list)  # CPU scalings history (time, allocation before, allocation after)
 
 
 @dataclass
