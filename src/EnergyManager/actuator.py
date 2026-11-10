@@ -2,10 +2,13 @@
 
 It reuses the container-level logic of the Scaler (ContainerPlanner.check_container_request for
 limits and host free resources, ContainerRequest for the NodeRescaler call) on an in-memory DataContext.
-The CPUs of a container are chosen with the host topology (topology.plan_layout, CPU_LAYOUT = topology) or
-as the Scaler does (CPU_LAYOUT = scaler). Host changes (core map, free resources) are persisted to CouchDB
-afterwards, outside the control path.
+The CPUs of a container are chosen according to the following CPU_LAYOUT values:
+* topology: following the host topology (topology.plan_layout)
+* scaler: following the same order as the Scaler does
+* quota: containers have the cores of its maximum allocation assigned and CPU allocation is exclusively controlled through quota
+Host changes (core map, free resources) are persisted to CouchDB afterwards, outside the control path.
 """
+import math
 import time
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
@@ -94,6 +97,22 @@ class TopologyAwareContainerRequest(CachedTopologyContainerRequest):
         return {"cpu": {"cpu_num": ",".join(sorted(layout, key=int)), "cpu_allowance_limit": int(current_cpu_limit + applied)}}
 
 
+class QuotaContainerRequest(CachedTopologyContainerRequest):
+    """ContainerRequest of CPU_LAYOUT = quota: the container keeps the CPUs of its maximum CPU allocation
+    (the first ones of the Scaler order) and only its CPU quota changes. The core map is kept as the Scaler does.
+    Only for a container alone in its host: with others, their CPUs would overlap, so they are chosen as the Scaler does."""
+
+    def apply_cpu_request(self, request, amount, data_context):
+        changes = super().apply_cpu_request(request, amount, data_context)
+        name, host = request["structure"], request["host"]
+        if any(c.get("host") == host for other, c in data_context.containers.items() if other != name):
+            return changes
+        cpu_max = data_context.containers[name]["resources"]["cpu"]["max"]
+        cpus = self._generate_core_dist(self._get_cpu_topology(request), "Group_PP_LL")[:math.ceil(cpu_max / 100)]
+        changes["cpu"]["cpu_num"] = ",".join(sorted(cpus, key=int))
+        return changes
+
+
 def merge_changes(doc, changes):
     for key, value in changes.items():
         if isinstance(value, dict):
@@ -130,6 +149,7 @@ class Actuator:
         self.log_info, self.log_warning, self.log_error = log_info, log_warning, log_error
         self.debug = debug
         self.layout_params = None          # CPU_LAYOUT = topology: {min_socket_share, min_socket_cpus}; None: Scaler
+        self.quota_layout = False          # CPU_LAYOUT = quota
         self.host_locks = {}
         self.host_changes = {}
         self.persist_thread = None
@@ -149,8 +169,11 @@ class Actuator:
         return request
 
     def _execute(self, ctx, request):
-        req = TopologyAwareContainerRequest(request, self.couchdb_handler, self.rescaler_session, self.debug,
-                                            layout_params=self.layout_params)
+        if self.quota_layout:
+            req = QuotaContainerRequest(request, self.couchdb_handler, self.rescaler_session, self.debug)
+        else:
+            req = TopologyAwareContainerRequest(request, self.couchdb_handler, self.rescaler_session, self.debug,
+                                                layout_params=self.layout_params)
         success = req.execute(ctx, host_changes=self.host_changes, host_lock=self.host_locks.setdefault(req.host, Lock()))
         return request["structure"], (request["amount"] if success else 0)
 

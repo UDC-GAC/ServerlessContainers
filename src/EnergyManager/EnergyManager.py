@@ -135,6 +135,7 @@ class EnergyManager(Service):
         self.actuator.debug = self.debug
         self.actuator.layout_params = dict(min_socket_share=self.min_socket_share, min_socket_cpus=self.min_socket_cpus) \
             if self.cpu_layout == "topology" else None
+        self.actuator.quota_layout = self.cpu_layout == "quota"
 
     def invalid_conf(self, service_config):
         if self._controller is None:
@@ -149,8 +150,8 @@ class EnergyManager(Service):
             return True, "QUERY_LOOKBACK must be at least POLLING_FREQUENCY"
         if not 0 <= self.poll_offset < self.polling_frequency:
             return True, "POLL_OFFSET must be in [0, POLLING_FREQUENCY)"
-        if self.cpu_layout not in {"topology", "scaler"}:
-            return True, "CPU_LAYOUT must be 'topology' or 'scaler', got '{0}'".format(self.cpu_layout)
+        if self.cpu_layout not in {"topology", "scaler", "quota"}:
+            return True, "CPU_LAYOUT must be 'topology', 'scaler' or 'quota', got '{0}'".format(self.cpu_layout)
         if not 0 <= self.min_socket_share <= 1 or self.min_socket_cpus < 1:
             return True, "MIN_SOCKET_SHARE must be in [0, 1] and MIN_SOCKET_CPUS at least 1"
         invalid, msg = self._controller.invalid_conf()
