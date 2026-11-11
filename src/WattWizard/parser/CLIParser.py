@@ -129,6 +129,22 @@ data in proper format. Check README.md to see timestamps proper format.",
         )
 
         self.parser.add_argument(
+            "--split-points",
+            action="store_const",
+            const=True,
+            help="Divide the CPU-load range of each model at split points (in cores) selected automatically, \n\
+with a partial-range model up to each split point (<model>_upto_<cores>). Train timestamps must include the cores \n\
+of each experiment, and the executions of the first core are taken from Single_Core.timestamps if it exists. \n\
+Currently, it is only available for the polyreg prediction method.",
+        )
+
+        self.parser.add_argument(
+            "--split-points-target-error",
+            type=float,
+            help="Target MAPE (%%) of the split points: no more split points are added once it is reached.",
+        )
+
+        self.parser.add_argument(
             "--join-test-timestamps",
             action="store_const",
             const=True,
@@ -149,7 +165,7 @@ Each file must store time series timestamps from test data in proper format. Che
         self.parser.add_argument(
             "--plot-time-series",
             action="store_const",
-            const=False,
+            const=True,
             help="Plot the time series used to train and test each model",
         )
 

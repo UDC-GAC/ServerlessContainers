@@ -7,6 +7,11 @@ STATIC_PREDICTION_METHODS = ["polyreg", "interpolation", "multisocket", "randomf
 
 HW_AWARE_PREDICTION_METHODS = ["multisocket"]
 
+# Prediction methods whose CPU-load range can be divided at split points, with
+# a partial-range model up to each split point named <model name>_upto_<cores>
+SPLIT_PREDICTION_METHODS = ["polyreg"]
+SPLIT_POINT_SUFFIX = "_upto_"
+
 INSTANCE_CONSTRUCTORS = {
     "mlpregressor": lambda: Perceptron(),
     "sgdregressor": lambda: SGDRegression(),
@@ -43,6 +48,10 @@ class ModelHandler:
     def is_hw_aware_method(prediction_method):
         return prediction_method in HW_AWARE_PREDICTION_METHODS
 
+    @staticmethod
+    def is_split_method(prediction_method):
+        return prediction_method in SPLIT_PREDICTION_METHODS
+
     def __init__(self):
         if ModelHandler.__instance is not None:
             raise Exception(f"Trying to break Singleton. There is already an instance of {self.__class__.__name__} class")
@@ -69,6 +78,15 @@ class ModelHandler:
                 "hw_aware": prediction_method in HW_AWARE_PREDICTION_METHODS
             }
         return self.models[structure][model_name]
+
+    def add_split_model(self, structure, model, split_point):
+        # Partial-range model of a model up to a split point (in cores)
+        split_model = dict(model, name=f"{model['name']}{SPLIT_POINT_SUFFIX}{split_point}", split_point=split_point,
+                           instance=self.create_model_instance(model['prediction_method']))
+        split_model.pop('split_points', None)
+        self.models[structure][split_model['name']] = split_model
+        model.setdefault('split_points', {})[split_point] = split_model['name']
+        return split_model
 
     def get_model_names_by_structure(self, structure):
         if structure in self.models:

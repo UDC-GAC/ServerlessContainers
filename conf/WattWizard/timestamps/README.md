@@ -16,7 +16,7 @@ Timestamp files must follow the format below:
 With the following meaning:
 - `EXP_NAME`: User desired name. When we use HW aware models, this name must indicate the specific CPU socket used during the experiment.
 - `EXP_TYPE`: The type of experiment run during that period. It can take 2 values: IDLE if it's a period in which the CPU is idle and any other value if it's a period in which train data was obtained.
-- `CORES` (Optional): Comma-separated list of cores used in the experiment.
+- `CORES` (Optional): Comma-separated list of cores used in the experiment. It is required to select split points (option `split_points`), which divide the CPU-load range of each model by the number of cores of each experiment.
 - `START_DATE` or `STOP_DATE`: Timestamp of the beginning or end of the experiment in UTC format `%Y-%m-%d %H:%M:%S%z`.
 
 See the existing timestamp files for a better understanding of the format. The example files are timestamps corresponding to metrics collected on a server with 2 `Intel Xeon Silver 4216 Cascade Lake-SP` CPUs, each one having 16 physical cores and 32 logical cores (64 cores in total). Each file may correspond to different workloads, core distributions and stress patterns.

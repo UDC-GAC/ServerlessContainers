@@ -27,6 +27,12 @@ join_train_timestamps: no
 train_timestamps_dir: "./conf/WattWizard/timestamps/train/default"
 train_files: "all"
 
+# Split points: divide the CPU-load range of each model at split points (in cores) selected automatically,
+# adding the one that most reduces the MAPE (5-fold cross-validation) until it falls below the target (%)
+# Only available for the "polyreg" prediction method
+split_points: no
+split_points_target_error: 5
+
 # Test configuration
 join_test_timestamps: no
 test_timestamps_dir: "./conf/WattWizard/timestamps/test"

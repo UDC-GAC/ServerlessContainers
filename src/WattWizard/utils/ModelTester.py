@@ -1,5 +1,7 @@
 import os
 from src.WattWizard.logs.logger import log
+from src.WattWizard.model.ModelHandler import ModelHandler
+from src.WattWizard.utils.SplitPointSelector import get_cores
 from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error, r2_score, max_error, mean_absolute_error
 
 
@@ -69,8 +71,18 @@ class ModelTester:
         if new_data is not None:
             test_data = new_data
 
+        # If the model has split points, each sample is predicted with the partial-range model of the smallest split
+        # point that covers it (the execution of the sample has at most that many cores)
+        power_pred = power_pred.flatten()
+        cores = get_cores(test_data)
+        for split_point, split_model_name in sorted(model.get('split_points', {}).items(), reverse=True):
+            covered = cores <= split_point  # Get the data points covered by the current split point
+            if covered.any():
+                split_model = ModelHandler.get_instance().get_model_by_name(structure, split_model_name)
+                _, power_pred[covered] = split_model['instance'].test(time_series=test_data[covered], data_type="df")
+
         # Add predictions columns
-        test_data["power_predicted"] = power_pred.flatten()
+        test_data["power_predicted"] = power_pred
 
         # Write accuracy results
         self._write_results(structure, model, test_data, test_name)

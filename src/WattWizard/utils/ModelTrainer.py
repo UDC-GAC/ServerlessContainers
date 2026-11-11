@@ -1,5 +1,7 @@
 import os
 from src.WattWizard.logs.logger import log
+from src.WattWizard.model.ModelHandler import ModelHandler
+from src.WattWizard.utils.SplitPointSelector import SplitPointSelector
 
 
 class ModelTrainer:
@@ -11,6 +13,7 @@ class ModelTrainer:
         self.csv_caching = self.config.get_argument("csv_caching_train")
         self.ts_plotter = ts_plotter
         self.data_loader = data_loader
+        self.split_point_selector = SplitPointSelector(config, data_loader) if config.get_argument("split_points") else None
 
     def _plot_train_data(self, model, structure, ts_data):
         output_dir = os.path.join(self.config.get_argument("plot_time_series_dir"), structure, model['name'], "train")
@@ -48,11 +51,22 @@ class ModelTrainer:
                 f"using file {model['train_file_name']}. Skipping model training...", "WARN")
             return False
 
+        # If split points are enabled, the single-core samples are those of the first core train file
+        split = (self.split_point_selector is not None
+                 and ModelHandler.is_split_method(model['prediction_method'])
+                 and self.split_point_selector.has_cores(model, ts_data))
+        if split:
+            ts_data = self.split_point_selector.with_first_core(structure, model, ts_data)
+
         try:
             # Set idle consumption and train model
             model['instance'].set_idle_consumption(idle_data)
             model['instance'].pretrain(time_series=ts_data, data_type="df")
             log(f"Model {model['name']} successfully pretrained")
+
+            # Select split points and train a partial-range model up to each one
+            if split:
+                self.split_point_selector.split_model(structure, model, idle_data, ts_data)
 
             # Plot train time series if specified
             if self.config.get_argument("plot_time_series"):

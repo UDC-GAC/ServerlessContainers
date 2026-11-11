@@ -3,6 +3,7 @@ import os
 from src.WattWizard.logs.logger import log
 from src.WattWizard.config.MyConfig import MyConfig
 from src.WattWizard.influxdb.InfluxDBCollector import InfluxDBHandler
+from src.WattWizard.model.ModelHandler import ModelHandler, SPLIT_PREDICTION_METHODS
 
 
 SUPPORTED_ARGS = [
@@ -22,6 +23,8 @@ SUPPORTED_ARGS = [
     'join_train_timestamps',
     'train_timestamps_dir',
     'train_files',
+    'split_points',
+    'split_points_target_error',
     'join_test_timestamps',
     'test_timestamps_dir',
     'test_files',
@@ -126,6 +129,24 @@ class ArgsManager:
             log(f"{args['sockets']} sockets were expected in cores distribution but only '{len(args['cores_distribution'].keys())}' was found", "ERR")
             exit(1)
 
+    @staticmethod
+    def check_split_points(args):
+        if not args.get('split_points'):
+            return
+        if args.get('join_train_timestamps'):
+            log("Split points need the executions of the train files, so train timestamps can't be joined", "ERR")
+            exit(1)
+        target_error = args.get('split_points_target_error')
+        if target_error is None:
+            log("Split points need a target error: set split_points_target_error in the configuration file "
+                "or use --split-points-target-error", "ERR")
+            exit(1)
+        if not target_error > 0:
+            log(f"Split points target error must be positive, got '{target_error}'", "ERR")
+            exit(1)
+        if not any(ModelHandler.is_split_method(method) for method in args['prediction_methods']):
+            log(f"Split points are only selected for the prediction methods {SPLIT_PREDICTION_METHODS}", "WARN")
+
     def validate_args(self):
         my_config = MyConfig.get_instance()
         args = my_config.get_arguments()
@@ -144,6 +165,7 @@ class ArgsManager:
         # Perform additional validations that require information from more than one argument
         self.check_influxdb_args(args)
         self.check_cores_distribution(args)
+        self.check_split_points(args)
 
     def manage_args(self):
         my_config = MyConfig.get_instance()
@@ -153,4 +175,4 @@ class ArgsManager:
             if self.cli_args[arg_name] is not None:
                 my_config.add_argument(arg_name, self.cli_args[arg_name])
             else:
-                my_config.add_argument(arg_name, self.config_file_args[arg_name])
+                my_config.add_argument(arg_name, self.config_file_args.get(arg_name))
