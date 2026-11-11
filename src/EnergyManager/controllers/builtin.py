@@ -545,6 +545,37 @@ class BuiltinController(Controller):
         return U_max_host / (P_tdp_host - self.cfg("IDLE_POWER"))
 
     # ----------------------------------------------------------------- host control
+    def waits_for_host_power(self, view: HostView, c: ContainerView):
+        """Wait for a fresh host power measurement before applying a new model-based budget.
+
+        The measurement must be taken after the last action on any container of the host
+        (see HostView.power). Otherwise, the model may receive an incomplete power
+        measurement and produce a budget below the host's idle power.
+
+        While waiting, no scaling events are generated. MB waits at most REACTION_TIME
+        seconds before falling back to PPE without the model, whereas model-only keeps
+        waiting until a valid measurement is available."""
+        modelling = self.policy in MODEL_POLICIES and self.pb_cache.is_new(c.structure["_id"], c.budget)
+        if view.power_ready or not modelling:
+            self._host_power_waits.pop(c.name, None)
+            return False
+        budget, since = self._host_power_waits.get(c.name, (None, None))
+        if budget != c.budget:
+            since = view.now
+            self._host_power_waits[c.name] = (c.budget, since)
+        waited = view.now - since
+        if BUILTIN_POLICIES[self.policy] is not None and waited >= self.cfg("REACTION_TIME"):
+            self._host_power_waits.pop(c.name, None)
+            self.pb_cache.add(c.structure["_id"], c.budget)
+            self.ctx.log_warning(f"@{c.name} No power of the host for {waited:.0f} s: budget {c.budget:.1f} W applied "
+                                 f"without the power model ({BUILTIN_POLICIES[self.policy]})")
+            self.trace_decision(c, model_skipped="no host power")
+            return False
+        self.ctx.log_info(f"@{c.name} WAIT (power of the host after its last action, needed by the power model: "
+                          f"{waited:.0f} s)")
+        self.trace_decision(c, outcome="WAIT", reason="host power after the last action on the host")
+        return True
+
     @staticmethod
     def usages_are_valid(c: ContainerView):
         # 0 W is a valid power (e.g., the power meter gives no power to a container that uses little CPU), but only
@@ -576,6 +607,8 @@ class BuiltinController(Controller):
                     self.trace_decision(c, outcome="WAIT", reason="0 W power point not confirmed yet")
                 else:
                     self.ctx.log_warning(f"@{c.name} No valid usage data")
+                continue
+            if self.waits_for_host_power(view, c):
                 continue
             scalings[c.name] = self.compute_power_scaling(c)
 
