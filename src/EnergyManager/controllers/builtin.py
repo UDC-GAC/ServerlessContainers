@@ -16,6 +16,9 @@ BUILTIN_POLICIES = {"ev": "ev", "tdp": "tdp", "ppe-proportional": "ppe", "model-
 # Policies that apply the power model of WattWizard to each new budget
 MODEL_POLICIES = {"model-boosted", "model-only"}
 
+# WattWizard names the partial-range model of a model up to a split point <model>_upto_<cores> (option split_points)
+SPLIT_POINT_SUFFIX = "_upto_"
+
 CPU_USAGE = "structure.cpu.usage"
 CPU_USER = "structure.cpu.user"
 CPU_KERNEL = "structure.cpu.kernel"
@@ -86,6 +89,17 @@ def resolve_cpu_target(first, predict, model_after):
     return model_after(U), U, predictions, "frontier"
 
 
+def partial_range_model(model, U_usage_host, models):
+    """Model of WattWizard to use for a host CPU usage: among the partial-range models of a model (in models), the one
+    of the smallest split point that covers that usage, or the model itself (its full range) above all of them."""
+    prefix = model + SPLIT_POINT_SUFFIX
+    split_points = sorted(int(m[len(prefix):]) for m in models if m.startswith(prefix) and m[len(prefix):].isdigit())
+    for cores in split_points:
+        if U_usage_host <= 100 * cores:
+            return f"{prefix}{cores}"
+    return model
+
+
 def frontier(lo, hi, ok, tolerance=1):
     """Largest value of [lo, hi] for which ok holds, given ok(lo), by bisection (ok holds up to a frontier): with
     resolve_cpu_target, the largest host CPU target (within 1 share) that the model of its own distribution keeps within
@@ -103,13 +117,17 @@ class BuiltinController(Controller):
     # REACTION_TIME: maximum time (s) of data, since the last action, until scaling with the smallest errors
     # (N_max events, see get_max_events). METER_LAG, MIN_ENERGY_POINTS and POLLING_FREQUENCY (seconds of each sample)
     # are EnergyManager settings (it passes its defaults)
+
     # SCALE_UP_CHECK: how to know if a container would use more CPU before scaling it up
     #   boundary: CPU usage is not below the CPU quota minus its boundary (as the EnergyController)
     #   pressure: CPU pressure (share of its CPU demand waiting for a CPU) is at least PRESSURE_THRESHOLD
+
     # POWER_MODEL_ROUTING: MB uses the host model of WattWizard (with the prediction method of POWER_MODEL) whose core
     # distribution is closest to the CPUs that the host will have after the scaling (topology.closest_distribution).
     # Otherwise (or without topology or models), the General model, and the Single_Core model while the host would use
-    # less than one CPU
+    # less than one CPU. In both cases, if WattWizard has split points for that model, its partial-range model that
+    # covers the CPU usage of the host (partial_range_model)
+
     # POWER_ERROR: power of the container with which every policy (EV, TDP, PPE and the corrections of MB after its
     # power model) checks the band, counts the events and sizes the scaling, from the points taken since its last action:
     #   latest: the mean of the latest MIN_ENERGY_POINTS points
@@ -117,8 +135,10 @@ class BuiltinController(Controller):
     #   ewma: their exponentially weighted moving average with REACTION_TIME as time constant
     #   ewma-k: EWMA that is not reset after each scaling action, with previous samples reweighted according to the
     #   magnitude of the allocation change.
+
     # EVENTS_SYSTEM: dynamic (N = N_max * ALLOWED_ERROR / relative error events in a row), static (N_max) or none (no
     # events: every new sample out of the band scales)
+
     # MODEL_RELIABILITY: with 'high', MB applies a budget it has not modelled yet (a new container or a new budget)
     # with the power model in its first evaluation, without waiting for events; with 'low', as the other methods
     # (also model-only, which then keeps that CPU until the budget changes)
@@ -138,6 +158,8 @@ class BuiltinController(Controller):
         self._host_models = None    # Host models of WattWizard (read once: they only change if the platform is restarted)
         # Host -> model predicted for the host after the scaling of this iteration, checked with the CPUs applied
         self._model_checks = {}
+        # Container -> (budget, time since it waits for the power of its host to apply that budget with the power model)
+        self._host_power_waits = {}
         # Decision of each container in the current iteration (written to the EnergyManager trace)
         self.last_trace = {}
 
@@ -397,6 +419,7 @@ class BuiltinController(Controller):
         """Routing of the host models: route(host CPUs, host CPU usage) -> (model, description).
         - With POWER_MODEL_ROUTING, the model of the core distribution closest to those CPUs (topology.closest_distribution).
         - Without routing, the General model, or the Single_Core model depending on CPU usage.
+        If that model has split points, its partial-range variant that covers the host CPU usage (partial_range_model).
         Also returns the topology of the host, None if the CPUs do not matter."""
         method = self.cfg("POWER_MODEL").split("_")[0]
         raw_topology = view.extra.get("cpu_topology")
@@ -404,6 +427,13 @@ class BuiltinController(Controller):
         topo = topology.parse(raw_topology) if models else None
 
         def route(cpus, U_usage_host):
+            model, text = closest_model(cpus, U_usage_host)
+            partial = partial_range_model(model, U_usage_host, self.available_host_models())
+            if partial != model:
+                text += f", host CPU usage {U_usage_host:.0f} within the split point of {partial}"
+            return partial, text
+
+        def closest_model(cpus, U_usage_host):
             default = f"{method}_Single_Core" if U_usage_host < 100 else f"{method}_General"
             if topo is None:
                 return default, f"host CPU usage {U_usage_host:.1f}"
@@ -505,7 +535,8 @@ class BuiltinController(Controller):
             power_model, U_target, trace = self.select_power_model(view, P_budget_host, U_user_host, U_system_host,
                                                                    amounts_for, other_amounts)
         except Exception as e:
-            self.ctx.log_error(f"@{view.name} Error trying to get estimated CPU from power models: {e}")
+            self.ctx.log_error(f"@{view.name} Error trying to get estimated CPU from power models: {e} (these budgets "
+                               f"go on without the power model)")
             return {}
 
         # The model predicts the user CPU usage of the host (its kernel usage stays as it is)
