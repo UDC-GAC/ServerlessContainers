@@ -1,0 +1,47 @@
+# Services loaded into the State Database by 'services.py'
+#
+# services: <service name> -> configuration
+#   Each entry is loaded as a service document whose 'config' is the given mapping. Remove (or comment out) a service
+#   to skip it.
+
+services:
+  scaler:
+    ACTIVE: false
+    DEBUG: true
+    REQUEST_TIMEOUT: 60
+    POLLING_FREQUENCY: 5
+
+  guardian:
+    ACTIVE: false
+    DEBUG: true
+    EVENT_TIMEOUT: 120
+    WINDOW_DELAY: 20
+    WINDOW_TIMELAPSE: 10
+
+  database_snapshoter:
+    ACTIVE: false
+    DEBUG: true
+
+  structures_snapshoter:
+    ACTIVE: false
+    DEBUG: true
+    RESOURCES_PERSISTED: [cpu, mem]
+
+  refeeder:
+    ACTIVE: false
+    DEBUG: true
+
+  sanity_checker:
+    DELAY: 30
+    DEBUG: true
+
+  rebalancer:
+    DEBUG: true
+
+  watt_trainer:
+    DEBUG: true
+
+  energy_controller:
+    POLLING_FREQUENCY: 5
+    ACTIVE: true
+    DEBUG: true

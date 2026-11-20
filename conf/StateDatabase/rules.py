@@ -1,881 +1,237 @@
 # /usr/bin/python
+"""Initialize the 'rules' database from a YAML configuration file.
+
+The rules themselves are not meant to be edited here: they are generated from a set of rule templates (one per
+rule kind) and the parameters given in the configuration file. By default, the configuration file is 'rules.yml',
+located in the same directory as this script, but another one can be passed as the first argument:
+
+    python3 conf/StateDatabase/rules.py [path/to/rules.yml]
+
+See 'rules.yml' for a description of the configuration format.
+"""
+import os
+import sys
+
+import yaml
+
 import src.StateDatabase.couchdb as couchDB
 import src.StateDatabase.utils as couchdb_utils
 
-## CPU usage
-cpu_exceeded_upper = dict(
-    _id='cpu_exceeded_upper',
-    type='rule',
-    resource="cpu",
-    name='cpu_exceeded_upper',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "cpu.structure.cpu.usage"},
-                {"var": "cpu.limits.cpu.upper"}]},
-            {"<": [
-                {"var": "cpu.limits.cpu.upper"},
-                {"var": "cpu.structure.cpu.max"}]},
-            {"<": [
-                {"var": "cpu.structure.cpu.current"},
-                {"var": "cpu.structure.cpu.max"}]}
-        ]
-        }),
-    generates="events",
-    action={"events": {"scale": {"up": 1}}},
-    active=True
-)
-
-cpu_dropped_lower = dict(
-    _id='cpu_dropped_lower',
-    type='rule',
-    resource="cpu",
-    name='cpu_dropped_lower',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "cpu.structure.cpu.usage"},
-                0]},
-            {"<": [
-                {"var": "cpu.structure.cpu.usage"},
-                {"var": "cpu.limits.cpu.lower"}]},
-            {">": [
-                {"var": "cpu.limits.cpu.lower"},
-                {"var": "cpu.structure.cpu.min"}]}]}),
-    generates="events",
-    action={"events": {"scale": {"down": 1}}},
-    active=True
-)
-
-# Avoid hysteresis by only rescaling when X underuse events and no bottlenecks are detected, or viceversa
-CpuRescaleUp = dict(
-    _id='CpuRescaleUp',
-    type='rule',
-    resource="cpu",
-    name='CpuRescaleUp',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.up"},
-                2]},
-            {"<=": [
-                {"var": "events.scale.down"},
-                2]}
-        ]}),
-    events_to_remove=2,
-    generates="requests",
-    action={"requests": ["CpuRescaleUp"]},
-    amount=75,
-    rescale_policy="amount",
-    rescale_type="up",
-    active=True
-)
-
-CpuRescaleDown = dict(
-    _id='CpuRescaleDown',
-    type='rule',
-    resource="cpu",
-    name='CpuRescaleDown',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.down"},
-                6]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    events_to_remove=6,
-    generates="requests",
-    action={"requests": ["CpuRescaleDown"]},
-    rescale_policy="fit_to_usage",
-    rescale_type="down",
-    active=True,
-)
-
-# This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
-cpu_usage_low = dict(
-    _id='cpu_usage_low',
-    type='rule',
-    resource="cpu",
-    name='cpu_usage_low',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"-": [
-                    {"var": "cpu.structure.cpu.current"},
-                    {"var": "cpu.structure.cpu.min"}]
-                },
-                25
-            ]},
-            {"<": [
-                {"/": [
-                    {"var": "cpu.structure.cpu.usage"},
-                    {"var": "cpu.structure.cpu.current"}]
-                },
-                0.4
-            ]}
-        ]}
-    ),
-    active=False,
-    generates="",
-)
-
-# This rule is used by the ReBalancer, NOT the Guardian, leave it deactivated
-cpu_usage_high = dict(
-    _id='cpu_usage_high',
-    type='rule',
-    resource="cpu",
-    name='cpu_usage_high',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"-": [
-                    {"var": "cpu.structure.cpu.max"},
-                    {"var": "cpu.structure.cpu.current"}]
-                },
-                25
-            ]},
-            {">": [
-                {"/": [
-                    {"var": "cpu.structure.cpu.usage"},
-                    {"var": "cpu.structure.cpu.current"}]
-                },
-                0.7
-            ]}
-        ]}
-    ),
-    active=False,
-    generates="",
-)
-
-## Memory
-mem_exceeded_upper = dict(
-    _id='mem_exceeded_upper',
-    type='rule',
-    resource="mem",
-    name='mem_exceeded_upper',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "mem.structure.mem.usage"},
-                {"var": "mem.limits.mem.upper"}]},
-            {"<": [
-                {"var": "mem.limits.mem.upper"},
-                {"var": "mem.structure.mem.max"}]},
-            {"<": [
-                {"var": "mem.structure.mem.current"},
-                {"var": "mem.structure.mem.max"}]}
-
-        ]
-        }),
-    generates="events",
-    action={"events": {"scale": {"up": 1}}},
-    active=True
-)
-
-mem_dropped_lower = dict(
-    _id='mem_dropped_lower',
-    type='rule',
-    resource="mem",
-    name='mem_dropped_lower',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "mem.structure.mem.usage"},
-                0]},
-            {"<": [
-                {"var": "mem.structure.mem.usage"},
-                {"var": "mem.limits.mem.lower"}]},
-            {">": [
-                {"var": "mem.limits.mem.lower"},
-                {"var": "mem.structure.mem.min"}]}]}),
-    generates="events",
-    action={"events": {"scale": {"down": 1}}},
-    active=True
-)
-
-MemRescaleUp = dict(
-    _id='MemRescaleUp',
-    type='rule',
-    resource="mem",
-    name='MemRescaleUp',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.up"},
-                2]},
-            {"<=": [
-                {"var": "events.scale.down"},
-                6]}
-        ]}),
-    generates="requests",
-    events_to_remove=2,
-    action={"requests": ["MemRescaleUp"]},
-    amount=256,
-    rescale_policy="amount",
-    rescale_type="up",
-    active=True
-)
-
-MemRescaleDown = dict(
-    _id='MemRescaleDown',
-    type='rule',
-    resource="mem",
-    name='MemRescaleDown',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.down"},
-                8]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    generates="requests",
-    events_to_remove=8,
-    action={"requests": ["MemRescaleDown"]},
-    rescale_policy="fit_to_usage",
-    rescale_type="down",
-    active=True
-)
-
-## Disk READ
-disk_read_exceeded_upper = dict(
-    _id='disk_read_exceeded_upper',
-    type='rule',
-    resource="disk_read",
-    name='disk_read_exceeded_upper',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "disk_read.structure.disk_read.usage"},
-                {"var": "disk_read.limits.disk_read.upper"}]},
-            {"<": [
-                {"var": "disk_read.limits.disk_read.upper"},
-                {"var": "disk_read.structure.disk_read.max"}]},
-            {"<": [
-                {"var": "disk_read.structure.disk_read.current"},
-                {"var": "disk_read.structure.disk_read.max"}]}
-
-        ]
-        }),
-    generates="events",
-    action={"events": {"scale": {"up": 1}}},
-    active=True
-)
-
-disk_read_dropped_lower = dict(
-    _id='disk_read_dropped_lower',
-    type='rule',
-    resource="disk_read",
-    name='disk_read_dropped_lower',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "disk_read.structure.disk_read.usage"},
-                0]},
-            {"<": [
-                {"var": "disk_read.structure.disk_read.usage"},
-                {"var": "disk_read.limits.disk_read.lower"}]},
-            {">": [
-                {"var": "disk_read.limits.disk_read.lower"},
-                {"var": "disk_read.structure.disk_read.min"}]}]}),
-    generates="events",
-    action={"events": {"scale": {"down": 1}}},
-    active=True
-)
-
-Disk_readRescaleUp = dict(
-    _id='Disk_readRescaleUp',
-    type='rule',
-    resource="disk_read",
-    name='Disk_readRescaleUp',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.up"},
-                1]},
-            {"<=": [
-                {"var": "events.scale.down"},
-                6]}
-        ]}),
-    generates="requests",
-    events_to_remove=1,
-    action={"requests": ["Disk_readRescaleUp"]},
-    amount=450,
-    rescale_policy="amount",
-    rescale_type="up",
-    active=True
-)
-
-Disk_readRescaleDown = dict(
-    _id='Disk_readRescaleDown',
-    type='rule',
-    resource="disk_read",
-    name='Disk_readRescaleDown',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.down"},
-                6]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    generates="requests",
-    events_to_remove=6,
-    action={"requests": ["Disk_readRescaleDown"]},
-    rescale_policy="fit_to_usage",
-    rescale_type="down",
-    active=True
-)
+DEFAULT_CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.yml")
 
 
-## Disk WRITE
-disk_write_exceeded_upper = dict(
-    _id='disk_write_exceeded_upper',
-    type='rule',
-    resource="disk_write",
-    name='disk_write_exceeded_upper',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "disk_write.structure.disk_write.usage"},
-                {"var": "disk_write.limits.disk_write.upper"}]},
-            {"<": [
-                {"var": "disk_write.limits.disk_write.upper"},
-                {"var": "disk_write.structure.disk_write.max"}]},
-            {"<": [
-                {"var": "disk_write.structure.disk_write.current"},
-                {"var": "disk_write.structure.disk_write.max"}]}
+## Helpers to reference the variables available in the rule context
+def _structure(resource, field):
+    return {"var": "{0}.structure.{0}.{1}".format(resource, field)}
 
-        ]
-        }),
-    generates="events",
-    action={"events": {"scale": {"up": 1}}},
-    active=True
-)
 
-disk_write_dropped_lower = dict(
-    _id='disk_write_dropped_lower',
-    type='rule',
-    resource="disk_write",
-    name='disk_write_dropped_lower',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "disk_write.structure.disk_write.usage"},
-                0]},
-            {"<": [
-                {"var": "disk_write.structure.disk_write.usage"},
-                {"var": "disk_write.limits.disk_write.lower"}]},
-            {">": [
-                {"var": "disk_write.limits.disk_write.lower"},
-                {"var": "disk_write.structure.disk_write.min"}]}]}),
-    generates="events",
-    action={"events": {"scale": {"down": 1}}},
-    active=True
-)
+def _limit(resource, field):
+    return {"var": "{0}.limits.{0}.{1}".format(resource, field)}
 
-Disk_writeRescaleUp = dict(
-    _id='Disk_writeRescaleUp',
-    type='rule',
-    resource="disk_write",
-    name='Disk_writeRescaleUp',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.up"},
-                1]},
-            {"<=": [
-                {"var": "events.scale.down"},
-                6]}
-        ]}),
-    generates="requests",
-    events_to_remove=1,
-    action={"requests": ["Disk_writeRescaleUp"]},
-    amount=450,
-    rescale_policy="amount",
-    rescale_type="up",
-    active=True
-)
 
-Disk_writeRescaleDown = dict(
-    _id='Disk_writeRescaleDown',
-    type='rule',
-    resource="disk_write",
-    name='Disk_writeRescaleDown',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.down"},
-                6]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    generates="requests",
-    events_to_remove=6,
-    action={"requests": ["Disk_writeRescaleDown"]},
-    rescale_policy="fit_to_usage",
-    rescale_type="down",
-    active=True
-)
+def _events(path):
+    return {"var": "events.{0}".format(path)}
 
-## Energy usage
-energy_exceeded_upper = dict(
-    _id='energy_exceeded_upper',
-    type='rule',
-    resource="energy",
-    name='energy_exceeded_upper',
-    rule=dict(
-        {"and": [
-            {">": [
-                {"var": "energy.structure.energy.usage"},
-                {"var": "energy.structure.energy.max"}]}]}),
-    generates="events", action={"events": {"scale": {"up": 1}}},
-    active=True
-)
 
-energy_dropped_lower_and_cpu_exceeded_upper = dict(
-    _id='energy_dropped_lower_and_cpu_exceeded_upper',
-    type='rule',
-    resource="energy",
-    name='energy_dropped_lower_and_cpu_exceeded_upper',
-    rule=dict(
-        {"and": [
-            {"<": [
-                {"var": "energy.structure.energy.usage"},
-                {"var": "energy.limits.energy.upper"}]},
-            {">": [
-                {"var": "cpu.structure.cpu.usage"},
-                {"var": "cpu.limits.cpu.upper"}]}]}),
-    generates="events", action={"events": {"scale": {"down": 1}}},
-    active=True
-)
+## Event rules (generate events used by request rules), named '<resource>_<kind>' (e.g., cpu_exceeded_upper)
+def _exceeded_upper(r):
+    # Usage is over the upper limit and the resource can still be scaled up
+    return dict(
+        rule={"and": [
+            {">": [_structure(r, "usage"), _limit(r, "upper")]},
+            {"<": [_limit(r, "upper"), _structure(r, "max")]},
+            {"<": [_structure(r, "current"), _structure(r, "max")]}]},
+        generates="events",
+        action={"events": {"scale": {"up": 1}}})
 
-EnergyRescaleUp = dict(
-    _id='EnergyRescaleUp',
-    type='rule',
-    resource="energy",
-    name='EnergyRescaleUp',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.scale.down"},
-                3]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                1]}
-        ]}),
-    generates="requests",
-    events_to_remove=3,
-    action={"requests": ["CpuRescaleUp"]},
-    amount=20,
-    rescale_policy="proportional",
-    rescale_type="up",
-    active=True
-)
 
-EnergyRescaleDown = dict(
-    _id='EnergyRescaleDown',
-    type='rule',
-    resource="energy",
-    name='EnergyRescaleDown',
-    rule=dict(
-        {"and": [
-            {"<=": [
-                {"var": "events.scale.down"},
-                1]},
-            {">=": [
-                {"var": "events.scale.up"},
-                4]}
-        ]}),
-    generates="requests",
-    events_to_remove=4,
-    action={"requests": ["CpuRescaleDown"]},
-    amount=-20,
-    rescale_policy="proportional",
-    rescale_type="down",
-    active=True
-)
+def _dropped_lower(r, ignore_zero_usage):
+    # Usage is under the lower limit and the resource can still be scaled down
+    return dict(
+        rule={"and": [
+            {">" if ignore_zero_usage else ">=": [_structure(r, "usage"), 0]},
+            {"<": [_structure(r, "usage"), _limit(r, "lower")]},
+            {">": [_limit(r, "lower"), _structure(r, "min")]}]},
+        generates="events",
+        action={"events": {"scale": {"down": 1}}})
 
-## Idle resources
-cpu_idle = dict(
-    _id='cpu_idle',
-    type='rule',
-    resource="cpu",
-    name='cpu_idle',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "cpu.structure.cpu.usage"},
-                0]},
-            {"<": [
-                {"var": "cpu.structure.cpu.usage"},
-                {"*": [{"var": "cpu.structure.cpu.min"}, 0.2]}]},
-            {"<=": [
-                {"var": "cpu.limits.cpu.lower"},
-                {"var": "cpu.structure.cpu.min"}]},
-            {"!": [{"var": "cpu.structure.cpu.lent"}]}]}),
-    generates="events",
-    action={"events": {"idle": 1}},
-    active=True
-)
 
-# Disabled by default: idle containers rarely release memory and lent memory can't be reclaimed as quickly as CPU
-mem_idle = dict(
-    _id='mem_idle',
-    type='rule',
-    resource="mem",
-    name='mem_idle',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "mem.structure.mem.usage"},
-                0]},
-            {"<": [
-                {"var": "mem.structure.mem.usage"},
-                {"*": [{"var": "mem.structure.mem.min"}, 0.2]}]},
-            {"<=": [
-                {"var": "mem.limits.mem.lower"},
-                {"var": "mem.structure.mem.min"}]},
-            {"!": [{"var": "mem.structure.mem.lent"}]}]}),
-    generates="events",
-    action={"events": {"idle": 1}},
-    active=False
-)
+def _idle(r, usage_factor):
+    # Usage is under a fraction of the minimum, the resource is already at its minimum and nothing is lent
+    return dict(
+        rule={"and": [
+            {">=": [_structure(r, "usage"), 0]},
+            {"<": [_structure(r, "usage"), {"*": [_structure(r, "min"), usage_factor]}]},
+            {"<=": [_limit(r, "lower"), _structure(r, "min")]},
+            {"!": [_structure(r, "lent")]}]},
+        generates="events",
+        action={"events": {"idle": 1}})
 
-disk_read_idle = dict(
-    _id='disk_read_idle',
-    type='rule',
-    resource="disk_read",
-    name='disk_read_idle',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "disk_read.structure.disk_read.usage"},
-                0]},
-            {"<": [
-                {"var": "disk_read.structure.disk_read.usage"},
-                {"*": [{"var": "disk_read.structure.disk_read.min"}, 0.2]}]},
-            {"<=": [
-                {"var": "disk_read.limits.disk_read.lower"},
-                {"var": "disk_read.structure.disk_read.min"}]},
-            {"!": [{"var": "disk_read.structure.disk_read.lent"}]}]}),
-    generates="events",
-    action={"events": {"idle": 1}},
-    active=True
-)
 
-disk_write_idle = dict(
-    _id='disk_write_idle',
-    type='rule',
-    resource="disk_write",
-    name='disk_write_idle',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "disk_write.structure.disk_write.usage"},
-                0]},
-            {"<": [
-                {"var": "disk_write.structure.disk_write.usage"},
-                {"*": [{"var": "disk_write.structure.disk_write.min"}, 0.2]}]},
-            {"<=": [
-                {"var": "disk_write.limits.disk_write.lower"},
-                {"var": "disk_write.structure.disk_write.min"}]},
-            {"!": [{"var": "disk_write.structure.disk_write.lent"}]}]}),
-    generates="events",
-    action={"events": {"idle": 1}},
-    active=True
-)
+def _reclaim(r, usage_factor):
+    # Some amount of the resource is lent and usage is over a fraction of the minimum
+    return dict(
+        rule={"and": [
+            {"!!": [_structure(r, "lent")]},
+            {">=": [_structure(r, "usage"), {"*": [_structure(r, "min"), usage_factor]}]}]},
+        generates="events",
+        action={"events": {"reclaim": 1}})
 
-cpu_reclaim = dict(
-    _id='cpu_reclaim',
-    type='rule',
-    resource="cpu",
-    name='cpu_reclaim',
-    rule=dict(
-        {"and": [
-            {"!!": [{"var": "cpu.structure.cpu.lent"}]},
-            {">=": [
-                {"var": "cpu.structure.cpu.usage"},
-                {"*": [{"var": "cpu.structure.cpu.min"}, 0.5]}]}]}),
-    generates="events",
-    action={"events": {"reclaim": 1}},
-    active=True
-)
 
-mem_reclaim = dict(
-    _id='mem_reclaim',
-    type='rule',
-    resource="mem",
-    name='mem_reclaim',
-    rule=dict(
-        {"and": [
-            {"!!": [{"var": "mem.structure.mem.lent"}]},
-            {">=": [
-                {"var": "mem.structure.mem.usage"},
-                {"*": [{"var": "mem.structure.mem.min"}, 0.5]}]}]}),
-    generates="events",
-    action={"events": {"reclaim": 1}},
-    active=False
-)
+## Request rules (generate scaling requests from events), named '<Resource><Kind>' (e.g., CpuRescaleUp)
+def _requests_rule(trigger_event, trigger_amount, rescale_type, rescale_policy, events_to_remove,
+                   blocking_event=None, max_blocking_events=None, amount=None):
+    conditions = [{">=": [_events(trigger_event), trigger_amount]}]
+    if blocking_event:
+        conditions.append({"<=": [_events(blocking_event), max_blocking_events]})
+    doc = dict(
+        rule={"and": conditions},
+        generates="requests",
+        events_to_remove=trigger_amount if events_to_remove is None else events_to_remove,
+        rescale_policy=rescale_policy,
+        rescale_type=rescale_type)
+    if amount is not None:
+        doc["amount"] = amount
+    return doc
 
-disk_read_reclaim = dict(
-    _id='disk_read_reclaim',
-    type='rule',
-    resource="disk_read",
-    name='disk_read_reclaim',
-    rule=dict(
-        {"and": [
-            {"!!": [{"var": "disk_read.structure.disk_read.lent"}]},
-            {">=": [
-                {"var": "disk_read.structure.disk_read.usage"},
-                {"*": [{"var": "disk_read.structure.disk_read.min"}, 0.5]}]}]}),
-    generates="events",
-    action={"events": {"reclaim": 1}},
-    active=True
-)
 
-disk_write_reclaim = dict(
-    _id='disk_write_reclaim',
-    type='rule',
-    resource="disk_write",
-    name='disk_write_reclaim',
-    rule=dict(
-        {"and": [
-            {"!!": [{"var": "disk_write.structure.disk_write.lent"}]},
-            {">=": [
-                {"var": "disk_write.structure.disk_write.usage"},
-                {"*": [{"var": "disk_write.structure.disk_write.min"}, 0.5]}]}]}),
-    generates="events",
-    action={"events": {"reclaim": 1}},
-    active=True
-)
+def _rescale_up(r, up_events, max_down_events, rescale_policy, amount=None, events_to_remove=None):
+    return _requests_rule("scale.up", up_events, "up", rescale_policy, events_to_remove,
+                          "scale.down", max_down_events, amount)
 
-CpuLend = dict(
-    _id='CpuLend',
-    type='rule',
-    resource="cpu",
-    name='CpuLend',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.idle"},
-                3]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    events_to_remove=3,
-    generates="requests",
-    action={"requests": ["CpuLend"]},
-    rescale_policy="lend_current",
-    rescale_type="lend",
-    active=True
-)
 
-MemLend = dict(
-    _id='MemLend',
-    type='rule',
-    resource="mem",
-    name='MemLend',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.idle"},
-                3]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    events_to_remove=3,
-    generates="requests",
-    action={"requests": ["MemLend"]},
-    rescale_policy="lend_current",
-    rescale_type="lend",
-    active=False
-)
+def _rescale_down(r, down_events, max_up_events, rescale_policy, amount=None, events_to_remove=None):
+    return _requests_rule("scale.down", down_events, "down", rescale_policy, events_to_remove,
+                          "scale.up", max_up_events, amount)
 
-Disk_readLend = dict(
-    _id='Disk_readLend',
-    type='rule',
-    resource="disk_read",
-    name='Disk_readLend',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.idle"},
-                3]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    events_to_remove=3,
-    generates="requests",
-    action={"requests": ["Disk_readLend"]},
-    rescale_policy="lend_current",
-    rescale_type="lend",
-    active=True
-)
 
-Disk_writeLend = dict(
-    _id='Disk_writeLend',
-    type='rule',
-    resource="disk_write",
-    name='Disk_writeLend',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.idle"},
-                3]},
-            {"<=": [
-                {"var": "events.scale.up"},
-                0]}
-        ]}),
-    events_to_remove=3,
-    generates="requests",
-    action={"requests": ["Disk_writeLend"]},
-    rescale_policy="lend_current",
-    rescale_type="lend",
-    active=True
-)
+def _lend(r, idle_events, max_up_events, events_to_remove=None):
+    return _requests_rule("idle", idle_events, "lend", "lend_current", events_to_remove,
+                          "scale.up", max_up_events)
 
-CpuReclaim = dict(
-    _id='CpuReclaim',
-    type='rule',
-    resource="cpu",
-    name='CpuReclaim',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.reclaim"},
-                1]}
-        ]}),
-    events_to_remove=1,
-    generates="requests",
-    action={"requests": ["CpuReclaim"]},
-    rescale_policy="reclaim_lent",
-    rescale_type="reclaim",
-    active=True
-)
 
-MemReclaim = dict(
-    _id='MemReclaim',
-    type='rule',
-    resource="mem",
-    name='MemReclaim',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.reclaim"},
-                1]}
-        ]}),
-    events_to_remove=1,
-    generates="requests",
-    action={"requests": ["MemReclaim"]},
-    rescale_policy="reclaim_lent",
-    rescale_type="reclaim",
-    active=False
-)
+def _reclaim_lent(r, reclaim_events, events_to_remove=None):
+    return _requests_rule("reclaim", reclaim_events, "reclaim", "reclaim_lent", events_to_remove)
 
-Disk_readReclaim = dict(
-    _id='Disk_readReclaim',
-    type='rule',
-    resource="disk_read",
-    name='Disk_readReclaim',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.reclaim"},
-                1]}
-        ]}),
-    events_to_remove=1,
-    generates="requests",
-    action={"requests": ["Disk_readReclaim"]},
-    rescale_policy="reclaim_lent",
-    rescale_type="reclaim",
-    active=True
-)
 
-Disk_writeReclaim = dict(
-    _id='Disk_writeReclaim',
-    type='rule',
-    resource="disk_write",
-    name='Disk_writeReclaim',
-    rule=dict(
-        {"and": [
-            {">=": [
-                {"var": "events.reclaim"},
-                1]}
-        ]}),
-    events_to_remove=1,
-    generates="requests",
-    action={"requests": ["Disk_writeReclaim"]},
-    rescale_policy="reclaim_lent",
-    rescale_type="reclaim",
-    active=True
-)
+## ReBalancer rules (evaluated by the ReBalancer, not the Guardian), named '<resource>_<kind>'
+def _usage_high(r, min_margin, usage_ratio):
+    # There is room to scale up (max - current) and usage is over a fraction of the current allocation
+    return dict(
+        rule={"and": [
+            {">=": [{"-": [_structure(r, "max"), _structure(r, "current")]}, min_margin]},
+            {">": [{"/": [_structure(r, "usage"), _structure(r, "current")]}, usage_ratio]}]},
+        generates="")
+
+
+def _usage_low(r, min_margin, usage_ratio):
+    # There is room to scale down (current - min) and usage is under a fraction of the current allocation
+    return dict(
+        rule={"and": [
+            {">=": [{"-": [_structure(r, "current"), _structure(r, "min")]}, min_margin]},
+            {"<": [{"/": [_structure(r, "usage"), _structure(r, "current")]}, usage_ratio]}]},
+        generates="")
+
+
+def _event_name(resource, kind):
+    return "{0}_{1}".format(resource, kind)
+
+
+def _request_name(resource, kind):
+    return "{0}{1}".format(resource.capitalize(), kind)
+
+
+# Rule group -> (function to build the rule name, {kind: template})
+RULE_TEMPLATES = {
+    "events": (_event_name, {
+        "exceeded_upper": _exceeded_upper,
+        "dropped_lower": _dropped_lower,
+        "idle": _idle,
+        "reclaim": _reclaim,
+    }),
+    "requests": (_request_name, {
+        "RescaleUp": _rescale_up,
+        "RescaleDown": _rescale_down,
+        "Lend": _lend,
+        "Reclaim": _reclaim_lent,
+    }),
+    "rebalancer": (_event_name, {
+        "usage_high": _usage_high,
+        "usage_low": _usage_low,
+    }),
+}
+
+
+def _new_rule(name, resource, active, fields):
+    return dict(_id=name, type="rule", name=name, resource=resource, active=active, **fields)
+
+
+def build_template_rule(resource, group, kind, params):
+    if group not in RULE_TEMPLATES:
+        raise ValueError("Unknown rule group '{0}' in resource '{1}', expected one of: {2}".format(
+            group, resource, ", ".join(RULE_TEMPLATES)))
+    get_name, templates = RULE_TEMPLATES[group]
+    if kind not in templates:
+        raise ValueError("Unknown rule '{0}' in '{1}.{2}', expected one of: {3}".format(
+            kind, resource, group, ", ".join(templates)))
+
+    params = dict(params or {})
+    active = params.pop("active", True)
+    name = get_name(resource, kind)
+    try:
+        fields = templates[kind](resource, **params)
+    except TypeError as e:
+        raise ValueError("Invalid parameters for rule '{0}': {1}".format(name, e))
+    if fields["generates"] == "requests":
+        fields["action"] = {"requests": [name]}
+    return _new_rule(name, resource, active, fields)
+
+
+def build_custom_rule(rule):
+    rule = dict(rule)
+    missing = [f for f in ("name", "resource", "rule", "generates") if f not in rule]
+    if missing:
+        raise ValueError("Custom rule {0} is missing required fields: {1}".format(rule, ", ".join(missing)))
+    name, resource, active = rule.pop("name"), rule.pop("resource"), rule.pop("active", True)
+    return _new_rule(name, resource, active, rule)
+
+
+def build_rules(config):
+    rules = []
+    for resource, groups in (config.get("rules") or {}).items():
+        for group, kinds in (groups or {}).items():
+            for kind, params in (kinds or {}).items():
+                rules.append(build_template_rule(resource, group, kind, params))
+    rules.extend(build_custom_rule(rule) for rule in config.get("custom_rules") or [])
+
+    # Rules are always built (and thus validated), but only those of the enabled resources are loaded
+    enabled_resources = config.get("resources")
+    if enabled_resources is not None:
+        rules = [r for r in rules if r["resource"] in enabled_resources]
+
+    names = [r["name"] for r in rules]
+    duplicated = sorted({n for n in names if names.count(n) > 1})
+    if duplicated:
+        raise ValueError("Duplicated rule names: {0}".format(", ".join(duplicated)))
+    return rules
+
+
+def load_config(config_file):
+    with open(config_file, "r") as f:
+        return yaml.safe_load(f) or {}
+
 
 if __name__ == "__main__":
+    config_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG_FILE
+    # Build the rules before touching the database, so an invalid configuration does not leave it empty
+    rules = build_rules(load_config(config_file))
+
     initializer_utils = couchdb_utils.CouchDBUtils()
     handler = couchDB.CouchDBServer()
     database = "rules"
     initializer_utils.remove_db(database)
     initializer_utils.create_db(database)
-    if handler.database_exists("rules"):
-        print("Adding 'rules' documents")
-        
-        # CPU
-        handler.add_rule(cpu_exceeded_upper)
-        handler.add_rule(cpu_dropped_lower)
-        handler.add_rule(CpuRescaleUp)
-        handler.add_rule(CpuRescaleDown)
-        handler.add_rule(cpu_usage_high)
-        handler.add_rule(cpu_usage_low)
-
-        # Memory
-        handler.add_rule(mem_exceeded_upper)
-        handler.add_rule(mem_dropped_lower)
-        handler.add_rule(MemRescaleUp)
-        handler.add_rule(MemRescaleDown)
-
-        ## Disk
-        # Read
-        handler.add_rule(disk_read_exceeded_upper)
-        handler.add_rule(disk_read_dropped_lower)
-        handler.add_rule(Disk_readRescaleUp)
-        handler.add_rule(Disk_readRescaleDown)
-        # Write
-        handler.add_rule(disk_write_exceeded_upper)
-        handler.add_rule(disk_write_dropped_lower)
-        handler.add_rule(Disk_writeRescaleUp)
-        handler.add_rule(Disk_writeRescaleDown)
-
-        # Energy
-        handler.add_rule(energy_exceeded_upper)
-        handler.add_rule(energy_dropped_lower_and_cpu_exceeded_upper)
-        handler.add_rule(EnergyRescaleUp)
-        handler.add_rule(EnergyRescaleDown)
-
-        # Idle
-        handler.add_rule(cpu_idle)
-        handler.add_rule(mem_idle)
-        handler.add_rule(disk_read_idle)
-        handler.add_rule(disk_write_idle)
-        handler.add_rule(CpuLend)
-        handler.add_rule(MemLend)
-        handler.add_rule(Disk_readLend)
-        handler.add_rule(Disk_writeLend)
-
-        # Reclaim
-        handler.add_rule(cpu_reclaim)
-        handler.add_rule(mem_reclaim)
-        handler.add_rule(disk_read_reclaim)
-        handler.add_rule(disk_write_reclaim)
-        handler.add_rule(CpuReclaim)
-        handler.add_rule(MemReclaim)
-        handler.add_rule(Disk_readReclaim)
-        handler.add_rule(Disk_writeReclaim)
+    if handler.database_exists(database):
+        print("Adding 'rules' documents from {0}".format(config_file))
+        for rule in rules:
+            handler.add_rule(rule)

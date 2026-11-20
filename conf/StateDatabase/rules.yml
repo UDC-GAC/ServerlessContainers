@@ -1,0 +1,125 @@
+# Rules loaded into the State Database by 'rules.py'
+#
+# ── Format ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+#
+# resources: Resources whose rules are loaded. Rules of any other resource are validated but NOT loaded.
+#            If omitted, the rules of every resource are loaded.
+#
+# rules: <resource> -> <group> -> <rule kind> -> parameters
+#   Rules generated from the built-in templates in 'rules.py'. A rule is loaded only if it appears here (comment it out
+#   to skip it). Every rule accepts 'active' (default: true) to load it activated or deactivated.
+#
+#   events      Generate events, named '<resource>_<kind>' (e.g., cpu_exceeded_upper)
+#     exceeded_upper   Usage over the upper limit (and resource below its max)       (no parameters)
+#     dropped_lower    Usage under the lower limit (and resource above its min)      ignore_zero_usage: don't fire when usage is 0
+#     idle             Usage under min * usage_factor and nothing lent               usage_factor
+#     reclaim          Something lent and usage over min * usage_factor              usage_factor
+#
+#   requests    Generate scaling requests from events, named '<Resource><Kind>' (e.g., CpuRescaleUp)
+#     RescaleUp        'up_events' scale-up events and at most 'max_down_events'     up_events, max_down_events, rescale_policy, [amount]
+#     RescaleDown      'down_events' scale-down events and at most 'max_up_events'   down_events, max_up_events, rescale_policy, [amount]
+#     Lend             'idle_events' idle events and at most 'max_up_events'         idle_events, max_up_events
+#     Reclaim          'reclaim_events' reclaim events                               reclaim_events
+#     All of them also accept 'events_to_remove' (default: the number of events that trigger the rule)
+#
+#   rebalancer  Used by the ReBalancer (NOT the Guardian), named '<resource>_<kind>'. Keep them deactivated.
+#     usage_high       (max - current) >= min_margin and usage/current > usage_ratio  min_margin, usage_ratio
+#     usage_low        (current - min) >= min_margin and usage/current < usage_ratio  min_margin, usage_ratio
+#
+# custom_rules: List of rules that don't fit any template, written as the full CouchDB document. Fields 'name',
+#   'resource', 'rule' (JSON Logic) and 'generates' are required, 'active' defaults to true and '_id'/'type' are filled
+#   in automatically. Any other field (action, amount, rescale_policy...) is copied as is.
+# ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+resources: [cpu, mem, disk_read, disk_write, energy]
+
+rules:
+  cpu:
+    events:
+      exceeded_upper:
+      dropped_lower: {ignore_zero_usage: true}
+      idle: {usage_factor: 0.2}
+      reclaim: {usage_factor: 0.5}
+    requests:
+      # Avoid hysteresis by only rescaling when X underuse events and no bottlenecks are detected, or viceversa
+      RescaleUp: {up_events: 2, max_down_events: 2, rescale_policy: amount, amount: 75}
+      RescaleDown: {down_events: 6, max_up_events: 0, rescale_policy: fit_to_usage}
+      Lend: {idle_events: 3, max_up_events: 0}
+      Reclaim: {reclaim_events: 1}
+    rebalancer:
+      usage_high: {active: false, min_margin: 25, usage_ratio: 0.7}
+      usage_low: {active: false, min_margin: 25, usage_ratio: 0.4}
+
+  mem:
+    events:
+      exceeded_upper:
+      dropped_lower: {ignore_zero_usage: true}
+
+      # Disabled by default: idle containers rarely release memory and lent memory can't be reclaimed as quickly as CPU
+      idle: {active: false, usage_factor: 0.2}
+      reclaim: {active: false, usage_factor: 0.5}
+    requests:
+      RescaleUp: {up_events: 2, max_down_events: 6, rescale_policy: amount, amount: 256}
+      RescaleDown: {down_events: 8, max_up_events: 0, rescale_policy: fit_to_usage}
+      Lend: {active: false, idle_events: 3, max_up_events: 0}
+      Reclaim: {active: false, reclaim_events: 1}
+
+  disk_read:
+    events:
+      exceeded_upper:
+      dropped_lower: {ignore_zero_usage: false}
+      idle: {usage_factor: 0.2}
+      reclaim: {usage_factor: 0.5}
+    requests:
+      RescaleUp: {up_events: 1, max_down_events: 6, rescale_policy: amount, amount: 450}
+      RescaleDown: {down_events: 6, max_up_events: 0, rescale_policy: fit_to_usage}
+      Lend: {idle_events: 3, max_up_events: 0}
+      Reclaim: {reclaim_events: 1}
+
+  disk_write:
+    events:
+      exceeded_upper:
+      dropped_lower: {ignore_zero_usage: false}
+      idle: {usage_factor: 0.2}
+      reclaim: {usage_factor: 0.5}
+    requests:
+      RescaleUp: {up_events: 1, max_down_events: 6, rescale_policy: amount, amount: 450}
+      RescaleDown: {down_events: 6, max_up_events: 0, rescale_policy: fit_to_usage}
+      Lend: {idle_events: 3, max_up_events: 0}
+      Reclaim: {reclaim_events: 1}
+
+custom_rules:
+  # Energy rules generate CPU scaling requests (power capping)
+  - name: energy_exceeded_upper
+    resource: energy
+    rule: {"and": [{">": [{"var": "energy.structure.energy.usage"}, {"var": "energy.structure.energy.max"}]}]}
+    generates: events
+    action: {"events": {"scale": {"up": 1}}}
+
+  - name: energy_dropped_lower_and_cpu_exceeded_upper
+    resource: energy
+    rule: {"and": [
+      {"<": [{"var": "energy.structure.energy.usage"}, {"var": "energy.limits.energy.upper"}]},
+      {">": [{"var": "cpu.structure.cpu.usage"}, {"var": "cpu.limits.cpu.upper"}]}]}
+    generates: events
+    action: {"events": {"scale": {"down": 1}}}
+
+  - name: EnergyRescaleUp
+    resource: energy
+    rule: {"and": [{">=": [{"var": "events.scale.down"}, 3]}, {"<=": [{"var": "events.scale.up"}, 1]}]}
+    generates: requests
+    events_to_remove: 3
+    action: {"requests": ["CpuRescaleUp"]}
+    amount: 20
+    rescale_policy: proportional
+    rescale_type: up
+
+  - name: EnergyRescaleDown
+    resource: energy
+    rule: {"and": [{"<=": [{"var": "events.scale.down"}, 1]}, {">=": [{"var": "events.scale.up"}, 4]}]}
+    generates: requests
+    events_to_remove: 4
+    action: {"requests": ["CpuRescaleDown"]}
+    amount: -20
+    rescale_policy: proportional
+    rescale_type: down
