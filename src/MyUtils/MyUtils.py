@@ -299,6 +299,16 @@ def generate_event_name(event, resource):
 
     raise ValueError("Must have an 'up', 'down' or 'idle' count with positive values")
 
+def get_service_port(port_key, default_port):
+    """Return the port set for a service in services_config.yml (e.g., ORCHESTRATOR_PORT), or default_port if unset"""
+    try:
+        with open(os.environ['SERVERLESS_PATH'] + "/services_config.yml", "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader) or {}
+        return int(config.get(port_key, default_port))
+    except (KeyError, OSError, ValueError, TypeError, yaml.YAMLError):
+        return int(default_port)
+
+
 ######################################################################################################
 # ORCHESTRATOR
 ######################################################################################################

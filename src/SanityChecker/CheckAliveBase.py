@@ -28,6 +28,7 @@ import os
 import time
 import requests
 import src.StateDatabase.couchdb as couchDB
+from src.MyUtils.MyUtils import get_service_port
 
 
 class CheckAliveBase:
@@ -108,7 +109,8 @@ class CheckAliveBase:
         db = couchDB.CouchDBServer(couchdb_url="couchdb")
 
         orchestrator_hostname = "orchestrator"
-        self.__REST_SERVICES__.append((orchestrator_hostname, orchestrator_hostname, "5000"))
+        orchestrator_port = str(get_service_port('ORCHESTRATOR_PORT', 5000))
+        self.__REST_SERVICES__.append((orchestrator_hostname, orchestrator_hostname, orchestrator_port))
 
         while True:
             dead, alive = self.__sort_services_dead_and_alive(db.get_services(), self.__REST_SERVICES__,

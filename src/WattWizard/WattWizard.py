@@ -5,6 +5,7 @@ from src.WattWizard.parser.ConfigFileParser import ConfigFileParser
 from src.WattWizard.parser.ArgsManager import ArgsManager
 from src.WattWizard.utils.ModelBuilder import ModelBuilder
 from src.WattWizard.app.routes import routes
+from src.MyUtils.MyUtils import get_service_port
 
 app = Flask(__name__)
 
@@ -30,4 +31,4 @@ if __name__ == '__main__':
 
     # Start Flask server
     if MyConfig.get_instance().get_argument("server_mode"):
-        app.run(host='0.0.0.0', port=7777)
+        app.run(host='0.0.0.0', port=get_service_port('WATTWIZARD_PORT', 7777))

@@ -5,6 +5,9 @@ SINGULARITY_COMMAND_ALIAS: "apptainer" # singularity or apptainer (only relevant
 ## Cgroups version: v1 (Lecacy or Hybrid mode) or v2 (Unified mode)
 CGROUPS_VERSION: "v1"
 
+## NodeScaler (runs on every host, port is shared by all of them)
+NODE_SCALER_PORT: 8000
+
 ## Orchestrator
 ORCHESTRATOR_URL: "orchestrator"
 ORCHESTRATOR_PORT: 5000

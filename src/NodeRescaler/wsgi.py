@@ -27,7 +27,8 @@
 from werkzeug.serving import WSGIRequestHandler
 
 from src.NodeRescaler.NodeRescaler import node_rescaler
+from src.MyUtils.MyUtils import get_service_port
 
 if __name__ == "__main__":
     WSGIRequestHandler.protocol_version = "HTTP/1.1"
-    node_rescaler.run(host='0.0.0.0', port=8000)
+    node_rescaler.run(host='0.0.0.0', port=get_service_port('NODE_SCALER_PORT', 8000))

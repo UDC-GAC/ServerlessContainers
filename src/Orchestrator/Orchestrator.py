@@ -36,6 +36,8 @@ from src.Orchestrator.users import users_routes
 from datetime import datetime, timezone
 from werkzeug.serving import WSGIRequestHandler
 
+from src.MyUtils.MyUtils import get_service_port
+
 app = Flask(__name__)
 
 app.register_blueprint(rules_routes)
@@ -62,4 +64,4 @@ if __name__ == "__main__":
     if args.database_url_string:
         COUCHDB_URL = args.database_url_string
 
-    app.run(host='0.0.0.0', port=5000, request_handler=UTCRequestHandler)
+    app.run(host='0.0.0.0', port=get_service_port('ORCHESTRATOR_PORT', 5000), request_handler=UTCRequestHandler)

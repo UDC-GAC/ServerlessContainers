@@ -34,6 +34,7 @@ from werkzeug.serving import WSGIRequestHandler
 
 from src.NodeRescaler.lxd_node_resource_manager import LXDContainerManager
 from src.NodeRescaler.singularity_node_resource_manager import SingularityContainerManager
+from src.MyUtils.MyUtils import get_service_port
 from functools import wraps
 
 import yaml
@@ -278,4 +279,4 @@ if __name__ == "__main__":
         raise Exception("Error: a non-valid container engine was specified")
 
     WSGIRequestHandler.protocol_version = "HTTP/1.1"
-    node_rescaler.run(host='0.0.0.0', port=8000)
+    node_rescaler.run(host='0.0.0.0', port=get_service_port('NODE_SCALER_PORT', 8000))

@@ -25,6 +25,7 @@
 
 
 from src.Orchestrator.Orchestrator import app
+from src.MyUtils.MyUtils import get_service_port
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=get_service_port('ORCHESTRATOR_PORT', 5000))
